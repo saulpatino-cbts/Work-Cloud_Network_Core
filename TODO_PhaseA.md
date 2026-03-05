@@ -1,225 +1,96 @@
-# Phase A — Devil's Advocate Critique & Gap Analysis
+# Phase A — Devil's Advocate Critique
 
-> Unfiltered. No fluff. Every real problem with what was built.
-
----
-
-## 1. Core Models
-
-### `findings_schema.py`
-- `observed_state` is a free-text string. Nothing enforces format consistency.
-  Two engineers will write it completely differently. Add a structured format spec or a validator.
-- `data_confidence: str = "HIGH"` defaults to HIGH. That is backwards.
-  Confidence should be EARNED, not assumed. Default should be UNKNOWN or LOW.
-- `framework_mappings` is optional and defaults to empty. A finding with zero framework
-  mappings is useless for a compliance-oriented deliverable. Make at least one required.
-- `recommendation_source` is Optional[str]. A free text URL field. No validation,
-  no enforcement that it actually points to an MCP server. Easily left null forever.
-- No `region_group` field (us | emea | japan). Regional report generation will require
-  a lookup layer that could have been avoided by including it here.
-- No `affected_accounts` field. Multi-account findings have no home.
-
-### `engagement.py`
-- `status` is a plain string with a comment showing valid values.
-  Nothing enforces those values. A typo like `"Initalized"` will silently pass.
-  Use a `Literal` type or `Enum`.
-- `review_complete: bool` is a single boolean. In a real engagement you review
-  findings incrementally. One boolean means either nothing is reviewed or everything is.
-  There is no partial review state, no per-finding review tracking at this level.
-- `modules_installed` is a plain list of strings. Nothing links it to
-  the actual module registry at runtime. It can contain module names that don't exist.
-- `engagement_end_date` is Optional[str]. Should be `Optional[date]`.
-  String dates break sorting and comparison.
-
-### `escalation_engine.py`
-- `_matches()` returns `False` unconditionally and is labeled Phase C.
-  That means this entire engine is inert dead code right now.
-  It gives false confidence that critical finding detection exists. It does not.
-- The trigger lists are hardcoded Python lists in the source file.
-  Adding a new trigger requires a code change and a deployment. Should be YAML config.
-- No deduplication. If the same critical resource is evaluated twice, it fires twice.
-  In a multi-account sweep this will spam the notifier.
-- `notifier` is injected but never defined anywhere. No interface, no contract, no stub.
-  It will be `None` in 100% of runs until Phase D.
-
-### `discovery_coverage.py`
-- `block_reasons` is a list with no schema. It will accumulate mixed-format strings
-  from different discovery methods and be unparseable in reports.
-- No timestamp on when the coverage report was generated.
-  Stale coverage reports are indistinguishable from fresh ones.
-- `calculate_coverage()` only counts accounts. Regions, services, and
-  resource types are collected but never factored into the percentage.
-  The reported percentage is misleading — 80% account success could mean
-  0% of actual resources if every region was blocked.
-
-### `deliverable_dependency.py`
-- `gap_analysis`, `zero_trust_scorecard`, `risk_register`, `platform_findings`
-  are referenced as dependency sources but NONE of them are defined anywhere
-  in the codebase. They are strings pointing at concepts, not real objects.
-- `get_stale_deliverables()` returns names. Nothing calls it, nothing acts on it.
-  The staleness detection system has no consumer and no trigger. It is completely inert.
-
-### `version_manager.py`
-- `DocumentVersion.generated_by` is a free-text string. No enforcement that
-  it is one of `ai-engine | human-review | manual`.
-- Version bumping is a standalone function with no persistence. Calling
-  `bump_version("1.0.0")` returns `"1.0.1"` and then it evaporates.
-  Nothing stores it, nothing reads it. The versioning system does not version anything.
+> Unfiltered. Every decision challenged. Every gap named.
+> Fix these before calling Phase A truly done.
 
 ---
 
-## 2. CLI Layer
+## Architecture Decisions
 
-- Every command prints a TODO string and exits. The CLI is a shell with no behavior.
-  `cna init` does not create a directory, write a config file, or do anything at all.
-  A new engineer picking this up cannot run a single meaningful command.
-- `--regions` accepts a comma-separated string. It is never split, never validated,
-  never mapped to the `us | emea | japan` group model used everywhere else.
-  The first actual use will require rework.
-- `cna discover azure` takes `--sp-id` and `--tenant` as CLI flags.
-  That means credentials are in shell history and process listings.
-  Should read from `.env` or Key Vault only. This is a security design flaw.
-- `cna report` says it is "blocked until review complete" in a comment.
-  The block is not implemented. Nothing reads `engagement.review_complete`.
-  The gate that was called non-negotiable does not exist in code.
-- No `--engagement-id` flag on most commands. Commands have no way to target
-  a specific engagement. Everything assumes one engagement at a time.
-- No `--dry-run` flag on any command. For a tool running against production cloud
-  environments, this is a significant missing safety mechanism.
-- No `--output-dir` flag. Output paths are hardcoded in comments or absent entirely.
-- `cna module list` and `cna module install` are TODO. The module system
-  described in the README does not function.
+### DD-001: Delivery-only (no pre-sales)
+You have no sales funnel documented anywhere. "Delivery-only" sounds like a scope decision but it's actually a business model decision with zero supporting logic. How does a client even get to the delivery stage if there's no pre-sales engagement? There's no pricing model, no SOW template, no engagement letter. You've built a platform with no defined entry point.
 
----
+### DD-002: Observed state only, no assumptions
+Good principle. Zero enforcement. The AI prompt templates in `prompts/vpc_analysis.txt` say "observed state only" as plain English text that GPT-4o will ignore the moment context from its training data bleeds in. There is no schema-level validation that a generated finding contains only data-grounded observations. `observed_state` is a required string field — a model could write "this is likely a dev environment" and pass validation. This is a policy, not a control.
 
-## 3. Modules
+### DD-003: Recommendations via MCP servers only
+Awslabs/mcp and the Azure MCP server are not the same thing. The AWS MCP server is a collection of domain-specific servers — which ones exactly? Network? Security? Organizations? That decision is deferred to Phase D with no specification. If the wrong MCP server is invoked for a finding, recommendations will be wrong or irrelevant. No routing logic is defined beyond a `mcp_router.py` stub.
 
-- Every module under `discovery/` is a file with one comment: `# TODO: Phase C`.
-  The most critical part of the platform — actually collecting data — is entirely absent.
-- `module.yaml` files list required permissions. There is no code that reads
-  those permissions and validates them before discovery starts. The permissions
-  lists could be wrong and nothing would catch it until a runtime API error.
-- `depends_on` is declared in YAML but nothing in `registry.py` checks it.
-  Installing `security` without `network` will silently succeed.
-- `cna/modules/network/prompts/` contains text files.
-  Nothing in the AI engine reads them. They are orphaned documentation.
-- Zero Trust module has no discovery component. It depends on `network` and
-  `security` but the scorer has no input data contract. What data does it score?
-  Undefined.
-- Landing Zone module depends on `network` but the `network` module has no
-  landing zone data structures in its topology output. The dependency is circular
-  in concept and undefined in implementation.
+### DD-006: All regions enumerated dynamically
+This will hit AWS API rate limits immediately at scale. A client with 50 accounts across 20 regions is 1,000+ describe calls per service per module. There is no throttling strategy, no exponential backoff spec, no pagination design, no concurrency model. "Dynamic" is not an architecture.
+
+### DD-008: AI analyzes only our collected data
+Same problem as DD-002. This is stated as a principle but `analysis_engine.py` is a stub. There is no data isolation boundary, no prompt injection protection, no validation that the data fed to the model hasn't been tampered with between discovery and analysis. Supply chain risk on your own pipeline is unaddressed.
+
+### DD-009: Human review gate blocks report generation
+`review_complete` is a boolean on a Pydantic model stored... where? In memory? On disk? In Azure Blob Storage? There is no persistence layer defined anywhere in Phase A. If the CLI process exits, `review_complete=True` is gone. The "gate" has no backend.
+
+### DD-011: Landing zone = Mermaid docs, not IaC
+This is fine as a scope boundary but it's not explained to the client anywhere meaningful. The welcome packet says "we do not deploy infrastructure" in passing. A client expecting IaC outputs will be surprised. Mermaid diagrams are not a deliverable most enterprise clients have asked for or will know how to use.
+
+### DD-014: Executive PPTX auto-generated
+Auto-generated PPTX from AI findings has a 100% chance of producing slides that look auto-generated. No human has reviewed a single PPTX template, slide structure, or brand guideline. "20 slides" is an arbitrary number with no content outline. This will be the first thing an executive rejects.
+
+### DD-015: EN/JA language toggle
+Machine translation of security findings into Japanese for enterprise clients is a liability. Technical terms like "Transit Gateway", "NSG", "Security Group" do not translate cleanly. There is no translation review process, no native speaker review gate, no glossary of preferred Japanese technical terms. Auto-translated security findings sent to a Japanese enterprise client is a credibility risk.
 
 ---
 
-## 4. Diagram Engine (Phase B)
+## What's Missing From Phase A
 
-- Four files, all `# TODO`. Phase B is declared TOP PRIORITY but has zero implementation.
-  This critique exists because Phase B starts NOW.
-- No input data contract is enforced. `drawio_generator.py` has a docstring describing
-  what it takes, but there is no Pydantic model for topology input.
-  The generator and the discovery engine can diverge with no type-level warning.
-- The export pipeline references `drawio CLI`, `cairosvg`, and `reportlab` but
-  none of these are verified to be installed at container build time beyond graphviz/cairo
-  in the Dockerfile. `drawio` desktop CLI is not in the Dockerfile at all.
-- No diagram naming convention is defined. Will output files be named by account ID,
-  region, timestamp, engagement slug? Undefined. Every diagram type will invent its own.
-- No diagram versioning. If discovery runs twice, do diagrams get overwritten?
-  Archived? Named with timestamps? Undefined.
+### No Persistence Layer
+The single biggest gap. There is no storage model — no local file format spec, no Azure Blob Storage schema, no engagement state serialization. `EngagementConfig` is a Pydantic model with nowhere to go. `cna init` creates nothing. You cannot resume, audit, or version an engagement without this.
 
----
+### No Authentication / Credential Management Model
+`.env.example` lists credentials. That's it. There is no credential rotation strategy, no Key Vault integration pattern, no guidance on how the Docker container receives secrets at runtime. In production, a contractor runs `cna discover` on a client engagement — what credential workflow do they use? Unknown.
 
-## 5. Infrastructure & DevOps
+### No Engagement ID Strategy
+`engagement_id` is a string. Who generates it? When? Is it a UUID? A slug + date? Is it used as the S3 prefix? The Azure Blob container path? The report filename? If two engineers run `cna init` for the same client, do they collide?
 
-- There is no actual Azure infrastructure defined anywhere.
-  The README says "Vendor Cloud Backend: Your Azure subscription" but there is
-  no Bicep, Terraform, or ARM template. The backend does not exist.
-- No Key Vault integration exists. Secrets are expected from `.env`.
-  In production, every secret should come from Key Vault. `.env` is dev-only
-  and the code treats it as the primary mechanism.
-- No Azure Storage client exists. `EngagementConfig` is a Pydantic model
-  with no persistence layer. Engagements exist in memory only.
-- The CI pipeline runs `pytest tests/unit/` but the tests do not actually
-  install the package in the CI environment correctly. `pip install -e ".[dev]"`
-  requires the `dev` extra to be defined in `pyproject.toml`. It is defined, but
-  `ruff` and `pytest` are listed there while `ruff` is also called before tests.
-  If `ruff` is not installed, CI fails before tests run.
-- No CD pipeline. No container build and push to GHCR. No deployment automation.
-  The Dockerfile exists but is never used by any automated process.
-- No branch protection rules defined. `main` can be pushed to directly.
-  The CODEOWNERS file exists but has no effect without branch protection.
-- No `develop` branch created. The CI workflow references it but it does not exist.
+### No Concurrency or Locking Model
+Two engineers could run `cna discover` against the same engagement simultaneously. There is no file lock, no Azure lease, no queue. Data corruption is guaranteed in a multi-operator workflow.
 
----
+### No Error Taxonomy
+There are no defined exception types anywhere. Discovery will encounter: auth failures, permission denied, rate limits, network timeouts, malformed API responses, partial results, and service unavailability. Every one of these needs a distinct error class and distinct handling behavior. Right now all of them would raise unhandled exceptions.
 
-## 6. Documentation
+### No Logging Infrastructure
+Every stub says `console.print(...)`. There is no structured logging setup — no log levels wired to `CNA_LOG_LEVEL`, no log file output, no correlation IDs per engagement, no audit log for the human review gate (who approved, when, from what IP). The human review gate is legally meaningless without an audit log.
 
-- `welcome-packet.md`, `environment-info-form.md`, and `permission-grant-guide.md`
-  are marked Draft. They were described as finalized in session context but
-  were pushed as drafts with placeholder notes. Actual finalized content is not in the repo.
-- Design decisions DD-001 through DD-016 are all listed as Accepted.
-  None have a date, an author, or an alternative considered.
-  A decision log with no alternatives recorded is a changelog, not a decision log.
-- `documentation/architecture/overview.md` describes the data flow as a clean linear pipeline.
-  It does not document failure modes, retry behavior, partial discovery, or
-  what happens when the AI engine is unavailable. Happy-path-only architecture docs
-  give a false picture of the system.
-- No runbook. No on-call guide. No "what do I do when X fails" documentation.
-- No security documentation. No threat model. No data classification policy.
-  For a tool that ingests client cloud topology data, this is a notable gap.
-- No CHANGELOG.md. Commit messages are the only history.
+### No Secret Scanning in CI
+The CI pipeline runs pytest and ruff. It does not run `gitleaks`, `truffleHog`, or `detect-secrets`. An engineer could accidentally commit an AWS key and the pipeline would pass. Given this is a platform handling client cloud credentials, this is not optional.
+
+### No Pre-commit Hooks
+No `.pre-commit-config.yaml`. Engineers push directly to `main` with no local guardrails. Linting is `|| true` in CI — meaning it's decorative.
+
+### No Branching Strategy Enforced
+`develop` branch was discussed but never created. There are no branch protection rules on `main`. A direct push to `main` by anyone with repo access skips CI entirely if protection isn't enforced at the GitHub level.
+
+### Module `depends_on` Not Enforced
+`security` depends on `network`. If a user runs `cna analyze --module security` without having run network discovery first, what happens? Currently: nothing defined. The dependency graph in `module.yaml` is documentation, not enforcement.
+
+### No Data Schema for Discovery Output
+The diagram generation guide defines a "data contract" as an example dict in a Markdown file. That is not a contract. There is no Pydantic model, no JSON Schema, no versioned spec for what the discovery engine outputs and what the diagram engine consumes. Phase B will build diagrams against an undefined input contract and Phase C will produce output against an undefined output contract. They will not connect cleanly.
+
+### No Diagram Engine Input Validation
+`drawio_generator.py` is the top priority but there is nothing specifying what it accepts, what errors it raises on malformed input, what it does when a VPC has no subnets, when a TGW has 200 attachments, or when resource names contain XML-unsafe characters. These are guaranteed real-world inputs.
+
+### The `output/` Directory Has No Structure Defined
+`.gitignore` excludes `output/diagrams/` and `output/reports/` but neither directory exists and there is no spec for the path structure inside them. Phase B will generate files to an undefined location.
+
+### No Rollback or Idempotency Design
+`cna discover --resume` is a flag on the CLI with no backend. What constitutes "resumed"? What was checkpointed? Where? If discovery fails at account 47 of 50, which 47 are safely stored and which 3 need to be re-run?
+
+### Test Coverage Is Superficial
+All 6 unit tests test data models and pure functions. Zero tests touch the CLI layer. Zero tests validate that `module.yaml` files parse correctly. Zero tests assert that all installed modules have their `depends_on` modules also installed. Zero tests verify the `mcp_router` routes to the right server. The tests that exist are fine but they cover the least risky code in the repo.
+
+### No Engagement Templates
+There are no Jinja2 templates in the repo. `report_engine/` stubs reference Jinja2 but no templates exist. The PPTX deck references `python-pptx` but no slide template `.pptx` file exists. Phase E will start from scratch on these.
+
+### No Client Data Handling Policy
+This platform collects client cloud configuration data. Where does it live? How long? Who can access it? Is it encrypted at rest? Is it deleted after delivery? There is no data retention policy, no client data agreement template, no GDPR/SOC2 consideration documented anywhere. For an enterprise engagement platform, this is a legal gap.
 
 ---
 
-## 7. Testing
+## Summary Verdict
 
-- 6 unit tests cover 6 data models. Zero behavior is tested.
-  There are no tests for the CLI, the module registry, the diagram engine,
-  the report engine, or any integration between components.
-- `test_escalation_engine.py` tests that the engine does NOT escalate.
-  That is testing inert dead code. The tests will still pass after Phase C
-  makes the engine functional — only if someone remembers to update them.
-- No test fixtures. No factories. No shared test data.
-  Every test that needs a `Finding` or `EngagementConfig` will re-implement
-  construction from scratch, creating maintenance debt immediately.
-- No coverage threshold. CI passes at 0% meaningful coverage.
-- No integration test infrastructure. Tests are labeled integration but
-  contain only `# TODO: Phase C`. There is no mock AWS/Azure layer,
-  no localstack config, no VCR cassettes. Integration testing has no foundation.
-
----
-
-## 8. Security
-
-- `--sp-id` and `--external-id` as CLI flags expose secrets in shell history.
-  This was noted above and bears repeating: it is a security flaw, not a convenience tradeoff.
-- No input sanitization on any CLI parameter. `--client` is used as a slug
-  and likely as a directory name. Path traversal via `../../../etc` is untested.
-- The permission grant guide tells clients to attach `ReadOnlyAccess` (AWS managed) plus
-  additional permissions. `ReadOnlyAccess` is an extremely broad policy.
-  The actual minimum required permissions are listed per module in `module.yaml`
-  but the guide doesn't reference them. A security-conscious client will push back.
-- No credential rotation strategy documented.
-- No audit log of what the tool accessed. The discovery engine will make
-  hundreds of API calls against client infrastructure with no record kept on our side.
-
----
-
-## Summary of What Phase A Actually Delivered
-
-| Component | State |
-|---|---|
-| Data models | Defined, not enforced, not persisted |
-| CLI | Wired, all commands no-op |
-| Modules | Manifests only, no behavior |
-| Diagram engine | 4 empty files |
-| AI engine | 5 empty files |
-| Report engine | 6 empty files |
-| Delivery portal | 3 empty files |
-| Tests | 6 model tests, 0 behavior tests |
-| Infrastructure | 0 actual resources |
-| Security | Multiple open issues |
-
-Phase A is a well-organized skeleton. It is not a working system.
-The value is in the structure and the design decisions being codified.
-None of it runs. Phase B must produce the first functional code.
+Phase A delivered a well-organized skeleton. The module structure is sound, the design decisions are directionally correct, and the core models reflect real product thinking. But the skeleton has no connective tissue: no persistence, no auth workflow, no error handling, no data contracts between phases, and no enforcement of the principles that are documented. Before Phase C ships, DD-002, DD-009, and the persistence layer must be real — or the platform will produce untrustworthy outputs with no audit trail and no recovery path.

@@ -4,7 +4,7 @@
 
 A professional delivery platform for cloud network assessments across AWS and Azure.
 Produces architecture diagrams, security findings, and executive-ready reports for
-enterprise clients. **Phase C (Discovery Engine) is complete.**
+enterprise clients. **Phase D (AI Analysis Engine) is complete. Phase E (Report Generation) is active.**
 
 ---
 
@@ -15,13 +15,14 @@ enterprise clients. **Phase C (Discovery Engine) is complete.**
 | A | Platform Foundation | ✅ Complete | 2026-03-05 |
 | B | Diagram Engine | ✅ Complete | 2026-03-05 |
 | C | Discovery Engine | ✅ Complete | 2026-03-05 |
-| D | AI Analysis | 🔄 Next | — |
-| E | Report Generation | ⏳ Planned | — |
+| D | AI Analysis Engine | ✅ Complete | 2026-03-05 |
+| E | Report Generation | 🔄 Active | — |
 | F | Delivery Portal | ⏳ Planned | — |
 
-See [`TODO_PhaseA.md`](TODO_PhaseA.md), [`TODO_PhaseB.md`](TODO_PhaseB.md),
-and [`documentation/architecture/phase-c-discovery.md`](documentation/architecture/phase-c-discovery.md)
-for complete critique-and-close records for each completed phase.
+Critique-and-close records:
+[`TODO_PhaseA.md`](TODO_PhaseA.md) · [`TODO_PhaseB.md`](TODO_PhaseB.md) ·
+[`documentation/architecture/phase-c-discovery.md`](documentation/architecture/phase-c-discovery.md) ·
+[`TODO_PhaseD.md`](TODO_PhaseD.md) · [`documentation/architecture/phase-d-analysis.md`](documentation/architecture/phase-d-analysis.md)
 
 ---
 
@@ -66,59 +67,46 @@ cna init --client acme --platform aws --platform azure
 # Generates: welcome packet, env info form, permission grant guide
 ```
 
-### Discover AWS (Phase C — available now)
+### Discover (Phase C — complete)
 
 ```bash
-# Full org discovery via STS AssumeRole
+# AWS: full org discovery via STS AssumeRole
 cna discover aws \
   --engagement-id acme-20260305-a3f2 \
   --org-role arn:aws:iam::123456789012:role/CNA-ReadOnly
 
-# Specific accounts + regions
-cna discover aws \
-  --engagement-id acme-20260305-a3f2 \
-  --org-role arn:aws:iam::123456789012:role/CNA-ReadOnly \
-  --accounts 234567890123,345678901234 \
-  --regions us-east-1,eu-west-1
-
-# Resume interrupted run
-cna discover aws \
-  --engagement-id acme-20260305-a3f2 \
-  --org-role arn:aws:iam::123456789012:role/CNA-ReadOnly \
-  --resume
-```
-
-### Discover Azure (Phase C — available now)
-
-```bash
-# DefaultAzureCredential (az login / managed identity / env vars)
+# Azure: DefaultAzureCredential (az login / managed identity / env vars)
 cna discover azure \
   --engagement-id acme-20260305-a3f2 \
   --tenant-id 00000000-0000-0000-0000-000000000000
-
-# Service principal
-cna discover azure \
-  --engagement-id acme-20260305-a3f2 \
-  --tenant-id 00000000-0000-0000-0000-000000000000 \
-  --client-id <app-id> \
-  --client-secret <secret>
-
-# Specific subscriptions + resume
-cna discover azure \
-  --engagement-id acme-20260305-a3f2 \
-  --tenant-id 00000000-0000-0000-0000-000000000000 \
-  --subscriptions sub-id-1,sub-id-2 \
-  --resume
 ```
 
-### Generate Diagrams (Phase B — available now)
+### Analyze (Phase D — complete)
 
 ```bash
-# With draw.io CLI + Mermaid CLI (Docker recommended)
-docker-compose run cna cna diagram generate --engagement-id acme-20260305-a3f2
+# Full analysis: AWS + Azure finding rules, MCP enrichment
+cna analyze \
+  --engagement-id acme-20260305-a3f2 \
+  --aws --azure
 
-# XML-only mode (no external tools required)
-CNA_SKIP_RASTER=true cna diagram generate --engagement-id acme-20260305-a3f2
+# Dry run (findings generated, not written)
+cna analyze \
+  --engagement-id acme-20260305-a3f2 \
+  --aws --dry-run
+
+# Air-gapped / offline (no MCP, offline recommendation fallback)
+cna analyze \
+  --engagement-id acme-20260305-a3f2 \
+  --aws --azure --no-recommendations
+
+# Mark findings reviewed (required before cna report)
+cna review complete --engagement-id acme-20260305-a3f2
+```
+
+### Generate Diagrams (Phase B — complete)
+
+```bash
+docker-compose run cna cna diagram generate --engagement-id acme-20260305-a3f2
 ```
 
 ---
@@ -129,34 +117,76 @@ CNA_SKIP_RASTER=true cna diagram generate --engagement-id acme-20260305-a3f2
 cna/
 ├── cli/              # Click CLI entry points (all phases)
 │   ├── discover.py             # cna discover aws / cna discover azure
-│   └── diagram.py              # cna diagram generate / preview
+│   ├── diagram.py              # cna diagram generate / preview
+│   └── analyze.py              # cna analyze (Phase D)
 ├── core/             # Data contracts, auth, persistence, logging, exceptions
 │   ├── topology_schema.py      # v1.1.0 — AWS + Azure Pydantic models
-│   ├── findings_schema.py      # Findings with observed_state enforcement
+│   ├── findings_schema.py      # Findings with observed_state + severity + framework mappings
 │   ├── persistence.py          # EngagementStore — atomic writes, audit log
 │   ├── auth.py                 # STS AssumeRole, DefaultAzureCredential, Key Vault
-│   └── observed_state_validator.py  # 16 hedge patterns + evidence linkage
+│   └── escalation_engine.py    # DD-016: CRITICAL finding alert handler
 ├── diagram_engine/   # Phase B — three output formats
 │   ├── drawio_generator.py     # draw.io XML (VPC, VNet, TGW, vWAN)
 │   ├── mermaid_generator.py    # Mermaid text (org hierarchy, LZ, module deps)
 │   ├── diagrams_generator.py   # Mingrammer PNG (AWS + Azure, graceful fallback)
-│   ├── export_pipeline.py      # .drawio → .svg → .png → .pdf
-│   └── naming.py               # Canonical diagram filename convention
+│   └── export_pipeline.py      # .drawio → .svg → .png → .pdf
 ├── modules/          # Pluggable assessment modules
 │   ├── network/discovery/
 │   │   ├── aws_discovery.py    # STS + EC2/TGW/DX paginators, checkpoint resume
 │   │   └── azure_discovery.py  # ARM REST + Resource Graph, MG hierarchy
-│   └── security/               # Phase C target (next)
-├── ai_engine/        # Phase D — MCP-connected analysis (stub)
-├── report_engine/    # Phase E — Jinja2 templates, PPTX (stub)
-└── delivery_portal/  # Phase F — static portal (stub)
+│   └── security/               # Planned
+├── ai_engine/        # Phase D — COMPLETE
+│   ├── analysis_engine.py      # 11 AWS + 7 Azure finding rules, dedup, escalation
+│   ├── observed_state_enforcer.py  # 16 hedge patterns block assumption language
+│   ├── recommendation_engine.py    # MCP enrichment + offline fallback (DD-003)
+│   └── mcp_client/
+│       ├── mcp_router.py           # AWS / Azure routing
+│       ├── aws_mcp_client.py       # awslabs/mcp — graceful degradation
+│       └── azure_mcp_client.py     # Azure/azure-mcp — graceful degradation
+├── report_engine/    # Phase E — ACTIVE
+└── delivery_portal/  # Phase F — Planned
 documentation/
-├── architecture/     # System overview, repo structure, Phase C discovery design
+├── architecture/     # System overview, Phase C discovery, Phase D analysis
 ├── design/           # All design decisions (DD-001 through DD-016)
 ├── policies/         # Data handling, LZ scope, JA translation protocol
 ├── client-packet/    # Welcome packet, env form, permission guide, engagement model
 └── development/      # Module guide, diagram generation, branching strategy
 ```
+
+---
+
+## Finding Catalog (Phase D)
+
+### AWS Finding Rules (11)
+
+| Rule ID | Title | Severity |
+|---|---|---|
+| AWS-NET-001 | Default VPC exists | MEDIUM |
+| AWS-NET-002 | VPC flow logs disabled | HIGH |
+| AWS-NET-003 | SG unrestricted SSH (port 22) | CRITICAL |
+| AWS-NET-004 | SG unrestricted RDP (port 3389) | CRITICAL |
+| AWS-NET-005 | SG all-traffic from internet | CRITICAL |
+| AWS-NET-006 | TGW default route table association | MEDIUM |
+| AWS-NET-007 | TGW default route table propagation | MEDIUM |
+| AWS-NET-008 | Single Direct Connect — no redundancy | MEDIUM |
+| AWS-NET-009 | NAT Gateway single-AZ | MEDIUM |
+| AWS-NET-010 | Subnet without NACL association | MEDIUM |
+| AWS-NET-011 | IGW missing on public subnet route table | MEDIUM |
+
+### Azure Finding Rules (7)
+
+| Rule ID | Title | Severity |
+|---|---|---|
+| AZ-NET-001 | VNet no DDoS protection | MEDIUM |
+| AZ-NET-002 | Subnet without NSG | HIGH |
+| AZ-NET-003 | Azure Firewall Threat Intelligence not Deny | CRITICAL |
+| AZ-NET-004 | Single ExpressRoute — no redundancy | MEDIUM |
+| AZ-NET-005 | VNet peering gateway transit misconfiguration | MEDIUM |
+| AZ-NET-006 | VNet no flow logs | HIGH |
+| AZ-NET-007 | Application Gateway WAF disabled | HIGH |
+
+All findings enforce: `observed_state` (fact, no hedge language) + `severity` +
+`framework_mappings` (AWS WAF / Azure WAF / NIST CSF / CIS Benchmarks).
 
 ---
 
@@ -167,8 +197,7 @@ VPC Peering, TGW + Attachments, VPN Gateway, Direct Connect, Network Firewall Po
 
 **Azure models:** VNet, Subnet (with NSG/delegation/service endpoints), Route Table,
 VNet Peering, Azure Firewall (with Policy + Threat Intel), Application Gateway (WAF),
-vWAN + Hub (with routing state), Private DNS Zone (with VNet links),
-ExpressRoute Circuit, Management Group hierarchy
+vWAN + Hub, Private DNS Zone, ExpressRoute Circuit, Management Group hierarchy
 
 All models are Pydantic v2, version-pinned at `TOPOLOGY_SCHEMA_VERSION = "1.1.0"`.
 Schema version mismatch between a checkpoint and the current engine is a hard failure —
@@ -183,12 +212,12 @@ re-discovery required.
 | AWS | All org accounts × all enabled regions | `discovery_blocked=True` + reason logged + audit event | Per account+region checkpoint |
 | Azure | All tenant subscriptions × all resource groups | `discovery_blocked=True` + HTTP status + reason logged | Per subscription checkpoint |
 
-### AWS API Coverage (per account per region)
+### AWS API Coverage
 `ec2`: VPCs, Subnets, Route Tables, IGWs, NAT GWs, SGs, NACLs, VPC Peering,
 VPN Gateways, TGWs, TGW Attachments · `directconnect`: Connections, Virtual Interfaces ·
-`organizations`: account list (management account) · `sts`: AssumeRole
+`organizations`: account list · `sts`: AssumeRole
 
-### Azure API Coverage (per subscription)
+### Azure API Coverage
 ARM: VNets, Subnets, Peerings, vWAN + Hubs, Azure Firewalls, App Gateways,
 Private DNS Zones + VNet Links, ExpressRoute Circuits · Management API: MG hierarchy
 
@@ -197,14 +226,13 @@ Private DNS Zones + VNet Links, ExpressRoute Circuits · Management API: MG hier
 ## Required IAM / RBAC
 
 ### AWS
-- Role `CNA-ReadOnly` must exist in every member account with trust to management account
-- See `cna/modules/network/module.yaml` for the full IAM permission list
-- See `documentation/client-packet/permission-grant-guide.md` for the client-facing template
+- Role `CNA-ReadOnly` in every member account with trust to management account
+- See `cna/modules/network/module.yaml` for full IAM permission list
+- See `documentation/client-packet/permission-grant-guide.md` for client-facing template
 
 ### Azure
 - **Reader** at root Management Group (inherits to all subscriptions)
-- **Management Group Reader** at tenant root (for MG hierarchy)
-- For Private DNS: Reader at subscription level is sufficient
+- **Management Group Reader** at tenant root
 - `Network Contributor` is **not** required — all operations are read-only
 
 ---
@@ -217,10 +245,12 @@ All 16 architectural decisions are documented in
 Key decisions:
 - **DD-002:** `observed_state` enforced as observed fact only — hedge language
   detection + evidence linkage check block assumption-based findings
-- **DD-005/DD-016:** Every blocked account/region/subscription is logged with
-  reason, HTTP status, and account ID — never silently skipped
-- **DD-009:** Human review gate blocks report generation — `ReviewGateError` in
-  report engine, `review_complete` flag required in engagement state
+- **DD-003:** Findings and recommendations are strictly separate code paths —
+  `AnalysisEngine` generates findings; `RecommendationEngine` injects vendor MCP recommendations
+- **DD-005/DD-016:** Every blocked account/region/subscription logged with reason and
+  HTTP status — never silently skipped
+- **DD-008:** AI analysis engine reads from our data store only — never touches client environment
+- **DD-009:** Human review gate blocks report generation — `review_complete` flag required
 - **DD-011:** Landing zone = Mermaid/draw.io docs, **not IaC**
 - **DD-015:** JA reports require native speaker review gate before delivery
 
@@ -231,23 +261,21 @@ Key decisions:
 - `detect-secrets` + `gitleaks` pre-commit hooks on every commit
 - `gitleaks-action` in CI on every push and PR
 - Credentials are **never** written to disk — STS tokens and Azure tokens are in-memory only
-- `--client-secret` flag is in-memory only: never logged, never persisted
 - Engagement data retained 90 days post-delivery, then permanently deleted
 - See [`documentation/policies/data-handling-policy.md`](documentation/policies/data-handling-policy.md)
 
 ---
 
-## Phase D — What's Next
+## Phase E — What's Next (Report Generation)
 
-Phase D connects the topology models produced in Phase C to the AI analysis engine:
+Phase E consumes `FindingsReport` from `EngagementStore` and produces:
 
-- `cna analyze` — loads `AWSTopology` / `AzureTopology` checkpoints, runs finding generation
-- MCP router connects to `awslabs/mcp` (AWS) and Microsoft Azure MCP Server (Azure)
-- `recommendation_engine.py` strictly separated from `analysis_engine.py` — vendor
-  recommendations never mixed with observed findings (DD-002)
-- Every finding: `observed_state` required, `framework_mappings` required,
-  hedge language detection blocks publication
-- Output: versioned `FindingsReport` written to `EngagementStore`
+- **Executive PDF** — Jinja2-rendered, `reviewed_complete=True` gate enforced (DD-009)
+- **PPTX deck** — 10-section structure: executive summary, scope, methodology,
+  findings by severity, architecture diagrams, recommendations, roadmap
+- **Regional EN/JA reports** — JA requires native speaker review gate (DD-015)
+- **`cna report`** CLI — renders all formats in one command
+- **`cna report preview`** — HTML preview without full PDF render
 
 ---
 
@@ -255,9 +283,9 @@ Phase D connects the topology models produced in Phase C to the AI analysis engi
 
 1. Branch from `develop` — never commit directly to `main`
 2. Pre-commit hooks run automatically on `git commit`
-3. CI requires: secret scan + lint (no `|| true`) + unit tests (80% coverage gate)
+3. CI requires: secret scan + lint + unit tests (80% coverage gate)
 4. All architecture decisions go through design doc review before implementation
-5. Documentation in `/documentation` is updated in the same PR as code changes
+5. Documentation in `/documentation` updated in the same PR as code changes
 
 ---
 

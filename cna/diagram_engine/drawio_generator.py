@@ -96,6 +96,7 @@ ICON_W = 48
 ICON_H = 48
 SUBNETS_PER_ROW = 4
 VPC_HEADER_H = 36
+NAT_X_GAP = 60           # FIX P2: horizontal gap between NAT gateway icons
 
 
 def _safe(text: Optional[str]) -> str:
@@ -197,7 +198,6 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
     cursor_x = 40
 
     if not region_topology.vpcs:
-        # Explicit empty state — not a bug, not a missing diagram
         note_id = _cell_id()
         cells += _container_cell(
             note_id,
@@ -230,12 +230,12 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
                 f"{subnet.name or subnet.id}\n"
                 f"{subnet.cidr} | {subnet.az}\n"
                 f"[{subnet.subnet_type.value}]"
-                + (" 🔒" if not subnet.auto_assign_public_ip else " 🌐")
+                + (" \U0001f512" if not subnet.auto_assign_public_ip else " \U0001f310")
             )
             style = SUBNET_STYLES.get(subnet.subnet_type, STYLE_SUBNET_UNKNOWN)
             cells += _child_cell(sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, style, vpc_id)
 
-        # IGW icon above VPC
+        # IGW icon centered above VPC
         igw_ids = []
         for igw in vpc.internet_gateways:
             igw_id = _cell_id()
@@ -246,11 +246,14 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
             cells += _edge_cell(igw_id, vpc_id)
             igw_ids.append(igw_id)
 
-        # NAT Gateway icons inside first public subnet position
-        for nat in vpc.nat_gateways:
+        # FIX P2: NAT gateway icons laid out horizontally below the VPC.
+        # nat_x advances by NAT_X_GAP per gateway so multi-AZ NATs
+        # (a common prod pattern) are distinct nodes, not stacked on top of each other.
+        nat_base_x = cursor_x + SUBNET_PADDING
+        nat_y = VPC_Y_START + vpc_h + 10
+        for nat_idx, nat in enumerate(vpc.nat_gateways):
             nat_id = _cell_id()
-            nat_x = cursor_x + SUBNET_PADDING
-            nat_y = VPC_Y_START + vpc_h + 10
+            nat_x = nat_base_x + nat_idx * (ICON_W + NAT_X_GAP)
             nat_label = f"{nat.name or nat.id}\n{nat.public_ip or ''}"
             cells += _container_cell(nat_id, nat_label, nat_x, nat_y, ICON_W, ICON_H, STYLE_NAT)
             cells += _edge_cell(vpc_id, nat_id)
@@ -264,13 +267,6 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         tgw_id = _cell_id()
         tgw_label = f"{tgw.name or tgw.id}\nASN:{tgw.amazon_side_asn or 'N/A'}"
         cells += _container_cell(tgw_id, tgw_label, tgw_x_start, tgw_y, ICON_W * 2, ICON_H * 2, STYLE_TGW)
-        # Connect TGW to VPCs via attachments
-        for attachment in tgw.attachments:
-            for vpc in region_topology.vpcs:
-                if attachment.resource_id == vpc.id:
-                    # Find the vpc cell id (we regenerate — use lookup)
-                    # TODO Phase B: maintain id mapping instead of re-scanning
-                    pass
         tgw_x_start += ICON_W * 2 + 60
 
     label = f"VPC Topology — {region_topology.account_id} / {region_topology.region}"
@@ -280,14 +276,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
 # ── VNet Topology ──────────────────────────────────────────────────────────
 
 def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
-    """Generate draw.io XML for all VNets in an Azure subscription.
-
-    Args:
-        sub_topology: AzureSubscriptionTopology for one subscription.
-
-    Returns:
-        draw.io XML string.
-    """
+    """Generate draw.io XML for all VNets in an Azure subscription."""
     if sub_topology.discovery_blocked:
         raise ValueError(
             f"Discovery was blocked for subscription "
@@ -326,7 +315,7 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
             sx = SUBNET_PADDING + col * (SUBNET_W + SUBNET_COL_GAP)
             sy = VPC_HEADER_H + SUBNET_PADDING + row * (SUBNET_H + SUBNET_ROW_GAP)
             sn_id = _cell_id()
-            nsg_indicator = " 🔒" if subnet.nsg_id else " ⚠️"
+            nsg_indicator = " \U0001f512" if subnet.nsg_id else " \u26a0\ufe0f"
             sn_label = (
                 f"{subnet.name}\n"
                 f"{subnet.address_prefix}"
@@ -335,16 +324,14 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
             )
             cells += _child_cell(sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE, vnet_id)
 
-        # VNet peering edges
         for peering in vnet.peerings:
-            # Simplified: label shows peering target
             peer_note_id = _cell_id()
             peer_x = cursor_x + vnet_w + 40
             peer_y = VPC_Y_START + 20
             remote_name = peering.remote_vnet_name or peering.remote_vnet_id.split("/")[-1]
             cells += _container_cell(
                 peer_note_id,
-                f"⇄ {remote_name}\n[{peering.peering_state}]",
+                f"\u21c4 {remote_name}\n[{peering.peering_state}]",
                 peer_x, peer_y, 160, 50,
                 "rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;"
             )
@@ -359,25 +346,14 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
 # ── TGW Hub-and-Spoke ──────────────────────────────────────────────────────
 
 def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopology) -> str:
-    """Generate draw.io XML for a single Transit Gateway and all its attachments.
-
-    Args:
-        tgw: The TransitGateway model.
-        region_topology: Parent region data for resolving attachment names.
-
-    Returns:
-        draw.io XML string.
-    """
+    """Generate draw.io XML for a single Transit Gateway and all its attachments."""
+    import math
     cells = ""
-
-    # TGW center
     center_x, center_y = 500, 400
     tgw_id = _cell_id()
     tgw_label = f"{tgw.name or tgw.id}\n{tgw.owner_account_id}\nASN:{tgw.amazon_side_asn or 'N/A'}"
     cells += _container_cell(tgw_id, tgw_label, center_x, center_y, ICON_W * 2, ICON_H * 2, STYLE_TGW)
 
-    # Spoke layout: distribute attachments in a circle
-    import math
     count = len(tgw.attachments)
     radius = max(250, count * 40)
     for i, attachment in enumerate(tgw.attachments):
@@ -385,14 +361,11 @@ def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopolog
         ax = int(center_x + radius * math.cos(angle) - SUBNET_W // 2)
         ay = int(center_y + radius * math.sin(angle) - SUBNET_H // 2)
         att_id = _cell_id()
-
-        # Resolve display name from VPC list if possible
         display_name = attachment.resource_id
         for vpc in region_topology.vpcs:
             if vpc.id == attachment.resource_id:
                 display_name = vpc.name or vpc.id
                 break
-
         att_label = (
             f"{display_name}\n"
             f"[{attachment.resource_type.value}]\n"
@@ -408,14 +381,7 @@ def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopolog
 # ── Azure Virtual WAN Hub-and-Spoke ───────────────────────────────────────
 
 def generate_vwan_topology(vwan: AzureVWan) -> str:
-    """Generate draw.io XML for an Azure Virtual WAN and all its hubs.
-
-    Args:
-        vwan: AzureVWan model.
-
-    Returns:
-        draw.io XML string.
-    """
+    """Generate draw.io XML for an Azure Virtual WAN and all its hubs."""
     import math
     cells = ""
     count = len(vwan.hubs)
@@ -441,8 +407,8 @@ def generate_vwan_topology(vwan: AzureVWan) -> str:
         hx = int(center_x + radius * math.cos(angle) - ICON_W)
         hy = int(center_y + radius * math.sin(angle) - ICON_H)
         hub_id = _cell_id()
-        fw_note = " 🔥 AFW" if hub.azure_firewall_id else ""
-        er_note = " 🔗 ER" if hub.express_route_gateway_id else ""
+        fw_note = " \U0001f525 AFW" if hub.azure_firewall_id else ""
+        er_note = " \U0001f517 ER" if hub.express_route_gateway_id else ""
         hub_label = (
             f"{hub.name}\n"
             f"{hub.location} | {hub.address_prefix}\n"
@@ -451,18 +417,14 @@ def generate_vwan_topology(vwan: AzureVWan) -> str:
         cells += _container_cell(hub_id, hub_label, hx, hy, SUBNET_W, SUBNET_H + 20, STYLE_VWAN_HUB)
         cells += _edge_cell(vwan_id, hub_id)
 
-        # Connected VNets as spokes off each hub
-        for j, vnet_id_str in enumerate(hub.connected_vnet_ids[:8]):  # cap at 8 per hub
+        for j, vnet_id_str in enumerate(hub.connected_vnet_ids[:8]):
             vnet_spoke_id = _cell_id()
             vnet_name = vnet_id_str.split("/")[-1]
             inner_radius = 120
             inner_angle = angle + (math.pi / 4 * (j - len(hub.connected_vnet_ids) / 2))
             vx = int(hx + inner_radius * math.cos(inner_angle))
             vy = int(hy + inner_radius * math.sin(inner_angle))
-            cells += _container_cell(
-                vnet_spoke_id, vnet_name,
-                vx, vy, 120, 40, STYLE_VNET
-            )
+            cells += _container_cell(vnet_spoke_id, vnet_name, vx, vy, 120, 40, STYLE_VNET)
             cells += _edge_cell(hub_id, vnet_spoke_id)
 
     label = f"vWAN Topology — {vwan.name}"

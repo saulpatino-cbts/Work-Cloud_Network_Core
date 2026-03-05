@@ -1,0 +1,54 @@
+{# Finding Detail Template
+   One HTML page per finding. Source for report appendix and PPTX detail slides.
+
+   Variables:
+     finding: FindingModel instance (see cna/core/findings_schema.py)
+     evidence_snippets: list[dict]  (evidence_id -> raw API data excerpt)
+#}
+<div class="finding-detail" id="{{ finding.finding_id }}">
+  <h3>
+    <span class="severity-{{ finding.severity | lower }}">{{ finding.severity }}</span>
+    — {{ finding.title }}
+  </h3>
+
+  <table>
+    <tr><th>ID</th><td><code>{{ finding.finding_id }}</code></td></tr>
+    <tr><th>Module</th><td>{{ finding.module }}</td></tr>
+    <tr><th>Resource</th><td><code>{{ finding.resource_id }}</code></td></tr>
+    <tr><th>Platform</th><td>{{ finding.platform }}</td></tr>
+    {% if finding.account_id %}
+    <tr><th>Account/Sub</th><td><code>{{ finding.account_id }}</code></td></tr>
+    {% endif %}
+    {% if finding.region %}
+    <tr><th>Region</th><td>{{ finding.region }}</td></tr>
+    {% endif %}
+  </table>
+
+  <h4>Observed State</h4>
+  <p>{{ finding.observed_state }}</p>
+
+  <h4>Evidence</h4>
+  {% for ev in evidence_snippets %}
+  <pre><code>{{ ev.data | tojson(indent=2) }}</code></pre>
+  {% endfor %}
+
+  <h4>Framework Mappings</h4>
+  {% if finding.framework_mappings %}
+  <ul>
+  {% for mapping in finding.framework_mappings %}
+    <li>{{ mapping }}</li>
+  {% endfor %}
+  </ul>
+  {% else %}
+  <p><em>No framework mappings. Reviewer must add before report generation.</em></p>
+  {% endif %}
+
+  <h4>Review Status</h4>
+  <p>
+    {% if finding.reviewed %}
+    ✅ Reviewed by {{ finding.reviewed_by }} on {{ finding.reviewed_at }}
+    {% else %}
+    ⚠️ <strong>Pending review.</strong> Report generation is blocked until all findings are reviewed.
+    {% endif %}
+  </p>
+</div>

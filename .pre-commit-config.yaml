@@ -1,0 +1,42 @@
+# Pre-commit hooks — closes TODO_PhaseA: No Pre-commit Hooks
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key          # catches raw PEM/RSA keys
+      - id: no-commit-to-branch
+        args: [--branch, main]          # blocks direct commits to main locally
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [
+          "--baseline", ".secrets.baseline",
+          "--exclude-files", ".env.example",
+          "--exclude-files", "tests/",
+        ]
+        # Blocks commits containing AWS keys, Azure secrets,
+        # connection strings, JWT tokens, and generic high-entropy strings.
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        # Belt-and-suspenders: gitleaks catches patterns detect-secrets misses

@@ -1,54 +1,55 @@
-{# Finding Detail Template
-   One HTML page per finding. Source for report appendix and PPTX detail slides.
+{% macro finding_card(f) %}
+<div class="finding-card sev-{{ f.severity.value | lower }}">
+  <div class="finding-header">
+    <span class="badge sev-badge-{{ f.severity.value | lower }}">{{ f.severity.value }}</span>
+    <span class="rule-id">{{ f.rule_id }}</span>
+    <span class="finding-title">{{ f.title }}</span>
+  </div>
 
-   Variables:
-     finding: FindingModel instance (see cna/core/findings_schema.py)
-     evidence_snippets: list[dict]  (evidence_id -> raw API data excerpt)
-#}
-<div class="finding-detail" id="{{ finding.finding_id }}">
-  <h3>
-    <span class="severity-{{ finding.severity | lower }}">{{ finding.severity }}</span>
-    — {{ finding.title }}
-  </h3>
-
-  <table>
-    <tr><th>ID</th><td><code>{{ finding.finding_id }}</code></td></tr>
-    <tr><th>Module</th><td>{{ finding.module }}</td></tr>
-    <tr><th>Resource</th><td><code>{{ finding.resource_id }}</code></td></tr>
-    <tr><th>Platform</th><td>{{ finding.platform }}</td></tr>
-    {% if finding.account_id %}
-    <tr><th>Account/Sub</th><td><code>{{ finding.account_id }}</code></td></tr>
-    {% endif %}
-    {% if finding.region %}
-    <tr><th>Region</th><td>{{ finding.region }}</td></tr>
-    {% endif %}
+  <table class="detail-table">
+    <tr><th>Resource ID</th>    <td>{{ f.resource_id }}</td></tr>
+    <tr><th>Resource Type</th>  <td>{{ f.resource_type }}</td></tr>
+    <tr><th>Account / Sub</th>  <td>{{ f.account_id }}</td></tr>
+    <tr><th>Region</th>         <td>{{ f.region }}</td></tr>
+    <tr><th>Status</th>         <td>{{ f.status.value }}</td></tr>
   </table>
 
-  <h4>Observed State</h4>
-  <p>{{ finding.observed_state }}</p>
+  <div class="observed-state">
+    <strong>Observed State</strong>
+    <p class="fact">{{ f.observed_state.fact }}</p>
+    <p class="evidence">Evidence ref: <code>{{ f.observed_state.evidence_ref }}</code></p>
+  </div>
 
-  <h4>Evidence</h4>
-  {% for ev in evidence_snippets %}
-  <pre><code>{{ ev.data | tojson(indent=2) }}</code></pre>
-  {% endfor %}
+  <div class="framework-mappings">
+    <strong>Framework Mappings</strong>
+    <table class="fw-table">
+      <thead><tr><th>Framework</th><th>Pillar</th><th>Control</th></tr></thead>
+      <tbody>
+        {% for m in f.framework_mappings %}
+        <tr>
+          <td>{{ m.framework }}</td>
+          <td>{{ m.pillar }}</td>
+          <td>{{ m.control }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-  <h4>Framework Mappings</h4>
-  {% if finding.framework_mappings %}
-  <ul>
-  {% for mapping in finding.framework_mappings %}
-    <li>{{ mapping }}</li>
-  {% endfor %}
-  </ul>
-  {% else %}
-  <p><em>No framework mappings. Reviewer must add before report generation.</em></p>
+  {% if f.recommendations %}
+  <div class="recommendations">
+    <strong>Recommendations</strong>
+    {% for r in f.recommendations %}
+    <div class="rec-item">
+      <p>{{ r.text }}</p>
+      <p class="rec-source">Source: {{ r.source }}
+        {% if r.reference_url %}&nbsp;—&nbsp;
+          <a href="{{ r.reference_url }}">Reference</a>
+        {% endif %}
+      </p>
+    </div>
+    {% endfor %}
+  </div>
   {% endif %}
-
-  <h4>Review Status</h4>
-  <p>
-    {% if finding.reviewed %}
-    ✅ Reviewed by {{ finding.reviewed_by }} on {{ finding.reviewed_at }}
-    {% else %}
-    ⚠️ <strong>Pending review.</strong> Report generation is blocked until all findings are reviewed.
-    {% endif %}
-  </p>
 </div>
+{% endmacro %}

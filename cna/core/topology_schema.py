@@ -1,16 +1,16 @@
-"""Topology data contracts — the bridge between discovery (Phase C) and diagram engine (Phase B).
+"""Topology data contracts — bridge between discovery (Phase C) and diagram engine (Phase B).
 
-Criticized in TODO_PhaseA.md: diagram engine had no defined input contract.
-This file IS that contract. Every diagram generator imports from here.
-Every discovery writer outputs to these models.
-Version-pinned so schema drift is detected, not silently swallowed.
+Version 1.1.0 — Phase B Gap 8 closure.
+  Added AWS: SecurityGroup, NACL, VpnGateway, NetworkFirewallPolicy
+  Added Azure: AzureFirewall, ApplicationGateway, PrivateDnsZone, ExpressRouteCircuit
+  All new fields are Optional with default_factory so v1.0.0 data remains valid.
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 
-TOPOLOGY_SCHEMA_VERSION = "1.0.0"
+TOPOLOGY_SCHEMA_VERSION = "1.1.0"
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
@@ -41,9 +41,9 @@ class PeeringState(str, Enum):
 # ── AWS primitives ─────────────────────────────────────────────────────────
 
 class RouteEntry(BaseModel):
-    destination: str                    # CIDR or prefix list
-    target: str                         # igw-xxx | nat-xxx | tgw-xxx | local | etc.
-    target_type: str                    # igw | nat | tgw | local | pcx | vpgw | eni
+    destination: str
+    target: str
+    target_type: str
     state: str = "active"
 
 
@@ -53,6 +53,63 @@ class RouteTable(BaseModel):
     associated_subnet_ids: list[str] = Field(default_factory=list)
     routes: list[RouteEntry] = Field(default_factory=list)
     is_main: bool = False
+
+
+class SecurityGroupRule(BaseModel):
+    rule_id: Optional[str] = None
+    direction: str                  # "ingress" | "egress"
+    protocol: str                   # tcp | udp | icmp | -1 (all)
+    from_port: Optional[int] = None
+    to_port: Optional[int] = None
+    cidr_ranges: list[str] = Field(default_factory=list)
+    source_sg_id: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SecurityGroup(BaseModel):
+    id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    vpc_id: str
+    rules: list[SecurityGroupRule] = Field(default_factory=list)
+    tags: dict = Field(default_factory=dict)
+
+
+class NACLEntry(BaseModel):
+    rule_number: int
+    protocol: str
+    rule_action: str    # "allow" | "deny"
+    cidr: str
+    from_port: Optional[int] = None
+    to_port: Optional[int] = None
+    egress: bool
+
+
+class NACL(BaseModel):
+    id: str
+    name: Optional[str] = None
+    vpc_id: str
+    is_default: bool = False
+    entries: list[NACLEntry] = Field(default_factory=list)
+    associated_subnet_ids: list[str] = Field(default_factory=list)
+
+
+class VpnGateway(BaseModel):
+    id: str
+    name: Optional[str] = None
+    state: str
+    type: str = "ipsec.1"
+    amazon_side_asn: Optional[int] = None
+    vpc_id: Optional[str] = None
+
+
+class NetworkFirewallPolicy(BaseModel):
+    arn: str
+    name: str
+    vpc_id: str
+    firewall_subnet_ids: list[str] = Field(default_factory=list)
+    stateful_rule_group_arns: list[str] = Field(default_factory=list)
+    stateless_rule_group_arns: list[str] = Field(default_factory=list)
 
 
 class Subnet(BaseModel):
@@ -103,13 +160,15 @@ class VPC(BaseModel):
     internet_gateways: list[InternetGateway] = Field(default_factory=list)
     nat_gateways: list[NatGateway] = Field(default_factory=list)
     peering_connections: list[VpcPeeringConnection] = Field(default_factory=list)
+    security_groups: list[SecurityGroup] = Field(default_factory=list)
+    nacls: list[NACL] = Field(default_factory=list)
     flow_logs_enabled: bool = False
     tags: dict = Field(default_factory=dict)
 
 
 class TGWAttachment(BaseModel):
     id: str
-    resource_id: str               # vpc-xxx | vpn-xxx | dx-xxx
+    resource_id: str
     resource_type: AttachmentType
     resource_owner_account_id: str
     state: str
@@ -152,6 +211,8 @@ class AWSRegionTopology(BaseModel):
     vpcs: list[VPC] = Field(default_factory=list)
     transit_gateways: list[TransitGateway] = Field(default_factory=list)
     direct_connect_connections: list[DirectConnectConnection] = Field(default_factory=list)
+    vpn_gateways: list[VpnGateway] = Field(default_factory=list)
+    network_firewalls: list[NetworkFirewallPolicy] = Field(default_factory=list)
     discovery_blocked: bool = False
     block_reason: Optional[str] = None
 
@@ -181,7 +242,7 @@ class AzureSubnet(BaseModel):
 class AzureRouteEntry(BaseModel):
     name: str
     address_prefix: str
-    next_hop_type: str  # VirtualNetworkGateway | VnetLocal | Internet | VirtualAppliance | None
+    next_hop_type: str
     next_hop_ip: Optional[str] = None
 
 
@@ -204,6 +265,50 @@ class VNetPeering(BaseModel):
     allow_forwarded_traffic: bool
     allow_gateway_transit: bool
     use_remote_gateways: bool
+
+
+class AzureFirewall(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_tier: str                   # "Basic" | "Standard" | "Premium"
+    subnet_id: Optional[str] = None # AzureFirewallSubnet
+    public_ip_ids: list[str] = Field(default_factory=list)
+    policy_id: Optional[str] = None
+    threat_intel_mode: str = "Alert"
+
+
+class ApplicationGateway(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_name: str                   # "Standard_v2" | "WAF_v2"
+    subnet_id: str
+    waf_enabled: bool = False
+    frontend_ip_configs: list[str] = Field(default_factory=list)
+
+
+class PrivateDnsZone(BaseModel):
+    id: str
+    name: str                       # e.g. "privatelink.blob.core.windows.net"
+    resource_group: str
+    linked_vnet_ids: list[str] = Field(default_factory=list)
+    record_count: int = 0
+
+
+class ExpressRouteCircuit(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    service_provider: Optional[str] = None
+    peering_location: Optional[str] = None
+    bandwidth_mbps: Optional[int] = None
+    sku_tier: str = "Standard"      # "Standard" | "Premium"
+    sku_family: str = "MeteredData" # "MeteredData" | "UnlimitedData"
+    circuit_provisioning_state: str = "Enabled"
 
 
 class VNet(BaseModel):
@@ -257,6 +362,10 @@ class AzureSubscriptionTopology(BaseModel):
     tenant_id: str
     vnets: list[VNet] = Field(default_factory=list)
     virtual_wans: list[AzureVWan] = Field(default_factory=list)
+    firewalls: list[AzureFirewall] = Field(default_factory=list)
+    application_gateways: list[ApplicationGateway] = Field(default_factory=list)
+    private_dns_zones: list[PrivateDnsZone] = Field(default_factory=list)
+    express_route_circuits: list[ExpressRouteCircuit] = Field(default_factory=list)
     discovery_blocked: bool = False
     block_reason: Optional[str] = None
 

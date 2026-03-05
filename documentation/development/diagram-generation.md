@@ -1,84 +1,105 @@
-# Diagram Generation — Phase B (TOP PRIORITY)
+# Diagram Generation — Phase B
 
-## Diagram Types
+> Version: 1.1.0 | Updated: 2026-03-05 | Status: ACTIVE
 
-| Diagram | Generator | Module | Phase |
+---
+
+## Three Output Formats
+
+| Format | Tool | Use Case | Phase |
 |---|---|---|---|
-| VPC topology | draw.io (n2g) | network | B |
-| VNet topology | draw.io (n2g) | network | B |
-| Account/subscription hierarchy | Mermaid | network | B |
-| Security overlay | draw.io | security | B |
-| Traffic flow | draw.io | security | B |
-| Trust boundaries | draw.io + Mermaid | security | B |
-| TGW / Virtual WAN topology | draw.io (n2g) | network | B |
-| Landing zone architecture | Mermaid | landingzone | B |
-| Zero Trust radar chart | Chart.js (HTML) | zerotrust | D |
+| `.drawio` | draw.io XML generator | Client-editable deliverable, relationship diagrams | B ✅ |
+| `.mmd` → `.svg` | Mermaid CLI (`mmdc`) | Portal HTML, Markdown reports, GitHub rendering | B ✅ |
+| `.png` | Mingrammer `diagrams` | Code-driven, reproducible, AWS/Azure icon fidelity | B ✅ |
 
-## Output Formats
+---
 
-All diagram types produce all four formats:
+## Generating Diagrams
 
-```
-.drawio  →  source file (hand-editable in draw.io desktop/web)
-.svg     →  vector, lossless scaling, embed in reports
-.png     →  raster, for PowerPoint/Word
-.pdf     →  print-ready
-```
+### Local (with draw.io CLI installed)
+```bash
+# Generate all diagrams for an engagement
+cna diagram generate --engagement-id acme-20260305-a3f2
 
-## Export Pipeline
+# Skip raster export (XML only — for dev/testing)
+CNA_SKIP_RASTER=true cna diagram generate --engagement-id acme-20260305-a3f2
 
-```
-discovered topology dict
-      |
-      v
-cna/diagram_engine/drawio_generator.py
-      |  (.drawio XML string)
-      v
-cna/diagram_engine/export_pipeline.py
-      |  (drawio CLI: .drawio -> .svg)
-      |  (cairosvg: .svg -> .png)
-      |  (reportlab: .png -> .pdf)
-      v
-output/diagrams/<client>/<region>/<type>.*
+# Preview Mermaid in browser
+cna diagram preview --type account-hierarchy
 ```
 
-## Key Libraries
+### Docker (recommended)
+```bash
+# Full export chain: .drawio → .svg → .png → .pdf
+docker-compose run cna cna diagram generate --engagement-id acme-20260305-a3f2
+```
 
-- `n2g` — Network to Graph, converts topology data to draw.io XML shapes
-- `diagrams` — Python diagrams with native AWS + Azure provider icons
-- `drawio-diagram-generator` — programmatic draw.io XML
-- `cairosvg` — SVG to PNG conversion (installed via Dockerfile)
-- Mermaid — embedded in portal HTML and Markdown reports
+---
 
-## First Implementation Target
+## File Naming Convention
 
-`cna/diagram_engine/drawio_generator.py` with the `vpc_topology` diagram type.
-This is the first real code written in Phase B.
+All diagram files follow this pattern:
+```
+{engagement_id}-{platform}-{diagram_type}-{scope}-{region}.{ext}
+```
 
-## Data Contract
+Examples:
+```
+acme-20260305-a3f2-aws-vpc-topology-123456789012-us-east-1.drawio
+acme-20260305-a3f2-azure-vnet-topology-sub-a1b2c3d4.svg
+acme-20260305-a3f2-aws-account-hierarchy.mmd
+```
 
-Diagram generators accept a standardized topology dict output by discovery:
+See `cna/diagram_engine/naming.py` for the `diagram_filename()` function.
 
+---
+
+## Diagram Type Matrix
+
+| Diagram Type | Generator | Input Model | Output Formats |
+|---|---|---|---|
+| `vpc-topology` | `drawio_generator.generate_vpc_topology()` | `AWSRegionTopology` | .drawio, .svg, .png |
+| `vnet-topology` | `drawio_generator.generate_vnet_topology()` | `AzureSubscriptionTopology` | .drawio, .svg, .png |
+| `tgw-topology` | `drawio_generator.generate_tgw_topology()` | `TransitGateway` + `AWSRegionTopology` | .drawio, .svg, .png |
+| `vwan-topology` | `drawio_generator.generate_vwan_topology()` | `AzureVWan` | .drawio, .svg, .png |
+| `account-hierarchy` | `mermaid_generator.generate_aws_account_hierarchy()` | `AWSTopology` | .mmd, .svg |
+| `mg-hierarchy` | `mermaid_generator.generate_azure_mg_hierarchy()` | `AzureTopology` | .mmd, .svg |
+| `landing-zone` | `mermaid_generator.generate_landing_zone_diagram()` | `dict` (design notes) | .mmd, .svg |
+| `aws-infra` | `diagrams_generator.generate_aws_vpc_diagram()` | `AWSRegionTopology` | .png |
+| `azure-infra` | `diagrams_generator.generate_azure_vnet_diagram()` | `AzureSubscriptionTopology` | .png |
+
+---
+
+## Schema Version
+
+Topology schema is versioned in `cna/core/topology_schema.py`:
 ```python
-# Example VPC topology input
-{
-  "account_id": "123456789012",
-  "region": "us-east-1",
-  "vpcs": [
-    {
-      "id": "vpc-abc123",
-      "cidr": "10.0.0.0/16",
-      "name": "prod-vpc",
-      "subnets": [
-        {"id": "subnet-abc", "cidr": "10.0.1.0/24", "az": "us-east-1a", "type": "private"},
-        {"id": "subnet-def", "cidr": "10.0.2.0/24", "az": "us-east-1b", "type": "public"}
-      ],
-      "internet_gateway": "igw-abc",
-      "nat_gateways": ["nat-abc"],
-      "route_tables": [...]
-    }
-  ],
-  "transit_gateways": [...],
-  "vpc_peering": [...]
-}
+TOPOLOGY_SCHEMA_VERSION = "1.1.0"
 ```
+
+Current schema (v1.1.0) adds:
+- AWS: `SecurityGroup`, `NACL`, `VpnGateway`, `NetworkFirewallPolicy`
+- Azure: `AzureFirewall`, `ApplicationGateway`, `PrivateDnsZone`, `ExpressRouteCircuit`
+
+---
+
+## Export Pipeline Configuration
+
+| Env Var | Default | Description |
+|---|---|---|
+| `CNA_SKIP_RASTER` | `false` | Skip SVG/PNG/PDF export (XML only) |
+| `CNA_DIAGRAM_DPI` | `150` | PNG output DPI |
+| `CNA_DIAGRAM_MAX_PX` | `4096` | Max PNG dimension in pixels |
+
+---
+
+## DPI and Size Configuration
+
+The export pipeline computes PNG scale dynamically:
+```
+scale = min(dpi / 96, max_dimension_px / max(svg_width, svg_height))
+```
+
+Default `dpi=150` produces presentation-quality PNGs. For large diagrams
+(20+ subnets), the `max_dimension_px=4096` cap prevents PPTX embed issues.
+For print-quality output: `CNA_DIAGRAM_DPI=300 CNA_DIAGRAM_MAX_PX=8192`.

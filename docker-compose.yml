@@ -1,0 +1,16 @@
+version: '3.9'
+services:
+  cna:
+    build: .
+    image: cna:local
+    env_file: .env
+    volumes:
+      - ./engagements:/app/engagements
+      - ./output:/app/output
+    command: ["--help"]
+  cna-dev:
+    build: .
+    env_file: .env
+    volumes:
+      - .:/app
+    entrypoint: ["python", "-m", "pytest", "tests/", "-v"]

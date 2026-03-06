@@ -98,6 +98,12 @@ variable "frontdoor_minimum_tls_version" {
   default     = "TLS12"
 }
 
+variable "frontdoor_secret_versionless_id" {
+  description = "Optional Key Vault certificate secret versionless ID for customer-managed Front Door TLS"
+  type        = string
+  default     = null
+}
+
 variable "virtual_network_id" {
   description = "Virtual network ID used for private DNS links"
   type        = string

@@ -3,6 +3,7 @@ locals {
   frontdoor_route_name       = "route-${var.name_prefix}-api"
   use_custom_domain          = var.frontdoor_custom_domain_host_name != ""
   use_custom_domain_dns_zone = local.use_custom_domain && var.frontdoor_custom_domain_dns_zone_id != null
+  use_customer_managed_tls   = var.frontdoor_secret_versionless_id != null && var.frontdoor_certificate_type == "CustomerCertificate"
 }
 
 resource "azurerm_key_vault_secret" "openai_endpoint" {
@@ -142,6 +143,18 @@ resource "azurerm_cdn_frontdoor_profile" "platform" {
   sku_name            = "Standard_AzureFrontDoor"
 }
 
+resource "azurerm_cdn_frontdoor_secret" "platform" {
+  count                    = local.use_customer_managed_tls ? 1 : 0
+  name                     = "afd-secret-${var.name_prefix}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
+
+  secret {
+    customer_certificate {
+      key_vault_certificate_id = var.frontdoor_secret_versionless_id
+    }
+  }
+}
+
 resource "azurerm_cdn_frontdoor_endpoint" "platform" {
   name                     = "afd-endpoint-${var.name_prefix}"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
@@ -183,6 +196,7 @@ resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
   tls {
     certificate_type    = var.frontdoor_certificate_type
     minimum_tls_version = var.frontdoor_minimum_tls_version
+    cdn_frontdoor_secret_id = local.use_customer_managed_tls ? azurerm_cdn_frontdoor_secret.platform[0].id : null
   }
 }
 

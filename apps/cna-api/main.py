@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -39,8 +40,12 @@ def publish(request: PublishRequest) -> dict:
     target = publish_root / request.target_path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(f"published artifact placeholder for {request.engagement_id}\n")
+    blob_container = os.getenv("CNA_STORAGE_STATIC_CONTAINER", "static-site")
+    blob_prefix = f"engagements/{request.engagement_id}/"
     return {
         "status": "published",
         "engagement_id": request.engagement_id,
         "target_path": str(target),
+        "blob_container": blob_container,
+        "blob_prefix": blob_prefix,
     }

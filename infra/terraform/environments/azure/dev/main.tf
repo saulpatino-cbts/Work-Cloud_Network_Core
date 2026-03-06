@@ -36,3 +36,16 @@ module "ai" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 }
+
+module "runtime" {
+  source                                 = "../../../providers/azure/runtime"
+  resource_group_name                    = azurerm_resource_group.this.name
+  storage_account_id                     = module.storage.storage_account_id
+  storage_account_name                   = module.storage.storage_account_name
+  key_vault_id                           = module.identity.key_vault_id
+  managed_identity_principal_id          = module.identity.managed_identity_principal_id
+  azure_openai_endpoint                  = module.ai.azure_openai_endpoint
+  application_insights_connection_string = module.ai.application_insights_connection_string
+  api_container_app_id                   = module.compute.api_id
+  worker_container_app_id                = module.compute.worker_id
+}

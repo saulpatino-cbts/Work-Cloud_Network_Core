@@ -45,3 +45,7 @@ output "azure_openai_endpoint" {
 output "application_insights_name" {
   value = module.ai.application_insights_name
 }
+
+output "storage_role_assignment_id" {
+  value = module.runtime.storage_role_assignment_id
+}

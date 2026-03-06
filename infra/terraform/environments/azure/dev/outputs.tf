@@ -33,3 +33,15 @@ output "api_fqdn" {
 output "worker_name" {
   value = module.compute.worker_name
 }
+
+output "azure_openai_account_name" {
+  value = module.ai.azure_openai_account_name
+}
+
+output "azure_openai_endpoint" {
+  value = module.ai.azure_openai_endpoint
+}
+
+output "application_insights_name" {
+  value = module.ai.application_insights_name
+}

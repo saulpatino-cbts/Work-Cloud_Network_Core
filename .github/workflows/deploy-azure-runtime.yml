@@ -26,9 +26,12 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  plan:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,12 +45,53 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Terraform init
-        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
-        run: terraform init
+        run: terraform init -backend-config="key=${{ inputs.environment }}.terraform.tfstate"
 
-      - name: Terraform apply
-        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
         run: |
-          terraform apply -auto-approve \
+          terraform plan -out=tfplan \
             -var="api_image=${{ inputs.api_image }}" \
             -var="worker_image=${{ inputs.worker_image }}"
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
+
+  apply:
+    runs-on: ubuntu-latest
+    needs: plan
+    environment: ${{ inputs.environment == 'prod' && 'prod-approval' || inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform init
+        run: terraform init -backend-config="key=${{ inputs.environment }}.terraform.tfstate"
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve tfplan

@@ -41,6 +41,108 @@ resource "azurerm_network_security_rule" "allow_api_ingress" {
   network_security_group_name = azurerm_network_security_group.platform.name
 }
 
+resource "azurerm_private_dns_zone" "blob" {
+  name                = "privatelink.blob.core.windows.net"
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_private_dns_zone" "keyvault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_private_dns_zone" "openai" {
+  name                = "privatelink.openai.azure.com"
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
+  name                  = "pdns-link-${var.name_prefix}-blob"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.blob.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
+  name                  = "pdns-link-${var.name_prefix}-keyvault"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "openai" {
+  name                  = "pdns-link-${var.name_prefix}-openai"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.openai.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_endpoint" "storage_blob" {
+  name                = "pe-${var.name_prefix}-storage-blob"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${var.name_prefix}-storage-blob"
+    private_connection_resource_id = var.storage_account_id
+    subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdzg-storage-blob"
+    private_dns_zone_ids = [azurerm_private_dns_zone.blob.id]
+  }
+}
+
+resource "azurerm_private_endpoint" "keyvault" {
+  name                = "pe-${var.name_prefix}-keyvault"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${var.name_prefix}-keyvault"
+    private_connection_resource_id = var.key_vault_id
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdzg-keyvault"
+    private_dns_zone_ids = [azurerm_private_dns_zone.keyvault.id]
+  }
+}
+
+resource "azurerm_cognitive_account" "openai_private_link_stub" {
+  name                = "aoai-${var.name_prefix}-private"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  kind                = "OpenAI"
+  sku_name            = "S0"
+  custom_subdomain_name = "aoai-${var.name_prefix}-private"
+}
+
+resource "azurerm_private_endpoint" "openai" {
+  name                = "pe-${var.name_prefix}-openai"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${var.name_prefix}-openai"
+    private_connection_resource_id = azurerm_cognitive_account.openai_private_link_stub.id
+    subresource_names              = ["account"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdzg-openai"
+    private_dns_zone_ids = [azurerm_private_dns_zone.openai.id]
+  }
+}
+
 resource "azurerm_cdn_frontdoor_profile" "platform" {
   name                = "afd-${var.name_prefix}-platform"
   resource_group_name = var.resource_group_name
@@ -66,15 +168,15 @@ resource "azurerm_cdn_frontdoor_origin_group" "api" {
 }
 
 resource "azurerm_cdn_frontdoor_origin" "api" {
-  name                          = local.frontdoor_origin_name
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.api.id
-  enabled                       = true
-  host_name                     = var.api_container_app_fqdn
-  http_port                     = 80
-  https_port                    = 443
-  origin_host_header            = var.api_container_app_fqdn
-  priority                      = 1
-  weight                        = 1000
+  name                           = local.frontdoor_origin_name
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.api.id
+  enabled                        = true
+  host_name                      = var.api_container_app_fqdn
+  http_port                      = 80
+  https_port                     = 443
+  origin_host_header             = var.api_container_app_fqdn
+  priority                       = 1
+  weight                         = 1000
   certificate_name_check_enabled = true
 }
 

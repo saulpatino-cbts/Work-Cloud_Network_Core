@@ -113,4 +113,8 @@ module "security" {
   worker_container_app_id                = module.compute.worker_id
   azure_openai_endpoint                  = module.ai.azure_openai_endpoint
   application_insights_connection_string = module.ai.application_insights_connection_string
+  virtual_network_id                     = azurerm_virtual_network.platform.id
+  private_endpoint_subnet_id             = azurerm_subnet.private_endpoints.id
+  storage_account_id                     = module.storage.storage_account_id
+  storage_account_name                   = module.storage.storage_account_name
 }

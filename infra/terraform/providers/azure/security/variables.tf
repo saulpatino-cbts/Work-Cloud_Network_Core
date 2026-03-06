@@ -74,3 +74,23 @@ variable "frontdoor_custom_domain_host_name" {
   type        = string
   default     = ""
 }
+
+variable "virtual_network_id" {
+  description = "Virtual network ID used for private DNS links"
+  type        = string
+}
+
+variable "private_endpoint_subnet_id" {
+  description = "Subnet ID used for private endpoints"
+  type        = string
+}
+
+variable "storage_account_id" {
+  description = "Storage account resource ID for private endpoint"
+  type        = string
+}
+
+variable "storage_account_name" {
+  description = "Storage account name for private DNS wiring"
+  type        = string
+}

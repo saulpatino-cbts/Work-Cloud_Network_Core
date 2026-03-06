@@ -7,7 +7,7 @@ A professional delivery platform for cloud network assessments across AWS and Az
 Produces architecture diagrams, security findings, and executive-ready reports delivered
 through a time-limited, password-protected client portal.
 
-> **All six phases complete. Platform is deployment-ready at v0.1.0.**
+> **All six phases complete. Azure delivery hardening is now threshold-enforced, promotion-aware, and renewal-aware. AWS implementation track begins next.**
 
 ---
 
@@ -21,7 +21,22 @@ through a time-limited, password-protected client portal.
 | D | AI Analysis Engine | ✅ Complete | 2026-03-05 |
 | E | Report Generation | ✅ Complete | 2026-03-05 |
 | F | Delivery Portal | ✅ Complete | 2026-03-05 |
-| — | CI/CD + IaC Hardening | ✅ Complete | 2026-03-05 |
+| — | CI/CD + IaC Hardening | ✅ Complete | 2026-03-06 |
+| — | Azure Operational Hardening | ✅ Complete | 2026-03-06 |
+| — | AWS Provider Expansion | ⏳ Next | — |
+
+---
+
+## Current Delivery State
+
+The Azure delivery path now includes:
+- direct Azure Monitor and Application Insights verification queries
+- explicit threshold-based pass/fail gating for health and telemetry
+- Front Door promotion actions with progressive origin-weight control intent
+- certificate expiry-window enforcement with renewal-aware verification
+- release manifest evidence summaries for health, telemetry, rollout, and certificate state
+
+AWS platform parity is planned as the next implementation track.
 
 ---
 
@@ -92,6 +107,7 @@ cna publish run --engagement-id enterprise-20260305-c9d1 --cloud aws --bucket <B
 | CI | `ci.yml` | Push/PR to `main`, `develop` | Secret scan → lint → test (3.11+3.12) → module validation → Docker build smoke test |
 | Release | `release.yml` | `git tag v*.*.*` | Builds multi-platform GHCR image, creates GitHub Release with changelog |
 | CD Publish | `cd-publish.yml` | `workflow_dispatch` | Runs `cna publish run` in container via OIDC — no long-lived keys |
+| Azure Runtime Deploy | `deploy-azure-runtime.yml` | `workflow_dispatch`, schedule | Terraform plan/apply, direct Azure evidence queries, threshold enforcement, Front Door promotion control, certificate expiry and renewal-aware verification |
 
 ### Required Repository Secrets
 
@@ -101,11 +117,26 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Sec
 |---|---|---|
 | `CNA_AWS_ROLE_ARN` | `cd-publish.yml` | ARN of `CNA-Publish` IAM role (OIDC) |
 | `CNA_PUBLISH_BUCKET` | `cd-publish.yml` | S3 bucket name for delivery portal |
-| `CNA_AZURE_CLIENT_ID` | `cd-publish.yml` | Azure app registration client ID (OIDC) |
-| `CNA_AZURE_TENANT_ID` | `cd-publish.yml` | Azure tenant ID |
-| `CNA_AZURE_SUBSCRIPTION_ID` | `cd-publish.yml` | Azure subscription ID for portal storage |
+| `CNA_AZURE_CLIENT_ID` | `cd-publish.yml`, `deploy-azure-runtime.yml` | Azure app registration client ID (OIDC) |
+| `CNA_AZURE_TENANT_ID` | `cd-publish.yml`, `deploy-azure-runtime.yml` | Azure tenant ID |
+| `CNA_AZURE_SUBSCRIPTION_ID` | `cd-publish.yml`, `deploy-azure-runtime.yml` | Azure subscription ID for portal storage and runtime operations |
+| `FRONTDOOR_CERTIFICATE_PFX_PASSWORD` | `deploy-azure-runtime.yml` | Password for certificate import or rotation workflow fallback |
 
-> `GITHUB_TOKEN` is automatic — no setup needed. All workflows use it for GHCR push and release creation.
+### Required Repository Variables
+
+Set these in **GitHub → Settings → Secrets and variables → Actions → Variables**:
+
+| Variable | Used By | Description |
+|---|---|---|
+| `TFSTATE_RESOURCE_GROUP` | `deploy-azure-runtime.yml` | Terraform backend resource group |
+| `TFSTATE_STORAGE_ACCOUNT` | `deploy-azure-runtime.yml` | Terraform backend storage account |
+| `TFSTATE_CONTAINER` | `deploy-azure-runtime.yml` | Terraform backend blob container |
+| `APPLICATION_INSIGHTS_NAME` | `deploy-azure-runtime.yml` | Application Insights instance used for canary telemetry evaluation |
+| `KEY_VAULT_NAME` | `deploy-azure-runtime.yml` | Key Vault name for certificate monitoring and rotation evidence |
+| `FRONTDOOR_CERTIFICATE_NAME` | `deploy-azure-runtime.yml` | Key Vault certificate name associated with Front Door |
+| `FRONTDOOR_CERTIFICATE_PFX_PATH` | `deploy-azure-runtime.yml` | Certificate bundle path used by renewal/rotation fallback import logic |
+
+> `GITHUB_TOKEN` is automatic — no setup needed. All workflows use it for GHCR push, release creation, and release-catalog commits.
 
 ### No Secrets Needed for CI
 
@@ -120,6 +151,7 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Sec
 | `ci.yml` | ✅ Ready now | Nothing — runs on next push |
 | `release.yml` | ✅ Ready | `git tag v0.1.0 && git push --tags` |
 | `cd-publish.yml` | ⚠ Needs secrets | `CNA_AWS_ROLE_ARN` + `CNA_PUBLISH_BUCKET` (AWS) **or** Azure secrets (Azure) |
+| `deploy-azure-runtime.yml` | ⚠ Needs Azure secrets and variables | OIDC credentials, Terraform backend variables, Application Insights, Key Vault, and Front Door certificate settings |
 
 ---
 
@@ -147,13 +179,26 @@ cna/
 documentation/
 ├── deployment-guide.md    # ← START HERE for deployment
 ├── secrets-reference.md   # Every secret, variable, and value explained
-├── cicd-iac-report.md     # 18-gap CI/CD audit report
-├── architecture/          # Phase C, D, E, F architecture docs
+├── cicd-iac-report.md     # CI/CD audit and hardening report
+├── architecture/          # Phase docs + Azure hardening sequence
 ├── design/                # DD-001 through DD-019
 ├── policies/              # Data handling, LZ scope, JA translation
 ├── client-packet/         # Welcome packet, env form, permission guide
 └── development/           # Module guide, diagram generation, branching
 ```
+
+---
+
+## Azure Hardening Sequence
+
+The Azure operational hardening trail is now documented through:
+- `documentation/architecture/33-frontdoor-outputs-and-live-signal-wiring.md`
+- `documentation/architecture/34-direct-query-verification-and-traffic-control-intent.md`
+- `documentation/architecture/35-direct-azure-queries-and-live-evidence-collection.md`
+- `documentation/architecture/36-threshold-enforced-verification-and-promotion-control.md`
+- `documentation/architecture/37-progressive-rollout-and-renewal-verification.md`
+
+These documents capture the move from simulated evidence to direct Azure verification, threshold-enforced release gating, progressive rollout control, and renewal-aware certificate governance.
 
 ---
 
@@ -188,6 +233,12 @@ See [`documentation/deployment-guide.md`](documentation/deployment-guide.md)
 ### Azure Publish
 **Storage Blob Data Contributor** on storage account
 
+### Azure Runtime Delivery Hardening
+- OIDC-enabled application with subscription-scoped access for Terraform and monitoring queries
+- Permissions to query Azure Monitor metrics and Application Insights
+- Permissions to read and manage Front Door route and origin configuration
+- Permissions to read Key Vault certificate state and perform approved rotation workflows
+
 ---
 
 ## Security
@@ -201,6 +252,7 @@ See [`documentation/deployment-guide.md`](documentation/deployment-guide.md)
 - Pre-signed URLs and SAS tokens never stored — metadata only
 - 7-day hard cap on all client access link TTLs
 - 90-day engagement data retention enforced in code (DD-019)
+- Azure release approval is now backed by direct telemetry, rollout, and certificate evidence checks
 
 ---
 

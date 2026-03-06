@@ -1,3 +1,10 @@
 # Azure Dev Environment
 
-Development deployment composition for Azure-hosted CNA Platform.
+This environment will compose Azure provider modules for a development-grade hosted CNA Platform deployment.
+
+Planned first slice:
+- ingress
+- storage
+- compute
+- ai
+- presentation

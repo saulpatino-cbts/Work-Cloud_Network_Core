@@ -1,3 +1,12 @@
 # AWS Prod Environment
 
-Production deployment composition for AWS-hosted CNA Platform.
+This environment will compose AWS provider modules for a production-grade hosted CNA Platform deployment.
+
+Planned first slice:
+- ingress
+- storage
+- compute
+- ai
+- presentation
+- observability
+- identity

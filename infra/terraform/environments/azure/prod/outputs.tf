@@ -53,3 +53,7 @@ output "storage_role_assignment_id" {
 output "presentation_cdn_fqdn" {
   value = module.presentation.cdn_fqdn
 }
+
+output "openai_endpoint_secret_name" {
+  value = module.security.openai_endpoint_secret_name
+}

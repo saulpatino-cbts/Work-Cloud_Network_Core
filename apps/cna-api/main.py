@@ -43,6 +43,7 @@ def publish(request: PublishRequest) -> dict:
     blob_container = os.getenv("CNA_STORAGE_STATIC_CONTAINER", "static-site")
     blob_prefix = f"engagements/{request.engagement_id}/"
     upload_enabled = os.getenv("CNA_BLOB_UPLOAD_ENABLED", "false").lower() == "true"
+    upload_mode = os.getenv("CNA_BLOB_UPLOAD_MODE", "sdk")
     return {
         "status": "published",
         "engagement_id": request.engagement_id,
@@ -50,4 +51,5 @@ def publish(request: PublishRequest) -> dict:
         "blob_container": blob_container,
         "blob_prefix": blob_prefix,
         "upload_enabled": upload_enabled,
+        "upload_mode": upload_mode,
     }

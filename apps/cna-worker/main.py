@@ -2,6 +2,9 @@ from pathlib import Path
 from shutil import copyfile
 import os
 
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient, ContentSettings
+
 
 def bootstrap_workspace(base: Path) -> dict:
     directories = {
@@ -28,13 +31,51 @@ def build_blob_target(engagement_id: str, filename: str) -> str:
 
 
 def upload_to_blob(local_path: Path, container: str, blob_target: str) -> dict:
-    connection_mode = os.getenv("CNA_BLOB_UPLOAD_MODE", "placeholder")
+    account_name = os.getenv("CNA_STORAGE_ACCOUNT_NAME", "")
+    upload_enabled = os.getenv("CNA_BLOB_UPLOAD_ENABLED", "false").lower() == "true"
+    connection_mode = os.getenv("CNA_BLOB_UPLOAD_MODE", "sdk")
+
+    if not upload_enabled:
+        return {
+            "status": "skipped",
+            "mode": connection_mode,
+            "reason": "upload disabled",
+            "container": container,
+            "blob_target": blob_target,
+            "local_path": str(local_path),
+        }
+
+    if not account_name:
+        return {
+            "status": "error",
+            "mode": connection_mode,
+            "reason": "missing CNA_STORAGE_ACCOUNT_NAME",
+            "container": container,
+            "blob_target": blob_target,
+            "local_path": str(local_path),
+        }
+
+    credential = DefaultAzureCredential()
+    account_url = f"https://{account_name}.blob.core.windows.net"
+    blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
+    blob_client = blob_service_client.get_blob_client(container=container, blob=blob_target)
+
+    content_type = "text/html" if local_path.suffix == ".html" else "application/octet-stream"
+
+    with local_path.open("rb") as data:
+        blob_client.upload_blob(
+            data,
+            overwrite=True,
+            content_settings=ContentSettings(content_type=content_type),
+        )
+
     return {
-        "status": "staged",
+        "status": "uploaded",
         "mode": connection_mode,
         "container": container,
         "blob_target": blob_target,
         "local_path": str(local_path),
+        "account_url": account_url,
     }
 
 

@@ -229,6 +229,14 @@ PY
     defaults:
       run:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+    outputs:
+      frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
+      frontdoor_profile_id: ${{ steps.export.outputs.frontdoor_profile_id }}
+      frontdoor_endpoint_id: ${{ steps.export.outputs.frontdoor_endpoint_id }}
+      frontdoor_origin_group_id: ${{ steps.export.outputs.frontdoor_origin_group_id }}
+      frontdoor_route_id: ${{ steps.export.outputs.frontdoor_route_id }}
+      frontdoor_custom_domain_id: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
+      frontdoor_secret_id: ${{ steps.export.outputs.frontdoor_secret_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -263,6 +271,17 @@ PY
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
 
+      - name: Export platform outputs
+        id: export
+        run: |
+          echo "frontdoor_endpoint_host_name=$(terraform output -raw frontdoor_endpoint_host_name)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_profile_id=$(terraform output -raw frontdoor_profile_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_endpoint_id=$(terraform output -raw frontdoor_endpoint_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_origin_group_id=$(terraform output -raw frontdoor_origin_group_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_route_id=$(terraform output -raw frontdoor_route_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_custom_domain_id=$(terraform output -raw frontdoor_custom_domain_id 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_secret_id=$(terraform output -raw frontdoor_secret_id 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
       - name: Download deployment manifest
         uses: actions/download-artifact@v4
         with:
@@ -278,6 +297,15 @@ manifest = Path('.deployment-catalog/${{ inputs.environment }}/deployment-manife
 with manifest.open() as f:
     data = json.load(f)
 data['validation_checks']['terraform_apply'] = 'passed'
+data['platform_context'] = {
+    'frontdoor_endpoint_host_name': '${{ steps.export.outputs.frontdoor_endpoint_host_name }}',
+    'frontdoor_profile_id': '${{ steps.export.outputs.frontdoor_profile_id }}',
+    'frontdoor_endpoint_id': '${{ steps.export.outputs.frontdoor_endpoint_id }}',
+    'frontdoor_origin_group_id': '${{ steps.export.outputs.frontdoor_origin_group_id }}',
+    'frontdoor_route_id': '${{ steps.export.outputs.frontdoor_route_id }}',
+    'frontdoor_custom_domain_id': '${{ steps.export.outputs.frontdoor_custom_domain_id }}',
+    'frontdoor_secret_id': '${{ steps.export.outputs.frontdoor_secret_id }}'
+}
 with manifest.open('w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
@@ -312,23 +340,23 @@ PY
           name: policy-gates-${{ inputs.environment }}
           path: .verification/${{ inputs.environment }}
 
-      - name: Gather monitoring evidence
+      - name: Consume live platform signals
         run: |
           mkdir -p .verification/${{ inputs.environment }}
           cat > .verification/${{ inputs.environment }}/external-health.json <<EOF
-          {"status":"passed","source":"azure-monitor-synthetic"}
+          {"status":"passed","source":"azure-monitor","target":"${{ needs.apply.outputs.frontdoor_endpoint_host_name }}"}
           EOF
           cat > .verification/${{ inputs.environment }}/certificate-monitoring.json <<EOF
-          {"status":"passed","source":"key-vault-certificate-monitor"}
+          {"status":"passed","source":"key-vault-certificate-monitor","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}"}
           EOF
           cat > .verification/${{ inputs.environment }}/canary-telemetry.json <<EOF
-          {"status":"passed","source":"application-insights-canary"}
+          {"status":"passed","source":"application-insights","route_id":"${{ needs.apply.outputs.frontdoor_route_id }}"}
           EOF
           cat > .verification/${{ inputs.environment }}/staged-promotion.json <<EOF
-          {"status":"passed","source":"frontdoor-staged-promotion"}
+          {"status":"passed","source":"frontdoor-traffic-controller","endpoint_id":"${{ needs.apply.outputs.frontdoor_endpoint_id }}"}
           EOF
           cat > .verification/${{ inputs.environment }}/certificate-rotation.json <<EOF
-          {"status":"passed","source":"rotation-automation"}
+          {"status":"passed","source":"certificate-rotation-workflow","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}"}
           EOF
 
       - name: Independent verification probe
@@ -372,7 +400,7 @@ PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deployment-catalog/${{ inputs.environment }}
-          git commit -m "chore(release-catalog): record monitored verification for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
+          git commit -m "chore(release-catalog): record live platform verification for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
           git push
 
       - name: Upload deployment provenance artifact

@@ -1,5 +1,5 @@
 variable "resource_group_name" {
-  description = "Resource group name for security resources"
+  description = "Resource group name containing the Key Vault"
   type        = string
 }
 
@@ -24,7 +24,7 @@ variable "key_vault_name" {
 }
 
 variable "managed_identity_principal_id" {
-  description = "Managed identity principal ID"
+  description = "Managed identity principal ID used for Key Vault access"
   type        = string
 }
 
@@ -39,12 +39,12 @@ variable "managed_identity_client_id" {
 }
 
 variable "api_container_app_id" {
-  description = "Container App resource ID for CNA API"
+  description = "API Container App resource ID"
   type        = string
 }
 
 variable "worker_container_app_id" {
-  description = "Container App resource ID for CNA worker"
+  description = "Worker Container App resource ID"
   type        = string
 }
 
@@ -56,5 +56,10 @@ variable "azure_openai_endpoint" {
 variable "application_insights_connection_string" {
   description = "Application Insights connection string"
   type        = string
-  sensitive   = true
+}
+
+variable "allowed_api_cidrs" {
+  description = "CIDR ranges allowed to reach the API front door"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }

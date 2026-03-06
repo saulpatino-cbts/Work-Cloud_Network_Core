@@ -1,7 +1,4 @@
-output "openai_endpoint_secret_name" {
-  value = azurerm_key_vault_secret.openai_endpoint.name
-}
-
-output "appinsights_connection_secret_name" {
-  value = azurerm_key_vault_secret.appinsights_connection_string.name
+output "network_security_group_id" {
+  description = "Network security group ID for platform ingress governance"
+  value       = azurerm_network_security_group.platform.id
 }

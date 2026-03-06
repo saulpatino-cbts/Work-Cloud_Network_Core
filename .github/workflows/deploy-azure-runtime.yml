@@ -21,6 +21,24 @@ on:
         required: true
         default: ghcr.io/saulpatinojr/cna-worker:latest
         type: string
+      previous_api_image:
+        description: Previous API image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      previous_worker_image:
+        description: Previous worker image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      deploy_mode:
+        description: Deployment mode
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - rollback
   schedule:
     - cron: '0 11 * * *'
 
@@ -28,6 +46,7 @@ permissions:
   contents: read
   id-token: write
   security-events: write
+  attestations: write
 
 concurrency:
   group: deploy-azure-runtime-${{ github.event.inputs.environment || 'schedule' }}
@@ -35,6 +54,8 @@ concurrency:
 
 env:
   TF_IN_AUTOMATION: true
+  EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
+  EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
 
 jobs:
   policy-gates:
@@ -105,14 +126,33 @@ jobs:
       - name: Terraform plan
         run: |
           terraform plan -out=tfplan \
-            -var="api_image=${{ inputs.api_image }}" \
-            -var="worker_image=${{ inputs.worker_image }}"
+            -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
+            -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}"
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
           path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
+
+      - name: Create deployment manifest
+        run: |
+          cat > deployment-manifest.json <<EOF
+          {
+            "environment": "${{ inputs.environment }}",
+            "deploy_mode": "${{ inputs.deploy_mode }}",
+            "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
+            "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
+            "commit_sha": "${{ github.sha }}",
+            "workflow_run_id": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload deployment manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/deployment-manifest.json
 
   apply:
     if: github.event_name == 'workflow_dispatch'
@@ -153,6 +193,18 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
+
+      - name: Download deployment manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}
+
+      - name: Upload deployment provenance artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-provenance-${{ inputs.environment }}-${{ github.run_id }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/deployment-manifest.json
 
   drift-detection:
     if: github.event_name == 'schedule'

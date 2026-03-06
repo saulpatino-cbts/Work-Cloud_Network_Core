@@ -43,6 +43,11 @@ variable "api_container_app_id" {
   type        = string
 }
 
+variable "api_container_app_fqdn" {
+  description = "API Container App FQDN used as Front Door origin host"
+  type        = string
+}
+
 variable "worker_container_app_id" {
   description = "Worker Container App resource ID"
   type        = string
@@ -62,4 +67,10 @@ variable "allowed_api_cidrs" {
   description = "CIDR ranges allowed to reach the API front door"
   type        = list(string)
   default     = ["0.0.0.0/0"]
+}
+
+variable "frontdoor_custom_domain_host_name" {
+  description = "Optional custom domain hostname for Azure Front Door"
+  type        = string
+  default     = ""
 }

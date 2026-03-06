@@ -1,3 +1,8 @@
+locals {
+  frontdoor_origin_name = "origin-${var.name_prefix}-api"
+  frontdoor_route_name  = "route-${var.name_prefix}-api"
+}
+
 resource "azurerm_key_vault_secret" "openai_endpoint" {
   name         = "cna-azure-openai-endpoint"
   value        = var.azure_openai_endpoint
@@ -47,6 +52,32 @@ resource "azurerm_cdn_frontdoor_endpoint" "platform" {
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 }
 
+resource "azurerm_cdn_frontdoor_origin_group" "api" {
+  name                     = "og-${var.name_prefix}-api"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
+
+  load_balancing {}
+  health_probe {
+    interval_in_seconds = 120
+    path                = "/health"
+    protocol            = "Https"
+    request_type        = "GET"
+  }
+}
+
+resource "azurerm_cdn_frontdoor_origin" "api" {
+  name                          = local.frontdoor_origin_name
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.api.id
+  enabled                       = true
+  host_name                     = var.api_container_app_fqdn
+  http_port                     = 80
+  https_port                    = 443
+  origin_host_header            = var.api_container_app_fqdn
+  priority                      = 1
+  weight                        = 1000
+  certificate_name_check_enabled = true
+}
+
 resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   name                = "afd-waf-${var.name_prefix}"
   resource_group_name = var.resource_group_name
@@ -58,6 +89,18 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
     version = "1.0"
     action  = "Block"
   }
+}
+
+resource "azurerm_cdn_frontdoor_route" "api" {
+  name                          = local.frontdoor_route_name
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.platform.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.api.id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.api.id]
+  supported_protocols           = ["Http", "Https"]
+  patterns_to_match             = ["/*"]
+  forwarding_protocol           = "HttpsOnly"
+  https_redirect_enabled        = true
+  link_to_default_domain        = true
 }
 
 resource "azurerm_cdn_frontdoor_security_policy" "platform" {
@@ -79,7 +122,7 @@ resource "azurerm_cdn_frontdoor_security_policy" "platform" {
   }
 }
 
-resource "azurerm_role_assignment" "api_managed_identity_acrpull" {
+resource "azurerm_role_assignment" "api_managed_identity_key_vault_user" {
   scope                = var.key_vault_id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = var.managed_identity_principal_id

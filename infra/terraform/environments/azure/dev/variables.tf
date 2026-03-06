@@ -1,3 +1,15 @@
+variable "api_image" {
+  description = "Container image for CNA API"
+  type        = string
+  default     = "ghcr.io/saulpatinojr/cna-api:latest"
+}
+
+variable "worker_image" {
+  description = "Container image for CNA worker"
+  type        = string
+  default     = "ghcr.io/saulpatinojr/cna-worker:latest"
+}
+
 variable "tenant_id" {
   description = "Azure tenant ID"
   type        = string

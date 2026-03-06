@@ -26,6 +26,8 @@ module "compute" {
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
+  api_image           = var.api_image
+  worker_image        = var.worker_image
   tags                = local.tags
 }
 

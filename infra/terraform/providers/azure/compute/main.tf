@@ -29,7 +29,7 @@ resource "azurerm_container_app" "api" {
   template {
     container {
       name   = "cna-api"
-      image  = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      image  = var.api_image
       cpu    = 0.5
       memory = "1Gi"
     }
@@ -59,7 +59,7 @@ resource "azurerm_container_app" "worker" {
   template {
     container {
       name   = "cna-worker"
-      image  = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      image  = var.worker_image
       cpu    = 0.5
       memory = "1Gi"
     }

@@ -80,6 +80,24 @@ variable "frontdoor_custom_domain_host_name" {
   default     = ""
 }
 
+variable "frontdoor_custom_domain_dns_zone_id" {
+  description = "Optional Azure DNS zone resource ID for Front Door custom domain integration"
+  type        = string
+  default     = null
+}
+
+variable "frontdoor_certificate_type" {
+  description = "Certificate type for Front Door custom domain TLS"
+  type        = string
+  default     = "ManagedCertificate"
+}
+
+variable "frontdoor_minimum_tls_version" {
+  description = "Minimum TLS version for Front Door custom domain TLS"
+  type        = string
+  default     = "TLS12"
+}
+
 variable "virtual_network_id" {
   description = "Virtual network ID used for private DNS links"
   type        = string

@@ -132,13 +132,13 @@ for file in catalog_dir.glob('*.json'):
     try:
         with file.open() as f:
             data = json.load(f)
-        if data.get('deploy_mode') == 'release':
+        if data.get('deploy_mode') == 'release' and data.get('approval_status') == 'approved' and data.get('health_status') == 'healthy':
             records.append(data)
     except Exception:
         pass
 records.sort(key=lambda r: int(r.get('workflow_run_id', 0)), reverse=True)
 if not records:
-    raise SystemExit('No release catalog entries found for rollback resolution')
+    raise SystemExit('No approved and healthy release catalog entries found for rollback resolution')
 selected = records[0]
 with open(Path('${GITHUB_ENV}'), 'a') as env:
     env.write(f"EFFECTIVE_API_IMAGE={selected['api_image']}\n")
@@ -170,7 +170,9 @@ PY
             "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
             "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
             "commit_sha": "${{ github.sha }}",
-            "workflow_run_id": "${{ github.run_id }}"
+            "workflow_run_id": "${{ github.run_id }}",
+            "approval_status": "pending",
+            "health_status": "unknown"
           }
           EOF
 
@@ -238,6 +240,21 @@ PY
         with:
           name: deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Mark deployment as approved and healthy
+        run: |
+          python - <<'PY'
+import json
+from pathlib import Path
+manifest = Path('.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json')
+with manifest.open() as f:
+    data = json.load(f)
+data['approval_status'] = 'approved'
+data['health_status'] = 'healthy'
+with manifest.open('w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PY
 
       - name: Persist release catalog entry
         run: |

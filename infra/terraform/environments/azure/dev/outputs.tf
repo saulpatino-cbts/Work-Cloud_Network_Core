@@ -49,3 +49,7 @@ output "application_insights_name" {
 output "storage_role_assignment_id" {
   value = module.runtime.storage_role_assignment_id
 }
+
+output "presentation_cdn_fqdn" {
+  value = module.presentation.cdn_fqdn
+}

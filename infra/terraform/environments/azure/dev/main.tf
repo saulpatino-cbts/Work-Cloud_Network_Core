@@ -37,6 +37,16 @@ module "ai" {
   tags                = local.tags
 }
 
+module "presentation" {
+  source               = "../../../providers/azure/presentation"
+  resource_group_name  = azurerm_resource_group.this.name
+  location             = azurerm_resource_group.this.location
+  name_prefix          = local.name_prefix
+  storage_account_id   = module.storage.storage_account_id
+  storage_account_name = module.storage.storage_account_name
+  tags                 = local.tags
+}
+
 module "runtime" {
   source                                 = "../../../providers/azure/runtime"
   resource_group_name                    = azurerm_resource_group.this.name

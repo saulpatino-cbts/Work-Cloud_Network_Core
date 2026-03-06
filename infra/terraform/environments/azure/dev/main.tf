@@ -4,6 +4,40 @@ resource "azurerm_resource_group" "this" {
   tags     = local.tags
 }
 
+resource "azurerm_virtual_network" "platform" {
+  name                = "vnet-${local.name_prefix}-platform"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  address_space       = ["10.40.0.0/16"]
+  tags                = local.tags
+}
+
+resource "azurerm_subnet" "container_apps_infra" {
+  name                 = "snet-${local.name_prefix}-aca-infra"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.platform.name
+  address_prefixes     = ["10.40.0.0/23"]
+
+  delegation {
+    name = "container-apps-delegation"
+
+    service_delegation {
+      name = "Microsoft.App/environments"
+      actions = [
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
+      ]
+    }
+  }
+}
+
+resource "azurerm_subnet" "private_endpoints" {
+  name                                           = "snet-${local.name_prefix}-private-endpoints"
+  resource_group_name                            = azurerm_resource_group.this.name
+  virtual_network_name                           = azurerm_virtual_network.platform.name
+  address_prefixes                               = ["10.40.2.0/24"]
+  private_endpoint_network_policies = "Disabled"
+}
+
 module "storage" {
   source              = "../../../providers/azure/storage"
   resource_group_name = azurerm_resource_group.this.name
@@ -29,6 +63,7 @@ module "compute" {
   api_image                    = var.api_image
   worker_image                 = var.worker_image
   container_apps_internal_only = true
+  infrastructure_subnet_id     = azurerm_subnet.container_apps_infra.id
   tags                         = local.tags
 }
 

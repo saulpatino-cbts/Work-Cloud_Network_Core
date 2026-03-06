@@ -103,3 +103,9 @@ variable "container_apps_internal_only" {
   type        = bool
   default     = false
 }
+
+variable "infrastructure_subnet_id" {
+  description = "Subnet ID delegated to the Container Apps managed environment infrastructure"
+  type        = string
+  default     = null
+}

@@ -7,6 +7,10 @@ output "application_insights_connection_string" {
   sensitive = true
 }
 
+output "azure_openai_account_id" {
+  value = azurerm_cognitive_account.this.id
+}
+
 output "azure_openai_account_name" {
   value = azurerm_cognitive_account.this.name
 }

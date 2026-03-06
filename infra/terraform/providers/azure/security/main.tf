@@ -1,6 +1,7 @@
 locals {
   frontdoor_origin_name = "origin-${var.name_prefix}-api"
   frontdoor_route_name  = "route-${var.name_prefix}-api"
+  use_custom_domain     = var.frontdoor_custom_domain_host_name != ""
 }
 
 resource "azurerm_key_vault_secret" "openai_endpoint" {
@@ -115,15 +116,6 @@ resource "azurerm_private_endpoint" "keyvault" {
   }
 }
 
-resource "azurerm_cognitive_account" "openai_private_link_stub" {
-  name                = "aoai-${var.name_prefix}-private"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  kind                = "OpenAI"
-  sku_name            = "S0"
-  custom_subdomain_name = "aoai-${var.name_prefix}-private"
-}
-
 resource "azurerm_private_endpoint" "openai" {
   name                = "pe-${var.name_prefix}-openai"
   location            = var.location
@@ -132,7 +124,7 @@ resource "azurerm_private_endpoint" "openai" {
 
   private_service_connection {
     name                           = "psc-${var.name_prefix}-openai"
-    private_connection_resource_id = azurerm_cognitive_account.openai_private_link_stub.id
+    private_connection_resource_id = var.azure_openai_account_id
     subresource_names              = ["account"]
     is_manual_connection           = false
   }
@@ -180,6 +172,19 @@ resource "azurerm_cdn_frontdoor_origin" "api" {
   certificate_name_check_enabled = true
 }
 
+resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
+  count                    = local.use_custom_domain ? 1 : 0
+  name                     = "afd-domain-${var.name_prefix}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
+  dns_zone_id              = null
+  host_name                = var.frontdoor_custom_domain_host_name
+
+  tls {
+    certificate_type    = "ManagedCertificate"
+    minimum_tls_version = "TLS12"
+  }
+}
+
 resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   name                = "afd-waf-${var.name_prefix}"
   resource_group_name = var.resource_group_name
@@ -202,7 +207,8 @@ resource "azurerm_cdn_frontdoor_route" "api" {
   patterns_to_match             = ["/*"]
   forwarding_protocol           = "HttpsOnly"
   https_redirect_enabled        = true
-  link_to_default_domain        = true
+  link_to_default_domain        = !local.use_custom_domain
+  cdn_frontdoor_custom_domain_ids = local.use_custom_domain ? [azurerm_cdn_frontdoor_custom_domain.platform[0].id] : []
 }
 
 resource "azurerm_cdn_frontdoor_security_policy" "platform" {
@@ -216,6 +222,13 @@ resource "azurerm_cdn_frontdoor_security_policy" "platform" {
       association {
         domain {
           cdn_frontdoor_domain_id = azurerm_cdn_frontdoor_endpoint.platform.id
+        }
+
+        dynamic "domain" {
+          for_each = local.use_custom_domain ? [azurerm_cdn_frontdoor_custom_domain.platform[0].id] : []
+          content {
+            cdn_frontdoor_domain_id = domain.value
+          }
         }
 
         patterns_to_match = ["/*"]

@@ -111,6 +111,7 @@ module "security" {
   api_container_app_id                   = module.compute.api_id
   api_container_app_fqdn                 = module.compute.api_fqdn
   worker_container_app_id                = module.compute.worker_id
+  azure_openai_account_id                = module.ai.azure_openai_account_id
   azure_openai_endpoint                  = module.ai.azure_openai_endpoint
   application_insights_connection_string = module.ai.application_insights_connection_string
   virtual_network_id                     = azurerm_virtual_network.platform.id

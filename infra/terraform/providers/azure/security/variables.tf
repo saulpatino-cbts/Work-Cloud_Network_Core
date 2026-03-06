@@ -53,6 +53,11 @@ variable "worker_container_app_id" {
   type        = string
 }
 
+variable "azure_openai_account_id" {
+  description = "Azure OpenAI cognitive account resource ID used for private endpoint integration"
+  type        = string
+}
+
 variable "azure_openai_endpoint" {
   description = "Azure OpenAI endpoint"
   type        = string

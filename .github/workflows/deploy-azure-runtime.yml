@@ -67,6 +67,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -103,6 +105,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -117,21 +121,29 @@ jobs:
       - name: Resolve rollback targets from release catalog
         if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '')
         run: |
-          test -f ../../../../.deployment-catalog/${{ inputs.environment }}/latest.json
-          API_IMAGE=$(python - <<'PY'
+          python - <<'PY'
 import json
-with open('../../../../.deployment-catalog/${{ inputs.environment }}/latest.json') as f:
-    print(json.load(f)['api_image'])
+from pathlib import Path
+catalog_dir = Path('../../../../.deployment-catalog/${{ inputs.environment }}')
+records = []
+for file in catalog_dir.glob('*.json'):
+    if file.name in {'latest.json', 'deployment-manifest.json'}:
+        continue
+    try:
+        with file.open() as f:
+            data = json.load(f)
+        if data.get('deploy_mode') == 'release':
+            records.append(data)
+    except Exception:
+        pass
+records.sort(key=lambda r: int(r.get('workflow_run_id', 0)), reverse=True)
+if not records:
+    raise SystemExit('No release catalog entries found for rollback resolution')
+selected = records[0]
+with open(Path('${GITHUB_ENV}'), 'a') as env:
+    env.write(f"EFFECTIVE_API_IMAGE={selected['api_image']}\n")
+    env.write(f"EFFECTIVE_WORKER_IMAGE={selected['worker_image']}\n")
 PY
-)
-          WORKER_IMAGE=$(python - <<'PY'
-import json
-with open('../../../../.deployment-catalog/${{ inputs.environment }}/latest.json') as f:
-    print(json.load(f)['worker_image'])
-PY
-)
-          echo "EFFECTIVE_API_IMAGE=$API_IMAGE" >> $GITHUB_ENV
-          echo "EFFECTIVE_WORKER_IMAGE=$WORKER_IMAGE" >> $GITHUB_ENV
 
       - name: Terraform init
         run: |
@@ -190,6 +202,8 @@ PY
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3

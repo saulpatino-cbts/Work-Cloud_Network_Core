@@ -20,3 +20,11 @@ module "identity" {
   tenant_id           = var.tenant_id
   tags                = local.tags
 }
+
+module "compute" {
+  source              = "../../../providers/azure/compute"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_prefix         = local.name_prefix
+  tags                = local.tags
+}

@@ -21,3 +21,15 @@ output "key_vault_name" {
 output "managed_identity_client_id" {
   value = module.identity.managed_identity_client_id
 }
+
+output "container_app_environment_id" {
+  value = module.compute.container_app_environment_id
+}
+
+output "api_fqdn" {
+  value = module.compute.api_fqdn
+}
+
+output "worker_name" {
+  value = module.compute.worker_name
+}

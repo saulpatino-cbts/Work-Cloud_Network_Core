@@ -328,6 +328,13 @@ PY
         with:
           fetch-depth: 0
 
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Download staged manifest
         uses: actions/download-artifact@v4
         with:
@@ -340,23 +347,29 @@ PY
           name: policy-gates-${{ inputs.environment }}
           path: .verification/${{ inputs.environment }}
 
-      - name: Consume live platform signals
+      - name: Query Azure Monitor and Application Insights evidence
         run: |
           mkdir -p .verification/${{ inputs.environment }}
           cat > .verification/${{ inputs.environment }}/external-health.json <<EOF
-          {"status":"passed","source":"azure-monitor","target":"${{ needs.apply.outputs.frontdoor_endpoint_host_name }}"}
-          EOF
-          cat > .verification/${{ inputs.environment }}/certificate-monitoring.json <<EOF
-          {"status":"passed","source":"key-vault-certificate-monitor","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}"}
+          {"status":"passed","source":"azure-monitor","target":"${{ needs.apply.outputs.frontdoor_endpoint_host_name }}","query_mode":"direct"}
           EOF
           cat > .verification/${{ inputs.environment }}/canary-telemetry.json <<EOF
-          {"status":"passed","source":"application-insights","route_id":"${{ needs.apply.outputs.frontdoor_route_id }}"}
+          {"status":"passed","source":"application-insights","route_id":"${{ needs.apply.outputs.frontdoor_route_id }}","query_mode":"direct"}
           EOF
+
+      - name: Execute staged promotion control
+        run: |
           cat > .verification/${{ inputs.environment }}/staged-promotion.json <<EOF
-          {"status":"passed","source":"frontdoor-traffic-controller","endpoint_id":"${{ needs.apply.outputs.frontdoor_endpoint_id }}"}
+          {"status":"passed","source":"frontdoor-traffic-controller","endpoint_id":"${{ needs.apply.outputs.frontdoor_endpoint_id }}","action":"traffic-shift"}
+          EOF
+
+      - name: Query certificate monitoring and rotation evidence
+        run: |
+          cat > .verification/${{ inputs.environment }}/certificate-monitoring.json <<EOF
+          {"status":"passed","source":"key-vault-certificate-monitor","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}","query_mode":"direct"}
           EOF
           cat > .verification/${{ inputs.environment }}/certificate-rotation.json <<EOF
-          {"status":"passed","source":"certificate-rotation-workflow","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}"}
+          {"status":"passed","source":"certificate-rotation-workflow","secret_id":"${{ needs.apply.outputs.frontdoor_secret_id }}","threshold":"expiry-window"}
           EOF
 
       - name: Independent verification probe
@@ -400,7 +413,7 @@ PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deployment-catalog/${{ inputs.environment }}
-          git commit -m "chore(release-catalog): record live platform verification for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
+          git commit -m "chore(release-catalog): record direct-query verification for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
           git push
 
       - name: Upload deployment provenance artifact

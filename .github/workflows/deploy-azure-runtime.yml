@@ -1,0 +1,53 @@
+name: deploy-azure-runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      api_image:
+        description: API image reference
+        required: true
+        default: ghcr.io/saulpatinojr/cna-api:latest
+        type: string
+      worker_image:
+        description: Worker image reference
+        required: true
+        default: ghcr.io/saulpatinojr/cna-worker:latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform init
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform apply
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+        run: |
+          terraform apply -auto-approve \
+            -var="api_image=${{ inputs.api_image }}" \
+            -var="worker_image=${{ inputs.worker_image }}"

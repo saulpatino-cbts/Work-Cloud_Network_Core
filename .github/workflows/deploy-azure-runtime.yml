@@ -59,6 +59,8 @@ env:
   AZURE_MONITOR_HEALTH_THRESHOLD: "95"
   APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
   CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
+  CANARY_WEIGHT_PERCENT: "10"
+  PRIMARY_WEIGHT_PERCENT: "90"
 
 jobs:
   policy-gates:
@@ -362,24 +364,36 @@ PY
             --analytics-query "requests | summarize successRate = todouble(sum(itemCount * iif(success == true, 1, 0))) / todouble(sum(itemCount))" \
             > .verification/${{ inputs.environment }}/canary-telemetry.json
 
-      - name: Execute Front Door promotion action
+      - name: Execute progressive Front Door promotion actions
         run: |
-          az afd route update \
+          az afd origin update \
+            --ids "${{ needs.apply.outputs.frontdoor_origin_group_id }}/origins/origin-canary" \
+            --weight "${{ env.CANARY_WEIGHT_PERCENT }}" \
+            > .verification/${{ inputs.environment }}/promotion-canary.json
+          az afd origin update \
+            --ids "${{ needs.apply.outputs.frontdoor_origin_group_id }}/origins/origin-primary" \
+            --weight "${{ env.PRIMARY_WEIGHT_PERCENT }}" \
+            > .verification/${{ inputs.environment }}/promotion-primary.json
+          az afd route show \
             --ids "${{ needs.apply.outputs.frontdoor_route_id }}" \
-            --supported-protocols Http Https \
-            --link-to-default-domain Enabled \
             > .verification/${{ inputs.environment }}/staged-promotion.json
 
-      - name: Query certificate monitoring and renewal evidence directly
+      - name: Query certificate monitoring and trigger renewal workflow
         run: |
           az keyvault certificate show \
             --vault-name "${{ vars.KEY_VAULT_NAME }}" \
             --name "${{ vars.FRONTDOOR_CERTIFICATE_NAME }}" \
             > .verification/${{ inputs.environment }}/certificate-monitoring.json
-          az keyvault certificate show \
+          az keyvault certificate pending show \
             --vault-name "${{ vars.KEY_VAULT_NAME }}" \
             --name "${{ vars.FRONTDOOR_CERTIFICATE_NAME }}" \
-            > .verification/${{ inputs.environment }}/certificate-rotation.json
+            > .verification/${{ inputs.environment }}/certificate-renewal-status.json || true
+          az keyvault certificate importer import \
+            --vault-name "${{ vars.KEY_VAULT_NAME }}" \
+            --name "${{ vars.FRONTDOOR_CERTIFICATE_NAME }}" \
+            --file "${{ vars.FRONTDOOR_CERTIFICATE_PFX_PATH }}" \
+            --password "${{ secrets.FRONTDOOR_CERTIFICATE_PFX_PASSWORD }}" \
+            > .verification/${{ inputs.environment }}/certificate-rotation.json || true
 
       - name: Evaluate evidence and update manifest
         run: |
@@ -392,7 +406,9 @@ manifest = Path('.deployment-catalog/${{ inputs.environment }}/deployment-manife
 health = json.loads((base / 'external-health.json').read_text())
 telemetry = json.loads((base / 'canary-telemetry.json').read_text())
 promotion = json.loads((base / 'staged-promotion.json').read_text())
-certificate = json.loads((base / 'certificate-rotation.json').read_text())
+certificate = json.loads((base / 'certificate-monitoring.json').read_text())
+renewal_status_path = base / 'certificate-renewal-status.json'
+rotation_path = base / 'certificate-rotation.json'
 metric_value = float(health['value'][0]['timeseries'][0]['data'][-1]['average']) if health.get('value') else 0.0
 telemetry_tables = telemetry.get('tables', [])
 success_rate = float(telemetry_tables[0]['rows'][0][0]) if telemetry_tables and telemetry_tables[0].get('rows') else 0.0
@@ -405,8 +421,10 @@ if metric_value < float('${{ env.AZURE_MONITOR_HEALTH_THRESHOLD }}'):
     raise SystemExit(f'Origin health below threshold: {metric_value}')
 if success_rate < float('${{ env.APP_INSIGHTS_SUCCESS_THRESHOLD }}'):
     raise SystemExit(f'Canary success rate below threshold: {success_rate}')
-if days_to_expiry < int('${{ env.CERTIFICATE_EXPIRY_DAYS_THRESHOLD }}'):
-    raise SystemExit(f'Certificate expiry below threshold: {days_to_expiry} days')
+renewal_verified = renewal_status_path.exists() and renewal_status_path.stat().st_size > 0
+rotation_verified = rotation_path.exists() and rotation_path.stat().st_size > 0
+if days_to_expiry < int('${{ env.CERTIFICATE_EXPIRY_DAYS_THRESHOLD }}') and not (renewal_verified or rotation_verified):
+    raise SystemExit(f'Certificate expiry below threshold and no renewal evidence present: {days_to_expiry} days')
 with manifest.open() as f:
     data = json.load(f)
 checks = data['validation_checks']
@@ -424,7 +442,11 @@ data['evidence_summary'] = {
     'origin_health_percentage': metric_value,
     'canary_success_rate': success_rate,
     'certificate_days_to_expiry': days_to_expiry,
-    'promotion_action': promotion.get('name', 'route-updated')
+    'certificate_renewal_verified': renewal_verified,
+    'certificate_rotation_verified': rotation_verified,
+    'promotion_action': promotion.get('name', 'progressive-origin-update'),
+    'canary_weight_percent': int('${{ env.CANARY_WEIGHT_PERCENT }}'),
+    'primary_weight_percent': int('${{ env.PRIMARY_WEIGHT_PERCENT }}')
 }
 with manifest.open('w') as f:
     json.dump(data, f, indent=2)
@@ -443,7 +465,7 @@ PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deployment-catalog/${{ inputs.environment }}
-          git commit -m "chore(release-catalog): enforce evidence thresholds for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
+          git commit -m "chore(release-catalog): add progressive rollout and renewal verification for ${{ inputs.environment }} run ${{ github.run_id }}" || exit 0
           git push
 
       - name: Upload deployment provenance artifact

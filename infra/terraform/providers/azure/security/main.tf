@@ -36,6 +36,49 @@ resource "azurerm_network_security_rule" "allow_api_ingress" {
   network_security_group_name = azurerm_network_security_group.platform.name
 }
 
+resource "azurerm_cdn_frontdoor_profile" "platform" {
+  name                = "afd-${var.name_prefix}-platform"
+  resource_group_name = var.resource_group_name
+  sku_name            = "Standard_AzureFrontDoor"
+}
+
+resource "azurerm_cdn_frontdoor_endpoint" "platform" {
+  name                     = "afd-endpoint-${var.name_prefix}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
+}
+
+resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
+  name                = "afd-waf-${var.name_prefix}"
+  resource_group_name = var.resource_group_name
+  sku_name            = "Standard_AzureFrontDoor"
+  mode                = "Prevention"
+
+  managed_rule {
+    type    = "DefaultRuleSet"
+    version = "1.0"
+    action  = "Block"
+  }
+}
+
+resource "azurerm_cdn_frontdoor_security_policy" "platform" {
+  name                     = "afd-security-${var.name_prefix}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
+
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = azurerm_cdn_frontdoor_firewall_policy.platform.id
+
+      association {
+        domain {
+          cdn_frontdoor_domain_id = azurerm_cdn_frontdoor_endpoint.platform.id
+        }
+
+        patterns_to_match = ["/*"]
+      }
+    }
+  }
+}
+
 resource "azurerm_role_assignment" "api_managed_identity_acrpull" {
   scope                = var.key_vault_id
   role_definition_name = "Key Vault Secrets User"

@@ -129,15 +129,10 @@ jobs:
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
             -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}"
 
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ inputs.environment }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
-
       - name: Create deployment manifest
         run: |
-          cat > deployment-manifest.json <<EOF
+          mkdir -p .deployment-catalog/${{ inputs.environment }}
+          cat > .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json <<EOF
           {
             "environment": "${{ inputs.environment }}",
             "deploy_mode": "${{ inputs.deploy_mode }}",
@@ -148,11 +143,22 @@ jobs:
           }
           EOF
 
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
+
       - name: Upload deployment manifest
         uses: actions/upload-artifact@v4
         with:
           name: deployment-manifest-${{ inputs.environment }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}/deployment-manifest.json
+          path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
 
   apply:
     if: github.event_name == 'workflow_dispatch'
@@ -198,13 +204,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: deployment-manifest-${{ inputs.environment }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Persist release catalog entry
+        run: |
+          cp .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json \
+            .deployment-catalog/${{ inputs.environment }}/${{ github.run_id }}.json
 
       - name: Upload deployment provenance artifact
         uses: actions/upload-artifact@v4
         with:
           name: deployment-provenance-${{ inputs.environment }}-${{ github.run_id }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}/deployment-manifest.json
+          path: .deployment-catalog/${{ inputs.environment }}/${{ github.run_id }}.json
 
   drift-detection:
     if: github.event_name == 'schedule'

@@ -97,3 +97,9 @@ variable "container_app_secrets" {
   default     = {}
   sensitive   = true
 }
+
+variable "container_apps_internal_only" {
+  description = "Whether the Container Apps environment should use internal-only ingress"
+  type        = bool
+  default     = false
+}

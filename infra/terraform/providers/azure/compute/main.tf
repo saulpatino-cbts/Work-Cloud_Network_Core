@@ -8,12 +8,12 @@ resource "azurerm_log_analytics_workspace" "compute" {
 }
 
 resource "azurerm_container_app_environment" "this" {
-  name                       = local.container_apps_env_name
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.compute.id
-  internal_load_balancer_enabled = false
-  tags                       = var.tags
+  name                          = local.container_apps_env_name
+  location                      = var.location
+  resource_group_name           = var.resource_group_name
+  log_analytics_workspace_id    = azurerm_log_analytics_workspace.compute.id
+  internal_load_balancer_enabled = var.container_apps_internal_only
+  tags                          = var.tags
 }
 
 resource "azurerm_container_app" "api" {
@@ -87,7 +87,7 @@ resource "azurerm_container_app" "api" {
   }
 
   ingress {
-    external_enabled = true
+    external_enabled = var.container_apps_internal_only ? false : true
     target_port      = var.api_target_port
     transport        = "auto"
     traffic_weight {

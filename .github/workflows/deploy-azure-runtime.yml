@@ -21,18 +21,60 @@ on:
         required: true
         default: ghcr.io/saulpatinojr/cna-worker:latest
         type: string
+  schedule:
+    - cron: '0 11 * * *'
 
 permissions:
   contents: read
   id-token: write
+  security-events: write
 
 concurrency:
-  group: deploy-azure-runtime-${{ inputs.environment }}
+  group: deploy-azure-runtime-${{ github.event.inputs.environment || 'schedule' }}
   cancel-in-progress: false
 
+env:
+  TF_IN_AUTOMATION: true
+
 jobs:
-  plan:
+  policy-gates:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform security scan
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infra/terraform
+          soft_fail: false
+
+  plan:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: policy-gates
     environment: ${{ inputs.environment }}
     defaults:
       run:
@@ -44,19 +86,21 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Azure login
+      - name: Azure login with OIDC
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform init
-        run: terraform init -backend-config="key=${{ inputs.environment }}.terraform.tfstate"
-
-      - name: Terraform fmt check
-        run: terraform fmt -check -recursive
-
-      - name: Terraform validate
-        run: terraform validate
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
 
       - name: Terraform plan
         run: |
@@ -71,6 +115,7 @@ jobs:
           path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
 
   apply:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs: plan
     environment: ${{ inputs.environment == 'prod' && 'prod-approval' || inputs.environment }}
@@ -84,13 +129,21 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Azure login
+      - name: Azure login with OIDC
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform init
-        run: terraform init -backend-config="key=${{ inputs.environment }}.terraform.tfstate"
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
 
       - name: Download plan artifact
         uses: actions/download-artifact@v4
@@ -117,15 +170,23 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Azure login
+      - name: Azure login with OIDC
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform init
-        run: terraform init -backend-config="key=${{ matrix.environment }}.terraform.tfstate"
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ matrix.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
 
-      - name: Terraform plan drift check
+      - name: Terraform drift plan
         run: |
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \

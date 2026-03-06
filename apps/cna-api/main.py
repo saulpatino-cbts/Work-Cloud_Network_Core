@@ -42,10 +42,12 @@ def publish(request: PublishRequest) -> dict:
     target.write_text(f"published artifact placeholder for {request.engagement_id}\n")
     blob_container = os.getenv("CNA_STORAGE_STATIC_CONTAINER", "static-site")
     blob_prefix = f"engagements/{request.engagement_id}/"
+    upload_enabled = os.getenv("CNA_BLOB_UPLOAD_ENABLED", "false").lower() == "true"
     return {
         "status": "published",
         "engagement_id": request.engagement_id,
         "target_path": str(target),
         "blob_container": blob_container,
         "blob_prefix": blob_prefix,
+        "upload_enabled": upload_enabled,
     }

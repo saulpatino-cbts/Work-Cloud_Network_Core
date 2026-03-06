@@ -3,3 +3,20 @@ resource "azurerm_resource_group" "this" {
   location = var.location
   tags     = local.tags
 }
+
+module "storage" {
+  source              = "../../../providers/azure/storage"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_prefix         = local.name_prefix
+  tags                = local.tags
+}
+
+module "identity" {
+  source              = "../../../providers/azure/identity"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  name_prefix         = local.name_prefix
+  tenant_id           = var.tenant_id
+  tags                = local.tags
+}

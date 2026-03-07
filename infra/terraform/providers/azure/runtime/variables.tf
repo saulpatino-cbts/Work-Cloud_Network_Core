@@ -8,13 +8,8 @@ variable "storage_account_id" {
   type        = string
 }
 
-variable "storage_account_name" {
-  description = "Storage account name"
-  type        = string
-}
-
 variable "key_vault_id" {
-  description = "Key Vault resource ID"
+  description = "Key Vault resource ID — secrets are stored here for sync-env workflow"
   type        = string
 }
 
@@ -23,23 +18,20 @@ variable "managed_identity_principal_id" {
   type        = string
 }
 
-variable "azure_openai_endpoint" {
-  description = "Azure OpenAI endpoint URL"
-  type        = string
-}
-
-variable "application_insights_connection_string" {
-  description = "Application Insights connection string"
+variable "database_url" {
+  description = "Full PostgreSQL connection string (postgresql://user:pass@host:5432/db?sslmode=require)"
   type        = string
   sensitive   = true
 }
 
-variable "api_container_app_id" {
-  description = "Container App resource ID for CNA API"
+variable "nextauth_secret" {
+  description = "NextAuth.js JWT signing secret — generate with: openssl rand -base64 32"
   type        = string
+  sensitive   = true
 }
 
-variable "worker_container_app_id" {
-  description = "Container App resource ID for CNA worker"
+variable "entra_client_secret" {
+  description = "Entra ID (Azure AD) OAuth2 client secret for NextAuth provider"
   type        = string
+  sensitive   = true
 }

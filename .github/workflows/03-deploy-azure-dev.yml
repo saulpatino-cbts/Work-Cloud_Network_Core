@@ -1,4 +1,4 @@
-name: deploy-azure-runtime
+name: "03 · Deploy Azure (Dev/Prod)"
 
 on:
   workflow_dispatch:
@@ -20,6 +20,11 @@ on:
         description: Worker image reference
         required: true
         default: ghcr.io/saulpatinojr/cna-worker:latest
+        type: string
+      web_image:
+        description: Web (Next.js) image reference
+        required: true
+        default: ghcr.io/saulpatinojr/cna-web:latest
         type: string
       previous_api_image:
         description: Previous API image reference for rollback operations
@@ -56,6 +61,7 @@ env:
   TF_IN_AUTOMATION: true
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
+  EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}
   AZURE_MONITOR_HEALTH_THRESHOLD: "95"
   APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
   CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
@@ -180,7 +186,15 @@ PY
         run: |
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
-            -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}"
+            -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}" \
+            -var="web_image=${{ env.EFFECTIVE_WEB_IMAGE }}" \
+            -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
+            -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
+            -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
+            -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
+            -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="ghcr_pat=${{ secrets.GHCR_PAT }}"
 
       - name: Create deployment manifest
         run: |
@@ -191,6 +205,7 @@ PY
             "deploy_mode": "${{ inputs.deploy_mode }}",
             "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
             "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
+            "web_image": "${{ env.EFFECTIVE_WEB_IMAGE }}",
             "commit_sha": "${{ github.sha }}",
             "workflow_run_id": "${{ github.run_id }}",
             "approval_status": "pending",
@@ -510,4 +525,12 @@ PY
         run: |
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
-            -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest"
+            -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest" \
+            -var="web_image=ghcr.io/saulpatinojr/cna-web:latest" \
+            -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
+            -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
+            -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
+            -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
+            -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="ghcr_pat=${{ secrets.GHCR_PAT }}"

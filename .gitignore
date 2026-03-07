@@ -28,3 +28,9 @@ node_modules/
 htmlcov/
 .coverage
 *.drawio.bak
+
+# Next.js
+.next/
+out/
+apps/cna-web/.env.local
+apps/cna-web/.env*.local

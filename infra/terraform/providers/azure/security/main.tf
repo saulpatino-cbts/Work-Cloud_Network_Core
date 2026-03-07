@@ -1,6 +1,6 @@
 locals {
-  frontdoor_origin_name      = "origin-${var.name_prefix}-api"
-  frontdoor_route_name       = "route-${var.name_prefix}-api"
+  frontdoor_origin_name      = "origin-${var.name_prefix}-web"
+  frontdoor_route_name       = "route-${var.name_prefix}-web"
   use_custom_domain          = var.frontdoor_custom_domain_host_name != ""
   use_custom_domain_dns_zone = local.use_custom_domain && var.frontdoor_custom_domain_dns_zone_id != null
   use_customer_managed_tls   = var.frontdoor_secret_versionless_id != null && var.frontdoor_certificate_type == "CustomerCertificate"
@@ -59,6 +59,13 @@ resource "azurerm_private_dns_zone" "openai" {
   resource_group_name = var.resource_group_name
 }
 
+# PostgreSQL Flexible Server requires a dedicated private DNS zone and VNet link.
+# The database module depends on this zone ID being available before the server is created.
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = var.resource_group_name
+}
+
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "pdns-link-${var.name_prefix}-blob"
   resource_group_name   = var.resource_group_name
@@ -77,6 +84,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "openai" {
   name                  = "pdns-link-${var.name_prefix}-openai"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.openai.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "pdns-link-${var.name_prefix}-postgres"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
   virtual_network_id    = var.virtual_network_id
 }
 
@@ -160,27 +174,27 @@ resource "azurerm_cdn_frontdoor_endpoint" "platform" {
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 }
 
-resource "azurerm_cdn_frontdoor_origin_group" "api" {
-  name                     = "og-${var.name_prefix}-api"
+resource "azurerm_cdn_frontdoor_origin_group" "web" {
+  name                     = "og-${var.name_prefix}-web"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 
   load_balancing {}
   health_probe {
     interval_in_seconds = 120
-    path                = "/health"
+    path                = "/api/health"
     protocol            = "Https"
     request_type        = "GET"
   }
 }
 
-resource "azurerm_cdn_frontdoor_origin" "api" {
+resource "azurerm_cdn_frontdoor_origin" "web" {
   name                           = local.frontdoor_origin_name
-  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.api.id
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.web.id
   enabled                        = true
-  host_name                      = var.api_container_app_fqdn
+  host_name                      = var.web_container_app_fqdn
   http_port                      = 80
   https_port                     = 443
-  origin_host_header             = var.api_container_app_fqdn
+  origin_host_header             = var.web_container_app_fqdn
   priority                       = 1
   weight                         = 1000
   certificate_name_check_enabled = true
@@ -201,7 +215,8 @@ resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
 }
 
 resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
-  name                = "afd-waf-${var.name_prefix}-platform"
+  # Azure requires WAF policy names to be alphanumeric only — no hyphens allowed.
+  name                = "afdwaf${replace(var.name_prefix, "-", "")}platform"
   resource_group_name = var.resource_group_name
   sku_name            = "Standard_AzureFrontDoor"
   mode                = "Prevention"
@@ -213,11 +228,11 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   }
 }
 
-resource "azurerm_cdn_frontdoor_route" "api" {
+resource "azurerm_cdn_frontdoor_route" "web" {
   name                            = local.frontdoor_route_name
   cdn_frontdoor_endpoint_id       = azurerm_cdn_frontdoor_endpoint.platform.id
-  cdn_frontdoor_origin_group_id   = azurerm_cdn_frontdoor_origin_group.api.id
-  cdn_frontdoor_origin_ids        = [azurerm_cdn_frontdoor_origin.api.id]
+  cdn_frontdoor_origin_group_id   = azurerm_cdn_frontdoor_origin_group.web.id
+  cdn_frontdoor_origin_ids        = [azurerm_cdn_frontdoor_origin.web.id]
   supported_protocols             = ["Http", "Https"]
   patterns_to_match               = ["/*"]
   forwarding_protocol             = "HttpsOnly"

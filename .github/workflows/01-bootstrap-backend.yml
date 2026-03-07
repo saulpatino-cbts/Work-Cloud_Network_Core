@@ -1,0 +1,96 @@
+name: "01 · Bootstrap Terraform Backend"
+# ONE-TIME workflow. Run this before any other workflow.
+# Creates the Azure Resource Group + Storage Account used as the
+# Terraform remote backend. After this completes, set:
+#   TFSTATE_RESOURCE_GROUP   (GitHub Variable)
+#   TFSTATE_STORAGE_ACCOUNT  (GitHub Variable)
+#   TFSTATE_CONTAINER        (GitHub Variable)
+
+on:
+  workflow_dispatch:
+    inputs:
+      location:
+        description: Azure region for the tfstate backend
+        required: true
+        default: eastus
+        type: string
+      tfstate_resource_group:
+        description: Resource group name for Terraform state storage
+        required: true
+        default: rg-cna-tfstate
+        type: string
+      tfstate_storage_account:
+        description: Storage account name for Terraform state (globally unique, 3-24 chars, lowercase)
+        required: true
+        default: stcnatfstate
+        type: string
+      tfstate_container:
+        description: Blob container name for state files
+        required: true
+        default: tfstate
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create resource group
+        run: |
+          az group create \
+            --name "${{ inputs.tfstate_resource_group }}" \
+            --location "${{ inputs.location }}"
+
+      - name: Create storage account
+        run: |
+          az storage account create \
+            --name "${{ inputs.tfstate_storage_account }}" \
+            --resource-group "${{ inputs.tfstate_resource_group }}" \
+            --location "${{ inputs.location }}" \
+            --sku Standard_LRS \
+            --min-tls-version TLS1_2 \
+            --allow-blob-public-access false \
+            --https-only true
+
+      - name: Create blob container
+        run: |
+          az storage container create \
+            --name "${{ inputs.tfstate_container }}" \
+            --account-name "${{ inputs.tfstate_storage_account }}" \
+            --auth-mode login
+
+      - name: Assign Storage Blob Data Contributor to CI identity
+        run: |
+          STORAGE_ID=$(az storage account show \
+            --name "${{ inputs.tfstate_storage_account }}" \
+            --resource-group "${{ inputs.tfstate_resource_group }}" \
+            --query id --output tsv)
+          # Get the service principal object ID for the federated OIDC identity
+          CLIENT_OID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id --output tsv)
+          az role assignment create \
+            --role "Storage Blob Data Contributor" \
+            --assignee-object-id "$CLIENT_OID" \
+            --assignee-principal-type ServicePrincipal \
+            --scope "$STORAGE_ID"
+
+      - name: Summary
+        run: |
+          echo "## Bootstrap Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Set these GitHub Actions **Variables** before running any other workflow:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Variable | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`TFSTATE_RESOURCE_GROUP\` | \`${{ inputs.tfstate_resource_group }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`TFSTATE_STORAGE_ACCOUNT\` | \`${{ inputs.tfstate_storage_account }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`TFSTATE_CONTAINER\` | \`${{ inputs.tfstate_container }}\` |" >> "$GITHUB_STEP_SUMMARY"

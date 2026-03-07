@@ -1,0 +1,33 @@
+import NextAuth from "next-auth";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "@/lib/prisma";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    MicrosoftEntraID({
+      clientId: process.env.AZURE_AD_CLIENT_ID!,
+      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+      // next-auth v5 beta dropped tenantId as a standalone prop.
+      // Pass the OIDC issuer URL directly; the provider appends
+      // /.well-known/openid-configuration for discovery.
+      issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
+    }),
+  ],
+  callbacks: {
+    // Attach user role to the session token so UI can make auth decisions.
+    async session({ session, user }) {
+      if (session.user && user) {
+        session.user.id = user.id;
+        // @ts-expect-error — role is added to User model via Prisma schema
+        session.user.role = user.role;
+      }
+      return session;
+    },
+  },
+  pages: {
+    signIn: "/auth/signin",
+    error: "/auth/error",
+  },
+});

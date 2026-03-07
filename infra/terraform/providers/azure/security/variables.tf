@@ -44,7 +44,17 @@ variable "api_container_app_id" {
 }
 
 variable "api_container_app_fqdn" {
-  description = "API Container App FQDN used as Front Door origin host"
+  description = "API Container App FQDN (internal, kept for reference)"
+  type        = string
+}
+
+variable "web_container_app_fqdn" {
+  description = "Web (Next.js) Container App FQDN — used as Azure Front Door origin host"
+  type        = string
+}
+
+variable "web_container_app_id" {
+  description = "Web (Next.js) Container App resource ID"
   type        = string
 }
 

@@ -27,7 +27,13 @@ output "container_app_environment_id" {
 }
 
 output "api_fqdn" {
-  value = module.compute.api_fqdn
+  description = "CNA API Container App FQDN (internal — not directly reachable from internet)"
+  value       = module.compute.api_fqdn
+}
+
+output "web_fqdn" {
+  description = "CNA Web (Next.js) Container App FQDN"
+  value       = module.compute.web_fqdn
 }
 
 output "worker_name" {
@@ -54,6 +60,21 @@ output "presentation_cdn_fqdn" {
   value = module.presentation.cdn_fqdn
 }
 
+output "frontdoor_endpoint_host_name" {
+  description = "Azure Front Door endpoint hostname — this is the public URL for the platform"
+  value       = module.security.frontdoor_endpoint_host_name
+}
+
 output "openai_endpoint_secret_name" {
   value = module.security.openai_endpoint_secret_name
+}
+
+output "database_server_name" {
+  description = "PostgreSQL Flexible Server name"
+  value       = module.database.server_name
+}
+
+output "database_server_fqdn" {
+  description = "PostgreSQL Flexible Server FQDN (private DNS name — only reachable within the VNet)"
+  value       = module.database.server_fqdn
 }

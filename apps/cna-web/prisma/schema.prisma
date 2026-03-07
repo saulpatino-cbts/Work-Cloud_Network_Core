@@ -1,0 +1,188 @@
+// CNA Platform — Prisma schema
+// PostgreSQL 16 via Azure Flexible Server (private, VNet-integrated)
+// Run:  npx prisma db push   (dev)
+//       npx prisma migrate deploy   (prod/CI)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(ANALYST)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  engagements   EngagementMember[]
+}
+
+enum UserRole {
+  ANALYST   // Can run discovery, create engagements, run analysis
+  REVIEWER  // Can approve findings and publish deliverables
+  CLIENT    // Read-only: can view published deliverables for their org
+  ADMIN     // Full platform access
+}
+
+// NextAuth.js required tables ─────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Engagements ──────────────────────────────────────────────────────────────
+
+model Engagement {
+  id          String           @id @default(cuid())
+  name        String
+  clientOrg   String
+  status      EngagementStatus @default(DRAFT)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  members     EngagementMember[]
+  documents   IngestedDocument[]
+  findings    Finding[]
+  deliverables Deliverable[]
+}
+
+enum EngagementStatus {
+  DRAFT
+  DISCOVERY
+  ANALYSIS
+  REVIEW
+  DELIVERED
+}
+
+model EngagementMember {
+  id           String     @id @default(cuid())
+  engagementId String
+  userId       String
+  role         UserRole
+
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([engagementId, userId])
+}
+
+// ─── Document Ingestion ───────────────────────────────────────────────────────
+
+model IngestedDocument {
+  id           String       @id @default(cuid())
+  engagementId String
+  fileName     String
+  blobPath     String       // path in Azure Blob Storage engagements/ container
+  docType      DocumentType
+  parsedText   String?      @db.Text
+  vectorId     String?      // future: Azure AI Search vector index reference
+  createdAt    DateTime     @default(now())
+
+  engagement   Engagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  findings     Finding[]
+}
+
+enum DocumentType {
+  CLIENT_ARCHITECTURE
+  COMPLIANCE_FRAMEWORK
+  NETWORK_DIAGRAM
+  CONFIGURATION_EXPORT
+  OTHER
+}
+
+// ─── Analysis & Findings ──────────────────────────────────────────────────────
+
+model Finding {
+  id           String         @id @default(cuid())
+  engagementId String
+  documentId   String?
+  title        String
+  severity     FindingSeverity
+  category     String
+  description  String         @db.Text
+  recommendation String?      @db.Text
+  aiGenerated  Boolean        @default(true)
+  reviewedBy   String?        // userId of reviewer
+  reviewedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  engagement   Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  document     IngestedDocument? @relation(fields: [documentId], references: [id])
+}
+
+enum FindingSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFORMATIONAL
+}
+
+// ─── Deliverables ─────────────────────────────────────────────────────────────
+
+model Deliverable {
+  id              String            @id @default(cuid())
+  engagementId    String
+  title           String
+  type            DeliverableType
+  blobPath        String?           // path to generated file in Blob Storage
+  content         String?           @db.Text // inline markdown for previews
+  publishedAt     DateTime?
+  publishedBy     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  engagement      Engagement        @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+}
+
+enum DeliverableType {
+  SPECIALIZATION_REPORT
+  EXECUTIVE_SUMMARY
+  TECHNICAL_FINDINGS
+  REMEDIATION_PLAN
+}

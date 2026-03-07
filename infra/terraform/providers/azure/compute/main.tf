@@ -28,9 +28,21 @@ resource "azurerm_container_app" "api" {
     type = "SystemAssigned"
   }
 
+  # GHCR requires username + PAT — Azure Managed Identity only works with ACR.
   registry {
-    server   = var.container_registry_server
-    identity = "system"
+    server               = var.container_registry_server
+    username             = local.use_ghcr_auth ? var.ghcr_username : null
+    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
+    identity             = local.use_ghcr_auth ? null : "system"
+  }
+
+  # Inject the GHCR PAT as a secret so the registry block can reference it.
+  dynamic "secret" {
+    for_each = local.use_ghcr_auth ? { "ghcr-pat" = var.ghcr_pat } : {}
+    content {
+      name  = secret.key
+      value = secret.value
+    }
   }
 
   dynamic "secret" {
@@ -88,7 +100,7 @@ resource "azurerm_container_app" "api" {
   }
 
   ingress {
-    external_enabled = var.container_apps_internal_only ? false : true
+    external_enabled = false # Internal only — Front Door routes to cna-web, not cna-api
     target_port      = var.api_target_port
     transport        = "auto"
     traffic_weight {
@@ -98,6 +110,9 @@ resource "azurerm_container_app" "api" {
   }
 }
 
+# ─── cna-worker ───────────────────────────────────────────────────────────────
+# Background job processor. No HTTP ingress — processes discovery, analysis,
+# and delivery pipelines asynchronously.
 resource "azurerm_container_app" "worker" {
   name                         = local.worker_app_name
   container_app_environment_id = azurerm_container_app_environment.this.id
@@ -110,8 +125,18 @@ resource "azurerm_container_app" "worker" {
   }
 
   registry {
-    server   = var.container_registry_server
-    identity = "system"
+    server               = var.container_registry_server
+    username             = local.use_ghcr_auth ? var.ghcr_username : null
+    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
+    identity             = local.use_ghcr_auth ? null : "system"
+  }
+
+  dynamic "secret" {
+    for_each = local.use_ghcr_auth ? { "ghcr-pat" = var.ghcr_pat } : {}
+    content {
+      name  = secret.key
+      value = secret.value
+    }
   }
 
   dynamic "secret" {
@@ -147,6 +172,100 @@ resource "azurerm_container_app" "worker" {
           secret_name = env.value.secret_name
         }
       }
+    }
+  }
+}
+
+# ─── cna-web ──────────────────────────────────────────────────────────────────
+# Next.js 15 frontend + API routes. Public face of the CNA platform.
+# Azure Front Door terminates TLS and WAF here. Port 3000.
+resource "azurerm_container_app" "web" {
+  name                         = local.web_app_name
+  container_app_environment_id = azurerm_container_app_environment.this.id
+  resource_group_name          = var.resource_group_name
+  revision_mode                = var.container_app_revision_mode
+  tags                         = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  registry {
+    server               = var.container_registry_server
+    username             = local.use_ghcr_auth ? var.ghcr_username : null
+    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
+    identity             = local.use_ghcr_auth ? null : "system"
+  }
+
+  dynamic "secret" {
+    for_each = local.use_ghcr_auth ? { "ghcr-pat" = var.ghcr_pat } : {}
+    content {
+      name  = secret.key
+      value = secret.value
+    }
+  }
+
+  dynamic "secret" {
+    for_each = var.container_app_secrets
+    content {
+      name  = secret.key
+      value = secret.value
+    }
+  }
+
+  template {
+    min_replicas = var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
+
+    container {
+      name   = "cna-web"
+      image  = var.web_image
+      cpu    = 0.5
+      memory = "1Gi"
+
+      liveness_probe {
+        transport = "HTTP"
+        port      = var.web_target_port
+        path      = "/api/health"
+      }
+
+      readiness_probe {
+        transport = "HTTP"
+        port      = var.web_target_port
+        path      = "/api/health"
+      }
+
+      startup_probe {
+        transport = "HTTP"
+        port      = var.web_target_port
+        path      = "/api/health"
+      }
+
+      dynamic "env" {
+        for_each = local.web_plain_env_vars
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.web_secret_env_vars
+        content {
+          name        = env.value.name
+          secret_name = env.value.secret_name
+        }
+      }
+    }
+  }
+
+  ingress {
+    external_enabled = true # Public — Azure Front Door terminates TLS here
+    target_port      = var.web_target_port
+    transport        = "auto"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
     }
   }
 }

@@ -373,6 +373,7 @@ PY
           az rest --method get --url "https://management.azure.com${{ needs.apply.outputs.frontdoor_profile_id }}/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01" > .verification/${{ inputs.environment }}/external-health.json
 
       - name: Query Application Insights telemetry directly
+        if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''
         run: |
           az monitor app-insights query \
             --app "${{ vars.APPLICATION_INSIGHTS_NAME }}" \
@@ -394,6 +395,7 @@ PY
             > .verification/${{ inputs.environment }}/staged-promotion.json
 
       - name: Query certificate monitoring and trigger renewal workflow
+        if: vars.KEY_VAULT_NAME != 'none' && vars.KEY_VAULT_NAME != ''
         run: |
           az keyvault certificate show \
             --vault-name "${{ vars.KEY_VAULT_NAME }}" \

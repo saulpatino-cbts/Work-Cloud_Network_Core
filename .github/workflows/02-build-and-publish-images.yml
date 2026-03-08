@@ -132,7 +132,13 @@ jobs:
             -e AZURE_AD_TENANT_ID="00000000-0000-0000-0000-000000000000" \
             -p 3000:3000 \
             ghcr.io/${{ github.repository_owner }}/cna-web:latest
-          sleep 10
+          sleep 15
+          # Always dump logs so we can diagnose crashes even on failure
+          echo "--- container status ---"
+          docker ps -a --filter name=cna-web-smoke --format "table {{.Status}}\t{{.Ports}}"
+          echo "--- container logs ---"
+          docker logs cna-web-smoke || true
+          echo "--- end logs ---"
           # Health check returns 503 without a real DB — verify the process started
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health || true)
           docker rm -f cna-web-smoke

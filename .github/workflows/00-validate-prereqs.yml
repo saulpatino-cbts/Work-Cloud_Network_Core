@@ -1,0 +1,209 @@
+name: "00 · Validate Prerequisites"
+# Run this workflow before 01-bootstrap-backend to confirm that all required
+# GitHub Secrets, GitHub Variables, and Azure OIDC authentication are in place.
+#
+# Safe to run at any time — read-only, makes no changes to Azure or GitHub.
+#
+# What it checks:
+#   1. Required GitHub Secrets are non-empty
+#   2. Required GitHub Variables are set and not placeholder values
+#   3. Azure login succeeds via OIDC (confirms app registration + federated
+#      credential + role assignment are all correctly configured)
+#   4. Prints a pass/fail summary to the workflow step summary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Validate prerequisites
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check required GitHub Secrets
+        env:
+          # Map each secret to an env var so we can test for empty values.
+          # GitHub redacts secret values in logs but we can detect empty strings.
+          V_AZURE_CLIENT_ID:             ${{ secrets.AZURE_CLIENT_ID }}
+          V_AZURE_TENANT_ID:             ${{ secrets.AZURE_TENANT_ID }}
+          V_AZURE_SUBSCRIPTION_ID:       ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          V_CNA_POSTGRES_ADMIN_PASSWORD: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+          V_CNA_ENTRA_CLIENT_SECRET:     ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
+          V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
+          V_GHCR_PAT:                    ${{ secrets.GHCR_PAT }}
+        run: |
+          echo "## Secret Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secret | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          FAILED=0
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [[ -z "$value" ]]; then
+              echo "| \`$name\` | ❌ Missing |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Secret $name is not set"
+              FAILED=1
+            else
+              echo "| \`$name\` | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          check_secret "AZURE_CLIENT_ID"             "$V_AZURE_CLIENT_ID"
+          check_secret "AZURE_TENANT_ID"             "$V_AZURE_TENANT_ID"
+          check_secret "AZURE_SUBSCRIPTION_ID"       "$V_AZURE_SUBSCRIPTION_ID"
+          check_secret "CNA_POSTGRES_ADMIN_PASSWORD" "$V_CNA_POSTGRES_ADMIN_PASSWORD"
+          check_secret "CNA_ENTRA_CLIENT_SECRET"     "$V_CNA_ENTRA_CLIENT_SECRET"
+          check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
+          check_secret "GHCR_PAT"                    "$V_GHCR_PAT"
+
+          if [[ "$FAILED" -eq 1 ]]; then
+            echo ""
+            echo "::error::One or more required secrets are missing. Run scripts/setup-azure-prereqs.sh to set them."
+            exit 1
+          fi
+          echo "All secrets present ✅"
+
+      - name: Check required GitHub Variables
+        env:
+          TFSTATE_RESOURCE_GROUP:    ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT:   ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_CONTAINER:         ${{ vars.TFSTATE_CONTAINER }}
+          CNA_ENTRA_CLIENT_ID:       ${{ vars.CNA_ENTRA_CLIENT_ID }}
+          CNA_NEXTAUTH_URL:          ${{ vars.CNA_NEXTAUTH_URL }}
+          CNA_AZURE_OPENAI_DEPLOY:   ${{ vars.CNA_AZURE_OPENAI_DEPLOYMENT }}
+          APPLICATION_INSIGHTS_NAME: ${{ vars.APPLICATION_INSIGHTS_NAME }}
+          KEY_VAULT_NAME:            ${{ vars.KEY_VAULT_NAME }}
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Variable Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Variable | Value | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          FAILED=0
+          check_var() {
+            local name="$1"
+            local value="$2"
+            local allow_none="${3:-false}"  # some vars start as 'none' until Terraform creates the resource
+            if [[ -z "$value" ]]; then
+              echo "| \`$name\` | _(empty)_ | ❌ Missing |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Variable $name is not set"
+              FAILED=1
+            elif [[ "$allow_none" == "false" && "$value" == "none" ]]; then
+              echo "| \`$name\` | \`none\` | ⚠️ Placeholder |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Variable $name is still set to 'none' — update after Terraform deploy"
+            elif [[ "$value" == *"PLACEHOLDER"* || "$value" == *"example.com"* ]]; then
+              echo "| \`$name\` | \`$value\` | ⚠️ Placeholder |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Variable $name still has a placeholder value"
+            else
+              echo "| \`$name\` | \`$value\` | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          # Core tfstate vars — must be set, must not be placeholders
+          check_var "TFSTATE_RESOURCE_GROUP"  "$TFSTATE_RESOURCE_GROUP"
+          check_var "TFSTATE_STORAGE_ACCOUNT" "$TFSTATE_STORAGE_ACCOUNT"
+          check_var "TFSTATE_CONTAINER"       "$TFSTATE_CONTAINER"
+          check_var "CNA_ENTRA_CLIENT_ID"     "$CNA_ENTRA_CLIENT_ID"
+          check_var "CNA_NEXTAUTH_URL"        "$CNA_NEXTAUTH_URL"
+          check_var "CNA_AZURE_OPENAI_DEPLOYMENT" "$CNA_AZURE_OPENAI_DEPLOY"
+
+          # Post-deploy vars — allowed to be 'none' before first Terraform run
+          check_var "APPLICATION_INSIGHTS_NAME" "$APPLICATION_INSIGHTS_NAME" "true"
+          check_var "KEY_VAULT_NAME"             "$KEY_VAULT_NAME"             "true"
+
+          if [[ "$FAILED" -eq 1 ]]; then
+            echo ""
+            echo "::error::One or more required variables are missing."
+            exit 1
+          fi
+          echo "All variables present ✅"
+
+      - name: Azure login via OIDC
+        id: azure_login
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure access
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Azure Access Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Confirm subscription is visible
+          SUB_NAME=$(az account show --query name -o tsv)
+          SUB_ID=$(az account show --query id -o tsv)
+          TENANT_ID=$(az account show --query tenantId -o tsv)
+
+          echo "| Check | Value | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| OIDC login | ✅ Succeeded | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Subscription | \`$SUB_NAME\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Subscription ID | \`$SUB_ID\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tenant ID | \`$TENANT_ID\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+
+          # Verify Contributor role is assigned
+          APP_ID="${{ secrets.AZURE_CLIENT_ID }}"
+          CONTRIBUTOR=$(az role assignment list \
+            --assignee "$APP_ID" \
+            --role Contributor \
+            --scope "/subscriptions/$SUB_ID" \
+            --query "[0].roleDefinitionName" -o tsv 2>/dev/null || echo "")
+
+          UAA=$(az role assignment list \
+            --assignee "$APP_ID" \
+            --role "User Access Administrator" \
+            --scope "/subscriptions/$SUB_ID" \
+            --query "[0].roleDefinitionName" -o tsv 2>/dev/null || echo "")
+
+          if [[ -n "$CONTRIBUTOR" ]]; then
+            echo "| Contributor role | Assigned | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Contributor role | ❌ Not assigned | |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Contributor role not found. Run: az role assignment create --role Contributor --assignee $APP_ID --scope /subscriptions/$SUB_ID"
+          fi
+
+          if [[ -n "$UAA" ]]; then
+            echo "| User Access Admin role | Assigned | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| User Access Admin role | ❌ Not assigned | |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::User Access Administrator role not found — Terraform may fail when assigning roles to managed identities"
+          fi
+
+          # Verify tfstate storage account is accessible (only after workflow 01 has run)
+          TFSTATE_SA="${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
+          TFSTATE_RG="${{ vars.TFSTATE_RESOURCE_GROUP }}"
+          if [[ "$TFSTATE_SA" != "none" && -n "$TFSTATE_SA" ]]; then
+            SA_EXISTS=$(az storage account show \
+              --name "$TFSTATE_SA" \
+              --resource-group "$TFSTATE_RG" \
+              --query name -o tsv 2>/dev/null || echo "")
+            if [[ -n "$SA_EXISTS" ]]; then
+              echo "| Tfstate storage account | \`$TFSTATE_SA\` exists | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| Tfstate storage account | \`$TFSTATE_SA\` not found | ⚠️ Run workflow 01 |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Storage account $TFSTATE_SA not found in $TFSTATE_RG — run workflow 01 to create it"
+            fi
+          fi
+
+          echo ""
+          echo "Azure access verified ✅"
+
+      - name: Final summary
+        if: always()
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Next step:** If all checks are green, run workflow \`01 · Bootstrap Terraform Backend\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 03)." >> "$GITHUB_STEP_SUMMARY"

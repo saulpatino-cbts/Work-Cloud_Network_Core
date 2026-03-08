@@ -1,8 +1,27 @@
 # CNA Platform — GitHub Actions Workflows
 
+## First-Time Setup
+
+Before running any workflow, run the setup script once from your local terminal
+or Azure Cloud Shell. It creates all Azure prerequisites and sets GitHub Secrets
+and Variables automatically:
+
+```bash
+# Prerequisites: az login && gh auth login
+chmod +x scripts/setup-azure-prereqs.sh
+./scripts/setup-azure-prereqs.sh
+```
+
+See `scripts/setup-azure-prereqs.sh` for configuration options at the top of the file.
+The four secrets the script cannot generate must be set manually afterward:
+`GHCR_PAT`, `CNA_POSTGRES_ADMIN_PASSWORD`, `CNA_ENTRA_CLIENT_SECRET`, `CNA_NEXTAUTH_SECRET`.
+
+---
+
 ## Execution Order
 
 ```
+00 → (manual)    Validate all GitHub Secrets, Variables, and Azure OIDC access
 01 → (one-time)  Bootstrap Terraform backend in Azure
 02 → (on push)   Build & publish all three container images to GHCR
 03 → (manual)    Deploy Azure infrastructure + containers via Terraform
@@ -45,6 +64,26 @@ See `documentation/architecture/40-naming-conventions.md` for the full reference
 ---
 
 ## Workflows
+
+### `00-validate-prereqs.yml` — Validate Prerequisites
+**Trigger:** Manual
+**Duration:** ~1 minute
+**Azure auth required:** Yes (OIDC)
+
+Read-only validation workflow. Run this after `setup-azure-prereqs.sh` and
+after setting the four manual secrets to confirm everything is wired correctly
+before attempting a real deployment.
+
+Checks:
+- All required GitHub Secrets are non-empty
+- All required GitHub Variables are set (warns on placeholder values)
+- Azure OIDC login succeeds
+- Contributor and User Access Administrator roles are assigned
+- Tfstate storage account exists (after workflow 01 has run)
+
+Prints a pass/fail table to the workflow step summary.
+
+---
 
 ### `01-bootstrap-backend.yml` — Bootstrap Terraform Backend
 **Trigger:** Manual (run once before anything else)
@@ -200,58 +239,46 @@ Auto-generates changelog from PRs merged since the last tag.
 ## First Deployment Checklist
 
 ```
-[ ] 1. Create Entra ID App Registration in Azure Portal (or az CLI):
+[ ] 1. Create Entra app registration and its OAuth client secret (portal only — one-time):
+       - Azure Portal → Entra ID → App registrations → New registration
        - Redirect URI: https://cna.example.com/api/auth/callback/microsoft-entra-id
-         (placeholder — update to real Front Door hostname after step 8)
+         (placeholder — update to real Front Door hostname after step 7)
        - API permissions: openid, profile, email, User.Read
-       - Note the Application (Client) ID and create a Client Secret
+       - Certificates & secrets → New client secret → copy the value
 
-[ ] 2. Create a GitHub PAT for GHCR image pulls:
+[ ] 2. Create a GitHub PAT for GHCR image pulls (portal only — one-time):
        - GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
-       - New token: Expiration = 90 days (or No expiration for long-lived infra tokens)
        - Scope: read:packages only (nested under write:packages — expand, check only read:packages)
        - Copy the token — you cannot view it again
 
-[ ] 3. Set up OIDC federated credential on the Entra app registration:
-       az ad sp create --id <appId>
-       az role assignment create \
-         --role Contributor \
-         --assignee <appId> \
-         --scope /subscriptions/<subscriptionId>
-       az ad app federated-credential create --id <appId> --parameters '{
-         "name": "cna-github-main",
-         "issuer": "https://token.actions.githubusercontent.com",
-         "subject": "repo:saulpatinojr/MVP-Cloud_Network_Assessment:ref:refs/heads/main",
-         "audiences": ["api://AzureADTokenExchange"]
-       }'
+[ ] 3. Run the setup script (automates all remaining Azure + GitHub wiring):
+       Requires: az login && gh auth login
+       Edit the variables at the top of the script, then run:
 
-[ ] 4. Set GitHub Secrets (Settings → Secrets and variables → Actions → Secrets tab):
-       - AZURE_CLIENT_ID             (appId from step 3)
-       - AZURE_TENANT_ID             (your Azure tenant ID)
-       - AZURE_SUBSCRIPTION_ID       (your Azure subscription ID)
-       - CNA_POSTGRES_ADMIN_PASSWORD (generate: openssl rand -base64 16)
-       - CNA_ENTRA_CLIENT_SECRET     (client secret from step 1)
-       - CNA_NEXTAUTH_SECRET         (generate: openssl rand -base64 32)
+       chmod +x scripts/setup-azure-prereqs.sh
+       ./scripts/setup-azure-prereqs.sh
+
+       This script creates the service principal, assigns Contributor and User Access
+       Administrator roles, adds the OIDC federated credential, and sets all GitHub
+       Secrets and Variables automatically.
+
+[ ] 4. Set the four secrets the script cannot generate:
+       GitHub → Settings → Secrets and variables → Actions → Secrets tab
        - GHCR_PAT                    (PAT from step 2)
+       - CNA_ENTRA_CLIENT_SECRET     (client secret from step 1)
+       - CNA_POSTGRES_ADMIN_PASSWORD (generate: openssl rand -base64 16)
+       - CNA_NEXTAUTH_SECRET         (generate: openssl rand -base64 32)
 
-[ ] 5. Set GitHub Repository Variables (Settings → Secrets and variables → Actions → Variables tab):
-       Note: GitHub does not allow empty variable values — use none as a placeholder
-       where the real value is not yet known.
-
-       - TFSTATE_RESOURCE_GROUP      = rg-cna-tfstate
-       - TFSTATE_STORAGE_ACCOUNT     = stcnatfstate
-       - TFSTATE_CONTAINER           = tfstate
-       - CNA_ENTRA_CLIENT_ID         = <Application (Client) ID from step 1>
-       - CNA_NEXTAUTH_URL            = https://cna.example.com  (placeholder)
-       - CNA_AZURE_OPENAI_DEPLOYMENT = gpt-4o  (or your deployment name)
-       - APPLICATION_INSIGHTS_NAME   = none    (Terraform creates this — update after step 8)
-       - KEY_VAULT_NAME              = none    (Terraform creates this — update after step 8)
+[ ] 5. Run workflow 00 — Validate Prerequisites (~1 min)
+       Confirms all secrets, variables, Azure OIDC, and role assignments are green
+       before touching any real infrastructure.
 
 [ ] 6. Run workflow 01 — Bootstrap Terraform Backend (one-time, ~2 min)
-       Inputs: location = southcentralus (all other inputs keep their defaults)
+       All inputs are pre-filled — just run with defaults.
+       After it completes, the workflow summary shows the three variables to confirm.
 
 [ ] 7. Push to main — workflow 02 auto-builds all three container images (~8 min)
-       OR run workflow 02 manually if images are not yet built
+       OR run workflow 02 manually if images are not yet built.
 
 [ ] 8. Run workflow 03 (environment: dev) — first Terraform deploy (~20 min)
        - PostgreSQL provisioning is the slowest part (~10 min)

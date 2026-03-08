@@ -25,7 +25,13 @@ variable "tenant_id" {
 variable "location" {
   description = "Azure region for CNA Platform deployment"
   type        = string
-  default     = "eastus"
+  default     = "southcentralus"
+}
+
+variable "region_short" {
+  description = "Short region code used in resource names (e.g. scus, eus2, wus2)"
+  type        = string
+  default     = "scus"
 }
 
 variable "environment" {

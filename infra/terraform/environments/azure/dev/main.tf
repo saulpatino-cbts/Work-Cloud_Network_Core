@@ -1,20 +1,22 @@
-resource "azurerm_resource_group" "this" {
-  name     = "rg-${local.name_prefix}-platform"
-  location = var.location
-  tags     = local.tags
+# The resource group is pre-created by workflow 01 (bootstrap-backend) so that
+# the Terraform state storage account can live in the same RG. Terraform uses it
+# as a data source rather than managing its lifecycle — this prevents accidental
+# deletion of the RG (and the tfstate it contains) on a destroy.
+data "azurerm_resource_group" "this" {
+  name = "rg-${local.name_prefix}"
 }
 
 resource "azurerm_virtual_network" "platform" {
   name                = "vnet-${local.name_prefix}-platform"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = data.azurerm_resource_group.this.location
+  resource_group_name = data.azurerm_resource_group.this.name
   address_space       = ["10.40.0.0/16"]
   tags                = local.tags
 }
 
 resource "azurerm_subnet" "container_apps_infra" {
   name                 = "snet-${local.name_prefix}-aca-infra"
-  resource_group_name  = azurerm_resource_group.this.name
+  resource_group_name  = data.azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.platform.name
   address_prefixes     = ["10.40.0.0/23"]
 
@@ -32,7 +34,7 @@ resource "azurerm_subnet" "container_apps_infra" {
 
 resource "azurerm_subnet" "private_endpoints" {
   name                              = "snet-${local.name_prefix}-private-endpoints"
-  resource_group_name               = azurerm_resource_group.this.name
+  resource_group_name               = data.azurerm_resource_group.this.name
   virtual_network_name              = azurerm_virtual_network.platform.name
   address_prefixes                  = ["10.40.2.0/24"]
   private_endpoint_network_policies = "Disabled"
@@ -43,7 +45,7 @@ resource "azurerm_subnet" "private_endpoints" {
 # Microsoft.DBforPostgreSQL/flexibleServers and cannot contain other resources.
 resource "azurerm_subnet" "database" {
   name                 = "snet-${local.name_prefix}-database"
-  resource_group_name  = azurerm_resource_group.this.name
+  resource_group_name  = data.azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.platform.name
   address_prefixes     = ["10.40.3.0/24"]
 
@@ -61,16 +63,16 @@ resource "azurerm_subnet" "database" {
 
 module "storage" {
   source              = "../../../providers/azure/storage"
-  resource_group_name = azurerm_resource_group.this.name
-  location            = azurerm_resource_group.this.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = data.azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
   tags                = local.tags
 }
 
 module "identity" {
   source              = "../../../providers/azure/identity"
-  resource_group_name = azurerm_resource_group.this.name
-  location            = azurerm_resource_group.this.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = data.azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
   tenant_id           = var.tenant_id
   tags                = local.tags
@@ -78,8 +80,8 @@ module "identity" {
 
 module "compute" {
   source                       = "../../../providers/azure/compute"
-  resource_group_name          = azurerm_resource_group.this.name
-  location                     = azurerm_resource_group.this.location
+  resource_group_name          = data.azurerm_resource_group.this.name
+  location                     = data.azurerm_resource_group.this.location
   name_prefix                  = local.name_prefix
   api_image                    = var.api_image
   worker_image                 = var.worker_image
@@ -130,16 +132,16 @@ module "compute" {
 
 module "ai" {
   source              = "../../../providers/azure/ai"
-  resource_group_name = azurerm_resource_group.this.name
-  location            = azurerm_resource_group.this.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = data.azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
   tags                = local.tags
 }
 
 module "presentation" {
   source               = "../../../providers/azure/presentation"
-  resource_group_name  = azurerm_resource_group.this.name
-  location             = azurerm_resource_group.this.location
+  resource_group_name  = data.azurerm_resource_group.this.name
+  location             = data.azurerm_resource_group.this.location
   name_prefix          = local.name_prefix
   storage_account_id   = module.storage.storage_account_id
   storage_account_name = module.storage.storage_account_name
@@ -148,7 +150,7 @@ module "presentation" {
 
 module "runtime" {
   source                        = "../../../providers/azure/runtime"
-  resource_group_name           = azurerm_resource_group.this.name
+  resource_group_name           = data.azurerm_resource_group.this.name
   storage_account_id            = module.storage.storage_account_id
   key_vault_id                  = module.identity.key_vault_id
   managed_identity_principal_id = module.identity.managed_identity_principal_id
@@ -159,8 +161,8 @@ module "runtime" {
 
 module "security" {
   source                                 = "../../../providers/azure/security"
-  resource_group_name                    = azurerm_resource_group.this.name
-  location                               = azurerm_resource_group.this.location
+  resource_group_name                    = data.azurerm_resource_group.this.name
+  location                               = data.azurerm_resource_group.this.location
   name_prefix                            = local.name_prefix
   key_vault_id                           = module.identity.key_vault_id
   key_vault_name                         = module.identity.key_vault_name
@@ -187,8 +189,8 @@ module "security" {
 # is passed here. The server itself must be created AFTER the DNS zone + link.
 module "database" {
   source                       = "../../../providers/azure/database"
-  resource_group_name          = azurerm_resource_group.this.name
-  location                     = azurerm_resource_group.this.location
+  resource_group_name          = data.azurerm_resource_group.this.name
+  location                     = data.azurerm_resource_group.this.location
   name_prefix                  = local.name_prefix
   db_subnet_id                 = azurerm_subnet.database.id
   postgres_private_dns_zone_id = module.security.postgres_private_dns_zone_id

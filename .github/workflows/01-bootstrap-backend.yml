@@ -15,9 +15,9 @@ on:
         default: southcentralus
         type: string
       tfstate_resource_group:
-        description: Resource group name for Terraform state storage
+        description: Resource group name for Terraform state storage (shared with platform resources)
         required: true
-        default: rg-cna-tfstate
+        default: rg-cna-dev-scus
         type: string
       tfstate_storage_account:
         description: Storage account name for Terraform state (globally unique, 3-24 chars, lowercase)

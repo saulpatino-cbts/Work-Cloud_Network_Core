@@ -19,18 +19,19 @@
 
 All Azure resources follow the pattern `{abbreviation}-{project}-{environment}-{region}`.
 
-| Layer | Region | `name_prefix` |
+| Layer | Region | `name_prefix` | Resource Group |
+|---|---|---|---|
+| dev | South Central US (`southcentralus`) | `cna-dev-scus` | `rg-cna-dev-scus` |
+| prod | South Central US (`southcentralus`) | `cna-prod-scus` | `rg-cna-prod-scus` |
+
+The Terraform state storage account lives in the same RG as the platform resources.
+Workflow 01 pre-creates the RG; Terraform uses it as a `data` source (not managed by Terraform):
+
+| Resource | Name | Notes |
 |---|---|---|
-| dev | South Central US (`southcentralus`) | `cna-dev-scus` |
-| prod | South Central US (`southcentralus`) | `cna-prod-scus` |
-
-The Terraform state backend resources are **shared** (no environment or region suffix):
-
-| Resource | Name |
-|---|---|
-| Resource Group | `rg-cna-tfstate` |
-| Storage Account | `stcnatfstate` |
-| Blob Container | `tfstate` |
+| Resource Group | `rg-cna-dev-scus` | Pre-created by workflow 01; shared with platform resources |
+| Storage Account | `stcnatfstate` | Single backend serving dev + prod state files |
+| Blob Container | `tfstate` | State files keyed by environment: `dev.terraform.tfstate`, `prod.terraform.tfstate` |
 
 See `documentation/architecture/40-naming-conventions.md` for the full reference.
 
@@ -60,7 +61,7 @@ GitHub **Repository Variables** (Settings → Secrets and variables → Actions 
 
 | Variable | Value |
 |---|---|
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus` |
 | `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
 | `TFSTATE_CONTAINER` | `tfstate` |
 
@@ -230,7 +231,7 @@ Auto-generates changelog from PRs merged since the last tag.
        Note: GitHub does not allow empty variable values — use none as a placeholder
        where the real value is not yet known.
 
-       - TFSTATE_RESOURCE_GROUP      = rg-cna-tfstate
+       - TFSTATE_RESOURCE_GROUP      = rg-cna-dev-scus
        - TFSTATE_STORAGE_ACCOUNT     = stcnatfstate
        - TFSTATE_CONTAINER           = tfstate
        - CNA_ENTRA_CLIENT_ID         = <Application (Client) ID from step 1>

@@ -53,8 +53,14 @@ name_prefix = "${var.project_name}-${var.environment}-${var.region_short}"
 | Front Door Route | `route-{prefix}-web` | `route-cna-dev-scus-web` | `route-cna-prod-scus-web` |
 | WAF Policy | `afdwaf{prefix_no_hyphens}` | `afdwafcnadevscus` | `afdwafcnaprodscus` |
 | CDN Profile | `cdn-{prefix}-platform` | `cdn-cna-dev-scus-platform` | `cdn-cna-prod-scus-platform` |
-| Terraform State RG | `rg-{project}-tfstate` | `rg-cna-tfstate` | ← shared, no env/region |
-| Terraform State SA | `st{project}tfstate` (max 24) | `stcnatfstate` | ← shared, no env/region |
+| Terraform State RG | `rg-{prefix}` (same as platform RG) | `rg-cna-dev-scus` | `rg-cna-prod-scus` |
+| Terraform State SA | `st{project}tfstate` (max 24) | `stcnatfstate` | ← single shared backend |
+
+> **Resource Group strategy:** One RG per environment (`rg-cna-dev-scus`, `rg-cna-prod-scus`).
+> The Terraform state storage account (`stcnatfstate`) lives in `rg-cna-dev-scus` alongside the
+> platform resources. Workflow 01 (bootstrap) pre-creates the RG so Terraform uses it as a
+> `data` source rather than managing its lifecycle — this prevents accidental deletion of
+> the RG (and the tfstate) on a `terraform destroy`.
 
 > **Character restriction rules:**
 > - Storage Account: no hyphens, lowercase, max 24 → strip `-` with `replace()`

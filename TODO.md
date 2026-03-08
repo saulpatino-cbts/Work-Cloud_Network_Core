@@ -62,16 +62,22 @@ Go to repo → Settings → Secrets and variables → Actions → Variables tab 
 ### Step 2 — Bootstrap Terraform Backend
 
 Run workflow `01-bootstrap-backend.yml` **once**. This creates:
-- Resource group `rg-cna-tfstate`
+- Resource group `rg-cna-dev-scus` (shared RG for platform + tfstate)
 - Storage account `stcnatfstate`
 - Blob container `tfstate`
 
-**How to run:**
-1. GitHub repo → Actions tab
-2. `01 Bootstrap Terraform Backend` → `Run workflow` → branch: `main`
-3. Wait for green check (~2 min)
+All defaults are pre-filled correctly — just hit **Run workflow** with `location = southcentralus`.
 
-> After this runs, never run it again. It is idempotent but unnecessary.
+After it completes, set these GitHub **Repository Variables**:
+
+| Variable | Value |
+|---|---|
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus` |
+| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
+| `TFSTATE_CONTAINER` | `tfstate` |
+
+> Terraform uses `rg-cna-dev-scus` as a `data` source (pre-created by this workflow)
+> rather than managing the RG itself — this prevents accidental deletion on `destroy`.
 
 ---
 

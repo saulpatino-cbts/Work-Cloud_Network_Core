@@ -22,7 +22,21 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 
-# ── Stage 3: runner ──────────────────────────────────────────────────────────
+# ── Stage 3: migrator ─────────────────────────────────────────────────────────
+# Standalone image used exclusively to run `prisma migrate deploy` once per
+# deployment (via workflow 03). Keeping CLI deps out of the runtime image avoids
+# chasing Prisma's transitive dep tree (effect, fast-check, etc.) across upgrades.
+FROM node:20-alpine AS migrator
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules ./node_modules
+
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy"]
+
+# ── Stage 4: runner ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -40,38 +54,16 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma schema, generated client, and CLI (needed at runtime for migrations).
-# @prisma/client + .prisma = runtime query engine
-# prisma = CLI binary required by `prisma migrate deploy`
-COPY --from=builder /app/prisma ./prisma
+# Prisma runtime only — @prisma/client + generated query engine.
+# The Prisma CLI is intentionally excluded; migrations run from the
+# migrator stage in workflow 03 before this container is deployed.
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Fix ownership so the nextjs user can execute the prisma CLI and read the schema.
-RUN chown -R nextjs:nodejs ./node_modules/.prisma ./node_modules/@prisma ./node_modules/prisma ./prisma
-
-# Create the .bin symlink for the prisma CLI — not present because only selected
-# node_modules subdirs are copied (a full npm install never ran in this stage).
-# Read the actual bin path from prisma's package.json so this works across
-# Prisma major versions (v5 used bin/prisma.js, v6+ uses build/index.js).
-RUN mkdir -p node_modules/.bin && \
-    node -e " \
-      const fs = require('fs'); \
-      const pkg = JSON.parse(fs.readFileSync('node_modules/prisma/package.json', 'utf8')); \
-      const bin = pkg.bin; \
-      const rel = typeof bin === 'string' ? bin : (bin.prisma || Object.values(bin)[0]); \
-      const abs = '/app/node_modules/prisma/' + rel; \
-      fs.symlinkSync(abs, 'node_modules/.bin/prisma'); \
-      fs.chmodSync(abs, 0o755); \
-      console.log('prisma bin linked:', abs); \
-    "
+RUN chown -R nextjs:nodejs ./node_modules/.prisma ./node_modules/@prisma
 
 USER nextjs
 
 EXPOSE 3000
 
-# Run Prisma migrations then start the server.
-# `prisma migrate deploy` is idempotent — already-applied migrations are skipped.
-# Use node_modules/.bin/prisma directly to avoid npx network lookup.
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node server.js"]
+CMD ["node", "server.js"]

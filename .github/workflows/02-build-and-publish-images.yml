@@ -110,16 +110,37 @@ jobs:
             type=raw,value=latest
             type=sha
 
+      - name: Extract metadata for Migrator
+        id: meta_migrator
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cna-migrator
+          tags: |
+            type=raw,value=latest
+            type=sha
+
       - name: Build and push Web image
         uses: docker/build-push-action@v6
         with:
           context: apps/cna-web
           file: apps/cna-web/Dockerfile
+          target: runner
           push: true
           tags: ${{ steps.meta_web.outputs.tags }}
           labels: ${{ steps.meta_web.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push Migrator image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/cna-web
+          file: apps/cna-web/Dockerfile
+          target: migrator
+          push: true
+          tags: ${{ steps.meta_migrator.outputs.tags }}
+          labels: ${{ steps.meta_migrator.outputs.labels }}
+          cache-from: type=gha
 
       - name: Smoke test — /api/health returns 200
         run: |

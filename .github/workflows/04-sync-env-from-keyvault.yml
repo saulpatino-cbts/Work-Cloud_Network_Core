@@ -1,4 +1,4 @@
-name: "05 · Sync Env from Key Vault"
+name: "04 · Sync Env from Key Vault"
 # Pulls all CNA platform secrets from Azure Key Vault and generates a
 # populated .env file as a 1-day workflow artifact.
 # Run this after infrastructure deployment to validate secrets are present

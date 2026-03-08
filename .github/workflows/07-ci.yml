@@ -9,7 +9,7 @@
 #   - module-dependency-check now also runs on PRs (was push-only)
 #   - Job timeout-minutes set on every job (prevent runaway billing)
 #   - Explicit permissions block (principle of least privilege)
-name: CNA CI
+name: "07 · CNA CI"
 
 on:
   push:

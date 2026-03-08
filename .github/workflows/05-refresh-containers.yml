@@ -1,4 +1,4 @@
-name: "06 · Refresh Containers (Fast Redeploy)"
+name: "05 · Refresh Containers (Fast Redeploy)"
 # Fast image update without a full Terraform apply.
 # Use this when you only need to roll out a new container image to
 # one or more Container Apps — no infrastructure changes.

@@ -12,7 +12,7 @@ on:
       location:
         description: Azure region for the tfstate backend
         required: true
-        default: eastus
+        default: southcentralus
         type: string
       tfstate_resource_group:
         description: Resource group name for Terraform state storage

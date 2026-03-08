@@ -9,7 +9,7 @@
 # Required repository settings:
 #   Actions > General > Workflow permissions: Read and write
 #   (or grant packages:write explicitly in permissions block below)
-name: Release
+name: "08 · Release"
 
 on:
   push:

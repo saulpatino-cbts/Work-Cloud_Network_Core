@@ -53,9 +53,19 @@ RUN chown -R nextjs:nodejs ./node_modules/.prisma ./node_modules/@prisma ./node_
 
 # Create the .bin symlink for the prisma CLI — not present because only selected
 # node_modules subdirs are copied (a full npm install never ran in this stage).
+# Read the actual bin path from prisma's package.json so this works across
+# Prisma major versions (v5 used bin/prisma.js, v6+ uses build/index.js).
 RUN mkdir -p node_modules/.bin && \
-    ln -sf /app/node_modules/prisma/bin/prisma.js node_modules/.bin/prisma && \
-    chmod +x node_modules/prisma/bin/prisma.js
+    node -e " \
+      const fs = require('fs'); \
+      const pkg = JSON.parse(fs.readFileSync('node_modules/prisma/package.json', 'utf8')); \
+      const bin = pkg.bin; \
+      const rel = typeof bin === 'string' ? bin : (bin.prisma || Object.values(bin)[0]); \
+      const abs = '/app/node_modules/prisma/' + rel; \
+      fs.symlinkSync(abs, 'node_modules/.bin/prisma'); \
+      fs.chmodSync(abs, 0o755); \
+      console.log('prisma bin linked:', abs); \
+    "
 
 USER nextjs
 

@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c3  # v2.3.9
+        uses: gitleaks/gitleaks-action@v2  # pinned SHA removed — tag ff98106 no longer resolves; re-pin after confirming current SHA
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

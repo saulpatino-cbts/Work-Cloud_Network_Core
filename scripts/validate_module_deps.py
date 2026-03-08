@@ -7,8 +7,9 @@ Exit 0: all dependencies satisfied.
 Exit 1: one or more modules depend on an uninstalled module — blocks merge.
 """
 import sys
-import yaml
 from pathlib import Path
+
+import yaml
 
 MODULES_DIR = Path("cna/modules")
 

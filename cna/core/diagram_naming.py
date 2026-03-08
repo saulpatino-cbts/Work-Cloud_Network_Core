@@ -11,7 +11,6 @@ Example:
   acme/japan/azure_vnet_topology_japaneast_v1.0.0.svg
 """
 from pathlib import Path
-from datetime import datetime
 
 
 DIAGRAM_TYPES = {

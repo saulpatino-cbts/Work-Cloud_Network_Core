@@ -18,9 +18,8 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from cna.core.engagement import EngagementConfig
 
@@ -34,7 +33,7 @@ def generate_engagement_id(client_slug: str) -> str:
     The 4-char hex suffix is derived from a UUID4 — collision probability
     across 65,536 same-client-same-day IDs is negligible for this use case.
     """
-    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    date_str = datetime.now(UTC).strftime("%Y%m%d")
     suffix = uuid.uuid4().hex[:4]
     slug = client_slug.lower().replace(" ", "-")[:20]
     return f"{slug}-{date_str}-{suffix}"
@@ -62,7 +61,7 @@ class EngagementStore:
     REPORTS_DIR = "reports"
     AUDIT_LOG_FILE = "audit.jsonl"
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         env_dir = os.environ.get("CNA_DATA_DIR", "./engagements")
         self.data_dir = data_dir or Path(env_dir)
 
@@ -125,7 +124,7 @@ class EngagementStore:
             )
         lock_data = {
             "operator": operator,
-            "locked_at": datetime.now(timezone.utc).isoformat(),
+            "locked_at": datetime.now(UTC).isoformat(),
             "engagement_id": engagement_id,
         }
         lock_path.write_text(json.dumps(lock_data), encoding="utf-8")
@@ -171,7 +170,7 @@ class EngagementStore:
         Every human review action is logged here with operator, timestamp, and action.
         """
         audit_path = self.engagement_dir(engagement_id) / self.AUDIT_LOG_FILE
-        event["timestamp"] = datetime.now(timezone.utc).isoformat()
+        event["timestamp"] = datetime.now(UTC).isoformat()
         with open(audit_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")
 

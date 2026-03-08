@@ -15,11 +15,10 @@ Fallback strategy if drawio CLI not available:
 from __future__ import annotations
 
 import logging
-import subprocess
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("cna.diagram_engine.export_pipeline")
 
@@ -47,14 +46,14 @@ class DiagramExporter:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.skip_raster = skip_raster
-        self._drawio_bin: Optional[str] = self._find_drawio_cli()
+        self._drawio_bin: str | None = self._find_drawio_cli()
         if not self._drawio_bin:
             logger.warning(
                 "draw.io CLI not found. Only .drawio XML will be written. "
                 "Install draw.io desktop or run inside the Docker container."
             )
 
-    def _find_drawio_cli(self) -> Optional[str]:
+    def _find_drawio_cli(self) -> str | None:
         for candidate in self.DRAWIO_CLI_CANDIDATES:
             if shutil.which(candidate):
                 return candidate

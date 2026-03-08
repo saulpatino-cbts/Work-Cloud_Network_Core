@@ -20,7 +20,6 @@ from __future__ import annotations
 import html
 import textwrap
 import uuid
-from typing import Optional
 
 from cna.core.topology_schema import (
     AWSRegionTopology,
@@ -99,7 +98,7 @@ VPC_HEADER_H = 36
 NAT_X_GAP = 60           # FIX P2: horizontal gap between NAT gateway icons
 
 
-def _safe(text: Optional[str]) -> str:
+def _safe(text: str | None) -> str:
     """Escape XML-unsafe characters. Handles None gracefully."""
     if not text:
         return ""

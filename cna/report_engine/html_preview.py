@@ -19,7 +19,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from cna.core.findings_schema import FindingsReport, FindingSeverity
+from cna.core.findings_schema import FindingSeverity, FindingsReport
 
 logger = logging.getLogger("cna.report.preview")
 

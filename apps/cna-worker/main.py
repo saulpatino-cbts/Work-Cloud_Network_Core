@@ -1,6 +1,6 @@
+import os
 from pathlib import Path
 from shutil import copyfile
-import os
 
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContentSettings

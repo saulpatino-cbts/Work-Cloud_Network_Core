@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger("cna.core.auth")
 
@@ -61,12 +60,12 @@ class AWSCredentials:
         raise NotImplementedError("Phase C")
 
     @classmethod
-    def from_env(cls) -> "AWSCredentials":
+    def from_env(cls) -> AWSCredentials:
         """Construct from environment variables (local dev / CI)."""
         role_arn = os.environ.get("CNA_AWS_ROLE_ARN", "")
         external_id = os.environ.get("CNA_AWS_EXTERNAL_ID", "")
         if not role_arn:
-            raise EnvironmentError(
+            raise OSError(
                 "CNA_AWS_ROLE_ARN not set. "
                 "Set it in .env or pass --role to `cna discover aws`."
             )
@@ -85,7 +84,7 @@ class AzureCredentials:
         self,
         tenant_id: str,
         client_id: str,
-        client_secret: Optional[str] = None,
+        client_secret: str | None = None,
     ):
         self.tenant_id = tenant_id
         self.client_id = client_id
@@ -103,13 +102,13 @@ class AzureCredentials:
         raise NotImplementedError("Phase C")
 
     @classmethod
-    def from_env(cls) -> "AzureCredentials":
+    def from_env(cls) -> AzureCredentials:
         """Construct from environment variables."""
         tenant_id = os.environ.get("AZURE_TENANT_ID", "")
         client_id = os.environ.get("AZURE_CLIENT_ID", "")
         client_secret = os.environ.get("AZURE_CLIENT_SECRET", "")
         if not tenant_id or not client_id:
-            raise EnvironmentError(
+            raise OSError(
                 "AZURE_TENANT_ID and AZURE_CLIENT_ID must be set. "
                 "Set them in .env or pass --sp-id and --tenant to `cna discover azure`."
             )
@@ -131,10 +130,10 @@ class KeyVaultCredentialProvider:
       cna-azure-sp-secret-<engagement_id>
     """
 
-    def __init__(self, vault_url: Optional[str] = None):
+    def __init__(self, vault_url: str | None = None):
         self.vault_url = vault_url or os.environ.get("AZURE_KEY_VAULT_URL", "")
         if not self.vault_url:
-            raise EnvironmentError(
+            raise OSError(
                 "AZURE_KEY_VAULT_URL not set. "
                 "Set it in .env or provide via --vault-url."
             )

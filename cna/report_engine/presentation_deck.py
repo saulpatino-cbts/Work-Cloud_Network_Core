@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
-from cna.core.findings_schema import FindingsReport, FindingSeverity
+from cna.core.findings_schema import FindingSeverity, FindingsReport
 
 logger = logging.getLogger("cna.report.pptx")
 
@@ -40,9 +39,7 @@ class PresentationDeckBuilder:
         """Build PPTX and write to output_path. Returns path."""
         try:
             from pptx import Presentation
-            from pptx.util import Inches, Pt, Emu
-            from pptx.dml.color import RGBColor
-            from pptx.enum.text import PP_ALIGN
+            from pptx.util import Inches
         except ImportError:
             logger.warning(
                 "python-pptx not installed. PPTX skipped. "
@@ -54,7 +51,6 @@ class PresentationDeckBuilder:
         prs.slide_width = Inches(13.33)
         prs.slide_height = Inches(7.5)
 
-        blank_layout = prs.slide_layouts[6]   # completely blank
         title_layout = prs.slide_layouts[0]   # title + subtitle
         body_layout  = prs.slide_layouts[1]   # title + content
 

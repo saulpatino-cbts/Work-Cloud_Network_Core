@@ -20,11 +20,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from cna.core.findings_schema import FindingsReport, FindingSeverity
+from cna.core.findings_schema import FindingSeverity, FindingsReport
 
 logger = logging.getLogger("cna.report.executive")
 

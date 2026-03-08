@@ -10,7 +10,6 @@ it goes on the list. Engineers can request removal via design doc amendment.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 # Words that indicate assumption, not observation.
 # Protocol: lowercase, word-boundary matched.

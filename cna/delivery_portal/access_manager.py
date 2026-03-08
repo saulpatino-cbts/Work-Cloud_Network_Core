@@ -13,9 +13,9 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Literal, Optional
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 logger = logging.getLogger("cna.portal.access")
 
@@ -39,12 +39,12 @@ class AccessRecord:
     def is_expired(self) -> bool:
         """True if access link has passed its expiry time."""
         expiry = datetime.fromisoformat(self.expires_at)
-        return datetime.now(timezone.utc) >= expiry
+        return datetime.now(UTC) >= expiry
 
     def hours_remaining(self) -> float:
         """Hours until expiry. Negative if already expired."""
         expiry = datetime.fromisoformat(self.expires_at)
-        delta = expiry - datetime.now(timezone.utc)
+        delta = expiry - datetime.now(UTC)
         return delta.total_seconds() / 3600
 
     def to_dict(self) -> dict:
@@ -74,7 +74,7 @@ class AccessManager:
                 "Requested TTL %dh exceeds hard cap %dh. Capped.",
                 ttl_hours, _MAX_TTL_HOURS
             )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiry = now + timedelta(hours=effective_ttl)
         return now.isoformat(), expiry.isoformat(), effective_ttl
 

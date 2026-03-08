@@ -20,9 +20,8 @@ Required IAM permissions for CNA-Publish role:
 from __future__ import annotations
 
 import logging
-import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from cna.delivery_portal.portal_generator import CONTENT_TYPES
 
@@ -70,11 +69,11 @@ class S3Deployer:
         try:
             import boto3
             return boto3.client("s3")
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "boto3 is required for S3 deployment. "
                 "Install with: pip install boto3"
-            )
+            ) from err
 
     def _object_key(self, file_path: Path) -> str:
         return f"{self._prefix}/{file_path.name}" if self._prefix else file_path.name
@@ -93,7 +92,7 @@ class S3Deployer:
     def upload(
         self,
         file_path: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> str:
         """Upload a single file. Returns S3 object key.
 
@@ -158,7 +157,7 @@ class S3Deployer:
     def upload_all(
         self,
         file_paths: list[Path],
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
     ) -> dict[str, str]:
         """Upload all files and return {local_path_str: presigned_url}.
 
@@ -167,7 +166,7 @@ class S3Deployer:
         self.configure_cors()
         signed_urls = {}
         for fp in file_paths:
-            cb = (lambda fp=fp: lambda b, t: progress_callback(fp.name, b, t))() \
+            cb = (lambda b, t, fp=fp: progress_callback(fp.name, b, t)) \
                 if progress_callback else None
             key = self.upload(fp, progress_callback=cb)
             signed_urls[str(fp)] = self.generate_presigned_url(key)

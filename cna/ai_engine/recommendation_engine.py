@@ -15,10 +15,9 @@ MCP fallback:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from cna.ai_engine.mcp_client.mcp_router import MCPRouter
-from cna.core.findings_schema import Finding, FindingRecommendation, FindingsReport
+from cna.core.findings_schema import FindingRecommendation, FindingsReport
 
 logger = logging.getLogger("cna.recommendation")
 
@@ -30,7 +29,7 @@ class RecommendationEngine:
     Modifies findings in-place. Returns updated report.
     """
 
-    def __init__(self, router: Optional[MCPRouter] = None):
+    def __init__(self, router: MCPRouter | None = None):
         self._router = router or MCPRouter()
 
     def enrich(self, report: FindingsReport) -> FindingsReport:

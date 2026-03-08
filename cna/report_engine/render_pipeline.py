@@ -16,12 +16,10 @@ Output written to: engagements/{engagement_id}/deliverables/
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from cna.core.findings_schema import FindingsReport
 from cna.core.persistence import EngagementStore
@@ -50,7 +48,7 @@ class RenderOptions:
     render_regional_ja: bool = False      # requires ja_review_complete=True
     ja_review_complete: bool = False
     skip_pdf: bool = False                # HTML-only mode, no PDF toolchain required
-    output_dir: Optional[Path] = None    # defaults to store deliverables dir
+    output_dir: Path | None = None    # defaults to store deliverables dir
 
 
 class RenderPipeline:
@@ -69,7 +67,7 @@ class RenderPipeline:
         return base
 
     def _timestamp(self) -> str:
-        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
     def _filename(self, label: str, ext: str) -> str:
         return f"{self.store.engagement_id}_{label}_{self._timestamp()}.{ext}"

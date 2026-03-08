@@ -26,7 +26,6 @@ AI pipeline (Phase D) calls validate_finding() before persisting.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 # Patterns that indicate assumption, not observation
 HEDGE_PATTERNS: list[re.Pattern] = [
@@ -51,7 +50,7 @@ HEDGE_PATTERNS: list[re.Pattern] = [
 
 class ObservedStateViolation(Exception):
     """Raised when a finding's observed_state contains non-observed language."""
-    def __init__(self, finding_id: str, violation: str, offending_phrase: Optional[str] = None):
+    def __init__(self, finding_id: str, violation: str, offending_phrase: str | None = None):
         msg = f"Finding '{finding_id}' observed_state violation: {violation}"
         if offending_phrase:
             msg += f" (offending phrase: '{offending_phrase}')"

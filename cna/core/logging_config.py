@@ -23,7 +23,6 @@ import logging.handlers
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 class JSONFormatter(logging.Formatter):
@@ -66,8 +65,8 @@ class EngagementFilter(logging.Filter):
 
 
 def setup_logging(
-    engagement_id: Optional[str] = None,
-    log_dir: Optional[Path] = None,
+    engagement_id: str | None = None,
+    log_dir: Path | None = None,
 ) -> None:
     """Configure root CNA logger.
 

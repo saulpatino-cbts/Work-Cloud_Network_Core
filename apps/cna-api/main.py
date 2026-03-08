@@ -1,5 +1,6 @@
-from pathlib import Path
 import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 

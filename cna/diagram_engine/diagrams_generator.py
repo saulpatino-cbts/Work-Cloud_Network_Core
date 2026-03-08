@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("cna.diagram_engine.diagrams_generator")
 
@@ -31,7 +30,7 @@ def _diagrams_available() -> bool:
 def generate_aws_vpc_diagram(
     region_topology,  # AWSRegionTopology — avoid circular import at module level
     output_path: Path,
-) -> Optional[Path]:
+) -> Path | None:
     """Generate a Mingrammer diagrams PNG for all VPCs in an AWS region.
 
     Args:
@@ -48,9 +47,8 @@ def generate_aws_vpc_diagram(
         )
         return None
 
-    from diagrams import Diagram, Cluster, Edge
-    from diagrams.aws.network import VPC, InternetGateway, NATGateway, TransitGateway
-    from diagrams.aws.network import DirectConnect
+    from diagrams import Cluster, Diagram, Edge
+    from diagrams.aws.network import DirectConnect, InternetGateway, NATGateway, TransitGateway
 
     output_path.mkdir(parents=True, exist_ok=True)
     safe_region = region_topology.region.replace("-", "_")
@@ -129,7 +127,7 @@ def generate_aws_vpc_diagram(
 def generate_azure_vnet_diagram(
     sub_topology,  # AzureSubscriptionTopology
     output_path: Path,
-) -> Optional[Path]:
+) -> Path | None:
     """Generate a Mingrammer diagrams PNG for all VNets in an Azure subscription.
 
     Args:
@@ -146,9 +144,8 @@ def generate_azure_vnet_diagram(
         )
         return None
 
-    from diagrams import Diagram, Cluster, Edge
-    from diagrams.azure.network import VirtualNetworks, Subnets, VirtualNetworkGateways
-    from diagrams.azure.network import Firewall, ApplicationGateway
+    from diagrams import Cluster, Diagram, Edge
+    from diagrams.azure.network import Subnets, VirtualNetworks
 
     output_path.mkdir(parents=True, exist_ok=True)
     safe_sub = sub_topology.subscription_id.replace("-", "_")[:16]

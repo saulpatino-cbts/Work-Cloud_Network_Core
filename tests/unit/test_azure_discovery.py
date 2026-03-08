@@ -13,11 +13,12 @@ Tests cover:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
-from cna.modules.network.discovery.azure_discovery import AzureDiscovery, AzureDiscoveryOptions
 from cna.core.topology_schema import AzureSubscriptionTopology
+from cna.modules.network.discovery.azure_discovery import AzureDiscovery, AzureDiscoveryOptions
 
 
 @pytest.fixture
@@ -136,7 +137,6 @@ class TestCollectExpressRoute:
 
 class TestDiscoveryBlocked:
     def test_http_403_sets_blocked(self, discovery):
-        from azure.core.exceptions import HttpResponseError
         topo = AzureSubscriptionTopology(
             subscription_id="sub-0001",
             tenant_id="tenant-001",

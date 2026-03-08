@@ -17,8 +17,7 @@ Design:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Union
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger("cna.portal.retention")
 
@@ -38,11 +37,11 @@ class RetentionEngine:
         """Compute retention expiry from ISO 8601 delivery_date string."""
         delivered = datetime.fromisoformat(delivery_date)
         if delivered.tzinfo is None:
-            delivered = delivered.replace(tzinfo=timezone.utc)
+            delivered = delivered.replace(tzinfo=UTC)
         return delivered + timedelta(days=_RETENTION_DAYS)
 
     @staticmethod
-    def check(engagement_id: str, delivery_date: Optional[str]) -> None:
+    def check(engagement_id: str, delivery_date: str | None) -> None:
         """DD-019: Raise RetentionExpiredError if past 90-day window.
 
         If delivery_date is None, retention clock has not started — no error.
@@ -56,7 +55,7 @@ class RetentionEngine:
             return
 
         expiry = RetentionEngine.retention_expiry(delivery_date)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if now >= expiry:
             raise RetentionExpiredError(

@@ -14,11 +14,10 @@
   - output directory creation
   - multiple format paths
 """
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+
 import pytest
-import tempfile
 
 from cna.diagram_engine.export_pipeline import DiagramExporter, ExportPipelineError
 from cna.diagram_engine.naming import diagram_filename
@@ -58,7 +57,7 @@ class TestExporterNoCLI:
         new_dir = tmp_path / "deep" / "nested" / "dir"
         assert not new_dir.exists()
         with patch("shutil.which", return_value=None):
-            exporter = DiagramExporter(output_dir=new_dir)
+            DiagramExporter(output_dir=new_dir)
         assert new_dir.exists()
 
 

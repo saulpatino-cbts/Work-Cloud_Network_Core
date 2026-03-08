@@ -5,14 +5,15 @@ No filesystem writes — all tests operate on string output only.
 No draw.io CLI required.
 """
 import pytest
+
 from cna.core.topology_schema import (
-    AWSRegionTopology, AzureSubscriptionTopology, AWSTopology, AzureTopology,
-    VPC, VNet, AzureSubnet, Subnet, SubnetType, ManagementGroup,
-    TransitGateway, AzureVWan, AzureVHub,
+    AWSRegionTopology, AWSTopology, AzureSubscriptionTopology, AzureTopology,
+    AzureSubnet, AzureVHub, AzureVWan, ManagementGroup, Subnet, SubnetType,
+    TransitGateway, VNet, VPC,
 )
 from cna.diagram_engine.drawio_generator import (
-    generate_vpc_topology, generate_vnet_topology,
-    generate_tgw_topology, generate_vwan_topology,
+    generate_tgw_topology, generate_vnet_topology, generate_vpc_topology,
+    generate_vwan_topology,
 )
 from cna.diagram_engine.mermaid_generator import (
     generate_aws_account_hierarchy, generate_azure_mg_hierarchy,

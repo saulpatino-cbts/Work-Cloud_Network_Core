@@ -22,16 +22,14 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
-from cna.core.exceptions import CNAAuthError, CNAPermissionError
+from cna.core.exceptions import CNAAuthError
 from cna.core.persistence import EngagementStore
 from cna.core.throttle import with_retry
 from cna.core.topology_schema import (
-    AzureTopology, AzureSubscriptionTopology, ManagementGroup,
-    VNet, AzureSubnet, AzureRouteTable, AzureRouteEntry, VNetPeering,
-    AzureFirewall, ApplicationGateway, PrivateDnsZone, ExpressRouteCircuit,
-    AzureVWan, AzureVHub, TOPOLOGY_SCHEMA_VERSION,
+    AzureFirewall, AzureSubscriptionTopology, AzureTopology, AzureVHub, AzureVWan,
+    AzureSubnet, ApplicationGateway, ExpressRouteCircuit, ManagementGroup,
+    PrivateDnsZone, TOPOLOGY_SCHEMA_VERSION, VNet, VNetPeering,
 )
 
 logger = logging.getLogger("cna.discovery.azure")
@@ -43,8 +41,8 @@ class AzureDiscoveryOptions:
     subscription_ids: list[str] = field(default_factory=list)  # empty = all
     resume: bool = False
     use_resource_graph: bool = True   # faster cross-sub queries
-    client_id: Optional[str] = None   # for service principal auth
-    client_secret: Optional[str] = None  # never logged, in-memory only
+    client_id: str | None = None   # for service principal auth
+    client_secret: str | None = None  # never logged, in-memory only
 
 
 class AzureDiscovery:
@@ -146,7 +144,6 @@ class AzureDiscovery:
     def _discover_subscription(self, sub_id: str, sub_name: str) -> AzureSubscriptionTopology:
         """Run full network discovery for one Azure subscription."""
         from azure.mgmt.network import NetworkManagementClient
-        from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 
         topo = AzureSubscriptionTopology(
             subscription_id=sub_id,

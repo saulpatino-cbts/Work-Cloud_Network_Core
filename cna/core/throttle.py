@@ -16,8 +16,9 @@ import asyncio
 import logging
 import random
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 from cna.core.exceptions import CNARateLimitError
 

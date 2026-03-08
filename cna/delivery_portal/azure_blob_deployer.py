@@ -17,9 +17,9 @@ Required Azure RBAC:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Callable, Optional
 
 from cna.delivery_portal.portal_generator import CONTENT_TYPES
 
@@ -55,11 +55,11 @@ class AzureBlobDeployer:
             credential = DefaultAzureCredential()
             account_url = f"https://{self._account}.blob.core.windows.net"
             return BlobServiceClient(account_url=account_url, credential=credential)
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "azure-storage-blob and azure-identity are required for Azure Blob deployment. "
                 "Install with: pip install azure-storage-blob azure-identity"
-            )
+            ) from err
 
     def _content_type(self, file_path: Path) -> str:
         return CONTENT_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
@@ -77,7 +77,7 @@ class AzureBlobDeployer:
     def upload(
         self,
         file_path: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> str:
         """Upload file to blob. Returns blob name."""
         blob_name = file_path.name
@@ -105,12 +105,11 @@ class AzureBlobDeployer:
     def generate_sas_token(self, blob_name: str) -> str:
         """Generate a SAS token URL for a blob. TTL capped at 7 days."""
         from azure.storage.blob import (
-            generate_blob_sas, BlobSasPermissions, UserDelegationKey
+            BlobSasPermissions, UserDelegationKey, generate_blob_sas,
         )
-        from azure.identity import DefaultAzureCredential
 
-        expiry = datetime.now(timezone.utc) + timedelta(hours=self._ttl_hours)
-        start  = datetime.now(timezone.utc) - timedelta(minutes=5)  # clock skew tolerance
+        expiry = datetime.now(UTC) + timedelta(hours=self._ttl_hours)
+        start  = datetime.now(UTC) - timedelta(minutes=5)  # clock skew tolerance
 
         # User delegation key — no storage account key required
         udk: UserDelegationKey = self._client.get_user_delegation_key(
@@ -143,13 +142,13 @@ class AzureBlobDeployer:
     def upload_all(
         self,
         file_paths: list[Path],
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
     ) -> dict[str, str]:
         """Upload all files and return {local_path_str: sas_url}."""
         self.ensure_container()
         sas_urls = {}
         for fp in file_paths:
-            cb = (lambda fp=fp: lambda b, t: progress_callback(fp.name, b, t))() \
+            cb = (lambda b, t, fp=fp: progress_callback(fp.name, b, t)) \
                 if progress_callback else None
             blob_name = self.upload(fp, progress_callback=cb)
             sas_urls[str(fp)] = self.generate_sas_token(blob_name)

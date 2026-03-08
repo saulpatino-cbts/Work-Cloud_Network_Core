@@ -15,13 +15,11 @@ Tests cover:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
+
 import pytest
 
-from cna.core.topology_schema import (
-    SubnetType, PeeringState, AttachmentType,
-    AWSRegionTopology
-)
+from cna.core.topology_schema import AWSRegionTopology
 from cna.modules.network.discovery.aws_discovery import AWSDiscovery, DiscoveryOptions
 
 
@@ -194,7 +192,6 @@ class TestDiscoveryBlocked:
                        "Message": "You are not authorized"}},
             "DescribeVpcs",
         )
-        topo = discovery._discover_region(ec2.get_paginator.__self__, "123456789012", "us-east-1")
         # We need to call the actual method with a mock ec2 client
         # Patch the ec2 client creation
         with patch.object(discovery, "_discover_region") as mock_dr:

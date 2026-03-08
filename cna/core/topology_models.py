@@ -8,34 +8,35 @@ Discovery engine (Phase C) MUST output these models.
 Diagram generators MUST accept only these models.
 """
 from __future__ import annotations
-from enum import Enum
-from typing import Optional
+
+from enum import Enum, StrEnum
+
 from pydantic import BaseModel, Field
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
 
-class SubnetType(str, Enum):
+class SubnetType(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     ISOLATED = "isolated"  # no route to internet, no NAT
     TRANSIT = "transit"    # TGW attachment subnet
 
 
-class PeeringState(str, Enum):
+class PeeringState(StrEnum):
     ACTIVE = "active"
     PENDING = "pending"
     REJECTED = "rejected"
     EXPIRED = "expired"
 
 
-class FirewallMode(str, Enum):
+class FirewallMode(StrEnum):
     INLINE = "inline"       # traffic routed through
     PARALLEL = "parallel"   # monitoring only
     NONE = "none"
 
 
-class RegionGroup(str, Enum):
+class RegionGroup(StrEnum):
     US = "us"
     EMEA = "emea"
     JAPAN = "japan"
@@ -49,8 +50,8 @@ class AWSSubnet(BaseModel):
     cidr: str
     az: str
     type: SubnetType
-    name: Optional[str] = None
-    route_table_id: Optional[str] = None
+    name: str | None = None
+    route_table_id: str | None = None
 
 
 class AWSRouteTable(BaseModel):
@@ -69,7 +70,7 @@ class AWSNatGateway(BaseModel):
     id: str
     subnet_id: str
     state: str
-    public_ip: Optional[str] = None
+    public_ip: str | None = None
 
 
 class AWSVPCPeeringConnection(BaseModel):
@@ -92,7 +93,7 @@ class AWSTransitGatewayAttachment(BaseModel):
 
 class AWSTransitGateway(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     account_id: str
     region: str
     attachments: list[AWSTransitGatewayAttachment] = Field(default_factory=list)
@@ -102,13 +103,13 @@ class AWSTransitGateway(BaseModel):
 class AWSVPC(BaseModel):
     id: str
     cidr: str
-    name: Optional[str] = None
+    name: str | None = None
     account_id: str
     region: str
     is_default: bool = False
     subnets: list[AWSSubnet] = Field(default_factory=list)
     route_tables: list[AWSRouteTable] = Field(default_factory=list)
-    internet_gateway: Optional[AWSInternetGateway] = None
+    internet_gateway: AWSInternetGateway | None = None
     nat_gateways: list[AWSNatGateway] = Field(default_factory=list)
     peering_connections: list[AWSVPCPeeringConnection] = Field(default_factory=list)
     tgw_attachments: list[str] = Field(default_factory=list)  # attachment IDs
@@ -118,14 +119,14 @@ class AWSVPC(BaseModel):
 
 class AWSAccount(BaseModel):
     account_id: str
-    name: Optional[str] = None
-    organizational_unit: Optional[str] = None
+    name: str | None = None
+    organizational_unit: str | None = None
     is_management: bool = False
 
 
 class AWSRegionTopology(BaseModel):
     account_id: str
-    account_name: Optional[str] = None
+    account_name: str | None = None
     region: str
     region_group: RegionGroup
     vpcs: list[AWSVPC] = Field(default_factory=list)
@@ -151,8 +152,8 @@ class AzureSubnet(BaseModel):
     id: str
     name: str
     address_prefix: str
-    nsg_id: Optional[str] = None
-    route_table_id: Optional[str] = None
+    nsg_id: str | None = None
+    route_table_id: str | None = None
     service_endpoints: list[str] = Field(default_factory=list)
     delegations: list[str] = Field(default_factory=list)
 
@@ -179,9 +180,9 @@ class AzureVNet(BaseModel):
     subnets: list[AzureSubnet] = Field(default_factory=list)
     peerings: list[AzureVNetPeering] = Field(default_factory=list)
     connected_to_hub: bool = False
-    hub_id: Optional[str] = None
+    hub_id: str | None = None
     firewall_present: bool = False
-    firewall_id: Optional[str] = None
+    firewall_id: str | None = None
     firewall_mode: FirewallMode = FirewallMode.NONE
     ddos_protection: bool = False
 
@@ -195,7 +196,7 @@ class AzureVHub(BaseModel):
     region_group: RegionGroup
     connected_vnets: list[str] = Field(default_factory=list)  # VNet IDs
     connected_vpn_sites: list[str] = Field(default_factory=list)
-    azure_firewall_id: Optional[str] = None
+    azure_firewall_id: str | None = None
 
 
 class AzureVWan(BaseModel):

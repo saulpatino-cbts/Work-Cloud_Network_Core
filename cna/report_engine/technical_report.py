@@ -20,7 +20,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from cna.core.findings_schema import FindingsReport, FindingSeverity
+from cna.core.findings_schema import FindingSeverity, FindingsReport
 
 logger = logging.getLogger("cna.report.technical")
 
@@ -65,14 +65,14 @@ class TechnicalReportRenderer:
             "LOW":      [f for f in report.findings if f.severity == FindingSeverity.LOW],
         }
         # Group by account/region for coverage tables
-        aws_accounts = sorted(set(
+        aws_accounts = sorted({
             f.account_id for f in report.findings
             if f.resource_type.startswith("AWS")
-        ))
-        azure_subscriptions = sorted(set(
+        })
+        azure_subscriptions = sorted({
             f.account_id for f in report.findings
             if f.resource_type.startswith("Microsoft")
-        ))
+        })
         return {
             "engagement_id": report.engagement_id,
             "generated_at": report.generated_at,

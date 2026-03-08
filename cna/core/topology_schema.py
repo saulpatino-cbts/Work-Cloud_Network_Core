@@ -6,23 +6,24 @@ Version 1.1.0 — Phase B Gap 8 closure.
   All new fields are Optional with default_factory so v1.0.0 data remains valid.
 """
 from __future__ import annotations
+
+from enum import Enum, StrEnum
+
 from pydantic import BaseModel, Field
-from typing import Optional
-from enum import Enum
 
 TOPOLOGY_SCHEMA_VERSION = "1.1.0"
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
 
-class SubnetType(str, Enum):
+class SubnetType(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     ISOLATED = "isolated"
     UNKNOWN = "unknown"
 
 
-class AttachmentType(str, Enum):
+class AttachmentType(StrEnum):
     VPC = "vpc"
     VPN = "vpn"
     DIRECT_CONNECT = "direct_connect"
@@ -30,7 +31,7 @@ class AttachmentType(str, Enum):
     CONNECT = "connect"
 
 
-class PeeringState(str, Enum):
+class PeeringState(StrEnum):
     ACTIVE = "active"
     PENDING = "pending"
     REJECTED = "rejected"
@@ -49,27 +50,27 @@ class RouteEntry(BaseModel):
 
 class RouteTable(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     associated_subnet_ids: list[str] = Field(default_factory=list)
     routes: list[RouteEntry] = Field(default_factory=list)
     is_main: bool = False
 
 
 class SecurityGroupRule(BaseModel):
-    rule_id: Optional[str] = None
+    rule_id: str | None = None
     direction: str                  # "ingress" | "egress"
     protocol: str                   # tcp | udp | icmp | -1 (all)
-    from_port: Optional[int] = None
-    to_port: Optional[int] = None
+    from_port: int | None = None
+    to_port: int | None = None
     cidr_ranges: list[str] = Field(default_factory=list)
-    source_sg_id: Optional[str] = None
-    description: Optional[str] = None
+    source_sg_id: str | None = None
+    description: str | None = None
 
 
 class SecurityGroup(BaseModel):
     id: str
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
     vpc_id: str
     rules: list[SecurityGroupRule] = Field(default_factory=list)
     tags: dict = Field(default_factory=dict)
@@ -80,14 +81,14 @@ class NACLEntry(BaseModel):
     protocol: str
     rule_action: str    # "allow" | "deny"
     cidr: str
-    from_port: Optional[int] = None
-    to_port: Optional[int] = None
+    from_port: int | None = None
+    to_port: int | None = None
     egress: bool
 
 
 class NACL(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     vpc_id: str
     is_default: bool = False
     entries: list[NACLEntry] = Field(default_factory=list)
@@ -96,7 +97,7 @@ class NACL(BaseModel):
 
 class VpnGateway(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     state: str
     type: str = "ipsec.1"
     amazon_side_asn: Optional[int] = None
@@ -114,7 +115,7 @@ class NetworkFirewallPolicy(BaseModel):
 
 class Subnet(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     cidr: str
     az: str
     subnet_type: SubnetType = SubnetType.UNKNOWN
@@ -125,13 +126,13 @@ class Subnet(BaseModel):
 
 class InternetGateway(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     state: str = "attached"
 
 
 class NatGateway(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     subnet_id: str
     state: str
     public_ip: Optional[str] = None
@@ -139,7 +140,7 @@ class NatGateway(BaseModel):
 
 class VpcPeeringConnection(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     requester_vpc_id: str
     requester_account_id: str
     requester_region: str
@@ -151,7 +152,7 @@ class VpcPeeringConnection(BaseModel):
 
 class VPC(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     cidr: str
     secondary_cidrs: list[str] = Field(default_factory=list)
     is_default: bool = False
@@ -177,7 +178,7 @@ class TGWAttachment(BaseModel):
 
 class TransitGateway(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     owner_account_id: str
     amazon_side_asn: Optional[int] = None
     attachments: list[TGWAttachment] = Field(default_factory=list)
@@ -190,7 +191,7 @@ class TransitGateway(BaseModel):
 
 class DirectConnectConnection(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     location: str
     bandwidth: str
     state: str

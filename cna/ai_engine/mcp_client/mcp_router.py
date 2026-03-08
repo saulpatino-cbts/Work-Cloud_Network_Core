@@ -16,7 +16,6 @@ Contract:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from cna.ai_engine.mcp_client.aws_mcp_client import AWSMCPClient
 from cna.ai_engine.mcp_client.azure_mcp_client import AzureMCPClient
@@ -30,8 +29,8 @@ class MCPRouter:
 
     def __init__(
         self,
-        aws_client: Optional[AWSMCPClient] = None,
-        azure_client: Optional[AzureMCPClient] = None,
+        aws_client: AWSMCPClient | None = None,
+        azure_client: AzureMCPClient | None = None,
     ):
         self._aws = aws_client or AWSMCPClient()
         self._azure = azure_client or AzureMCPClient()

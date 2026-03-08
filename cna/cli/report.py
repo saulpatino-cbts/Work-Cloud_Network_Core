@@ -59,7 +59,9 @@ def generate(
         --regional-ja --ja-review-complete
     """
     from cna.core.persistence import EngagementStore
-    from cna.report_engine.render_pipeline import RenderPipeline, RenderOptions, ReviewGateError
+    from cna.report_engine.render_pipeline import (
+        RenderOptions, RenderPipeline, ReviewGateError,
+    )
 
     store = EngagementStore(
         engagement_id=engagement_id,

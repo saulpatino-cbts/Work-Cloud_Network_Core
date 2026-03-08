@@ -21,27 +21,19 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 import boto3
 import botocore.exceptions
 
-from cna.core.auth import AWSCredentials
-from cna.core.exceptions import (
-    CNAAuthError,
-    CNAPermissionError,
-    CNARateLimitError,
-    CNAMalformedResponse,
-    CNAPartialResult,
-)
+from cna.core.exceptions import CNAAuthError, CNARateLimitError
 from cna.core.persistence import EngagementStore
-from cna.core.throttle import with_retry, PaginationCursor
+from cna.core.throttle import PaginationCursor, with_retry
 from cna.core.topology_schema import (
-    AWSTopology, AWSRegionTopology, AWSAccount, VPC, Subnet, SubnetType,
-    RouteTable, RouteEntry, InternetGateway, NatGateway, VpcPeeringConnection,
-    PeeringState, SecurityGroup, SecurityGroupRule, NACL, NACLEntry,
-    VpnGateway, TransitGateway, TGWAttachment, AttachmentType,
-    DirectConnectConnection, TOPOLOGY_SCHEMA_VERSION,
+    AWSAccount, AWSRegionTopology, AWSTopology, AttachmentType,
+    DirectConnectConnection, InternetGateway, NACL, NACLEntry, NatGateway,
+    PeeringState, RouteEntry, RouteTable, SecurityGroup, SecurityGroupRule,
+    Subnet, SubnetType, TGWAttachment, TOPOLOGY_SCHEMA_VERSION, TransitGateway,
+    VPC, VpnGateway,
 )
 
 logger = logging.getLogger("cna.discovery.aws")
@@ -58,7 +50,7 @@ _OPT_IN_REGIONS = {
 @dataclass
 class DiscoveryOptions:
     org_role_arn: str              # arn:aws:iam::MGMT:role/CNA-ReadOnly
-    external_id: Optional[str] = None
+    external_id: str | None = None
     regions: list[str] = field(default_factory=list)   # empty = all enabled regions
     account_ids: list[str] = field(default_factory=list)  # empty = all org accounts
     skip_opt_in_regions: bool = True
@@ -72,7 +64,7 @@ class AWSDiscovery:
     def __init__(self, store: EngagementStore, options: DiscoveryOptions):
         self.store = store
         self.opts = options
-        self._mgmt_session: Optional[boto3.Session] = None
+        self._mgmt_session: boto3.Session | None = None
 
     # ------------------------------------------------------------------ setup
 

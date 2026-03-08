@@ -21,9 +21,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-from jinja2 import Environment, BaseLoader
+from jinja2 import BaseLoader, Environment
 
 from cna.report_engine.deliverable_manifest import DeliverableManifest
 
@@ -44,7 +43,7 @@ class PortalEntry:
     label: str
     format: str
     lang: str
-    size_bytes: Optional[int]
+    size_bytes: int | None
     rendered_at: str
     download_url: str          # pre-signed URL or SAS token injected at publish
     is_stale: bool = False     # DD-013: True if rendered before last analysis run
@@ -174,7 +173,7 @@ class PortalGenerator:
         output_path: Path,
     ) -> Path:
         """Render portal HTML and write to output_path. Returns path."""
-        env = Environment(loader=BaseLoader())
+        env = Environment(loader=BaseLoader(), autoescape=True)
         # Jinja2 filesizeformat filter
         env.filters["filesizeformat"] = self._filesizeformat
         template = env.from_string(_PORTAL_TEMPLATE)

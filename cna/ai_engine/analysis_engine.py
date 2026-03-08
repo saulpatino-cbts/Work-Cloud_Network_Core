@@ -18,11 +18,9 @@ Any finding with the same key is deduplicated — the first occurrence wins.
 """
 from __future__ import annotations
 
-import hashlib
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime, UTC
 
 from cna.core.findings_schema import (
     Finding, FindingSeverity, FindingStatus, FindingsReport,
@@ -31,7 +29,6 @@ from cna.core.findings_schema import (
 from cna.core.persistence import EngagementStore
 from cna.core.topology_schema import (
     AWSTopology, AWSRegionTopology, AzureTopology, AzureSubscriptionTopology,
-    VPC, VNet,
 )
 from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer
 from cna.core.escalation_engine import EscalationEngine
@@ -88,7 +85,7 @@ class AnalysisOptions:
     load_aws: bool = True
     load_azure: bool = True
     dry_run: bool = False   # produce findings but do not write to store
-    progress_callback: Optional[callable] = None
+    progress_callback: callable | None = None
 
 
 class AnalysisEngine:
@@ -544,8 +541,8 @@ class AnalysisEngine:
 
     def run(
         self,
-        aws_topology: Optional[AWSTopology] = None,
-        azure_topology: Optional[AzureTopology] = None,
+        aws_topology: AWSTopology | None = None,
+        azure_topology: AzureTopology | None = None,
     ) -> FindingsReport:
         """Execute analysis. Returns FindingsReport.
 
@@ -604,7 +601,7 @@ class AnalysisEngine:
             low_count=len([f for f in self._findings
                            if f.severity == FindingSeverity.LOW]),
             review_complete=False,   # DD-009: must be set to True manually
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
         if not self.opts.dry_run:

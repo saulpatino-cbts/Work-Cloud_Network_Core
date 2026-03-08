@@ -12,11 +12,9 @@ DD-013: Deliverable staleness detection.
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -26,10 +24,10 @@ class DeliverableRecord:
     format: str                   # "pdf", "html", "pptx"
     lang: str                     # "en", "ja"
     rendered_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
-    findings_checksum: Optional[str] = None   # SHA-256 of FindingsReport JSON at render time
-    size_bytes: Optional[int] = None
+    findings_checksum: str | None = None   # SHA-256 of FindingsReport JSON at render time
+    size_bytes: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -48,7 +46,7 @@ class DeliverableManifest:
     engagement_id: str
     records: list[DeliverableRecord] = field(default_factory=list)
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def add(self, record: DeliverableRecord) -> None:

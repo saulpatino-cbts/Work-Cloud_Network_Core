@@ -4,9 +4,9 @@ DD-012: Every generated document is versioned.
 Automatic: patch bump on every regeneration.
 Manual: cna version bump --doc <name> --type minor/major
 """
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class DocumentVersion(BaseModel):
@@ -14,7 +14,7 @@ class DocumentVersion(BaseModel):
     generated_at: datetime
     generated_by: str       # ai-engine | human-review | manual
     change_summary: str
-    parent_version: Optional[str] = None
+    parent_version: str | None = None
 
 
 def bump_version(current: str, bump_type: str = "patch") -> str:

@@ -70,10 +70,14 @@ ignore = [
     "S101",   # use of assert (acceptable in tests)
     "S603",   # subprocess call (needed for diagram export)
     "S607",   # partial executable path (needed for diagram export)
+    "N818",   # exception name without Error suffix — intentional (CNAPartialResult, ObservedStateViolation, etc.)
+    "S108",   # /tmp usage — acceptable in containerised CLI/worker images
+    "S311",   # pseudo-random — used for jitter/throttle, not cryptography
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S", "N"]   # relax security + naming rules in tests
+"cna/diagram_engine/diagrams_generator.py" = ["N811"]  # VPC imported as SubnetNode is a deliberate alias
 
 [tool.coverage.run]
 source = ["cna"]

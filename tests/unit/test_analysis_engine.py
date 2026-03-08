@@ -15,21 +15,19 @@ Tests cover:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
+
 import pytest
 
 from cna.ai_engine.analysis_engine import AnalysisEngine, AnalysisOptions
-from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer, ObservedStateViolation
+from cna.ai_engine.observed_state_enforcer import ObservedStateViolation
 from cna.core.findings_schema import (
-    Finding, FindingSeverity, FindingStatus, ObservedState, FrameworkMapping,
+    FindingSeverity, FindingStatus, FrameworkMapping, ObservedState,
 )
 from cna.core.topology_schema import (
-    AWSTopology, AWSRegionTopology, AWSAccount,
-    AzureTopology, AzureSubscriptionTopology,
-    VPC, SecurityGroup, SecurityGroupRule, TransitGateway,
-    DirectConnectConnection, VNet, AzureSubnet, AzureFirewall,
-    ApplicationGateway, ExpressRouteCircuit,
+    AWSRegionTopology, AWSTopology, AzureFirewall, AzureSubnet,
+    AzureSubscriptionTopology, SecurityGroup, SecurityGroupRule,
+    TransitGateway, VNet, VPC,
 )
 
 

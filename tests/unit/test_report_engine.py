@@ -15,22 +15,23 @@ Tests cover:
 """
 from __future__ import annotations
 
-import json
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 import pytest
 
 from cna.core.findings_schema import (
-    Finding, FindingSeverity, FindingStatus, FindingsReport,
-    ObservedState, FrameworkMapping,
+    FindingSeverity, FindingStatus, FrameworkMapping, FindingsReport, Finding,
+    ObservedState,
 )
-from cna.report_engine.render_pipeline import RenderPipeline, RenderOptions, ReviewGateError, JaReviewGateError
 from cna.report_engine.deliverable_manifest import DeliverableManifest, DeliverableRecord
 from cna.report_engine.executive_report import ExecutiveReportRenderer
-from cna.report_engine.technical_report import TechnicalReportRenderer
 from cna.report_engine.html_preview import HtmlPreviewRenderer
+from cna.report_engine.render_pipeline import (
+    JaReviewGateError, RenderOptions, RenderPipeline, ReviewGateError,
+)
+from cna.report_engine.technical_report import TechnicalReportRenderer
 
 
 def _make_finding(rule_id: str, severity: FindingSeverity,
@@ -70,7 +71,7 @@ def _make_report(review_complete: bool = True) -> FindingsReport:
         medium_count=1,
         low_count=0,
         review_complete=review_complete,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 

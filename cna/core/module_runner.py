@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -24,7 +23,7 @@ logger = logging.getLogger("cna.core.module_runner")
 class ModuleRunner:
     """Enforces module dependency graph before execution."""
 
-    def __init__(self, store: EngagementStore, modules_dir: Optional[Path] = None):
+    def __init__(self, store: EngagementStore, modules_dir: Path | None = None):
         self.store = store
         self.modules_dir = modules_dir or Path("cna/modules")
 

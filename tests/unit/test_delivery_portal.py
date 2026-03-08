@@ -20,15 +20,14 @@ Tests cover:
 """
 from __future__ import annotations
 
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from cna.delivery_portal.portal_generator import PortalGenerator, PortalEntry
 from cna.delivery_portal.access_manager import AccessManager, AccessRecord
+from cna.delivery_portal.portal_generator import PortalEntry, PortalGenerator
 from cna.delivery_portal.retention_engine import RetentionEngine, RetentionExpiredError
 from cna.report_engine.deliverable_manifest import DeliverableManifest, DeliverableRecord
 
@@ -139,7 +138,7 @@ class TestAccessManager:
         assert effective == 24
 
     def test_is_expired_true_when_past_expiry(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         record = AccessRecord(
             engagement_id="test", cloud="aws",
             issued_at=past, expires_at=past,
@@ -148,17 +147,17 @@ class TestAccessManager:
         assert record.is_expired() is True
 
     def test_is_expired_false_when_not_expired(self):
-        future = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        future = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
         record = AccessRecord(
             engagement_id="test", cloud="aws",
-            issued_at=datetime.now(timezone.utc).isoformat(),
+            issued_at=datetime.now(UTC).isoformat(),
             expires_at=future, ttl_hours=24,
             storage_location="s3://bucket", deliverable_count=1,
         )
         assert record.is_expired() is False
 
     def test_hours_remaining_negative_when_expired(self):
-        past = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        past = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         record = AccessRecord(
             engagement_id="test", cloud="aws",
             issued_at=past, expires_at=past,
@@ -180,7 +179,7 @@ class TestAccessManager:
 class TestRetentionEngine:
     def test_check_raises_when_expired(self):
         delivery_date = (
-            datetime.now(timezone.utc) - timedelta(days=91)
+            datetime.now(UTC) - timedelta(days=91)
         ).isoformat()
         with pytest.raises(RetentionExpiredError):
             RetentionEngine.check("test-001", delivery_date)
@@ -191,14 +190,14 @@ class TestRetentionEngine:
 
     def test_check_passes_when_within_window(self):
         delivery_date = (
-            datetime.now(timezone.utc) - timedelta(days=10)
+            datetime.now(UTC) - timedelta(days=10)
         ).isoformat()
         RetentionEngine.check("test-001", delivery_date)  # should not raise
 
     def test_retention_expiry_is_90_days(self):
-        delivery = datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat()
+        delivery = datetime(2026, 1, 1, tzinfo=UTC).isoformat()
         expiry = RetentionEngine.retention_expiry(delivery)
-        assert expiry == datetime(2026, 4, 1, tzinfo=timezone.utc)
+        assert expiry == datetime(2026, 4, 1, tzinfo=UTC)
 
     def test_enforce_calls_s3_delete(self):
         mock_deployer = MagicMock()

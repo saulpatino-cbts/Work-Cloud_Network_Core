@@ -1,6 +1,7 @@
 """Module registry — loads installed modules, lists stubs."""
-import yaml
 from pathlib import Path
+
+import yaml
 
 MODULES_DIR = Path(__file__).parent
 

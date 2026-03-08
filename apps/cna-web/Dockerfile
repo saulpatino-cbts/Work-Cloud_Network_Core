@@ -49,14 +49,19 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Next.js standalone output bundles only the required files.
-COPY --from=builder /app/public ./public
+# Because outputFileTracingRoot is set to the repo root (two levels above the
+# app dir), Next.js mirrors the /app path inside .next/standalone — so the
+# server entry point lands at .next/standalone/app/server.js, not
+# .next/standalone/server.js.  All assets must be placed relative to server.js.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public          ./app/public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static    ./app/.next/static
 
 # Prisma runtime only — @prisma/client + generated query engine.
 # The Prisma CLI is intentionally excluded; migrations run from the
 # migrator stage in workflow 03 before this container is deployed.
+# Node.js walks the directory tree, so modules at /app/node_modules are
+# found by the server running from /app/app/server.js.
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
@@ -66,4 +71,5 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# server.js lives at /app/app/server.js due to outputFileTracingRoot path mirroring.
+CMD ["node", "app/server.js"]

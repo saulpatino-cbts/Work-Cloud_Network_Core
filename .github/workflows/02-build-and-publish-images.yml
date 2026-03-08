@@ -142,14 +142,6 @@ jobs:
           labels: ${{ steps.meta_migrator.outputs.labels }}
           cache-from: type=gha
 
-      - name: Locate server.js in image
-        run: |
-          echo "--- /app layout (depth 4) ---"
-          docker run --rm \
-            --entrypoint find \
-            ghcr.io/${{ github.repository_owner }}/cna-web:latest \
-            /app -name "server.js" -maxdepth 6 2>/dev/null || true
-
       - name: Smoke test — /api/health returns 200
         run: |
           docker run -d --name cna-web-smoke \

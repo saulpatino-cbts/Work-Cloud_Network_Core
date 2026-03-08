@@ -24,14 +24,21 @@ All Azure resources follow the pattern `{abbreviation}-{project}-{environment}-{
 | dev | South Central US (`southcentralus`) | `cna-dev-scus` | `rg-cna-dev-scus` |
 | prod | South Central US (`southcentralus`) | `cna-prod-scus` | `rg-cna-prod-scus` |
 
-The Terraform state storage account lives in the same RG as the platform resources.
-Workflow 01 pre-creates the RG; Terraform uses it as a `data` source (not managed by Terraform):
+Terraform state resources are isolated in their own dedicated RG, separate from workload resources.
+Workflow 01 creates this RG; it is never touched by Terraform itself:
 
 | Resource | Name | Notes |
 |---|---|---|
-| Resource Group | `rg-cna-dev-scus` | Pre-created by workflow 01; shared with platform resources |
+| Terraform State RG | `rg-cna-tfstate` | Dedicated to state only — never destroyed by Terraform |
 | Storage Account | `stcnatfstate` | Single backend serving dev + prod state files |
 | Blob Container | `tfstate` | State files keyed by environment: `dev.terraform.tfstate`, `prod.terraform.tfstate` |
+
+Workload RGs are created and managed by Terraform (workflow 03):
+
+| Environment | Resource Group |
+|---|---|
+| dev | `rg-cna-dev-scus` |
+| prod | `rg-cna-prod-scus` |
 
 See `documentation/architecture/40-naming-conventions.md` for the full reference.
 
@@ -61,7 +68,7 @@ GitHub **Repository Variables** (Settings → Secrets and variables → Actions 
 
 | Variable | Value |
 |---|---|
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus` |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` |
 | `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
 | `TFSTATE_CONTAINER` | `tfstate` |
 
@@ -231,7 +238,7 @@ Auto-generates changelog from PRs merged since the last tag.
        Note: GitHub does not allow empty variable values — use none as a placeholder
        where the real value is not yet known.
 
-       - TFSTATE_RESOURCE_GROUP      = rg-cna-dev-scus
+       - TFSTATE_RESOURCE_GROUP      = rg-cna-tfstate
        - TFSTATE_STORAGE_ACCOUNT     = stcnatfstate
        - TFSTATE_CONTAINER           = tfstate
        - CNA_ENTRA_CLIENT_ID         = <Application (Client) ID from step 1>

@@ -62,7 +62,7 @@ Go to repo → Settings → Secrets and variables → Actions → Variables tab 
 ### Step 2 — Bootstrap Terraform Backend
 
 Run workflow `01-bootstrap-backend.yml` **once**. This creates:
-- Resource group `rg-cna-dev-scus` (shared RG for platform + tfstate)
+- Resource group `rg-cna-tfstate` (dedicated to Terraform state — never touched by Terraform itself)
 - Storage account `stcnatfstate`
 - Blob container `tfstate`
 
@@ -72,12 +72,12 @@ After it completes, set these GitHub **Repository Variables**:
 
 | Variable | Value |
 |---|---|
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus` |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` |
 | `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
 | `TFSTATE_CONTAINER` | `tfstate` |
 
-> Terraform uses `rg-cna-dev-scus` as a `data` source (pre-created by this workflow)
-> rather than managing the RG itself — this prevents accidental deletion on `destroy`.
+> Workload resources (`rg-cna-dev-scus`) are created separately by Terraform in Step 4.
+> Keeping tfstate in its own RG means a `terraform destroy` of dev cannot affect state.
 
 ---
 

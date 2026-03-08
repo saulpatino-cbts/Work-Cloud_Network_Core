@@ -51,6 +51,12 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 # Fix ownership so the nextjs user can execute the prisma CLI and read the schema.
 RUN chown -R nextjs:nodejs ./node_modules/.prisma ./node_modules/@prisma ./node_modules/prisma ./prisma
 
+# Create the .bin symlink for the prisma CLI — not present because only selected
+# node_modules subdirs are copied (a full npm install never ran in this stage).
+RUN mkdir -p node_modules/.bin && \
+    ln -sf /app/node_modules/prisma/bin/prisma.js node_modules/.bin/prisma && \
+    chmod +x node_modules/prisma/bin/prisma.js
+
 USER nextjs
 
 EXPOSE 3000

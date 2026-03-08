@@ -9,7 +9,7 @@ Diagram generators MUST accept only these models.
 """
 from __future__ import annotations
 
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -209,7 +209,7 @@ class AzureVWan(BaseModel):
 class AzureSubscription(BaseModel):
     subscription_id: str
     name: str
-    management_group_id: Optional[str] = None
+    management_group_id: str | None = None
     vnets: list[AzureVNet] = Field(default_factory=list)
     # discovery metadata
     discovery_complete: bool = False

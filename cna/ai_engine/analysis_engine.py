@@ -20,18 +20,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
+from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer
+from cna.core.escalation_engine import EscalationEngine
 from cna.core.findings_schema import (
     Finding, FindingSeverity, FindingStatus, FindingsReport,
     FrameworkMapping, ObservedState, FINDINGS_SCHEMA_VERSION,
 )
 from cna.core.persistence import EngagementStore
 from cna.core.topology_schema import (
-    AWSTopology, AWSRegionTopology, AzureTopology, AzureSubscriptionTopology,
+    AWSRegionTopology, AWSTopology, AzureSubscriptionTopology, AzureTopology,
 )
-from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer
-from cna.core.escalation_engine import EscalationEngine
 
 logger = logging.getLogger("cna.analysis")
 

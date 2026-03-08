@@ -134,11 +134,6 @@ def run(
 
     click.echo("")
 
-    # Build portal entries with staleness detection
-    from cna.delivery_portal.portal_generator import PortalGenerator
-    from cna.report_engine.deliverable_manifest import DeliverableManifest as DM
-    from cna.delivery_portal.portal_generator import PortalGenerator as PG
-
     # Rebuild manifest with DeliverableRecord objects
     from cna.report_engine.deliverable_manifest import DeliverableRecord
     records = [

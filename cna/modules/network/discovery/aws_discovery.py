@@ -25,15 +25,15 @@ from dataclasses import dataclass, field
 import boto3
 import botocore.exceptions
 
-from cna.core.exceptions import CNAAuthError, CNARateLimitError
+from cna.core.exceptions import CNAAuthError
 from cna.core.persistence import EngagementStore
 from cna.core.throttle import PaginationCursor, with_retry
 from cna.core.topology_schema import (
     AWSAccount, AWSRegionTopology, AWSTopology, AttachmentType,
     DirectConnectConnection, InternetGateway, NACL, NACLEntry, NatGateway,
     PeeringState, RouteEntry, RouteTable, SecurityGroup, SecurityGroupRule,
-    Subnet, SubnetType, TGWAttachment, TOPOLOGY_SCHEMA_VERSION, TransitGateway,
-    VPC, VpnGateway,
+    Subnet, SubnetType, TGWAttachment, TransitGateway,
+    VPC, VpcPeeringConnection, VpnGateway,
 )
 
 logger = logging.getLogger("cna.discovery.aws")
@@ -483,7 +483,7 @@ class AWSDiscovery:
     # ----------------------------------------------------------------- helpers
 
     @staticmethod
-    def _tag(resource: dict, key: str) -> Optional[str]:
+    def _tag(resource: dict, key: str) -> str | None:
         for t in resource.get("Tags", []):
             if t["Key"] == key:
                 return t["Value"]

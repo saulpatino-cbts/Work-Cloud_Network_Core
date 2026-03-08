@@ -1,5 +1,6 @@
 import click
 from rich.console import Console
+
 console = Console()
 
 @click.group(name="discover")

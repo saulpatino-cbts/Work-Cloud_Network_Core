@@ -20,13 +20,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from cna.ai_engine.analysis_engine import AnalysisEngine, AnalysisOptions
-from cna.ai_engine.observed_state_enforcer import ObservedStateViolation
+from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer, ObservedStateViolation
 from cna.core.findings_schema import (
-    FindingSeverity, FindingStatus, FrameworkMapping, ObservedState,
+    Finding, FindingSeverity, FindingStatus, FrameworkMapping, ObservedState,
 )
 from cna.core.topology_schema import (
-    AWSRegionTopology, AWSTopology, AzureFirewall, AzureSubnet,
-    AzureSubscriptionTopology, SecurityGroup, SecurityGroupRule,
+    AWSRegionTopology, AWSTopology, AzureFirewall, AzureSubscriptionTopology,
+    AzureSubnet, DirectConnectConnection, SecurityGroup, SecurityGroupRule,
     TransitGateway, VNet, VPC,
 )
 

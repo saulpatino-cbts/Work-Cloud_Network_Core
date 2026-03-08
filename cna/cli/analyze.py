@@ -48,10 +48,9 @@ def analyze(
         --engagement-id acme-20260305-a3f2 \\
         --aws --azure --no-recommendations
     """
-    from cna.core.persistence import EngagementStore
-    from cna.core.topology_schema import AWSTopology, AzureTopology
     from cna.ai_engine.analysis_engine import AnalysisEngine, AnalysisOptions
     from cna.ai_engine.recommendation_engine import RecommendationEngine
+    from cna.core.persistence import EngagementStore
 
     if not load_aws and not load_azure:
         click.echo("\u274c Specify at least one of --aws or --azure", err=True)

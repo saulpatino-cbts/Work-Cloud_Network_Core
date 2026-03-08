@@ -100,8 +100,8 @@ class VpnGateway(BaseModel):
     name: str | None = None
     state: str
     type: str = "ipsec.1"
-    amazon_side_asn: Optional[int] = None
-    vpc_id: Optional[str] = None
+    amazon_side_asn: int | None = None
+    vpc_id: str | None = None
 
 
 class NetworkFirewallPolicy(BaseModel):
@@ -119,8 +119,8 @@ class Subnet(BaseModel):
     cidr: str
     az: str
     subnet_type: SubnetType = SubnetType.UNKNOWN
-    route_table_id: Optional[str] = None
-    nacl_id: Optional[str] = None
+    route_table_id: str | None = None
+    nacl_id: str | None = None
     auto_assign_public_ip: bool = False
 
 
@@ -135,7 +135,7 @@ class NatGateway(BaseModel):
     name: str | None = None
     subnet_id: str
     state: str
-    public_ip: Optional[str] = None
+    public_ip: str | None = None
 
 
 class VpcPeeringConnection(BaseModel):
@@ -173,14 +173,14 @@ class TGWAttachment(BaseModel):
     resource_type: AttachmentType
     resource_owner_account_id: str
     state: str
-    association_route_table_id: Optional[str] = None
+    association_route_table_id: str | None = None
 
 
 class TransitGateway(BaseModel):
     id: str
     name: str | None = None
     owner_account_id: str
-    amazon_side_asn: Optional[int] = None
+    amazon_side_asn: int | None = None
     attachments: list[TGWAttachment] = Field(default_factory=list)
     route_table_ids: list[str] = Field(default_factory=list)
     dns_support: bool = True
@@ -200,9 +200,9 @@ class DirectConnectConnection(BaseModel):
 
 class AWSAccount(BaseModel):
     account_id: str
-    account_name: Optional[str] = None
-    ou_id: Optional[str] = None
-    ou_name: Optional[str] = None
+    account_name: str | None = None
+    ou_id: str | None = None
+    ou_name: str | None = None
     is_management_account: bool = False
 
 
@@ -215,7 +215,7 @@ class AWSRegionTopology(BaseModel):
     vpn_gateways: list[VpnGateway] = Field(default_factory=list)
     network_firewalls: list[NetworkFirewallPolicy] = Field(default_factory=list)
     discovery_blocked: bool = False
-    block_reason: Optional[str] = None
+    block_reason: str | None = None
 
 
 class AWSTopology(BaseModel):
@@ -223,8 +223,8 @@ class AWSTopology(BaseModel):
     engagement_id: str
     accounts: list[AWSAccount] = Field(default_factory=list)
     regions: list[AWSRegionTopology] = Field(default_factory=list)
-    management_account_id: Optional[str] = None
-    organization_id: Optional[str] = None
+    management_account_id: str | None = None
+    organization_id: str | None = None
 
 
 # ── Azure primitives ───────────────────────────────────────────────────────
@@ -233,18 +233,18 @@ class AzureSubnet(BaseModel):
     id: str
     name: str
     address_prefix: str
-    nsg_id: Optional[str] = None
-    route_table_id: Optional[str] = None
+    nsg_id: str | None = None
+    route_table_id: str | None = None
     service_endpoints: list[str] = Field(default_factory=list)
     private_endpoint_network_policies: str = "Enabled"
-    delegation: Optional[str] = None
+    delegation: str | None = None
 
 
 class AzureRouteEntry(BaseModel):
     name: str
     address_prefix: str
     next_hop_type: str
-    next_hop_ip: Optional[str] = None
+    next_hop_ip: str | None = None
 
 
 class AzureRouteTable(BaseModel):
@@ -260,7 +260,7 @@ class VNetPeering(BaseModel):
     id: str
     name: str
     remote_vnet_id: str
-    remote_vnet_name: Optional[str] = None
+    remote_vnet_name: str | None = None
     remote_subscription_id: str
     peering_state: str
     allow_forwarded_traffic: bool
@@ -274,9 +274,9 @@ class AzureFirewall(BaseModel):
     location: str
     resource_group: str
     sku_tier: str                   # "Basic" | "Standard" | "Premium"
-    subnet_id: Optional[str] = None # AzureFirewallSubnet
+    subnet_id: str | None = None # AzureFirewallSubnet
     public_ip_ids: list[str] = Field(default_factory=list)
-    policy_id: Optional[str] = None
+    policy_id: str | None = None
     threat_intel_mode: str = "Alert"
 
 
@@ -304,9 +304,9 @@ class ExpressRouteCircuit(BaseModel):
     name: str
     location: str
     resource_group: str
-    service_provider: Optional[str] = None
-    peering_location: Optional[str] = None
-    bandwidth_mbps: Optional[int] = None
+    service_provider: str | None = None
+    peering_location: str | None = None
+    bandwidth_mbps: int | None = None
     sku_tier: str = "Standard"      # "Standard" | "Premium"
     sku_family: str = "MeteredData" # "MeteredData" | "UnlimitedData"
     circuit_provisioning_state: str = "Enabled"
@@ -335,8 +335,8 @@ class AzureVHub(BaseModel):
     sku: str = "Standard"
     connected_vnet_ids: list[str] = Field(default_factory=list)
     connected_vpn_site_ids: list[str] = Field(default_factory=list)
-    express_route_gateway_id: Optional[str] = None
-    azure_firewall_id: Optional[str] = None
+    express_route_gateway_id: str | None = None
+    azure_firewall_id: str | None = None
     routing_state: str
 
 
@@ -352,14 +352,14 @@ class ManagementGroup(BaseModel):
     id: str
     name: str
     display_name: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     subscription_ids: list[str] = Field(default_factory=list)
     child_mg_ids: list[str] = Field(default_factory=list)
 
 
 class AzureSubscriptionTopology(BaseModel):
     subscription_id: str
-    subscription_name: Optional[str] = None
+    subscription_name: str | None = None
     tenant_id: str
     vnets: list[VNet] = Field(default_factory=list)
     virtual_wans: list[AzureVWan] = Field(default_factory=list)
@@ -368,7 +368,7 @@ class AzureSubscriptionTopology(BaseModel):
     private_dns_zones: list[PrivateDnsZone] = Field(default_factory=list)
     express_route_circuits: list[ExpressRouteCircuit] = Field(default_factory=list)
     discovery_blocked: bool = False
-    block_reason: Optional[str] = None
+    block_reason: str | None = None
 
 
 class AzureTopology(BaseModel):

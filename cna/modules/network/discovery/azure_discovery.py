@@ -23,13 +23,15 @@ import json
 import logging
 from dataclasses import dataclass, field
 
+from azure.core.exceptions import HttpResponseError
+
 from cna.core.exceptions import CNAAuthError
 from cna.core.persistence import EngagementStore
 from cna.core.throttle import with_retry
 from cna.core.topology_schema import (
-    AzureFirewall, AzureSubscriptionTopology, AzureTopology, AzureVHub, AzureVWan,
-    AzureSubnet, ApplicationGateway, ExpressRouteCircuit, ManagementGroup,
-    PrivateDnsZone, TOPOLOGY_SCHEMA_VERSION, VNet, VNetPeering,
+    ApplicationGateway, AzureFirewall, AzureSubnet, AzureSubscriptionTopology,
+    AzureTopology, AzureVHub, AzureVWan, ExpressRouteCircuit, ManagementGroup,
+    PrivateDnsZone, VNet, VNetPeering,
 )
 
 logger = logging.getLogger("cna.discovery.azure")

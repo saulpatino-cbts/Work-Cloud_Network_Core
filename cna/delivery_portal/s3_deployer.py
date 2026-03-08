@@ -106,7 +106,6 @@ class S3Deployer:
 
         if progress_callback:
             from boto3.s3.transfer import TransferConfig
-            import boto3
             config = TransferConfig(multipart_threshold=8 * 1024 * 1024)
 
             def _callback(bytes_amount: int):

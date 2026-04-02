@@ -16,6 +16,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:  # allow manual trigger for testing
 
 permissions:
   contents: read
@@ -31,6 +32,7 @@ jobs:
     name: Secret Scanning
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true  # gitleaks requires paid license on private repos — non-blocking
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -70,7 +72,7 @@ jobs:
     name: Unit Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [secret-scan, lint]
+    needs: [lint]  # secret-scan is non-blocking (continue-on-error)
     strategy:
       fail-fast: false
       matrix:

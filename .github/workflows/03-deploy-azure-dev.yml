@@ -295,7 +295,7 @@ jobs:
 
       - name: Update apply evidence
         env:
-          MANIFEST_PATH: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+          MANIFEST_PATH: ${{ github.workspace }}/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
           FRONTDOOR_ENDPOINT_HOST_NAME: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
           FRONTDOOR_PROFILE_ID: ${{ steps.export.outputs.frontdoor_profile_id }}
           FRONTDOOR_ENDPOINT_ID: ${{ steps.export.outputs.frontdoor_endpoint_id }}
@@ -303,7 +303,7 @@ jobs:
           FRONTDOOR_ROUTE_ID: ${{ steps.export.outputs.frontdoor_route_id }}
           FRONTDOOR_CUSTOM_DOMAIN_ID: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
           FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
-        run: python scripts/ci/update_apply_evidence.py
+        run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 
       - name: Upload staged manifest
         uses: actions/upload-artifact@v4

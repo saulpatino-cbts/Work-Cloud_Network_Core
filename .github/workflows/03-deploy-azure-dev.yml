@@ -213,11 +213,6 @@ jobs:
           name: deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
 
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
-
   apply:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

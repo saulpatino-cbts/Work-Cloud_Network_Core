@@ -15,6 +15,12 @@ resource "azurerm_container_app_environment" "this" {
   internal_load_balancer_enabled = var.container_apps_internal_only
   infrastructure_subnet_id       = var.infrastructure_subnet_id
   tags                           = var.tags
+
+  lifecycle {
+    ignore_changes = [
+      infrastructure_resource_group_name
+    ]
+  }
 }
 
 resource "azurerm_container_app" "api" {

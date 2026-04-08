@@ -62,6 +62,36 @@ output "frontdoor_endpoint_host_name" {
   value       = module.security.frontdoor_endpoint_host_name
 }
 
+output "frontdoor_profile_id" {
+  description = "Azure Front Door profile resource ID"
+  value       = module.security.frontdoor_profile_id
+}
+
+output "frontdoor_endpoint_id" {
+  description = "Azure Front Door endpoint resource ID"
+  value       = module.security.frontdoor_endpoint_id
+}
+
+output "frontdoor_origin_group_id" {
+  description = "Azure Front Door origin group resource ID"
+  value       = module.security.frontdoor_origin_group_id
+}
+
+output "frontdoor_route_id" {
+  description = "Azure Front Door route resource ID"
+  value       = module.security.frontdoor_route_id
+}
+
+output "frontdoor_custom_domain_id" {
+  description = "Azure Front Door custom domain resource ID"
+  value       = module.security.frontdoor_custom_domain_id
+}
+
+output "frontdoor_secret_id" {
+  description = "Azure Front Door secret resource ID"
+  value       = module.security.frontdoor_secret_id
+}
+
 output "openai_endpoint_secret_name" {
   value = module.security.openai_endpoint_secret_name
 }

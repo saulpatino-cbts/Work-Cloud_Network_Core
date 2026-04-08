@@ -3,6 +3,7 @@
 Loads topology checkpoints from EngagementStore, runs AnalysisEngine,
 enriches with RecommendationEngine, writes FindingsReport.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,19 +17,33 @@ logger = logging.getLogger("cna.cli.analyze")
 
 @click.command("analyze")
 @click.option("--engagement-id", required=True, help="Engagement ID from `cna init`")
-@click.option("--aws", "load_aws", is_flag=True, default=False,
-              help="Load and analyze AWS topology checkpoints")
-@click.option("--azure", "load_azure", is_flag=True, default=False,
-              help="Load and analyze Azure topology checkpoints")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Generate findings but do not write FindingsReport to store")
-@click.option("--no-recommendations", is_flag=True, default=False,
-              help="Skip MCP recommendation enrichment")
-@click.option("--data-dir", default="./engagements",
-              help="Engagement data directory (default: ./engagements)")
-def analyze(
-    engagement_id, load_aws, load_azure, dry_run, no_recommendations, data_dir
-):
+@click.option(
+    "--aws",
+    "load_aws",
+    is_flag=True,
+    default=False,
+    help="Load and analyze AWS topology checkpoints",
+)
+@click.option(
+    "--azure",
+    "load_azure",
+    is_flag=True,
+    default=False,
+    help="Load and analyze Azure topology checkpoints",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Generate findings but do not write FindingsReport to store",
+)
+@click.option(
+    "--no-recommendations", is_flag=True, default=False, help="Skip MCP recommendation enrichment"
+)
+@click.option(
+    "--data-dir", default="./engagements", help="Engagement data directory (default: ./engagements)"
+)
+def analyze(engagement_id, load_aws, load_azure, dry_run, no_recommendations, data_dir):
     """Analyze discovery checkpoints and generate a FindingsReport.
 
     \b
@@ -67,12 +82,12 @@ def analyze(
         try:
             aws_topology = store.load_aws_topology(engagement_id)
             regions = len(aws_topology.regions) if aws_topology else 0
-            blocked = sum(1 for r in (aws_topology.regions if aws_topology else [])
-                         if r.discovery_blocked)
+            blocked = sum(
+                1 for r in (aws_topology.regions if aws_topology else []) if r.discovery_blocked
+            )
             click.echo(f"  \u2713 {regions} regions loaded ({blocked} blocked)")
         except FileNotFoundError:
-            click.echo("  \u26a0 No AWS checkpoints found. Run `cna discover aws` first.",
-                       err=True)
+            click.echo("  \u26a0 No AWS checkpoints found. Run `cna discover aws` first.", err=True)
             if not load_azure:
                 sys.exit(1)
 
@@ -81,12 +96,16 @@ def analyze(
         try:
             azure_topology = store.load_azure_topology(engagement_id)
             subs = len(azure_topology.subscriptions) if azure_topology else 0
-            blocked = sum(1 for s in (azure_topology.subscriptions if azure_topology else [])
-                         if s.discovery_blocked)
+            blocked = sum(
+                1
+                for s in (azure_topology.subscriptions if azure_topology else [])
+                if s.discovery_blocked
+            )
             click.echo(f"  \u2713 {subs} subscriptions loaded ({blocked} blocked)")
         except FileNotFoundError:
-            click.echo("  \u26a0 No Azure checkpoints found. Run `cna discover azure` first.",
-                       err=True)
+            click.echo(
+                "  \u26a0 No Azure checkpoints found. Run `cna discover azure` first.", err=True
+            )
             if not load_aws or not aws_topology:
                 sys.exit(1)
 
@@ -124,7 +143,7 @@ def analyze(
         click.echo(
             f"\n\u26a0  {report.critical_count} CRITICAL finding(s) detected. "
             "Escalation engine has been notified.",
-            err=True
+            err=True,
         )
 
     if not dry_run:

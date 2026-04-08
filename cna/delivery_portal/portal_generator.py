@@ -16,6 +16,7 @@ DD-013: Staleness detection.
   PortalGenerator computes current FindingsReport checksum and compares.
   Stale records get a visible warning badge in the portal HTML.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,7 +31,7 @@ logger = logging.getLogger("cna.portal.generator")
 
 # MIME types per extension — must be set on every uploaded file (Gap #14)
 CONTENT_TYPES: dict[str, str] = {
-    ".pdf":  "application/pdf",
+    ".pdf": "application/pdf",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".html": "text/html; charset=utf-8",
     ".json": "application/json",
@@ -40,14 +41,15 @@ CONTENT_TYPES: dict[str, str] = {
 @dataclass
 class PortalEntry:
     """A single deliverable entry in the portal download table."""
+
     label: str
     format: str
     lang: str
     size_bytes: int | None
     rendered_at: str
-    download_url: str          # pre-signed URL or SAS token injected at publish
-    is_stale: bool = False     # DD-013: True if rendered before last analysis run
-    stale_reason: str = ""     # human-readable explanation
+    download_url: str  # pre-signed URL or SAS token injected at publish
+    is_stale: bool = False  # DD-013: True if rendered before last analysis run
+    stale_reason: str = ""  # human-readable explanation
 
 
 _PORTAL_TEMPLATE = """\
@@ -188,8 +190,9 @@ class PortalGenerator:
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(html, encoding="utf-8")
-        logger.info("Portal index written: %s (%d entries, stale=%s)",
-                    output_path, len(entries), has_stale)
+        logger.info(
+            "Portal index written: %s (%d entries, stale=%s)", output_path, len(entries), has_stale
+        )
         return output_path
 
     @staticmethod
@@ -218,17 +221,20 @@ class PortalGenerator:
                 record.findings_checksum is not None
                 and record.findings_checksum != current_findings_checksum
             )
-            entries.append(PortalEntry(
-                label=record.label,
-                format=record.format,
-                lang=record.lang,
-                size_bytes=record.size_bytes,
-                rendered_at=record.rendered_at,
-                download_url=signed_urls.get(record.path, "#"),
-                is_stale=is_stale,
-                stale_reason=(
-                    "Rendered before latest analysis run. Re-generate reports."
-                    if is_stale else ""
-                ),
-            ))
+            entries.append(
+                PortalEntry(
+                    label=record.label,
+                    format=record.format,
+                    lang=record.lang,
+                    size_bytes=record.size_bytes,
+                    rendered_at=record.rendered_at,
+                    download_url=signed_urls.get(record.path, "#"),
+                    is_stale=is_stale,
+                    stale_reason=(
+                        "Rendered before latest analysis run. Re-generate reports."
+                        if is_stale
+                        else ""
+                    ),
+                )
+            )
         return entries

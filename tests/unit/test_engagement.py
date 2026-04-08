@@ -1,4 +1,5 @@
 """Unit tests for engagement model."""
+
 from cna.core.engagement import EngagementConfig
 
 

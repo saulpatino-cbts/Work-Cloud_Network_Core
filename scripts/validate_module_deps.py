@@ -6,6 +6,7 @@ Runs in CI (module-dependency-check job) and can be run locally.
 Exit 0: all dependencies satisfied.
 Exit 1: one or more modules depend on an uninstalled module — blocks merge.
 """
+
 import sys
 from pathlib import Path
 
@@ -41,8 +42,7 @@ def validate() -> bool:
         for dep in data.get("depends_on", []):
             if dep not in installed:
                 errors.append(
-                    f"ERROR: Module '{name}' depends on '{dep}' "
-                    f"but '{dep}' is not installed."
+                    f"ERROR: Module '{name}' depends on '{dep}' but '{dep}' is not installed."
                 )
 
     if errors:

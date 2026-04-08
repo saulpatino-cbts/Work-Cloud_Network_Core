@@ -10,6 +10,7 @@ Responsibilities:
   - Write access record to EngagementStore for audit trail
   - Never store actual pre-signed URL in the store (security) — only metadata
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,7 @@ from typing import Literal
 
 logger = logging.getLogger("cna.portal.access")
 
-_MAX_TTL_HOURS = 7 * 24     # 7 days — hard cap
+_MAX_TTL_HOURS = 7 * 24  # 7 days — hard cap
 _DEFAULT_TTL_HOURS = 7 * 24
 
 CloudProvider = Literal["aws", "azure"]
@@ -28,12 +29,13 @@ CloudProvider = Literal["aws", "azure"]
 @dataclass
 class AccessRecord:
     """Metadata record for an issued access link (URL never stored)."""
+
     engagement_id: str
     cloud: CloudProvider
     issued_at: str
     expires_at: str
     ttl_hours: int
-    storage_location: str    # s3://bucket/prefix or https://account.blob.core.windows.net/container
+    storage_location: str  # s3://bucket/prefix or https://account.blob.core.windows.net/container
     deliverable_count: int
 
     def is_expired(self) -> bool:
@@ -71,8 +73,7 @@ class AccessManager:
         effective_ttl = min(ttl_hours, _MAX_TTL_HOURS)
         if ttl_hours > _MAX_TTL_HOURS:
             logger.warning(
-                "Requested TTL %dh exceeds hard cap %dh. Capped.",
-                ttl_hours, _MAX_TTL_HOURS
+                "Requested TTL %dh exceeds hard cap %dh. Capped.", ttl_hours, _MAX_TTL_HOURS
             )
         now = datetime.now(UTC)
         expiry = now + timedelta(hours=effective_ttl)
@@ -99,6 +100,9 @@ class AccessManager:
         )
         logger.info(
             "Access record issued: %s | %s | expires %s | %d deliverables",
-            engagement_id, cloud, expires_at, deliverable_count
+            engagement_id,
+            cloud,
+            expires_at,
+            deliverable_count,
         )
         return record

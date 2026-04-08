@@ -27,6 +27,7 @@ Credential workflow for each operator persona:
      Azure SP: Secret rotation managed in Key Vault with expiry alerts.
      No long-lived static keys should ever be used for discovery.
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,8 +67,7 @@ class AWSCredentials:
         external_id = os.environ.get("CNA_AWS_EXTERNAL_ID", "")
         if not role_arn:
             raise OSError(
-                "CNA_AWS_ROLE_ARN not set. "
-                "Set it in .env or pass --role to `cna discover aws`."
+                "CNA_AWS_ROLE_ARN not set. Set it in .env or pass --role to `cna discover aws`."
             )
         return cls(role_arn=role_arn, external_id=external_id)
 
@@ -133,10 +133,7 @@ class KeyVaultCredentialProvider:
     def __init__(self, vault_url: str | None = None):
         self.vault_url = vault_url or os.environ.get("AZURE_KEY_VAULT_URL", "")
         if not self.vault_url:
-            raise OSError(
-                "AZURE_KEY_VAULT_URL not set. "
-                "Set it in .env or provide via --vault-url."
-            )
+            raise OSError("AZURE_KEY_VAULT_URL not set. Set it in .env or provide via --vault-url.")
 
     def get_secret(self, secret_name: str) -> str:
         """Retrieve a secret value from Key Vault.

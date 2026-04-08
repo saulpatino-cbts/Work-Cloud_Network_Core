@@ -1,6 +1,8 @@
 import click
 from rich.console import Console
+
 console = Console()
+
 
 @click.command(name="review")
 @click.option("--finding-id", default=None, help="Review a specific finding by ID")

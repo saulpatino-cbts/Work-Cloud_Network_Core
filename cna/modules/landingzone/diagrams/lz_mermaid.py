@@ -2,6 +2,7 @@
 
 DD-011: Mermaid-based documentation, not IaC.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

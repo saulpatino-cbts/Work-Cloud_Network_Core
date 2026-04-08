@@ -20,7 +20,9 @@ def bootstrap_workspace(base: Path) -> dict:
 
 def publish_placeholder(deliverables_dir: Path, static_site_dir: Path, engagement_id: str) -> Path:
     source = deliverables_dir / f"{engagement_id}-summary.html"
-    source.write_text(f"<html><body><h1>{engagement_id}</h1><p>CNA publish placeholder</p></body></html>\n")
+    source.write_text(
+        f"<html><body><h1>{engagement_id}</h1><p>CNA publish placeholder</p></body></html>\n"
+    )
     target = static_site_dir / "index.html"
     copyfile(source, target)
     return target
@@ -83,7 +85,9 @@ def main() -> None:
     work_dir = Path("/tmp/cna-worker")
     work_dir.mkdir(parents=True, exist_ok=True)
     layout = bootstrap_workspace(work_dir)
-    published = publish_placeholder(work_dir / "deliverables", work_dir / "static-site", "sample-engagement")
+    published = publish_placeholder(
+        work_dir / "deliverables", work_dir / "static-site", "sample-engagement"
+    )
     blob_container = os.getenv("CNA_STORAGE_STATIC_CONTAINER", "static-site")
     blob_target = build_blob_target("sample-engagement", published.name)
     upload_result = upload_to_blob(published, blob_container, blob_target)

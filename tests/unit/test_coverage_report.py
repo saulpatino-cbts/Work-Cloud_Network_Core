@@ -1,4 +1,5 @@
 """Unit tests for discovery coverage report (DD-005/DD-016)."""
+
 from cna.core.discovery_coverage import DiscoveryCoverageReport
 
 

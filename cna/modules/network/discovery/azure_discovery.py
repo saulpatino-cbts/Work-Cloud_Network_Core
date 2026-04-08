@@ -17,6 +17,7 @@ API coverage:
   Resource Graph: cross-subscription bulk queries for efficiency
   Management API: Management Group tree from tenant root
 """
+
 from __future__ import annotations
 
 import json
@@ -29,9 +30,18 @@ from cna.core.exceptions import CNAAuthError
 from cna.core.persistence import EngagementStore
 from cna.core.throttle import with_retry
 from cna.core.topology_schema import (
-    ApplicationGateway, AzureFirewall, AzureSubnet, AzureSubscriptionTopology,
-    AzureTopology, AzureVHub, AzureVWan, ExpressRouteCircuit, ManagementGroup,
-    PrivateDnsZone, VNet, VNetPeering,
+    ApplicationGateway,
+    AzureFirewall,
+    AzureSubnet,
+    AzureSubscriptionTopology,
+    AzureTopology,
+    AzureVHub,
+    AzureVWan,
+    ExpressRouteCircuit,
+    ManagementGroup,
+    PrivateDnsZone,
+    VNet,
+    VNetPeering,
 )
 
 logger = logging.getLogger("cna.discovery.azure")
@@ -42,8 +52,8 @@ class AzureDiscoveryOptions:
     tenant_id: str
     subscription_ids: list[str] = field(default_factory=list)  # empty = all
     resume: bool = False
-    use_resource_graph: bool = True   # faster cross-sub queries
-    client_id: str | None = None   # for service principal auth
+    use_resource_graph: bool = True  # faster cross-sub queries
+    client_id: str | None = None  # for service principal auth
     client_secret: str | None = None  # never logged, in-memory only
 
 
@@ -62,9 +72,8 @@ class AzureDiscovery:
     def _init_credentials(self) -> None:
         """Initialize Azure credentials using DefaultAzureCredential chain."""
         try:
-            from azure.identity import DefaultAzureCredential, ClientSecretCredential
+            from azure.identity import ClientSecretCredential, DefaultAzureCredential
             from azure.mgmt.subscription import SubscriptionClient
-            from azure.mgmt.resource.resources import ResourceManagementClient
 
             if self.opts.client_id and self.opts.client_secret:
                 logger.info("Using service principal credentials")
@@ -93,14 +102,20 @@ class AzureDiscovery:
         subs = []
         for sub in with_retry(self._sub_client.subscriptions.list)():
             if sub.state != "Enabled":
-                logger.info("Skipping %s subscription %s (%s)",
-                            sub.state, sub.subscription_id, sub.display_name)
+                logger.info(
+                    "Skipping %s subscription %s (%s)",
+                    sub.state,
+                    sub.subscription_id,
+                    sub.display_name,
+                )
                 continue
-            subs.append({
-                "id": sub.subscription_id,
-                "name": sub.display_name,
-                "tenant_id": self.opts.tenant_id,
-            })
+            subs.append(
+                {
+                    "id": sub.subscription_id,
+                    "name": sub.display_name,
+                    "tenant_id": self.opts.tenant_id,
+                }
+            )
         return subs
 
     # ------------------------------------------------------------------ management groups
@@ -110,33 +125,34 @@ class AzureDiscovery:
         try:
             from azure.mgmt.managementgroups import ManagementGroupsAPI
         except ImportError:
-            logger.warning("azure-mgmt-managementgroups not installed. "
-                           "Skipping MG hierarchy discovery.")
+            logger.warning(
+                "azure-mgmt-managementgroups not installed. Skipping MG hierarchy discovery."
+            )
             return []
 
         mg_client = ManagementGroupsAPI(self._credential)
         mg_list = []
         try:
             for mg in mg_client.management_groups.list():
-                detail = mg_client.management_groups.get(
-                    mg.name, expand="children", recurse=False
-                )
+                detail = mg_client.management_groups.get(mg.name, expand="children", recurse=False)
                 child_mg_ids = []
                 sub_ids = []
-                for child in (detail.children or []):
+                for child in detail.children or []:
                     if "/managementGroups/" in (child.id or ""):
                         child_mg_ids.append(child.name)
                     elif "/subscriptions/" in (child.id or ""):
                         sub_ids.append(child.name)
 
-                mg_list.append(ManagementGroup(
-                    id=mg.name,
-                    name=mg.name,
-                    display_name=mg.display_name or mg.name,
-                    parent_id=None,  # resolved in post-processing pass
-                    subscription_ids=sub_ids,
-                    child_mg_ids=child_mg_ids,
-                ))
+                mg_list.append(
+                    ManagementGroup(
+                        id=mg.name,
+                        name=mg.name,
+                        display_name=mg.display_name or mg.name,
+                        parent_id=None,  # resolved in post-processing pass
+                        subscription_ids=sub_ids,
+                        child_mg_ids=child_mg_ids,
+                    )
+                )
         except Exception as e:
             logger.warning("Management group enumeration failed: %s", e)
         return mg_list
@@ -182,25 +198,24 @@ class AzureDiscovery:
         vnets = []
         for vnet in net.virtual_networks.list_all():
             subnets = []
-            for s in (vnet.subnets or []):
-                subnets.append(AzureSubnet(
-                    id=s.id,
-                    name=s.name,
-                    address_prefix=s.address_prefix or "",
-                    nsg_id=s.network_security_group.id if s.network_security_group else None,
-                    route_table_id=s.route_table.id if s.route_table else None,
-                    service_endpoints=[se.service for se in (s.service_endpoints or [])],
-                    private_endpoint_network_policies=str(
-                        s.private_endpoint_network_policies or "Enabled"
-                    ),
-                    delegation=(
-                        s.delegations[0].service_name
-                        if s.delegations else None
-                    ),
-                ))
+            for s in vnet.subnets or []:
+                subnets.append(
+                    AzureSubnet(
+                        id=s.id,
+                        name=s.name,
+                        address_prefix=s.address_prefix or "",
+                        nsg_id=s.network_security_group.id if s.network_security_group else None,
+                        route_table_id=s.route_table.id if s.route_table else None,
+                        service_endpoints=[se.service for se in (s.service_endpoints or [])],
+                        private_endpoint_network_policies=str(
+                            s.private_endpoint_network_policies or "Enabled"
+                        ),
+                        delegation=(s.delegations[0].service_name if s.delegations else None),
+                    )
+                )
 
             peerings = []
-            for p in (vnet.virtual_network_peerings or []):
+            for p in vnet.virtual_network_peerings or []:
                 remote_sub = ""
                 remote_id = p.remote_virtual_network.id if p.remote_virtual_network else ""
                 # Extract subscription from remote VNet ID
@@ -208,34 +223,37 @@ class AzureDiscovery:
                 if "subscriptions" in parts:
                     idx = parts.index("subscriptions")
                     remote_sub = parts[idx + 1] if idx + 1 < len(parts) else ""
-                peerings.append(VNetPeering(
-                    id=p.id,
-                    name=p.name,
-                    remote_vnet_id=remote_id,
-                    remote_vnet_name=p.name.replace("-peering", ""),
-                    remote_subscription_id=remote_sub,
-                    peering_state=str(p.peering_state or "Unknown"),
-                    allow_forwarded_traffic=bool(p.allow_forwarded_traffic),
-                    allow_gateway_transit=bool(p.allow_gateway_transit),
-                    use_remote_gateways=bool(p.use_remote_gateways),
-                ))
+                peerings.append(
+                    VNetPeering(
+                        id=p.id,
+                        name=p.name,
+                        remote_vnet_id=remote_id,
+                        remote_vnet_name=p.name.replace("-peering", ""),
+                        remote_subscription_id=remote_sub,
+                        peering_state=str(p.peering_state or "Unknown"),
+                        allow_forwarded_traffic=bool(p.allow_forwarded_traffic),
+                        allow_gateway_transit=bool(p.allow_gateway_transit),
+                        use_remote_gateways=bool(p.use_remote_gateways),
+                    )
+                )
 
             rg = vnet.id.split("/")[4] if vnet.id else ""
-            vnets.append(VNet(
-                id=vnet.id,
-                name=vnet.name,
-                location=vnet.location,
-                resource_group=rg,
-                subscription_id=sub_id,
-                address_space=list(vnet.address_space.address_prefixes or []),
-                subnets=subnets,
-                peerings=peerings,
-                ddos_protection_enabled=bool(
-                    vnet.ddos_protection_plan is not None
-                    or vnet.enable_ddos_protection
-                ),
-                tags=dict(vnet.tags or {}),
-            ))
+            vnets.append(
+                VNet(
+                    id=vnet.id,
+                    name=vnet.name,
+                    location=vnet.location,
+                    resource_group=rg,
+                    subscription_id=sub_id,
+                    address_space=list(vnet.address_space.address_prefixes or []),
+                    subnets=subnets,
+                    peerings=peerings,
+                    ddos_protection_enabled=bool(
+                        vnet.ddos_protection_plan is not None or vnet.enable_ddos_protection
+                    ),
+                    tags=dict(vnet.tags or {}),
+                )
+            )
         return vnets
 
     def _collect_vwans(self, net, sub_id: str) -> list[AzureVWan]:
@@ -249,31 +267,33 @@ class AzureDiscovery:
                         for vc in (hub.virtual_network_connections or [])
                         if vc.remote_virtual_network
                     ]
-                    hubs.append(AzureVHub(
-                        id=hub.id,
-                        name=hub.name,
-                        location=hub.location,
-                        resource_group=hub.id.split("/")[4] if hub.id else "",
-                        address_prefix=hub.address_prefix or "",
-                        sku=hub.sku or "Standard",
-                        connected_vnet_ids=connected_vnets,
-                        express_route_gateway_id=(
-                            hub.express_route_gateway.id
-                            if hub.express_route_gateway else None
-                        ),
-                        azure_firewall_id=(
-                            hub.azure_firewall.id
-                            if hub.azure_firewall else None
-                        ),
-                        routing_state=str(hub.routing_state or "None"),
-                    ))
-            vwans.append(AzureVWan(
-                id=vwan.id,
-                name=vwan.name,
-                resource_group=vwan.id.split("/")[4] if vwan.id else "",
-                sku=vwan.type or "Standard",
-                hubs=hubs,
-            ))
+                    hubs.append(
+                        AzureVHub(
+                            id=hub.id,
+                            name=hub.name,
+                            location=hub.location,
+                            resource_group=hub.id.split("/")[4] if hub.id else "",
+                            address_prefix=hub.address_prefix or "",
+                            sku=hub.sku or "Standard",
+                            connected_vnet_ids=connected_vnets,
+                            express_route_gateway_id=(
+                                hub.express_route_gateway.id if hub.express_route_gateway else None
+                            ),
+                            azure_firewall_id=(
+                                hub.azure_firewall.id if hub.azure_firewall else None
+                            ),
+                            routing_state=str(hub.routing_state or "None"),
+                        )
+                    )
+            vwans.append(
+                AzureVWan(
+                    id=vwan.id,
+                    name=vwan.name,
+                    resource_group=vwan.id.split("/")[4] if vwan.id else "",
+                    sku=vwan.type or "Standard",
+                    hubs=hubs,
+                )
+            )
         return vwans
 
     def _collect_firewalls(self, net, sub_id: str) -> list[AzureFirewall]:
@@ -284,7 +304,7 @@ class AzureDiscovery:
             if fw.sku:
                 sku_tier = fw.sku.tier or "Standard"
             subnet_id = None
-            for ipc in (fw.ip_configurations or []):
+            for ipc in fw.ip_configurations or []:
                 if ipc.subnet and ipc.subnet.id:
                     subnet_id = ipc.subnet.id
                     break
@@ -293,17 +313,19 @@ class AzureDiscovery:
                 for ipc in (fw.ip_configurations or [])
                 if ipc.public_ip_address
             ]
-            firewalls.append(AzureFirewall(
-                id=fw.id,
-                name=fw.name,
-                location=fw.location,
-                resource_group=rg,
-                sku_tier=sku_tier,
-                subnet_id=subnet_id,
-                public_ip_ids=pip_ids,
-                policy_id=fw.firewall_policy.id if fw.firewall_policy else None,
-                threat_intel_mode=str(fw.threat_intel_mode or "Alert"),
-            ))
+            firewalls.append(
+                AzureFirewall(
+                    id=fw.id,
+                    name=fw.name,
+                    location=fw.location,
+                    resource_group=rg,
+                    sku_tier=sku_tier,
+                    subnet_id=subnet_id,
+                    public_ip_ids=pip_ids,
+                    policy_id=fw.firewall_policy.id if fw.firewall_policy else None,
+                    threat_intel_mode=str(fw.threat_intel_mode or "Alert"),
+                )
+            )
         return firewalls
 
     def _collect_appgws(self, net, sub_id: str) -> list[ApplicationGateway]:
@@ -317,29 +339,30 @@ class AzureDiscovery:
             if agw.web_application_firewall_configuration:
                 waf_enabled = agw.web_application_firewall_configuration.enabled
             subnet_id = ""
-            for gw_config in (agw.gateway_ip_configurations or []):
+            for gw_config in agw.gateway_ip_configurations or []:
                 if gw_config.subnet and gw_config.subnet.id:
                     subnet_id = gw_config.subnet.id
                     break
-            frontend_ips = [
-                fic.name for fic in (agw.frontend_ip_configurations or [])
-            ]
-            appgws.append(ApplicationGateway(
-                id=agw.id,
-                name=agw.name,
-                location=agw.location,
-                resource_group=rg,
-                sku_name=sku_name,
-                subnet_id=subnet_id,
-                waf_enabled=waf_enabled,
-                frontend_ip_configs=frontend_ips,
-            ))
+            frontend_ips = [fic.name for fic in (agw.frontend_ip_configurations or [])]
+            appgws.append(
+                ApplicationGateway(
+                    id=agw.id,
+                    name=agw.name,
+                    location=agw.location,
+                    resource_group=rg,
+                    sku_name=sku_name,
+                    subnet_id=subnet_id,
+                    waf_enabled=waf_enabled,
+                    frontend_ip_configs=frontend_ips,
+                )
+            )
         return appgws
 
     def _collect_private_dns(self, sub_id: str) -> list[PrivateDnsZone]:
         zones = []
         try:
             from azure.mgmt.privatedns import PrivateDnsManagementClient
+
             dns_client = PrivateDnsManagementClient(self._credential, sub_id)
             for zone in dns_client.private_zones.list():
                 rg = zone.id.split("/")[4] if zone.id else ""
@@ -348,13 +371,15 @@ class AzureDiscovery:
                     for link in dns_client.virtual_network_links.list(rg, zone.name)
                     if link.virtual_network
                 ]
-                zones.append(PrivateDnsZone(
-                    id=zone.id,
-                    name=zone.name,
-                    resource_group=rg,
-                    linked_vnet_ids=linked_vnets,
-                    record_count=zone.number_of_record_sets or 0,
-                ))
+                zones.append(
+                    PrivateDnsZone(
+                        id=zone.id,
+                        name=zone.name,
+                        resource_group=rg,
+                        linked_vnet_ids=linked_vnets,
+                        record_count=zone.number_of_record_sets or 0,
+                    )
+                )
         except ImportError:
             logger.warning("azure-mgmt-privatedns not installed. Skipping Private DNS discovery.")
         except Exception as e:
@@ -377,18 +402,20 @@ class AzureDiscovery:
                 provider = erc.service_provider_properties.service_provider_name
                 peering_loc = erc.service_provider_properties.peering_location
                 bw = erc.service_provider_properties.bandwidth_in_mbps
-            circuits.append(ExpressRouteCircuit(
-                id=erc.id,
-                name=erc.name,
-                location=erc.location,
-                resource_group=rg,
-                service_provider=provider,
-                peering_location=peering_loc,
-                bandwidth_mbps=bw,
-                sku_tier=sku_tier,
-                sku_family=sku_family,
-                circuit_provisioning_state=str(erc.circuit_provisioning_state or "Enabled"),
-            ))
+            circuits.append(
+                ExpressRouteCircuit(
+                    id=erc.id,
+                    name=erc.name,
+                    location=erc.location,
+                    resource_group=rg,
+                    service_provider=provider,
+                    peering_location=peering_loc,
+                    bandwidth_mbps=bw,
+                    sku_tier=sku_tier,
+                    sku_family=sku_family,
+                    circuit_provisioning_state=str(erc.circuit_provisioning_state or "Enabled"),
+                )
+            )
         return circuits
 
     # ----------------------------------------------------------------- run
@@ -407,8 +434,9 @@ class AzureDiscovery:
 
         # Management Group hierarchy
         topology.management_groups = self._collect_management_groups()
-        logger.info("[%s] %d management groups discovered",
-                    engagement_id, len(topology.management_groups))
+        logger.info(
+            "[%s] %d management groups discovered", engagement_id, len(topology.management_groups)
+        )
 
         # Subscriptions
         all_subs = self._list_subscriptions()
@@ -424,8 +452,9 @@ class AzureDiscovery:
             if self.opts.resume:
                 checkpoints = self.store.list_completed_checkpoints(engagement_id, "azure")
                 if any(sub_id in c for c in checkpoints):
-                    logger.info("[%s] Skipping %s — checkpoint exists (--resume)",
-                                engagement_id, sub_id)
+                    logger.info(
+                        "[%s] Skipping %s — checkpoint exists (--resume)", engagement_id, sub_id
+                    )
                     continue
 
             logger.info("[%s] Subscription: %s (%s)", engagement_id, sub_id, sub_name)
@@ -434,7 +463,8 @@ class AzureDiscovery:
 
             # Write checkpoint
             self.store.write_discovery_checkpoint(
-                engagement_id, "azure",
+                engagement_id,
+                "azure",
                 account_id=sub_id,
                 data=json.loads(sub_topo.model_dump_json()),
             )
@@ -443,6 +473,9 @@ class AzureDiscovery:
             blocked = " [BLOCKED]" if sub_topo.discovery_blocked else ""
             logger.info("[%s] %s: %d VNets%s", engagement_id, sub_id, vnet_count, blocked)
 
-        logger.info("[%s] Azure discovery complete. %d subscriptions collected.",
-                    engagement_id, len(topology.subscriptions))
+        logger.info(
+            "[%s] Azure discovery complete. %d subscriptions collected.",
+            engagement_id,
+            len(topology.subscriptions),
+        )
         return topology

@@ -1,6 +1,8 @@
 import click
 from rich.console import Console
+
 console = Console()
+
 
 @click.command(name="publish")
 @click.option("--domain", default=None, help="Custom domain for delivery portal")

@@ -10,8 +10,8 @@ Example:
   acme/us/aws_vpc_topology_us-east-1_v1.0.0.drawio
   acme/japan/azure_vnet_topology_japaneast_v1.0.0.svg
 """
-from pathlib import Path
 
+from pathlib import Path
 
 DIAGRAM_TYPES = {
     "vpc_topology",
@@ -31,9 +31,9 @@ OUTPUT_FORMATS = ["drawio", "svg", "png", "pdf"]
 def diagram_filename(
     engagement_slug: str,
     region_group: str,
-    platform: str,          # aws | azure
+    platform: str,  # aws | azure
     diagram_type: str,
-    scope: str,             # region name, account_id, tenant_id, or "all"
+    scope: str,  # region name, account_id, tenant_id, or "all"
     version: str = "1.0.0",
     ext: str = "drawio",
 ) -> Path:
@@ -58,8 +58,9 @@ def all_format_paths(
 ) -> dict[str, Path]:
     """Return paths for all output formats of a single diagram."""
     return {
-        ext: diagram_filename(engagement_slug, region_group, platform,
-                              diagram_type, scope, version, ext)
+        ext: diagram_filename(
+            engagement_slug, region_group, platform, diagram_type, scope, version, ext
+        )
         for ext in OUTPUT_FORMATS
     }
 
@@ -69,6 +70,7 @@ def diagram_version_from_existing(output_dir: Path, base_name: str) -> str:
     Prevents overwriting — each discovery run produces a new version.
     """
     from cna.core.version_manager import bump_version
+
     existing = sorted(output_dir.glob(f"{base_name}_v*.drawio"))
     if not existing:
         return "1.0.0"

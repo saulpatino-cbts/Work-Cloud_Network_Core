@@ -4,15 +4,16 @@ DD-012: Every generated document is versioned.
 Automatic: patch bump on every regeneration.
 Manual: cna version bump --doc <name> --type minor/major
 """
+
 from datetime import datetime
 
 from pydantic import BaseModel
 
 
 class DocumentVersion(BaseModel):
-    version: str            # semver: 1.0.0
+    version: str  # semver: 1.0.0
     generated_at: datetime
-    generated_by: str       # ai-engine | human-review | manual
+    generated_by: str  # ai-engine | human-review | manual
     change_summary: str
     parent_version: str | None = None
 

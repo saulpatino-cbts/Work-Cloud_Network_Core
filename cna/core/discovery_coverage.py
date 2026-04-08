@@ -3,6 +3,7 @@
 DD-005/DD-016: Every blocked account or region is logged and included
 in all final reports as a data quality caveat.
 """
+
 from pydantic import BaseModel
 
 

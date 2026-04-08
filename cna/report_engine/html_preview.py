@@ -12,6 +12,7 @@ Design:
   - Collapsible sections via pure CSS (no JavaScript)
   - Print-ready: @media print styles included
 """
+
 from __future__ import annotations
 
 import logging
@@ -52,10 +53,7 @@ class HtmlPreviewRenderer:
             FindingSeverity.MEDIUM: 2,
             FindingSeverity.LOW: 3,
         }
-        sorted_findings = sorted(
-            report.findings,
-            key=lambda f: severity_order.get(f.severity, 99)
-        )
+        sorted_findings = sorted(report.findings, key=lambda f: severity_order.get(f.severity, 99))
         return {
             "engagement_id": report.engagement_id,
             "generated_at": report.generated_at,

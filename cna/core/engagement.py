@@ -1,4 +1,5 @@
 """Engagement model — central state for an assessment engagement."""
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field

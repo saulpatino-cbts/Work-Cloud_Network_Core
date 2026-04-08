@@ -5,9 +5,10 @@ Version 1.1.0 — Phase B Gap 8 closure.
   Added Azure: AzureFirewall, ApplicationGateway, PrivateDnsZone, ExpressRouteCircuit
   All new fields are Optional with default_factory so v1.0.0 data remains valid.
 """
+
 from __future__ import annotations
 
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,7 @@ TOPOLOGY_SCHEMA_VERSION = "1.1.0"
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
+
 
 class SubnetType(StrEnum):
     PUBLIC = "public"
@@ -41,6 +43,7 @@ class PeeringState(StrEnum):
 
 # ── AWS primitives ─────────────────────────────────────────────────────────
 
+
 class RouteEntry(BaseModel):
     destination: str
     target: str
@@ -58,8 +61,8 @@ class RouteTable(BaseModel):
 
 class SecurityGroupRule(BaseModel):
     rule_id: str | None = None
-    direction: str                  # "ingress" | "egress"
-    protocol: str                   # tcp | udp | icmp | -1 (all)
+    direction: str  # "ingress" | "egress"
+    protocol: str  # tcp | udp | icmp | -1 (all)
     from_port: int | None = None
     to_port: int | None = None
     cidr_ranges: list[str] = Field(default_factory=list)
@@ -79,7 +82,7 @@ class SecurityGroup(BaseModel):
 class NACLEntry(BaseModel):
     rule_number: int
     protocol: str
-    rule_action: str    # "allow" | "deny"
+    rule_action: str  # "allow" | "deny"
     cidr: str
     from_port: int | None = None
     to_port: int | None = None
@@ -229,6 +232,7 @@ class AWSTopology(BaseModel):
 
 # ── Azure primitives ───────────────────────────────────────────────────────
 
+
 class AzureSubnet(BaseModel):
     id: str
     name: str
@@ -273,8 +277,8 @@ class AzureFirewall(BaseModel):
     name: str
     location: str
     resource_group: str
-    sku_tier: str                   # "Basic" | "Standard" | "Premium"
-    subnet_id: str | None = None # AzureFirewallSubnet
+    sku_tier: str  # "Basic" | "Standard" | "Premium"
+    subnet_id: str | None = None  # AzureFirewallSubnet
     public_ip_ids: list[str] = Field(default_factory=list)
     policy_id: str | None = None
     threat_intel_mode: str = "Alert"
@@ -285,7 +289,7 @@ class ApplicationGateway(BaseModel):
     name: str
     location: str
     resource_group: str
-    sku_name: str                   # "Standard_v2" | "WAF_v2"
+    sku_name: str  # "Standard_v2" | "WAF_v2"
     subnet_id: str
     waf_enabled: bool = False
     frontend_ip_configs: list[str] = Field(default_factory=list)
@@ -293,7 +297,7 @@ class ApplicationGateway(BaseModel):
 
 class PrivateDnsZone(BaseModel):
     id: str
-    name: str                       # e.g. "privatelink.blob.core.windows.net"
+    name: str  # e.g. "privatelink.blob.core.windows.net"
     resource_group: str
     linked_vnet_ids: list[str] = Field(default_factory=list)
     record_count: int = 0
@@ -307,8 +311,8 @@ class ExpressRouteCircuit(BaseModel):
     service_provider: str | None = None
     peering_location: str | None = None
     bandwidth_mbps: int | None = None
-    sku_tier: str = "Standard"      # "Standard" | "Premium"
-    sku_family: str = "MeteredData" # "MeteredData" | "UnlimitedData"
+    sku_tier: str = "Standard"  # "Standard" | "Premium"
+    sku_family: str = "MeteredData"  # "MeteredData" | "UnlimitedData"
     circuit_provisioning_state: str = "Enabled"
 
 

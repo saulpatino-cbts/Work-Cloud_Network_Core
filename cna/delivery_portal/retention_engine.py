@@ -14,6 +14,7 @@ Design:
   - Local engagement files are NOT deleted by this engine — only remote storage.
     Local cleanup is a separate operator step documented in the data handling policy.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ _RETENTION_DAYS = 90
 
 class RetentionExpiredError(RuntimeError):
     """Raised when an engagement has passed its 90-day retention window (DD-019)."""
+
     pass
 
 
@@ -48,10 +50,7 @@ class RetentionEngine:
         Call this at the START of cna publish before any upload.
         """
         if delivery_date is None:
-            logger.debug(
-                "[%s] Retention clock not started (delivery_date not set).",
-                engagement_id
-            )
+            logger.debug("[%s] Retention clock not started (delivery_date not set).", engagement_id)
             return
 
         expiry = RetentionEngine.retention_expiry(delivery_date)
@@ -68,20 +67,23 @@ class RetentionEngine:
         days_remaining = (expiry - now).days
         if days_remaining <= 14:
             logger.warning(
-                "[%s] Retention window expires in %d days (%s). "
-                "Schedule data deletion.",
-                engagement_id, days_remaining, expiry.date()
+                "[%s] Retention window expires in %d days (%s). Schedule data deletion.",
+                engagement_id,
+                days_remaining,
+                expiry.date(),
             )
         else:
             logger.info(
                 "[%s] Retention OK. %d days remaining (expires %s).",
-                engagement_id, days_remaining, expiry.date()
+                engagement_id,
+                days_remaining,
+                expiry.date(),
             )
 
     @staticmethod
     def enforce(
         engagement_id: str,
-        deployer,   # S3Deployer or AzureBlobDeployer
+        deployer,  # S3Deployer or AzureBlobDeployer
         cloud: str,
     ) -> None:
         """Delete all remote storage for an engagement (DD-019 enforcement).
@@ -91,7 +93,8 @@ class RetentionEngine:
         """
         logger.warning(
             "RETENTION ENFORCEMENT: Deleting all remote storage for [%s] on %s.",
-            engagement_id, cloud
+            engagement_id,
+            cloud,
         )
         if cloud == "aws":
             deployer.delete_prefix(prefix=engagement_id)
@@ -99,7 +102,4 @@ class RetentionEngine:
             deployer.delete_container()
         else:
             raise ValueError(f"Unknown cloud provider: {cloud!r}")
-        logger.info(
-            "RETENTION ENFORCEMENT COMPLETE: [%s] on %s.",
-            engagement_id, cloud
-        )
+        logger.info("RETENTION ENFORCEMENT COMPLETE: [%s] on %s.", engagement_id, cloud)

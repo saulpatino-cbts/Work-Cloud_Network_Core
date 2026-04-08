@@ -1,4 +1,5 @@
 """Unit tests for document version manager (DD-012)."""
+
 from cna.core.version_manager import bump_version
 
 

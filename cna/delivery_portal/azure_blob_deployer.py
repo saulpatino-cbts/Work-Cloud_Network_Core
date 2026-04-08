@@ -14,6 +14,7 @@ Required Azure RBAC:
   Storage Blob Data Contributor — on the storage account or container
   (Storage Blob Data Reader is insufficient — write access required for upload)
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,7 @@ from cna.delivery_portal.portal_generator import CONTENT_TYPES
 
 logger = logging.getLogger("cna.portal.azure_blob")
 
-_MAX_SAS_TTL_HOURS = 7 * 24    # 7 days hard cap
+_MAX_SAS_TTL_HOURS = 7 * 24  # 7 days hard cap
 _DEFAULT_SAS_TTL_HOURS = 7 * 24
 
 
@@ -43,15 +44,15 @@ class AzureBlobDeployer:
         self._ttl_hours = min(sas_ttl_hours, _MAX_SAS_TTL_HOURS)
         if sas_ttl_hours > _MAX_SAS_TTL_HOURS:
             logger.warning(
-                "SAS TTL %dh exceeds hard cap %dh. Capped.",
-                sas_ttl_hours, _MAX_SAS_TTL_HOURS
+                "SAS TTL %dh exceeds hard cap %dh. Capped.", sas_ttl_hours, _MAX_SAS_TTL_HOURS
             )
         self._client = self._make_client()
 
     def _make_client(self):
         try:
-            from azure.storage.blob import BlobServiceClient
             from azure.identity import DefaultAzureCredential
+            from azure.storage.blob import BlobServiceClient
+
             credential = DefaultAzureCredential()
             account_url = f"https://{self._account}.blob.core.windows.net"
             return BlobServiceClient(account_url=account_url, credential=credential)
@@ -67,6 +68,7 @@ class AzureBlobDeployer:
     def ensure_container(self) -> None:
         """Create container if it doesn't exist. Public access is DISABLED."""
         from azure.core.exceptions import ResourceExistsError
+
         container_client = self._client.get_container_client(self._container)
         try:
             container_client.create_container(public_access=None)  # no public access
@@ -85,6 +87,7 @@ class AzureBlobDeployer:
         size = file_path.stat().st_size
 
         from azure.storage.blob import ContentSettings
+
         container_client = self._client.get_container_client(self._container)
         blob_client = container_client.get_blob_client(blob_name)
 
@@ -96,20 +99,25 @@ class AzureBlobDeployer:
             )
 
         if progress_callback:
-            progress_callback(size, size)  # Azure SDK doesn't expose chunk callbacks; signal complete
+            progress_callback(
+                size, size
+            )  # Azure SDK doesn't expose chunk callbacks; signal complete
 
-        logger.info("Uploaded: %s/%s (%s, %d bytes)",
-                    self._container, blob_name, content_type, size)
+        logger.info(
+            "Uploaded: %s/%s (%s, %d bytes)", self._container, blob_name, content_type, size
+        )
         return blob_name
 
     def generate_sas_token(self, blob_name: str) -> str:
         """Generate a SAS token URL for a blob. TTL capped at 7 days."""
         from azure.storage.blob import (
-            BlobSasPermissions, UserDelegationKey, generate_blob_sas,
+            BlobSasPermissions,
+            UserDelegationKey,
+            generate_blob_sas,
         )
 
         expiry = datetime.now(UTC) + timedelta(hours=self._ttl_hours)
-        start  = datetime.now(UTC) - timedelta(minutes=5)  # clock skew tolerance
+        start = datetime.now(UTC) - timedelta(minutes=5)  # clock skew tolerance
 
         # User delegation key — no storage account key required
         udk: UserDelegationKey = self._client.get_user_delegation_key(
@@ -126,10 +134,7 @@ class AzureBlobDeployer:
             expiry=expiry,
             start=start,
         )
-        url = (
-            f"https://{self._account}.blob.core.windows.net/"
-            f"{self._container}/{blob_name}?{sas}"
-        )
+        url = f"https://{self._account}.blob.core.windows.net/{self._container}/{blob_name}?{sas}"
         logger.debug("SAS token generated for %s (TTL: %dh)", blob_name, self._ttl_hours)
         return url
 
@@ -148,8 +153,11 @@ class AzureBlobDeployer:
         self.ensure_container()
         sas_urls = {}
         for fp in file_paths:
-            cb = (lambda b, t, fp=fp: progress_callback(fp.name, b, t)) \
-                if progress_callback else None
+            cb = (
+                (lambda b, t, fp=fp: progress_callback(fp.name, b, t))
+                if progress_callback
+                else None
+            )
             blob_name = self.upload(fp, progress_callback=cb)
             sas_urls[str(fp)] = self.generate_sas_token(blob_name)
         return sas_urls

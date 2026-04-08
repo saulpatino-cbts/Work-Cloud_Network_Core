@@ -23,6 +23,7 @@ This module implements a two-layer control:
 This runs on every finding before it enters the findings store.
 AI pipeline (Phase D) calls validate_finding() before persisting.
 """
+
 from __future__ import annotations
 
 import re
@@ -50,6 +51,7 @@ HEDGE_PATTERNS: list[re.Pattern] = [
 
 class ObservedStateViolation(Exception):
     """Raised when a finding's observed_state contains non-observed language."""
+
     def __init__(self, finding_id: str, violation: str, offending_phrase: str | None = None):
         msg = f"Finding '{finding_id}' observed_state violation: {violation}"
         if offending_phrase:
@@ -78,8 +80,8 @@ def validate_observed_state(finding_id: str, observed_state: str, evidence_ids: 
             raise ObservedStateViolation(
                 finding_id=finding_id,
                 violation="Assumption language detected in observed_state. "
-                           "Only observed, evidence-backed facts are permitted.",
-                offending_phrase=match.group(0)
+                "Only observed, evidence-backed facts are permitted.",
+                offending_phrase=match.group(0),
             )
 
     # Layer 2: evidence linkage
@@ -87,5 +89,5 @@ def validate_observed_state(finding_id: str, observed_state: str, evidence_ids: 
         raise ObservedStateViolation(
             finding_id=finding_id,
             violation="No evidence_ids provided. Every finding must be grounded "
-                       "in at least one piece of collected topology data."
+            "in at least one piece of collected topology data.",
         )

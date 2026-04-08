@@ -9,6 +9,7 @@ DD-013: Deliverable staleness detection.
   Phase F compares this checksum against the current report; if different,
   the portal marks the deliverable as stale and prompts a re-render.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -19,14 +20,12 @@ from pathlib import Path
 
 @dataclass
 class DeliverableRecord:
-    label: str                    # human-readable: "Executive Report (PDF)"
-    path: str                     # absolute path to output file
-    format: str                   # "pdf", "html", "pptx"
-    lang: str                     # "en", "ja"
-    rendered_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
-    findings_checksum: str | None = None   # SHA-256 of FindingsReport JSON at render time
+    label: str  # human-readable: "Executive Report (PDF)"
+    path: str  # absolute path to output file
+    format: str  # "pdf", "html", "pptx"
+    lang: str  # "en", "ja"
+    rendered_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    findings_checksum: str | None = None  # SHA-256 of FindingsReport JSON at render time
     size_bytes: int | None = None
 
     def to_dict(self) -> dict:
@@ -45,9 +44,7 @@ class DeliverableRecord:
 class DeliverableManifest:
     engagement_id: str
     records: list[DeliverableRecord] = field(default_factory=list)
-    created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def add(self, record: DeliverableRecord) -> None:
         """Add a rendered file record. Populates size_bytes if file exists."""

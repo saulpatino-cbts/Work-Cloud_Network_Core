@@ -12,6 +12,7 @@ Fallback strategy if drawio CLI not available:
   - For testing/CI: write raw .drawio XML only, skip raster export.
   - Log clearly that visual formats were not produced.
 """
+
 from __future__ import annotations
 
 import logging
@@ -98,10 +99,11 @@ class DiagramExporter:
         png_path = self.output_dir / f"{safe_name}.png"
         try:
             import cairosvg
+
             cairosvg.svg2png(
                 url=str(svg_path),
                 write_to=str(png_path),
-                scale=2.0,       # 2x for high-DPI presentations
+                scale=2.0,  # 2x for high-DPI presentations
             )
             paths[".png"] = png_path
             logger.info("Written: %s", png_path)
@@ -126,8 +128,10 @@ class DiagramExporter:
         cmd = [
             self._drawio_bin,
             "--export",
-            "--format", fmt,
-            "--output", str(out_path),
+            "--format",
+            fmt,
+            "--output",
+            str(out_path),
             str(drawio_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)

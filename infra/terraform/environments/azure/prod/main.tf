@@ -140,8 +140,8 @@ module "compute" {
   # The runtime module persists them in KV for the 05-sync-env workflow;
   # these direct injections ensure the Container App can start before KV sync runs.
   container_app_secrets = {
-    "database-url"       = module.database.connection_string
-    "nextauth-secret"    = var.nextauth_secret
+    "database-url"        = module.database.connection_string
+    "nextauth-secret"     = var.nextauth_secret
     "entra-client-secret" = var.entra_client_secret
   }
 }

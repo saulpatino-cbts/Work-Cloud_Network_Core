@@ -7,20 +7,21 @@ a typed Pydantic model, not a raw dict.
 Discovery engine (Phase C) MUST output these models.
 Diagram generators MUST accept only these models.
 """
+
 from __future__ import annotations
 
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-
 # ── Enums ──────────────────────────────────────────────────────────────────
+
 
 class SubnetType(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     ISOLATED = "isolated"  # no route to internet, no NAT
-    TRANSIT = "transit"    # TGW attachment subnet
+    TRANSIT = "transit"  # TGW attachment subnet
 
 
 class PeeringState(StrEnum):
@@ -31,8 +32,8 @@ class PeeringState(StrEnum):
 
 
 class FirewallMode(StrEnum):
-    INLINE = "inline"       # traffic routed through
-    PARALLEL = "parallel"   # monitoring only
+    INLINE = "inline"  # traffic routed through
+    PARALLEL = "parallel"  # monitoring only
     NONE = "none"
 
 
@@ -44,6 +45,7 @@ class RegionGroup(StrEnum):
 
 
 # ── AWS Topology Models ────────────────────────────────────────────────────
+
 
 class AWSSubnet(BaseModel):
     id: str
@@ -139,6 +141,7 @@ class AWSRegionTopology(BaseModel):
 
 class AWSOrganizationTopology(BaseModel):
     """Root topology model for AWS — spans all accounts and regions."""
+
     engagement_id: str
     management_account_id: str
     accounts: list[AWSAccount] = Field(default_factory=list)
@@ -147,6 +150,7 @@ class AWSOrganizationTopology(BaseModel):
 
 
 # ── Azure Topology Models ──────────────────────────────────────────────────
+
 
 class AzureSubnet(BaseModel):
     id: str
@@ -219,6 +223,7 @@ class AzureSubscription(BaseModel):
 
 class AzureTenantTopology(BaseModel):
     """Root topology model for Azure — spans all subscriptions."""
+
     engagement_id: str
     tenant_id: str
     subscriptions: list[AzureSubscription] = Field(default_factory=list)

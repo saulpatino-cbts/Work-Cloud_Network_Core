@@ -15,6 +15,7 @@ Usage:
   logger = get_logger("cna.modules.network")
   logger.info("Starting VPC discovery", extra={"account_id": "123"})
 """
+
 from __future__ import annotations
 
 import json
@@ -39,11 +40,32 @@ class JSONFormatter(logging.Formatter):
         # Merge any extra fields passed via extra={...}
         for key, val in record.__dict__.items():
             if key not in (
-                "msg", "args", "levelname", "levelno", "pathname", "filename",
-                "module", "exc_info", "exc_text", "stack_info", "lineno",
-                "funcName", "created", "msecs", "relativeCreated", "thread",
-                "threadName", "processName", "process", "message", "asctime",
-                "name", "timestamp", "level", "logger", "engagement_id",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "message",
+                "asctime",
+                "name",
+                "timestamp",
+                "level",
+                "logger",
+                "engagement_id",
             ):
                 log_obj[key] = val
         if record.exc_info:
@@ -87,6 +109,7 @@ def setup_logging(
     # Console handler — Rich-formatted for human readability
     try:
         from rich.logging import RichHandler
+
         console_handler = RichHandler(
             level=level,
             show_time=True,

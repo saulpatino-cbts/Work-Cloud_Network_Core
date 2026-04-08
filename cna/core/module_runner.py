@@ -7,6 +7,7 @@ It checks that all declared depends_on modules have completed
 discovery for this engagement before proceeding.
 Raises ModuleDependencyError if not satisfied — never silently skips.
 """
+
 from __future__ import annotations
 
 import logging

@@ -17,6 +17,7 @@ Required IAM permissions for CNA-Publish role:
   s3:DeleteObject      — retention cleanup (called by RetentionEngine)
   s3:ListBucket        — status checks
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,7 +28,7 @@ from cna.delivery_portal.portal_generator import CONTENT_TYPES
 
 logger = logging.getLogger("cna.portal.s3")
 
-_MAX_PRESIGNED_TTL_SECONDS = 7 * 24 * 3600   # 7 days hard cap
+_MAX_PRESIGNED_TTL_SECONDS = 7 * 24 * 3600  # 7 days hard cap
 _DEFAULT_PRESIGNED_TTL_SECONDS = 7 * 24 * 3600
 
 _CORS_CONFIGURATION = {
@@ -60,7 +61,9 @@ class S3Deployer:
         if presigned_ttl_seconds > _MAX_PRESIGNED_TTL_SECONDS:
             logger.warning(
                 "Requested TTL %ds exceeds hard cap %ds. Capped at %ds.",
-                presigned_ttl_seconds, _MAX_PRESIGNED_TTL_SECONDS, self._ttl
+                presigned_ttl_seconds,
+                _MAX_PRESIGNED_TTL_SECONDS,
+                self._ttl,
             )
         self._client = self._make_client()
 
@@ -68,11 +71,11 @@ class S3Deployer:
     def _make_client():
         try:
             import boto3
+
             return boto3.client("s3")
         except ImportError as err:
             raise ImportError(
-                "boto3 is required for S3 deployment. "
-                "Install with: pip install boto3"
+                "boto3 is required for S3 deployment. Install with: pip install boto3"
             ) from err
 
     def _object_key(self, file_path: Path) -> str:
@@ -106,25 +109,29 @@ class S3Deployer:
 
         if progress_callback:
             from boto3.s3.transfer import TransferConfig
+
             config = TransferConfig(multipart_threshold=8 * 1024 * 1024)
 
             def _callback(bytes_amount: int):
                 progress_callback(bytes_amount, size)
 
             self._client.upload_file(
-                str(file_path), self._bucket, key,
+                str(file_path),
+                self._bucket,
+                key,
                 ExtraArgs=extra_args,
                 Callback=_callback,
                 Config=config,
             )
         else:
             self._client.upload_file(
-                str(file_path), self._bucket, key,
+                str(file_path),
+                self._bucket,
+                key,
                 ExtraArgs=extra_args,
             )
 
-        logger.info("Uploaded: s3://%s/%s (%s, %d bytes)",
-                    self._bucket, key, content_type, size)
+        logger.info("Uploaded: s3://%s/%s (%s, %d bytes)", self._bucket, key, content_type, size)
         return key
 
     def generate_presigned_url(self, object_key: str) -> str:
@@ -149,8 +156,9 @@ class S3Deployer:
                     Delete={"Objects": objects, "Quiet": True},
                 )
                 deleted += len(objects)
-        logger.info("RetentionEngine: deleted %d objects under s3://%s/%s",
-                    deleted, self._bucket, prefix)
+        logger.info(
+            "RetentionEngine: deleted %d objects under s3://%s/%s", deleted, self._bucket, prefix
+        )
         return deleted
 
     def upload_all(
@@ -165,8 +173,11 @@ class S3Deployer:
         self.configure_cors()
         signed_urls = {}
         for fp in file_paths:
-            cb = (lambda b, t, fp=fp: progress_callback(fp.name, b, t)) \
-                if progress_callback else None
+            cb = (
+                (lambda b, t, fp=fp: progress_callback(fp.name, b, t))
+                if progress_callback
+                else None
+            )
             key = self.upload(fp, progress_callback=cb)
             signed_urls[str(fp)] = self.generate_presigned_url(key)
         return signed_urls

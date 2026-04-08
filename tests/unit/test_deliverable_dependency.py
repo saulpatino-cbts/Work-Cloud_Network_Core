@@ -1,4 +1,5 @@
 """Unit tests for deliverable dependency graph (DD-013)."""
+
 from cna.core.deliverable_dependency import get_stale_deliverables
 
 

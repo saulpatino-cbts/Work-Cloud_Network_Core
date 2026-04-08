@@ -1,6 +1,8 @@
 import click
 from rich.console import Console
+
 console = Console()
+
 
 @click.command(name="init")
 @click.option("--client", required=True, help="Client slug (no spaces)")

@@ -1,4 +1,5 @@
 """Unit tests for critical finding escalation engine (DD-016)."""
+
 from cna.core.escalation_engine import CriticalFindingEscalationEngine
 
 

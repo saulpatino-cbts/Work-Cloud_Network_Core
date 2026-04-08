@@ -1,4 +1,5 @@
 """Transit Gateway topology diagram entry point — Phase B."""
+
 from __future__ import annotations
 
 from pathlib import Path

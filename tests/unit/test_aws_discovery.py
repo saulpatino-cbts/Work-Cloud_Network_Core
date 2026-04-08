@@ -13,6 +13,7 @@ Tests cover:
   - _tag helper
   - Org account listing with pagination
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -60,19 +61,22 @@ class TestTagHelper:
 
 
 class TestInferTargetType:
-    @pytest.mark.parametrize("target,expected", [
-        ("igw-abc123", "igw"),
-        ("nat-abc123", "nat"),
-        ("tgw-abc123", "tgw"),
-        ("pcx-abc123", "pcx"),
-        ("vgw-abc123", "vpgw"),
-        ("eni-abc123", "eni"),
-        ("lgw-abc123", "lgw"),
-        ("i-abc123", "instance"),
-        ("local", "local"),
-        ("unknown-thing", "unknown"),
-        ("", "unknown"),
-    ])
+    @pytest.mark.parametrize(
+        "target,expected",
+        [
+            ("igw-abc123", "igw"),
+            ("nat-abc123", "nat"),
+            ("tgw-abc123", "tgw"),
+            ("pcx-abc123", "pcx"),
+            ("vgw-abc123", "vpgw"),
+            ("eni-abc123", "eni"),
+            ("lgw-abc123", "lgw"),
+            ("i-abc123", "instance"),
+            ("local", "local"),
+            ("unknown-thing", "unknown"),
+            ("", "unknown"),
+        ],
+    )
     def test_target_types(self, target, expected):
         assert AWSDiscovery._infer_target_type(target) == expected
 
@@ -82,15 +86,19 @@ class TestCollectSubnets:
         ec2 = MagicMock()
         paginator = MagicMock()
         ec2.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [{
-            "Subnets": [{
-                "SubnetId": "subnet-001",
-                "Tags": [{"Key": "Name", "Value": "public-1a"}],
-                "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": "us-east-1a",
-                "MapPublicIpOnLaunch": True,
-            }]
-        }]
+        paginator.paginate.return_value = [
+            {
+                "Subnets": [
+                    {
+                        "SubnetId": "subnet-001",
+                        "Tags": [{"Key": "Name", "Value": "public-1a"}],
+                        "CidrBlock": "10.0.1.0/24",
+                        "AvailabilityZone": "us-east-1a",
+                        "MapPublicIpOnLaunch": True,
+                    }
+                ]
+            }
+        ]
         subnets = discovery._collect_subnets(ec2, "vpc-001")
         assert len(subnets) == 1
         assert subnets[0].id == "subnet-001"
@@ -104,19 +112,29 @@ class TestCollectRouteTables:
         ec2 = MagicMock()
         paginator = MagicMock()
         ec2.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [{
-            "RouteTables": [{
-                "RouteTableId": "rtb-001",
-                "Tags": [],
-                "Routes": [
-                    {"DestinationCidrBlock": "0.0.0.0/0",
-                     "GatewayId": "igw-001", "State": "active"},
-                    {"DestinationCidrBlock": "10.0.0.0/16",
-                     "GatewayId": "local", "State": "active"},
-                ],
-                "Associations": [{"Main": True}],
-            }]
-        }]
+        paginator.paginate.return_value = [
+            {
+                "RouteTables": [
+                    {
+                        "RouteTableId": "rtb-001",
+                        "Tags": [],
+                        "Routes": [
+                            {
+                                "DestinationCidrBlock": "0.0.0.0/0",
+                                "GatewayId": "igw-001",
+                                "State": "active",
+                            },
+                            {
+                                "DestinationCidrBlock": "10.0.0.0/16",
+                                "GatewayId": "local",
+                                "State": "active",
+                            },
+                        ],
+                        "Associations": [{"Main": True}],
+                    }
+                ]
+            }
+        ]
         tables = discovery._collect_route_tables(ec2, "vpc-001")
         assert len(tables) == 1
         assert tables[0].is_main is True
@@ -129,17 +147,21 @@ class TestCollectNats:
         ec2 = MagicMock()
         paginator = MagicMock()
         ec2.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [{
-            "NatGateways": [{
-                "NatGatewayId": "nat-001",
-                "Tags": [{"Key": "Name", "Value": "nat-az1"}],
-                "SubnetId": "subnet-001",
-                "State": "available",
-                "NatGatewayAddresses": [
-                    {"PublicIp": "52.1.2.3", "AllocationId": "eip-001"}
-                ],
-            }]
-        }]
+        paginator.paginate.return_value = [
+            {
+                "NatGateways": [
+                    {
+                        "NatGatewayId": "nat-001",
+                        "Tags": [{"Key": "Name", "Value": "nat-az1"}],
+                        "SubnetId": "subnet-001",
+                        "State": "available",
+                        "NatGatewayAddresses": [
+                            {"PublicIp": "52.1.2.3", "AllocationId": "eip-001"}
+                        ],
+                    }
+                ]
+            }
+        ]
         nats = discovery._collect_nats(ec2, "vpc-001")
         assert len(nats) == 1
         assert nats[0].public_ip == "52.1.2.3"
@@ -151,28 +173,36 @@ class TestCollectSecurityGroups:
         ec2 = MagicMock()
         paginator = MagicMock()
         ec2.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [{
-            "SecurityGroups": [{
-                "GroupId": "sg-001",
-                "GroupName": "web-sg",
-                "Description": "Web tier",
-                "Tags": [],
-                "IpPermissions": [{
-                    "IpProtocol": "tcp",
-                    "FromPort": 443,
-                    "ToPort": 443,
-                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                    "UserIdGroupPairs": [],
-                    "Ipv6Ranges": [],
-                }],
-                "IpPermissionsEgress": [{
-                    "IpProtocol": "-1",
-                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                    "UserIdGroupPairs": [],
-                    "Ipv6Ranges": [],
-                }],
-            }]
-        }]
+        paginator.paginate.return_value = [
+            {
+                "SecurityGroups": [
+                    {
+                        "GroupId": "sg-001",
+                        "GroupName": "web-sg",
+                        "Description": "Web tier",
+                        "Tags": [],
+                        "IpPermissions": [
+                            {
+                                "IpProtocol": "tcp",
+                                "FromPort": 443,
+                                "ToPort": 443,
+                                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                                "UserIdGroupPairs": [],
+                                "Ipv6Ranges": [],
+                            }
+                        ],
+                        "IpPermissionsEgress": [
+                            {
+                                "IpProtocol": "-1",
+                                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                                "UserIdGroupPairs": [],
+                                "Ipv6Ranges": [],
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
         sgs = discovery._collect_security_groups(ec2, "vpc-001")
         assert len(sgs) == 1
         assert sgs[0].id == "sg-001"
@@ -186,19 +216,20 @@ class TestCollectSecurityGroups:
 class TestDiscoveryBlocked:
     def test_permission_denied_sets_blocked(self, discovery):
         import botocore.exceptions
+
         ec2 = MagicMock()
         ec2.get_paginator.side_effect = botocore.exceptions.ClientError(
-            {"Error": {"Code": "UnauthorizedOperation",
-                       "Message": "You are not authorized"}},
+            {"Error": {"Code": "UnauthorizedOperation", "Message": "You are not authorized"}},
             "DescribeVpcs",
         )
         # We need to call the actual method with a mock ec2 client
         # Patch the ec2 client creation
         with patch.object(discovery, "_discover_region") as mock_dr:
             mock_topo = AWSRegionTopology(
-                account_id="123456789012", region="us-east-1",
+                account_id="123456789012",
+                region="us-east-1",
                 discovery_blocked=True,
-                block_reason="Permission denied: UnauthorizedOperation — You are not authorized"
+                block_reason="Permission denied: UnauthorizedOperation — You are not authorized",
             )
             mock_dr.return_value = mock_topo
             result = discovery._discover_region(MagicMock(), "123456789012", "us-east-1")

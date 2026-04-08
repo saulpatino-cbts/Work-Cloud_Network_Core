@@ -3,18 +3,27 @@
 DD-016: Fires during DISCOVERY — not during analysis.
 Critical findings are escalated immediately, not held until final report.
 """
+
 from datetime import datetime
 
 CRITICAL_TRIGGERS_AWS = [
-    {"service": "ec2", "check": "sg_ingress_0000_port_22",   "title": "SSH exposed to internet"},
+    {"service": "ec2", "check": "sg_ingress_0000_port_22", "title": "SSH exposed to internet"},
     {"service": "ec2", "check": "sg_ingress_0000_port_3389", "title": "RDP exposed to internet"},
-    {"service": "ec2", "check": "sg_ingress_0000_all_ports", "title": "All ports exposed to internet"},
-    {"service": "nfw", "check": "firewall_default_allow",    "title": "Network Firewall default allow"},
+    {
+        "service": "ec2",
+        "check": "sg_ingress_0000_all_ports",
+        "title": "All ports exposed to internet",
+    },
+    {
+        "service": "nfw",
+        "check": "firewall_default_allow",
+        "title": "Network Firewall default allow",
+    },
 ]
 
 CRITICAL_TRIGGERS_AZURE = [
     {"service": "nsg", "check": "any_any_allow", "title": "NSG allows any-to-any traffic"},
-    {"service": "afw", "check": "idps_off",      "title": "Azure Firewall IDPS disabled"},
+    {"service": "afw", "check": "idps_off", "title": "Azure Firewall IDPS disabled"},
 ]
 
 

@@ -16,6 +16,7 @@ Rendering:
   If WeasyPrint is unavailable, writes HTML only and logs a warning.
   HTML output is always written regardless of PDF availability.
 """
+
 from __future__ import annotations
 
 import logging
@@ -55,12 +56,14 @@ class ExecutiveReportRenderer:
         if output_path.suffix == ".pdf":
             try:
                 from weasyprint import HTML as WP
+
                 WP(string=html, base_url=str(_TEMPLATES_DIR)).write_pdf(str(output_path))
                 logger.info("Executive PDF written: %s", output_path)
             except ImportError:
                 logger.warning(
                     "WeasyPrint not installed. PDF skipped. HTML written to %s. "
-                    "Install with: pip install weasyprint", html_path
+                    "Install with: pip install weasyprint",
+                    html_path,
                 )
                 return html_path
         return output_path

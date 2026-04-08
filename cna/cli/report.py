@@ -4,6 +4,7 @@ Commands:
   cna report          — full render pipeline (all formats)
   cna report preview  — HTML only, no PDF toolchain required
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,21 +24,31 @@ def report_group():
 
 @report_group.command("generate")
 @click.option("--engagement-id", required=True, help="Engagement ID from `cna init`")
-@click.option("--data-dir", default="./engagements",
-              help="Engagement data directory (default: ./engagements)")
-@click.option("--skip-pdf", is_flag=True, default=False,
-              help="Skip PDF rendering (HTML output only, no WeasyPrint required)")
-@click.option("--no-pptx", is_flag=True, default=False,
-              help="Skip PPTX deck generation")
-@click.option("--regional-ja", is_flag=True, default=False,
-              help="Generate JA regional report (requires --ja-review-complete)")
-@click.option("--ja-review-complete", is_flag=True, default=False,
-              help="Confirm native speaker review complete (DD-015)")
-@click.option("--output-dir", default=None,
-              help="Override deliverables output directory")
+@click.option(
+    "--data-dir", default="./engagements", help="Engagement data directory (default: ./engagements)"
+)
+@click.option(
+    "--skip-pdf",
+    is_flag=True,
+    default=False,
+    help="Skip PDF rendering (HTML output only, no WeasyPrint required)",
+)
+@click.option("--no-pptx", is_flag=True, default=False, help="Skip PPTX deck generation")
+@click.option(
+    "--regional-ja",
+    is_flag=True,
+    default=False,
+    help="Generate JA regional report (requires --ja-review-complete)",
+)
+@click.option(
+    "--ja-review-complete",
+    is_flag=True,
+    default=False,
+    help="Confirm native speaker review complete (DD-015)",
+)
+@click.option("--output-dir", default=None, help="Override deliverables output directory")
 def generate(
-    engagement_id, data_dir, skip_pdf, no_pptx,
-    regional_ja, ja_review_complete, output_dir
+    engagement_id, data_dir, skip_pdf, no_pptx, regional_ja, ja_review_complete, output_dir
 ):
     """Render all engagement deliverables.
 
@@ -60,7 +71,9 @@ def generate(
     """
     from cna.core.persistence import EngagementStore
     from cna.report_engine.render_pipeline import (
-        RenderOptions, RenderPipeline, ReviewGateError,
+        RenderOptions,
+        RenderPipeline,
+        ReviewGateError,
     )
 
     store = EngagementStore(
@@ -73,9 +86,7 @@ def generate(
     try:
         report = store.load_findings_report(engagement_id)
     except FileNotFoundError:
-        click.echo(
-            "✗ No FindingsReport found. Run `cna analyze` first.", err=True
-        )
+        click.echo("✗ No FindingsReport found. Run `cna analyze` first.", err=True)
         sys.exit(1)
 
     opts = RenderOptions(
@@ -97,11 +108,7 @@ def generate(
         manifest = pipeline.run(report)
     except ReviewGateError as e:
         click.echo(f"\n✗ Review gate blocked render:\n  {e}", err=True)
-        click.echo(
-            "  Run: cna review complete "
-            f"--engagement-id {engagement_id}",
-            err=True
-        )
+        click.echo(f"  Run: cna review complete --engagement-id {engagement_id}", err=True)
         sys.exit(1)
     except Exception as e:
         click.echo(f"\n✗ Render failed: {e}", err=True)
@@ -145,9 +152,9 @@ def preview(engagement_id, data_dir, output):
         sys.exit(1)
 
     out_path = (
-        Path(output) if output
-        else Path(data_dir) / engagement_id / "deliverables" /
-             f"{engagement_id}_preview.html"
+        Path(output)
+        if output
+        else Path(data_dir) / engagement_id / "deliverables" / f"{engagement_id}_preview.html"
     )
 
     renderer = HtmlPreviewRenderer()

@@ -3,6 +3,7 @@ from rich.console import Console
 
 console = Console()
 
+
 @click.command(name="analyze")
 @click.option("--module", default="all", help="Module name or 'all'")
 @click.option("--platform", default="all", help="aws|azure|all")

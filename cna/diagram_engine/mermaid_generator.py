@@ -9,6 +9,7 @@ Generates Mermaid syntax strings for:
 Mermaid output is embedded in the static portal HTML and in Markdown reports.
 For stand-alone SVG export, call export_pipeline.mmdc_to_svg().
 """
+
 from __future__ import annotations
 
 from cna.core.topology_schema import AWSTopology, AzureTopology, ManagementGroup
@@ -41,7 +42,7 @@ def generate_aws_account_hierarchy(topology: AWSTopology) -> str:
     mgmt_node = _node_id(mgmt_id)
     # FIX P0: split into two separate lines.append() calls — no multi-line f-strings
     lines.append(f'  {mgmt_node}["Management Account\\n{mgmt_id}"]')
-    lines.append(f'  style {mgmt_node} fill:#FF8000,color:#fff,stroke:#333')
+    lines.append(f"  style {mgmt_node} fill:#FF8000,color:#fff,stroke:#333")
 
     # OU grouping
     ou_accounts: dict[str, list] = {}
@@ -55,7 +56,7 @@ def generate_aws_account_hierarchy(topology: AWSTopology) -> str:
         ou_node = _node_id(ou_name)
         # FIX P0: split into two separate lines.append() calls
         lines.append(f'  {ou_node}[["{ou_name}"]]')
-        lines.append(f'  style {ou_node} fill:#8C4FFF,color:#fff,stroke:#333')
+        lines.append(f"  style {ou_node} fill:#8C4FFF,color:#fff,stroke:#333")
         lines.append(f"  {mgmt_node} --> {ou_node}")
         for account in accounts:
             acc_node = _node_id(account.account_id)
@@ -85,12 +86,12 @@ def generate_azure_mg_hierarchy(topology: AzureTopology) -> str:
         mg_node = _node_id(mg.id)
         # FIX P0: split into two separate lines.append() calls
         lines.append(f'  {mg_node}[["{mg.display_name}"]]')
-        lines.append(f'  style {mg_node} fill:#0078D4,color:#fff,stroke:#333')
+        lines.append(f"  style {mg_node} fill:#0078D4,color:#fff,stroke:#333")
         for sub_id in mg.subscription_ids:
             sub_node = _node_id(sub_id)
             # FIX P0: split into two separate lines.append() calls
             lines.append(f'  {sub_node}["Sub\\n{sub_id[:8]}..."]')
-            lines.append(f'  style {sub_node} fill:#50E6FF,stroke:#0078D4')
+            lines.append(f"  style {sub_node} fill:#50E6FF,stroke:#0078D4")
             lines.append(f"  {mg_node} --> {sub_node}")
         for child_id in mg.child_mg_ids:
             if child_id in all_mgs:
@@ -136,7 +137,7 @@ def generate_landing_zone_diagram(platform: str, design_notes: dict) -> str:
         ctrl_node = _node_id(ctrl)
         # FIX P0: split into two separate lines.append() calls
         lines.append(f'  {ctrl_node}(("{ctrl}"))')
-        lines.append(f'  style {ctrl_node} fill:#FF4444,color:#fff')
+        lines.append(f"  style {ctrl_node} fill:#FF4444,color:#fff")
         lines.append(f"  {mgmt} -.-> {ctrl_node}")
 
     return "\n".join(lines)

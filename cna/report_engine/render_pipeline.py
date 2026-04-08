@@ -14,6 +14,7 @@ Design contracts enforced here:
 
 Output written to: engagements/{engagement_id}/deliverables/
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,11 +31,13 @@ logger = logging.getLogger("cna.report.pipeline")
 
 class ReviewGateError(RuntimeError):
     """Raised when FindingsReport.review_complete is False (DD-009)."""
+
     pass
 
 
 class JaReviewGateError(RuntimeError):
     """Raised when JA regional report is requested but ja_review_complete is False (DD-015)."""
+
     pass
 
 
@@ -45,10 +48,10 @@ class RenderOptions:
     render_pptx: bool = True
     render_html_preview: bool = True
     render_regional_en: bool = True
-    render_regional_ja: bool = False      # requires ja_review_complete=True
+    render_regional_ja: bool = False  # requires ja_review_complete=True
     ja_review_complete: bool = False
-    skip_pdf: bool = False                # HTML-only mode, no PDF toolchain required
-    output_dir: Path | None = None    # defaults to store deliverables dir
+    skip_pdf: bool = False  # HTML-only mode, no PDF toolchain required
+    output_dir: Path | None = None  # defaults to store deliverables dir
 
 
 class RenderPipeline:
@@ -108,82 +111,100 @@ class RenderPipeline:
 
         if self.opts.render_html_preview:
             from cna.report_engine.html_preview import HtmlPreviewRenderer
+
             renderer = HtmlPreviewRenderer()
             html_path = out / self._filename("preview", "html")
             renderer.render(report=report, output_path=html_path)
-            self._manifest.add(DeliverableRecord(
-                label="HTML Preview",
-                path=str(html_path),
-                format="html",
-                lang="en",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="HTML Preview",
+                    path=str(html_path),
+                    format="html",
+                    lang="en",
+                )
+            )
             logger.info("[%s] HTML preview written: %s", engagement_id, html_path)
 
         if self.opts.render_executive and not self.opts.skip_pdf:
             from cna.report_engine.executive_report import ExecutiveReportRenderer
+
             renderer = ExecutiveReportRenderer()
             pdf_path = out / self._filename("executive", "pdf")
             renderer.render(report=report, output_path=pdf_path)
-            self._manifest.add(DeliverableRecord(
-                label="Executive Report (PDF)",
-                path=str(pdf_path),
-                format="pdf",
-                lang="en",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="Executive Report (PDF)",
+                    path=str(pdf_path),
+                    format="pdf",
+                    lang="en",
+                )
+            )
             logger.info("[%s] Executive PDF written: %s", engagement_id, pdf_path)
 
         if self.opts.render_technical and not self.opts.skip_pdf:
             from cna.report_engine.technical_report import TechnicalReportRenderer
+
             renderer = TechnicalReportRenderer()
             pdf_path = out / self._filename("technical", "pdf")
             renderer.render(report=report, output_path=pdf_path)
-            self._manifest.add(DeliverableRecord(
-                label="Technical Report (PDF)",
-                path=str(pdf_path),
-                format="pdf",
-                lang="en",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="Technical Report (PDF)",
+                    path=str(pdf_path),
+                    format="pdf",
+                    lang="en",
+                )
+            )
             logger.info("[%s] Technical PDF written: %s", engagement_id, pdf_path)
 
         if self.opts.render_pptx:
             from cna.report_engine.presentation_deck import PresentationDeckBuilder
+
             builder = PresentationDeckBuilder()
             pptx_path = out / self._filename("deck", "pptx")
             builder.build(report=report, output_path=pptx_path)
-            self._manifest.add(DeliverableRecord(
-                label="Presentation Deck (PPTX)",
-                path=str(pptx_path),
-                format="pptx",
-                lang="en",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="Presentation Deck (PPTX)",
+                    path=str(pptx_path),
+                    format="pptx",
+                    lang="en",
+                )
+            )
             logger.info("[%s] PPTX deck written: %s", engagement_id, pptx_path)
 
         if self.opts.render_regional_en and not self.opts.skip_pdf:
             from cna.report_engine.regional_report import RegionalReportRenderer
+
             renderer = RegionalReportRenderer(lang="en")
             pdf_path = out / self._filename("regional_en", "pdf")
             renderer.render(report=report, output_path=pdf_path)
-            self._manifest.add(DeliverableRecord(
-                label="Regional Report EN (PDF)",
-                path=str(pdf_path),
-                format="pdf",
-                lang="en",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="Regional Report EN (PDF)",
+                    path=str(pdf_path),
+                    format="pdf",
+                    lang="en",
+                )
+            )
             logger.info("[%s] Regional EN written: %s", engagement_id, pdf_path)
 
         if self.opts.render_regional_ja:
             # DD-015: JA gate check before any JA rendering
             self._enforce_ja_gate()
             from cna.report_engine.regional_report import RegionalReportRenderer
+
             renderer = RegionalReportRenderer(lang="ja")
             pdf_path = out / self._filename("regional_ja", "pdf")
             renderer.render(report=report, output_path=pdf_path)
-            self._manifest.add(DeliverableRecord(
-                label="Regional Report JA (PDF)",
-                path=str(pdf_path),
-                format="pdf",
-                lang="ja",
-            ))
+            self._manifest.add(
+                DeliverableRecord(
+                    label="Regional Report JA (PDF)",
+                    path=str(pdf_path),
+                    format="pdf",
+                    lang="ja",
+                )
+            )
             logger.info("[%s] Regional JA written: %s", engagement_id, pdf_path)
 
         # Write manifest to store for Phase F portal
@@ -193,6 +214,7 @@ class RenderPipeline:
         )
         logger.info(
             "[%s] Deliverable manifest written: %d items",
-            engagement_id, len(self._manifest.records)
+            engagement_id,
+            len(self._manifest.records),
         )
         return self._manifest

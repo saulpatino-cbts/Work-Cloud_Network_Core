@@ -10,6 +10,7 @@ This module provides:
 
 All discovery code uses the @with_throttle decorator or ThrottleManager directly.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,7 +42,7 @@ def _jittered_wait(attempt: int) -> float:
     Formula: min(MAX_WAIT, BASE * 2^attempt) * random(0, 1)
     Full jitter prevents thundering herd on multi-account discovery.
     """
-    cap = min(MAX_WAIT_SECONDS, BASE_WAIT_SECONDS * (2 ** attempt))
+    cap = min(MAX_WAIT_SECONDS, BASE_WAIT_SECONDS * (2**attempt))
     return random.uniform(0, cap)
 
 
@@ -53,6 +54,7 @@ def with_retry(max_retries: int = MAX_RETRIES):
         def describe_vpcs(client, **kwargs):
             return client.describe_vpcs(**kwargs)
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -64,14 +66,19 @@ def with_retry(max_retries: int = MAX_RETRIES):
                     wait = e.retry_after_seconds or _jittered_wait(attempt)
                     logger.warning(
                         "Rate limit on attempt %d/%d. Waiting %.1fs: %s",
-                        attempt + 1, max_retries, wait, e
+                        attempt + 1,
+                        max_retries,
+                        wait,
+                        e,
                     )
                     if attempt == max_retries:
                         raise
                     time.sleep(wait)
                     last_exc = e
             raise last_exc  # pragma: no cover
+
         return wrapper
+
     return decorator
 
 

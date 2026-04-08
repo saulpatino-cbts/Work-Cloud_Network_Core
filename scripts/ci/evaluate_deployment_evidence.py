@@ -14,7 +14,7 @@ Reads from environment variables:
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 manifest_path = Path(os.environ["MANIFEST_PATH"])
@@ -51,9 +51,9 @@ if certificate_path.exists() and certificate_path.stat().st_size > 0:
         expiry_dt = (
             datetime.fromisoformat(expiry.replace("Z", "+00:00"))
             if "T" in expiry
-            else datetime.fromtimestamp(int(expiry), tz=timezone.utc)
+            else datetime.fromtimestamp(int(expiry), tz=UTC)
         )
-        days_to_expiry = (expiry_dt - datetime.now(timezone.utc)).days
+        days_to_expiry = (expiry_dt - datetime.now(UTC)).days
 
 # --- Parse health metric ---
 metric_value = 0.0

@@ -7,6 +7,7 @@ assumption rather than observation.
 Hedge word list is intentionally conservative. If a word is borderline,
 it goes on the list. Engineers can request removal via design doc amendment.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,10 +15,22 @@ import re
 # Words that indicate assumption, not observation.
 # Protocol: lowercase, word-boundary matched.
 _HEDGE_PATTERNS = [
-    r"\bmay\b", r"\bmight\b", r"\bcould\b", r"\bshould\b",
-    r"\bpossibly\b", r"\bprobably\b", r"\blikely\b", r"\bappears\b",
-    r"\bseems\b", r"\bsuggest\b", r"\bindicates\b", r"\bpotentially\b",
-    r"\bexpected\b", r"\btypically\b", r"\busually\b", r"\bgenerally\b",
+    r"\bmay\b",
+    r"\bmight\b",
+    r"\bcould\b",
+    r"\bshould\b",
+    r"\bpossibly\b",
+    r"\bprobably\b",
+    r"\blikely\b",
+    r"\bappears\b",
+    r"\bseems\b",
+    r"\bsuggest\b",
+    r"\bindicates\b",
+    r"\bpotentially\b",
+    r"\bexpected\b",
+    r"\btypically\b",
+    r"\busually\b",
+    r"\bgenerally\b",
 ]
 
 _COMPILED = [re.compile(p, re.IGNORECASE) for p in _HEDGE_PATTERNS]
@@ -25,6 +38,7 @@ _COMPILED = [re.compile(p, re.IGNORECASE) for p in _HEDGE_PATTERNS]
 
 class ObservedStateViolation(ValueError):
     """Raised when a finding contains hedge language in observed_state."""
+
     pass
 
 

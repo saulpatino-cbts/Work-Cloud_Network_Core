@@ -15,6 +15,7 @@ Supported diagram types:
 Export pipeline:
   XML string -> .drawio file -> export_pipeline.py -> .svg -> .png -> .pdf
 """
+
 from __future__ import annotations
 
 import html
@@ -24,9 +25,9 @@ import uuid
 from cna.core.topology_schema import (
     AWSRegionTopology,
     AzureSubscriptionTopology,
-    TransitGateway,
     AzureVWan,
     SubnetType,
+    TransitGateway,
 )
 
 # ── Draw.io style constants ─────────────────────────────────────────────────
@@ -42,20 +43,16 @@ STYLE_VNET = (
     "verticalAlign=top;"
 )
 STYLE_SUBNET_PUBLIC = (
-    "rounded=0;whiteSpace=wrap;html=1;"
-    "fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+    "rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
 )
 STYLE_SUBNET_PRIVATE = (
-    "rounded=0;whiteSpace=wrap;html=1;"
-    "fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;"
+    "rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;"
 )
 STYLE_SUBNET_ISOLATED = (
-    "rounded=0;whiteSpace=wrap;html=1;"
-    "fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
+    "rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
 )
 STYLE_SUBNET_UNKNOWN = (
-    "rounded=0;whiteSpace=wrap;html=1;"
-    "fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;"
+    "rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;"
 )
 STYLE_IGW = (
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;"
@@ -84,18 +81,18 @@ SUBNET_STYLES: dict[SubnetType, str] = {
 
 # ── Layout constants ─────────────────────────────────────────────────────
 
-VPC_X_GAP = 60           # horizontal gap between VPCs
+VPC_X_GAP = 60  # horizontal gap between VPCs
 VPC_Y_START = 80
 SUBNET_W = 180
 SUBNET_H = 60
 SUBNET_COL_GAP = 20
 SUBNET_ROW_GAP = 20
-SUBNET_PADDING = 20      # padding inside VPC container
+SUBNET_PADDING = 20  # padding inside VPC container
 ICON_W = 48
 ICON_H = 48
 SUBNETS_PER_ROW = 4
 VPC_HEADER_H = 36
-NAT_X_GAP = 60           # FIX P2: horizontal gap between NAT gateway icons
+NAT_X_GAP = 60  # FIX P2: horizontal gap between NAT gateway icons
 
 
 def _safe(text: str | None) -> str:
@@ -114,30 +111,36 @@ def _vpc_dims(subnet_count: int) -> tuple[int, int]:
     cols = min(subnet_count, SUBNETS_PER_ROW) if subnet_count > 0 else 1
     rows = max(1, -(-subnet_count // SUBNETS_PER_ROW))  # ceiling div
     w = SUBNET_PADDING * 2 + cols * SUBNET_W + (cols - 1) * SUBNET_COL_GAP
-    h = VPC_HEADER_H + SUBNET_PADDING + rows * SUBNET_H + (rows - 1) * SUBNET_ROW_GAP + SUBNET_PADDING
+    h = (
+        VPC_HEADER_H
+        + SUBNET_PADDING
+        + rows * SUBNET_H
+        + (rows - 1) * SUBNET_ROW_GAP
+        + SUBNET_PADDING
+    )
     return w, h
 
 
 # ── XML helpers ───────────────────────────────────────────────────────────
+
 
 def _container_cell(cell_id: str, label: str, x: int, y: int, w: int, h: int, style: str) -> str:
     return (
         f'<mxCell id="{cell_id}" value="{_safe(label)}" style="{style}" '
         f'vertex="1" parent="1">'
         f'<mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry"/>'
-        f'</mxCell>\n'
+        f"</mxCell>\n"
     )
 
 
 def _child_cell(
-    cell_id: str, label: str, x: int, y: int, w: int, h: int,
-    style: str, parent_id: str
+    cell_id: str, label: str, x: int, y: int, w: int, h: int, style: str, parent_id: str
 ) -> str:
     return (
         f'<mxCell id="{cell_id}" value="{_safe(label)}" style="{style}" '
         f'vertex="1" parent="{parent_id}">'
         f'<mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry"/>'
-        f'</mxCell>\n'
+        f"</mxCell>\n"
     )
 
 
@@ -147,7 +150,7 @@ def _edge_cell(src: str, tgt: str, label: str = "") -> str:
         f'<mxCell id="{eid}" value="{_safe(label)}" style="{STYLE_EDGE}" '
         f'edge="1" source="{src}" target="{tgt}" parent="1">'
         f'<mxGeometry relative="1" as="geometry"/>'
-        f'</mxCell>\n'
+        f"</mxCell>\n"
     )
 
 
@@ -171,6 +174,7 @@ def _wrap_diagram(cells: str, label: str) -> str:
 
 
 # ── VPC Topology ───────────────────────────────────────────────────────────
+
 
 def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
     """Generate draw.io XML for all VPCs in a single AWS region.
@@ -201,8 +205,11 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         cells += _container_cell(
             note_id,
             f"No VPCs found in {region_topology.account_id} / {region_topology.region}",
-            40, 80, 400, 60,
-            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;"
+            40,
+            80,
+            400,
+            60,
+            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;",
         )
         label = f"VPC Topology — {region_topology.account_id} / {region_topology.region} (empty)"
         return _wrap_diagram(cells, label)
@@ -211,11 +218,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         subnet_count = len(vpc.subnets)
         vpc_w, vpc_h = _vpc_dims(subnet_count)
         vpc_id = _cell_id()
-        vpc_label = (
-            f"{vpc.name or vpc.id}\n"
-            f"{vpc.cidr}"
-            + (" [default]" if vpc.is_default else "")
-        )
+        vpc_label = f"{vpc.name or vpc.id}\n{vpc.cidr}" + (" [default]" if vpc.is_default else "")
         cells += _container_cell(vpc_id, vpc_label, cursor_x, VPC_Y_START, vpc_w, vpc_h, STYLE_VPC)
 
         # Subnets inside VPC container
@@ -265,7 +268,9 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
     for tgw in region_topology.transit_gateways:
         tgw_id = _cell_id()
         tgw_label = f"{tgw.name or tgw.id}\nASN:{tgw.amazon_side_asn or 'N/A'}"
-        cells += _container_cell(tgw_id, tgw_label, tgw_x_start, tgw_y, ICON_W * 2, ICON_H * 2, STYLE_TGW)
+        cells += _container_cell(
+            tgw_id, tgw_label, tgw_x_start, tgw_y, ICON_W * 2, ICON_H * 2, STYLE_TGW
+        )
         tgw_x_start += ICON_W * 2 + 60
 
     label = f"VPC Topology — {region_topology.account_id} / {region_topology.region}"
@@ -273,6 +278,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
 
 
 # ── VNet Topology ──────────────────────────────────────────────────────────
+
 
 def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
     """Generate draw.io XML for all VNets in an Azure subscription."""
@@ -291,8 +297,11 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
         cells += _container_cell(
             note_id,
             f"No VNets found in subscription {sub_topology.subscription_id}",
-            40, 80, 420, 60,
-            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;"
+            40,
+            80,
+            420,
+            60,
+            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;",
         )
         label = f"VNet Topology — {sub_topology.subscription_id} (empty)"
         return _wrap_diagram(cells, label)
@@ -302,11 +311,11 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
         vnet_w, vnet_h = _vpc_dims(subnet_count)
         vnet_id = _cell_id()
         vnet_label = (
-            f"{vnet.name}\n"
-            f"{', '.join(vnet.address_space)}\n"
-            f"{vnet.location} | {vnet.resource_group}"
+            f"{vnet.name}\n{', '.join(vnet.address_space)}\n{vnet.location} | {vnet.resource_group}"
         )
-        cells += _container_cell(vnet_id, vnet_label, cursor_x, VPC_Y_START, vnet_w, vnet_h, STYLE_VNET)
+        cells += _container_cell(
+            vnet_id, vnet_label, cursor_x, VPC_Y_START, vnet_w, vnet_h, STYLE_VNET
+        )
 
         for idx, subnet in enumerate(vnet.subnets):
             col = idx % SUBNETS_PER_ROW
@@ -321,7 +330,9 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
                 + (f"\n{subnet.delegation}" if subnet.delegation else "")
                 + nsg_indicator
             )
-            cells += _child_cell(sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE, vnet_id)
+            cells += _child_cell(
+                sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE, vnet_id
+            )
 
         for peering in vnet.peerings:
             peer_note_id = _cell_id()
@@ -331,8 +342,11 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
             cells += _container_cell(
                 peer_note_id,
                 f"\u21c4 {remote_name}\n[{peering.peering_state}]",
-                peer_x, peer_y, 160, 50,
-                "rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;"
+                peer_x,
+                peer_y,
+                160,
+                50,
+                "rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;",
             )
             cells += _edge_cell(vnet_id, peer_note_id, peering.name)
 
@@ -344,14 +358,18 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
 
 # ── TGW Hub-and-Spoke ──────────────────────────────────────────────────────
 
+
 def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopology) -> str:
     """Generate draw.io XML for a single Transit Gateway and all its attachments."""
     import math
+
     cells = ""
     center_x, center_y = 500, 400
     tgw_id = _cell_id()
     tgw_label = f"{tgw.name or tgw.id}\n{tgw.owner_account_id}\nASN:{tgw.amazon_side_asn or 'N/A'}"
-    cells += _container_cell(tgw_id, tgw_label, center_x, center_y, ICON_W * 2, ICON_H * 2, STYLE_TGW)
+    cells += _container_cell(
+        tgw_id, tgw_label, center_x, center_y, ICON_W * 2, ICON_H * 2, STYLE_TGW
+    )
 
     count = len(tgw.attachments)
     radius = max(250, count * 40)
@@ -365,12 +383,10 @@ def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopolog
             if vpc.id == attachment.resource_id:
                 display_name = vpc.name or vpc.id
                 break
-        att_label = (
-            f"{display_name}\n"
-            f"[{attachment.resource_type.value}]\n"
-            f"{attachment.state}"
+        att_label = f"{display_name}\n[{attachment.resource_type.value}]\n{attachment.state}"
+        cells += _container_cell(
+            att_id, att_label, ax, ay, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE
         )
-        cells += _container_cell(att_id, att_label, ax, ay, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE)
         cells += _edge_cell(tgw_id, att_id)
 
     label = f"TGW Topology — {tgw.name or tgw.id}"
@@ -379,9 +395,11 @@ def generate_tgw_topology(tgw: TransitGateway, region_topology: AWSRegionTopolog
 
 # ── Azure Virtual WAN Hub-and-Spoke ───────────────────────────────────────
 
+
 def generate_vwan_topology(vwan: AzureVWan) -> str:
     """Generate draw.io XML for an Azure Virtual WAN and all its hubs."""
     import math
+
     cells = ""
     count = len(vwan.hubs)
 
@@ -390,15 +408,20 @@ def generate_vwan_topology(vwan: AzureVWan) -> str:
         cells += _container_cell(
             note_id,
             f"Virtual WAN {vwan.name} has no hubs.",
-            40, 80, 360, 60,
-            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;"
+            40,
+            80,
+            360,
+            60,
+            "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;",
         )
         return _wrap_diagram(cells, f"vWAN Topology — {vwan.name} (empty)")
 
     center_x, center_y = 500, 400
     vwan_id = _cell_id()
     vwan_label = f"vWAN: {vwan.name}\n[{vwan.sku}]"
-    cells += _container_cell(vwan_id, vwan_label, center_x, center_y, ICON_W * 2, ICON_H, STYLE_VWAN_HUB)
+    cells += _container_cell(
+        vwan_id, vwan_label, center_x, center_y, ICON_W * 2, ICON_H, STYLE_VWAN_HUB
+    )
 
     radius = max(300, count * 60)
     for i, hub in enumerate(vwan.hubs):

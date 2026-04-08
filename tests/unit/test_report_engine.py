@@ -13,29 +13,35 @@ Tests cover:
   - RenderPipeline writes manifest to store
   - Findings sorted by severity in HTML preview (CRITICAL first)
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from cna.core.findings_schema import (
-    FindingSeverity, FindingStatus, FrameworkMapping, FindingsReport, Finding,
+    Finding,
+    FindingSeverity,
+    FindingsReport,
+    FindingStatus,
+    FrameworkMapping,
     ObservedState,
 )
 from cna.report_engine.deliverable_manifest import DeliverableManifest, DeliverableRecord
 from cna.report_engine.executive_report import ExecutiveReportRenderer
 from cna.report_engine.html_preview import HtmlPreviewRenderer
 from cna.report_engine.render_pipeline import (
-    JaReviewGateError, RenderOptions, RenderPipeline, ReviewGateError,
+    JaReviewGateError,
+    RenderOptions,
+    RenderPipeline,
+    ReviewGateError,
 )
 from cna.report_engine.technical_report import TechnicalReportRenderer
 
 
-def _make_finding(rule_id: str, severity: FindingSeverity,
-                  resource_id: str = "r-001") -> Finding:
+def _make_finding(rule_id: str, severity: FindingSeverity, resource_id: str = "r-001") -> Finding:
     return Finding(
         rule_id=rule_id,
         severity=severity,
@@ -121,7 +127,7 @@ class TestReviewGate:
             render_pptx=False,
             render_regional_en=False,
             render_regional_ja=True,
-            ja_review_complete=False,   # NOT set
+            ja_review_complete=False,  # NOT set
             output_dir=tmp_path,
         )
         pipeline = RenderPipeline(store=store, options=opts)
@@ -194,12 +200,14 @@ class TestTechnicalReportContext:
 class TestDeliverableManifest:
     def test_manifest_serialises(self):
         m = DeliverableManifest(engagement_id="test-001")
-        m.add(DeliverableRecord(
-            label="Executive Report",
-            path="/tmp/executive.html",
-            format="html",
-            lang="en",
-        ))
+        m.add(
+            DeliverableRecord(
+                label="Executive Report",
+                path="/tmp/executive.html",
+                format="html",
+                lang="en",
+            )
+        )
         d = m.to_dict()
         assert d["total_deliverables"] == 1
         assert d["records"][0]["format"] == "html"
@@ -209,7 +217,7 @@ class TestDeliverableManifest:
         c1 = DeliverableManifest.checksum(data)
         c2 = DeliverableManifest.checksum(data)
         assert c1 == c2
-        assert len(c1) == 64   # SHA-256 hex digest
+        assert len(c1) == 64  # SHA-256 hex digest
 
     def test_different_data_different_checksum(self):
         c1 = DeliverableManifest.checksum('{"a": 1}')

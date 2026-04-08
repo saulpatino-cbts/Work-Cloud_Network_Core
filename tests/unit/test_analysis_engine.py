@@ -13,6 +13,7 @@ Tests cover:
   - dry_run does not call store.write_findings_report
   - FindingsReport counts match findings list
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -22,12 +23,25 @@ import pytest
 from cna.ai_engine.analysis_engine import AnalysisEngine, AnalysisOptions
 from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer, ObservedStateViolation
 from cna.core.findings_schema import (
-    Finding, FindingSeverity, FindingStatus, FrameworkMapping, ObservedState,
+    Finding,
+    FindingSeverity,
+    FindingStatus,
+    FrameworkMapping,
+    ObservedState,
 )
 from cna.core.topology_schema import (
-    AWSRegionTopology, AWSTopology, AzureFirewall, AzureSubscriptionTopology,
-    AzureSubnet, DirectConnectConnection, SecurityGroup, SecurityGroupRule,
-    TransitGateway, VNet, VPC,
+    VPC,
+    AWSRegionTopology,
+    AWSTopology,
+    AzureFirewall,
+    AzureSubnet,
+    AzureSubscriptionTopology,
+    AzureTopology,
+    DirectConnectConnection,
+    SecurityGroup,
+    SecurityGroupRule,
+    TransitGateway,
+    VNet,
 )
 
 
@@ -45,17 +59,27 @@ def engine(store):
 
 def _make_clean_vpc(vpc_id="vpc-001", is_default=False) -> VPC:
     return VPC(
-        id=vpc_id, name="test-vpc", cidr="10.0.0.0/16",
-        is_default=is_default, flow_logs_enabled=True,
-        security_groups=[], nacls=[], subnets=[], route_tables=[],
-        internet_gateways=[], nat_gateways=[], peering_connections=[],
+        id=vpc_id,
+        name="test-vpc",
+        cidr="10.0.0.0/16",
+        is_default=is_default,
+        flow_logs_enabled=True,
+        security_groups=[],
+        nacls=[],
+        subnets=[],
+        route_tables=[],
+        internet_gateways=[],
+        nat_gateways=[],
+        peering_connections=[],
     )
 
 
-def _make_region(account_id="111111111111", region="us-east-1",
-                 vpcs=None, tgws=None, dx=None) -> AWSRegionTopology:
+def _make_region(
+    account_id="111111111111", region="us-east-1", vpcs=None, tgws=None, dx=None
+) -> AWSRegionTopology:
     return AWSRegionTopology(
-        account_id=account_id, region=region,
+        account_id=account_id,
+        region=region,
         vpcs=vpcs or [],
         transit_gateways=tgws or [],
         direct_connect_connections=dx or [],
@@ -82,11 +106,15 @@ class TestAWSNetFindingRules:
     def test_sg_unrestricted_ssh_is_critical(self, engine):
         vpc = _make_clean_vpc()
         sg = SecurityGroup(
-            id="sg-001", name="web-sg", vpc_id=vpc.id,
+            id="sg-001",
+            name="web-sg",
+            vpc_id=vpc.id,
             rules=[
                 SecurityGroupRule(
-                    direction="ingress", protocol="tcp",
-                    from_port=22, to_port=22,
+                    direction="ingress",
+                    protocol="tcp",
+                    from_port=22,
+                    to_port=22,
                     cidr_ranges=["0.0.0.0/0"],
                 )
             ],
@@ -102,11 +130,15 @@ class TestAWSNetFindingRules:
     def test_sg_unrestricted_rdp_is_critical(self, engine):
         vpc = _make_clean_vpc()
         sg = SecurityGroup(
-            id="sg-002", name="rdp-sg", vpc_id=vpc.id,
+            id="sg-002",
+            name="rdp-sg",
+            vpc_id=vpc.id,
             rules=[
                 SecurityGroupRule(
-                    direction="ingress", protocol="tcp",
-                    from_port=3389, to_port=3389,
+                    direction="ingress",
+                    protocol="tcp",
+                    from_port=3389,
+                    to_port=3389,
                     cidr_ranges=["0.0.0.0/0"],
                 )
             ],
@@ -121,7 +153,8 @@ class TestAWSNetFindingRules:
 
     def test_tgw_default_rt_assoc_produces_finding(self, engine):
         tgw = TransitGateway(
-            id="tgw-001", name="core-tgw",
+            id="tgw-001",
+            name="core-tgw",
             owner_account_id="111111111111",
             default_route_table_association=True,
             default_route_table_propagation=False,
@@ -134,9 +167,12 @@ class TestAWSNetFindingRules:
 
     def test_single_dx_connection_produces_finding(self, engine):
         dx = DirectConnectConnection(
-            id="dxcon-001", name="primary-dx",
-            location="EqDC2", bandwidth="1Gbps",
-            state="available", owner_account_id="111111111111",
+            id="dxcon-001",
+            name="primary-dx",
+            location="EqDC2",
+            bandwidth="1Gbps",
+            state="available",
+            owner_account_id="111111111111",
         )
         region = _make_region(dx=[dx])
         topo = AWSTopology(engagement_id="test", regions=[region], accounts=[])
@@ -152,7 +188,8 @@ class TestAWSNetFindingRules:
 
     def test_blocked_region_produces_no_findings(self, engine):
         region = AWSRegionTopology(
-            account_id="111111111111", region="us-east-1",
+            account_id="111111111111",
+            region="us-east-1",
             discovery_blocked=True,
             block_reason="Permission denied",
         )
@@ -164,18 +201,28 @@ class TestAWSNetFindingRules:
 class TestAzureNetFindingRules:
     def _make_sub(self, sub_id="sub-001") -> AzureSubscriptionTopology:
         return AzureSubscriptionTopology(
-            subscription_id=sub_id, tenant_id="tenant-001",
-            vnets=[], firewalls=[], application_gateways=[],
-            express_route_circuits=[], virtual_wans=[], private_dns_zones=[],
+            subscription_id=sub_id,
+            tenant_id="tenant-001",
+            vnets=[],
+            firewalls=[],
+            application_gateways=[],
+            express_route_circuits=[],
+            virtual_wans=[],
+            private_dns_zones=[],
         )
 
     def test_vnet_no_ddos_produces_finding(self, engine):
         sub = self._make_sub()
         vnet = VNet(
-            id="/subs/sub-001/vnet-prod", name="vnet-prod",
-            location="eastus", resource_group="rg-net",
-            subscription_id="sub-001", address_space=["10.0.0.0/16"],
-            ddos_protection_enabled=False, subnets=[], peerings=[],
+            id="/subs/sub-001/vnet-prod",
+            name="vnet-prod",
+            location="eastus",
+            resource_group="rg-net",
+            subscription_id="sub-001",
+            address_space=["10.0.0.0/16"],
+            ddos_protection_enabled=False,
+            subnets=[],
+            peerings=[],
         )
         sub.vnets = [vnet]
         topo = AzureTopology(engagement_id="test", subscriptions=[sub])
@@ -185,9 +232,12 @@ class TestAzureNetFindingRules:
     def test_subnet_no_nsg_produces_high_finding(self, engine):
         sub = self._make_sub()
         vnet = VNet(
-            id="/subs/sub-001/vnet-prod", name="vnet-prod",
-            location="eastus", resource_group="rg-net",
-            subscription_id="sub-001", address_space=["10.0.0.0/16"],
+            id="/subs/sub-001/vnet-prod",
+            name="vnet-prod",
+            location="eastus",
+            resource_group="rg-net",
+            subscription_id="sub-001",
+            address_space=["10.0.0.0/16"],
             ddos_protection_enabled=True,
             subnets=[
                 AzureSubnet(
@@ -210,9 +260,12 @@ class TestAzureNetFindingRules:
         """GatewaySubnet must not be flagged for missing NSG — NSGs not allowed there."""
         sub = self._make_sub()
         vnet = VNet(
-            id="/subs/sub-001/vnet-hub", name="vnet-hub",
-            location="eastus", resource_group="rg-hub",
-            subscription_id="sub-001", address_space=["10.1.0.0/16"],
+            id="/subs/sub-001/vnet-hub",
+            name="vnet-hub",
+            location="eastus",
+            resource_group="rg-hub",
+            subscription_id="sub-001",
+            address_space=["10.1.0.0/16"],
             ddos_protection_enabled=True,
             subnets=[
                 AzureSubnet(
@@ -233,8 +286,10 @@ class TestAzureNetFindingRules:
     def test_firewall_threat_intel_alert_is_critical(self, engine):
         sub = self._make_sub()
         fw = AzureFirewall(
-            id="/subs/sub-001/fw-hub", name="fw-hub",
-            location="eastus", resource_group="rg-hub",
+            id="/subs/sub-001/fw-hub",
+            name="fw-hub",
+            location="eastus",
+            resource_group="rg-hub",
             sku_tier="Premium",
             threat_intel_mode="Alert",
         )
@@ -247,8 +302,10 @@ class TestAzureNetFindingRules:
 
     def test_blocked_subscription_produces_no_findings(self, engine):
         sub = AzureSubscriptionTopology(
-            subscription_id="sub-001", tenant_id="tenant-001",
-            discovery_blocked=True, block_reason="HTTP 403",
+            subscription_id="sub-001",
+            tenant_id="tenant-001",
+            discovery_blocked=True,
+            block_reason="HTTP 403",
         )
         topo = AzureTopology(engagement_id="test", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
@@ -272,11 +329,27 @@ class TestObservedStateEnforcer:
         enforcer = ObservedStateEnforcer()
         assert enforcer.scan_text("VPC vpc-001 has no flow logs enabled.") == []
 
-    @pytest.mark.parametrize("hedge_word", [
-        "may", "might", "could", "should", "possibly", "probably",
-        "likely", "appears", "seems", "suggests", "indicates",
-        "potentially", "expected", "typically", "usually", "generally",
-    ])
+    @pytest.mark.parametrize(
+        "hedge_word",
+        [
+            "may",
+            "might",
+            "could",
+            "should",
+            "possibly",
+            "probably",
+            "likely",
+            "appears",
+            "seems",
+            "suggests",
+            "indicates",
+            "potentially",
+            "expected",
+            "typically",
+            "usually",
+            "generally",
+        ],
+    )
     def test_hedge_words_detected(self, hedge_word):
         enforcer = ObservedStateEnforcer()
         result = enforcer.scan_text(f"This {hedge_word} be a problem.")
@@ -318,7 +391,7 @@ class TestObservedStateEnforcer:
                 fact="VPC vpc-001 has no flow logs enabled.",
                 evidence_ref="test",
             ),
-            framework_mappings=[],   # MISSING
+            framework_mappings=[],  # MISSING
             status=FindingStatus.OPEN,
         )
         with pytest.raises(ValueError, match="framework_mappings"):
@@ -331,11 +404,15 @@ class TestReportCounts:
         vpc = _make_clean_vpc(is_default=True)
         vpc.flow_logs_enabled = False
         sg = SecurityGroup(
-            id="sg-001", name="web-sg", vpc_id=vpc.id,
+            id="sg-001",
+            name="web-sg",
+            vpc_id=vpc.id,
             rules=[
                 SecurityGroupRule(
-                    direction="ingress", protocol="tcp",
-                    from_port=22, to_port=22,
+                    direction="ingress",
+                    protocol="tcp",
+                    from_port=22,
+                    to_port=22,
                     cidr_ranges=["0.0.0.0/0"],
                 )
             ],

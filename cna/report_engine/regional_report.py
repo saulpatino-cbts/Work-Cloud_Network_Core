@@ -13,6 +13,7 @@ Content (both languages):
   - Framework mapping table
   - Remediation roadmap
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,6 +52,7 @@ class RegionalReportRenderer:
         """Render regional report. JA requires ja_review_complete=True (DD-015)."""
         if self._lang == "ja" and not ja_review_complete:
             from cna.report_engine.render_pipeline import JaReviewGateError
+
             raise JaReviewGateError(
                 "JA regional report render attempted without native speaker review. "
                 "Set ja_review_complete=True only after native speaker sign-off."
@@ -66,12 +68,14 @@ class RegionalReportRenderer:
         if output_path.suffix == ".pdf":
             try:
                 from weasyprint import HTML as WP
+
                 WP(string=html, base_url=str(_TEMPLATES_DIR)).write_pdf(str(output_path))
                 logger.info("Regional %s PDF written: %s", self._lang.upper(), output_path)
             except ImportError:
                 logger.warning(
                     "WeasyPrint not installed. Regional %s PDF skipped. HTML at %s.",
-                    self._lang.upper(), html_path
+                    self._lang.upper(),
+                    html_path,
                 )
                 return html_path
         return output_path
@@ -89,8 +93,6 @@ class RegionalReportRenderer:
             "critical_findings": [
                 f for f in report.findings if f.severity == FindingSeverity.CRITICAL
             ],
-            "high_findings": [
-                f for f in report.findings if f.severity == FindingSeverity.HIGH
-            ],
+            "high_findings": [f for f in report.findings if f.severity == FindingSeverity.HIGH],
             "all_findings": report.findings,
         }

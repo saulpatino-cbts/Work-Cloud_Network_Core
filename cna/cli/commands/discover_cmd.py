@@ -3,10 +3,12 @@ from rich.console import Console
 
 console = Console()
 
+
 @click.group(name="discover")
 def discover():
     """Discover client cloud environments."""
     pass
+
 
 @discover.command()
 @click.option("--role", required=True, help="AWS IAM Role ARN")
@@ -16,6 +18,7 @@ def discover():
 def aws(role, external_id, regions, resume):
     """Discover AWS network and security architecture."""
     console.print("[yellow]Phase C: TODO — AWS discovery engine[/yellow]")
+
 
 @discover.command()
 @click.option("--sp-id", required=True, help="Azure Service Principal Client ID")

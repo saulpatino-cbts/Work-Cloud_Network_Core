@@ -12,6 +12,7 @@ Connection:
   - Default transport: sse (Azure MCP Server default)
   - Graceful degradation: on ImportError or connection failure, returns []
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,6 +41,7 @@ class AzureMCPClient:
     def _try_init(self) -> None:
         try:
             import mcp  # noqa: F401 — optional dependency
+
             self._available = True
             logger.info("Azure MCP client initialized (transport=%s)", self._transport)
         except ImportError:

@@ -3,12 +3,18 @@ from rich.console import Console
 
 from cna import __version__
 from cna.cli.commands import (
-    init_cmd, discover_cmd, analyze_cmd,
-    diagram_cmd, review_cmd, report_cmd,
-    publish_cmd, module_cmd
+    analyze_cmd,
+    diagram_cmd,
+    discover_cmd,
+    init_cmd,
+    module_cmd,
+    publish_cmd,
+    report_cmd,
+    review_cmd,
 )
 
 console = Console()
+
 
 @click.group()
 @click.version_option(version=__version__)
@@ -19,6 +25,7 @@ def cli():
     AI-assisted analysis, diagram generation, and delivery.
     """
     pass
+
 
 cli.add_command(init_cmd.init)
 cli.add_command(discover_cmd.discover)

@@ -13,6 +13,7 @@ Content:
   - Blocked resources table: every blocked account/region with reason
   - Appendix: full topology summary by account/subscription
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,12 +47,13 @@ class TechnicalReportRenderer:
         if output_path.suffix == ".pdf":
             try:
                 from weasyprint import HTML as WP
+
                 WP(string=html, base_url=str(_TEMPLATES_DIR)).write_pdf(str(output_path))
                 logger.info("Technical PDF written: %s", output_path)
             except ImportError:
                 logger.warning(
-                    "WeasyPrint not installed. Technical PDF skipped. "
-                    "HTML written to %s.", html_path
+                    "WeasyPrint not installed. Technical PDF skipped. HTML written to %s.",
+                    html_path,
                 )
                 return html_path
         return output_path
@@ -60,19 +62,17 @@ class TechnicalReportRenderer:
     def _build_context(report: FindingsReport) -> dict:
         findings_by_severity = {
             "CRITICAL": [f for f in report.findings if f.severity == FindingSeverity.CRITICAL],
-            "HIGH":     [f for f in report.findings if f.severity == FindingSeverity.HIGH],
-            "MEDIUM":   [f for f in report.findings if f.severity == FindingSeverity.MEDIUM],
-            "LOW":      [f for f in report.findings if f.severity == FindingSeverity.LOW],
+            "HIGH": [f for f in report.findings if f.severity == FindingSeverity.HIGH],
+            "MEDIUM": [f for f in report.findings if f.severity == FindingSeverity.MEDIUM],
+            "LOW": [f for f in report.findings if f.severity == FindingSeverity.LOW],
         }
         # Group by account/region for coverage tables
-        aws_accounts = sorted({
-            f.account_id for f in report.findings
-            if f.resource_type.startswith("AWS")
-        })
-        azure_subscriptions = sorted({
-            f.account_id for f in report.findings
-            if f.resource_type.startswith("Microsoft")
-        })
+        aws_accounts = sorted(
+            {f.account_id for f in report.findings if f.resource_type.startswith("AWS")}
+        )
+        azure_subscriptions = sorted(
+            {f.account_id for f in report.findings if f.resource_type.startswith("Microsoft")}
+        )
         return {
             "engagement_id": report.engagement_id,
             "generated_at": report.generated_at,

@@ -11,6 +11,7 @@ Tests cover:
   - Resume/checkpoint skip logic
   - AzureDiscoveryOptions defaults
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

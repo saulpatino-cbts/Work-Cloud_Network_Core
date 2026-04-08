@@ -1,4 +1,5 @@
 """Module registry — loads installed modules, lists stubs."""
+
 from pathlib import Path
 
 import yaml

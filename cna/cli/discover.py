@@ -4,6 +4,7 @@ Commands:
   cna discover aws    — STS AssumeRole cross-account discovery
   cna discover azure  — DefaultAzureCredential subscription discovery
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,22 +25,32 @@ def discover():
 
 @discover.command("aws")
 @click.option("--engagement-id", required=True, help="Engagement ID from `cna init`")
-@click.option("--org-role", required=True,
-              help="ARN of the cross-account read-only role (e.g. arn:aws:iam::MGMT:role/CNA-ReadOnly)")
+@click.option(
+    "--org-role",
+    required=True,
+    help="ARN of the cross-account read-only role (e.g. arn:aws:iam::MGMT:role/CNA-ReadOnly)",
+)
 @click.option("--external-id", default=None, help="STS ExternalId for the role assumption")
-@click.option("--regions", default=None,
-              help="Comma-separated region list. Default: all enabled regions.")
-@click.option("--accounts", default=None,
-              help="Comma-separated account IDs. Default: all org accounts.")
-@click.option("--resume", is_flag=True, default=False,
-              help="Skip accounts/regions with existing checkpoints.")
-@click.option("--skip-opt-in-regions", is_flag=True, default=True,
-              help="Skip opt-in regions that require explicit enablement.")
-@click.option("--data-dir", default="./engagements",
-              help="Engagement data directory (default: ./engagements)")
+@click.option(
+    "--regions", default=None, help="Comma-separated region list. Default: all enabled regions."
+)
+@click.option(
+    "--accounts", default=None, help="Comma-separated account IDs. Default: all org accounts."
+)
+@click.option(
+    "--resume", is_flag=True, default=False, help="Skip accounts/regions with existing checkpoints."
+)
+@click.option(
+    "--skip-opt-in-regions",
+    is_flag=True,
+    default=True,
+    help="Skip opt-in regions that require explicit enablement.",
+)
+@click.option(
+    "--data-dir", default="./engagements", help="Engagement data directory (default: ./engagements)"
+)
 def discover_aws(
-    engagement_id, org_role, external_id, regions, accounts,
-    resume, skip_opt_in_regions, data_dir
+    engagement_id, org_role, external_id, regions, accounts, resume, skip_opt_in_regions, data_dir
 ):
     """Discover AWS network topology via STS AssumeRole.
 
@@ -63,8 +74,8 @@ def discover_aws(
         --org-role arn:aws:iam::123456789012:role/CNA-ReadOnly \\
         --resume
     """
-    from cna.modules.network.discovery.aws_discovery import AWSDiscovery, DiscoveryOptions
     from cna.core.exceptions import CNAAuthError
+    from cna.modules.network.discovery.aws_discovery import AWSDiscovery, DiscoveryOptions
 
     store = EngagementStore(engagement_id=engagement_id, data_dir=Path(data_dir))
 
@@ -90,7 +101,7 @@ def discover_aws(
 
         total_vpcs = sum(len(r.vpcs) for r in topology.regions)
         blocked = sum(1 for r in topology.regions if r.discovery_blocked)
-        click.echo(f"\n\u2705 AWS discovery complete.")
+        click.echo("\n\u2705 AWS discovery complete.")
         click.echo(f"   Accounts : {len(topology.accounts)}")
         click.echo(f"   Regions  : {len(topology.regions)}")
         click.echo(f"   VPCs     : {total_vpcs}")
@@ -107,21 +118,42 @@ def discover_aws(
 @discover.command("azure")
 @click.option("--engagement-id", required=True, help="Engagement ID from `cna init`")
 @click.option("--tenant-id", required=True, help="Azure tenant (directory) ID")
-@click.option("--subscriptions", default=None,
-              help="Comma-separated subscription IDs. Default: all enabled subscriptions.")
-@click.option("--client-id", default=None,
-              help="Service principal client ID (optional — DefaultAzureCredential if not set)")
-@click.option("--client-secret", default=None,
-              help="Service principal secret (in-memory only, never logged or written to disk)")
-@click.option("--resume", is_flag=True, default=False,
-              help="Skip subscriptions with existing checkpoints.")
-@click.option("--no-resource-graph", is_flag=True, default=False,
-              help="Disable Azure Resource Graph (use ARM REST only — slower).")
-@click.option("--data-dir", default="./engagements",
-              help="Engagement data directory (default: ./engagements)")
+@click.option(
+    "--subscriptions",
+    default=None,
+    help="Comma-separated subscription IDs. Default: all enabled subscriptions.",
+)
+@click.option(
+    "--client-id",
+    default=None,
+    help="Service principal client ID (optional — DefaultAzureCredential if not set)",
+)
+@click.option(
+    "--client-secret",
+    default=None,
+    help="Service principal secret (in-memory only, never logged or written to disk)",
+)
+@click.option(
+    "--resume", is_flag=True, default=False, help="Skip subscriptions with existing checkpoints."
+)
+@click.option(
+    "--no-resource-graph",
+    is_flag=True,
+    default=False,
+    help="Disable Azure Resource Graph (use ARM REST only — slower).",
+)
+@click.option(
+    "--data-dir", default="./engagements", help="Engagement data directory (default: ./engagements)"
+)
 def discover_azure(
-    engagement_id, tenant_id, subscriptions, client_id, client_secret,
-    resume, no_resource_graph, data_dir
+    engagement_id,
+    tenant_id,
+    subscriptions,
+    client_id,
+    client_secret,
+    resume,
+    no_resource_graph,
+    data_dir,
 ):
     """Discover Azure network topology via ARM REST + Resource Graph.
 
@@ -146,8 +178,8 @@ def discover_azure(
         --subscriptions sub-id-1,sub-id-2 \\
         --resume
     """
-    from cna.modules.network.discovery.azure_discovery import AzureDiscovery, AzureDiscoveryOptions
     from cna.core.exceptions import CNAAuthError
+    from cna.modules.network.discovery.azure_discovery import AzureDiscovery, AzureDiscoveryOptions
 
     store = EngagementStore(engagement_id=engagement_id, data_dir=Path(data_dir))
 
@@ -173,7 +205,7 @@ def discover_azure(
 
         total_vnets = sum(len(s.vnets) for s in topology.subscriptions)
         blocked = sum(1 for s in topology.subscriptions if s.discovery_blocked)
-        click.echo(f"\n\u2705 Azure discovery complete.")
+        click.echo("\n\u2705 Azure discovery complete.")
         click.echo(f"   Subscriptions     : {len(topology.subscriptions)}")
         click.echo(f"   Management Groups : {len(topology.management_groups)}")
         click.echo(f"   VNets             : {total_vnets}")

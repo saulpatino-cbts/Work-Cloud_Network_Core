@@ -12,6 +12,7 @@ Example: acme-20260305-a3f2
   - Hex suffix prevents same-client-same-day collision
   - Used as: local dir name, blob prefix, S3 prefix, report filename stem
 """
+
 from __future__ import annotations
 
 import json
@@ -189,10 +190,10 @@ class EngagementStore:
         Closes TODO_PhaseA: output/ directory has no structure defined.
         """
         return {
-            "discovery":  "{data_dir}/{engagement_id}/discovery/{platform}_{account_id}.json",
-            "diagrams":   "{data_dir}/{engagement_id}/diagrams/{type}/{name}.{ext}",
-            "reports":    "{data_dir}/{engagement_id}/reports/{type}/{name}.{ext}",
-            "audit_log":  "{data_dir}/{engagement_id}/audit.jsonl",
+            "discovery": "{data_dir}/{engagement_id}/discovery/{platform}_{account_id}.json",
+            "diagrams": "{data_dir}/{engagement_id}/diagrams/{type}/{name}.{ext}",
+            "reports": "{data_dir}/{engagement_id}/reports/{type}/{name}.{ext}",
+            "audit_log": "{data_dir}/{engagement_id}/audit.jsonl",
             "engagement": "{data_dir}/{engagement_id}/engagement.json",
         }
 

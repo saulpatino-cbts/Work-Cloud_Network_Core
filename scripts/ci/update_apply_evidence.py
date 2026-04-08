@@ -37,5 +37,7 @@ with manifest.open("w") as f:
     f.write("\n")
 
 print(f"Updated manifest: {manifest}")
-print(f"  terraform_apply = passed")
-print(f"  frontdoor_endpoint_host_name = {data['platform_context']['frontdoor_endpoint_host_name']}")
+print("  terraform_apply = passed")
+print(
+    f"  frontdoor_endpoint_host_name = {data['platform_context']['frontdoor_endpoint_host_name']}"
+)

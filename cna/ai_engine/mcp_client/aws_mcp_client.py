@@ -12,6 +12,7 @@ Connection:
   - Default transport: stdio (local subprocess)
   - Graceful degradation: on ImportError or connection failure, returns []
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,6 +43,7 @@ class AWSMCPClient:
         """Attempt MCP SDK import and connection. Silently marks unavailable on failure."""
         try:
             import mcp  # noqa: F401 — optional dependency
+
             self._available = True
             logger.info("AWS MCP client initialized (transport=%s)", self._transport)
         except ImportError:

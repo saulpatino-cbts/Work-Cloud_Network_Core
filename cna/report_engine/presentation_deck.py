@@ -14,6 +14,7 @@ Slide sections (in order):
   9. Remediation Roadmap — short-term / medium-term / long-term
   10. Appendix — full finding table (rule ID, resource, severity, framework)
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,10 +26,10 @@ logger = logging.getLogger("cna.report.pptx")
 
 # Severity colour palette (RGB tuples)
 _SEVERITY_COLORS = {
-    "CRITICAL": (0xD3, 0x2F, 0x2F),   # red
-    "HIGH":     (0xF5, 0x7C, 0x00),   # orange
-    "MEDIUM":   (0xF9, 0xA8, 0x25),   # amber
-    "LOW":      (0x43, 0xA0, 0x47),   # green
+    "CRITICAL": (0xD3, 0x2F, 0x2F),  # red
+    "HIGH": (0xF5, 0x7C, 0x00),  # orange
+    "MEDIUM": (0xF9, 0xA8, 0x25),  # amber
+    "LOW": (0x43, 0xA0, 0x47),  # green
 }
 
 
@@ -42,8 +43,7 @@ class PresentationDeckBuilder:
             from pptx.util import Inches
         except ImportError:
             logger.warning(
-                "python-pptx not installed. PPTX skipped. "
-                "Install with: pip install python-pptx"
+                "python-pptx not installed. PPTX skipped. Install with: pip install python-pptx"
             )
             return output_path
 
@@ -51,13 +51,13 @@ class PresentationDeckBuilder:
         prs.slide_width = Inches(13.33)
         prs.slide_height = Inches(7.5)
 
-        title_layout = prs.slide_layouts[0]   # title + subtitle
-        body_layout  = prs.slide_layouts[1]   # title + content
+        title_layout = prs.slide_layouts[0]  # title + subtitle
+        body_layout = prs.slide_layouts[1]  # title + content
 
         critical = [f for f in report.findings if f.severity == FindingSeverity.CRITICAL]
-        high     = [f for f in report.findings if f.severity == FindingSeverity.HIGH]
-        medium   = [f for f in report.findings if f.severity == FindingSeverity.MEDIUM]
-        low      = [f for f in report.findings if f.severity == FindingSeverity.LOW]
+        high = [f for f in report.findings if f.severity == FindingSeverity.HIGH]
+        medium = [f for f in report.findings if f.severity == FindingSeverity.MEDIUM]
+        low = [f for f in report.findings if f.severity == FindingSeverity.LOW]
 
         def add_title_slide(title_text: str, subtitle_text: str = "") -> None:
             slide = prs.slides.add_slide(title_layout)
@@ -80,11 +80,8 @@ class PresentationDeckBuilder:
                 f"Resource: {finding.resource_id} ({finding.resource_type})\n"
                 f"Account/Sub: {finding.account_id} | Region: {finding.region}\n\n"
                 f"Observed: {finding.observed_state.fact}\n\n"
-                f"Framework: " +
-                ", ".join(
-                    f"{m.framework} — {m.control}"
-                    for m in finding.framework_mappings
-                )
+                f"Framework: "
+                + ", ".join(f"{m.framework} — {m.control}" for m in finding.framework_mappings)
             )
             tf = slide.placeholders[1].text_frame
             tf.text = body
@@ -140,9 +137,11 @@ class PresentationDeckBuilder:
         top5 = (critical + high)[:5]
         for finding in top5:
             recs = finding.recommendations or []
-            rec_text = "\n".join(
-                f"• {r.text}" for r in recs[:2]
-            ) if recs else "See technical report for full recommendations."
+            rec_text = (
+                "\n".join(f"• {r.text}" for r in recs[:2])
+                if recs
+                else "See technical report for full recommendations."
+            )
             add_body_slide(
                 f"Recommendation: {finding.rule_id}",
                 f"{finding.title}\n\n{rec_text}",

@@ -129,8 +129,8 @@ module "compute" {
 
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
   web_secret_env_vars = {
-    DATABASE_URL         = "database-url"
-    NEXTAUTH_SECRET      = "nextauth-secret"
+    DATABASE_URL           = "database-url"
+    NEXTAUTH_SECRET        = "nextauth-secret"
     AZURE_AD_CLIENT_SECRET = "entra-client-secret"
   }
 
@@ -138,8 +138,8 @@ module "compute" {
   # These are referenced by the web_secret_env_vars above. The actual values
   # come from Terraform variables set via GitHub Secrets in CI.
   container_app_secrets = {
-    "database-url"      = module.database.connection_string
-    "nextauth-secret"   = var.nextauth_secret
+    "database-url"        = module.database.connection_string
+    "nextauth-secret"     = var.nextauth_secret
     "entra-client-secret" = var.entra_client_secret
   }
 }

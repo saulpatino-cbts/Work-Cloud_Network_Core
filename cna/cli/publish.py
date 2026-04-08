@@ -4,6 +4,7 @@ Commands:
   cna publish          — upload deliverables, generate portal, issue access links
   cna publish status   — check if portal is live and access link is still valid
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,18 +24,14 @@ def publish_group():
 
 @publish_group.command("run")
 @click.option("--engagement-id", required=True, help="Engagement ID")
-@click.option("--cloud", required=True, type=click.Choice(["aws", "azure"]),
-              help="Storage target")
-@click.option("--bucket",          default=None, help="S3 bucket name (aws)")
-@click.option("--s3-prefix",       default=None, help="S3 key prefix (default: engagement-id)")
+@click.option("--cloud", required=True, type=click.Choice(["aws", "azure"]), help="Storage target")
+@click.option("--bucket", default=None, help="S3 bucket name (aws)")
+@click.option("--s3-prefix", default=None, help="S3 key prefix (default: engagement-id)")
 @click.option("--storage-account", default=None, help="Azure storage account name (azure)")
-@click.option("--container",       default=None, help="Azure Blob container name (azure)")
-@click.option("--ttl-hours",       default=168,  help="Link TTL in hours (max 168 = 7 days)")
-@click.option("--data-dir",        default="./engagements")
-def run(
-    engagement_id, cloud, bucket, s3_prefix,
-    storage_account, container, ttl_hours, data_dir
-):
+@click.option("--container", default=None, help="Azure Blob container name (azure)")
+@click.option("--ttl-hours", default=168, help="Link TTL in hours (max 168 = 7 days)")
+@click.option("--data-dir", default="./engagements")
+def run(engagement_id, cloud, bucket, s3_prefix, storage_account, container, ttl_hours, data_dir):
     """Upload deliverables and publish portal.
 
     \b
@@ -54,9 +51,9 @@ def run(
         --container acme-20260305-a3f2
     """
     from cna.core.persistence import EngagementStore
-    from cna.delivery_portal.retention_engine import RetentionEngine, RetentionExpiredError
-    from cna.delivery_portal.portal_generator import PortalGenerator
     from cna.delivery_portal.access_manager import AccessManager
+    from cna.delivery_portal.portal_generator import PortalGenerator
+    from cna.delivery_portal.retention_engine import RetentionEngine, RetentionExpiredError
     from cna.report_engine.deliverable_manifest import DeliverableManifest
 
     store = EngagementStore(
@@ -82,10 +79,7 @@ def run(
             records=manifest_data["records"],
         )
     except FileNotFoundError:
-        click.echo(
-            "✗ No deliverable manifest found. Run `cna report generate` first.",
-            err=True
-        )
+        click.echo("✗ No deliverable manifest found. Run `cna report generate` first.", err=True)
         sys.exit(1)
 
     # Current findings checksum for staleness detection
@@ -112,6 +106,7 @@ def run(
 
     if cloud == "aws":
         from cna.delivery_portal.s3_deployer import S3Deployer
+
         prefix = s3_prefix or engagement_id
         deployer = S3Deployer(
             bucket=bucket,
@@ -123,6 +118,7 @@ def run(
 
     elif cloud == "azure":
         from cna.delivery_portal.azure_blob_deployer import AzureBlobDeployer
+
         cont = container or engagement_id
         deployer = AzureBlobDeployer(
             account_name=storage_account,
@@ -136,8 +132,11 @@ def run(
 
     # Rebuild manifest with DeliverableRecord objects
     from cna.report_engine.deliverable_manifest import DeliverableRecord
+
     records = [
-        DeliverableRecord(**{k: v for k, v in r.items() if k in DeliverableRecord.__dataclass_fields__})
+        DeliverableRecord(
+            **{k: v for k, v in r.items() if k in DeliverableRecord.__dataclass_fields__}
+        )
         for r in manifest_data["records"]
     ]
     manifest.records = records
@@ -158,6 +157,7 @@ def run(
     )
 
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         portal_path = Path(tmpdir) / "index.html"
         PortalGenerator().generate(
@@ -184,7 +184,9 @@ def run(
     stale_count = sum(1 for e in entries if e.is_stale)
     click.echo(f"\n✅ Portal published — {len(entries)} deliverable(s)")
     if stale_count:
-        click.echo(f"   ⚠  {stale_count} stale deliverable(s) — re-run `cna report generate` to refresh")
+        click.echo(
+            f"   ⚠  {stale_count} stale deliverable(s) — re-run `cna report generate` to refresh"
+        )
     click.echo(f"   Expires: {access_record.expires_at}")
     click.echo(f"   Portal URL: {portal_url}")
     click.echo("   (Share this URL with the client. It expires automatically.)")
@@ -192,7 +194,7 @@ def run(
 
 @publish_group.command("status")
 @click.option("--engagement-id", required=True, help="Engagement ID")
-@click.option("--data-dir",      default="./engagements")
+@click.option("--data-dir", default="./engagements")
 def status(engagement_id, data_dir):
     """Check portal publication status and access link expiry.
 
@@ -222,7 +224,7 @@ def status(engagement_id, data_dir):
         click.echo(f"   Expired at: {record.expires_at}")
         click.echo("   Re-run `cna publish run` to issue a new link.")
     else:
-        click.echo(f"✅ Portal active")
+        click.echo("✅ Portal active")
         click.echo(f"   Cloud:        {record.cloud.upper()}")
         click.echo(f"   Location:     {record.storage_location}")
         click.echo(f"   Deliverables: {record.deliverable_count}")

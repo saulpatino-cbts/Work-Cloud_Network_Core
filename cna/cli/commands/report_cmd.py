@@ -1,10 +1,16 @@
 import click
 from rich.console import Console
+
 console = Console()
 
+
 @click.command(name="report")
-@click.option("--type", "rtype", default="all",
-    help="executive|technical|regional|roadmap|deck|knowledge-transfer|all")
+@click.option(
+    "--type",
+    "rtype",
+    default="all",
+    help="executive|technical|regional|roadmap|deck|knowledge-transfer|all",
+)
 @click.option("--region", default="all", help="us|emea|japan|all")
 @click.option("--lang", default="en", help="en|ja")
 @click.option("--format", "fmt", default="pdf,docx")

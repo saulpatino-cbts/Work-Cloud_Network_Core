@@ -11,6 +11,7 @@ This is the third diagram format alongside draw.io and Mermaid:
 Fallback: if `diagrams` is not installed, functions log a warning
 and return None rather than crashing the engagement run.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +23,7 @@ logger = logging.getLogger("cna.diagram_engine.diagrams_generator")
 def _diagrams_available() -> bool:
     try:
         import diagrams  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -103,10 +105,15 @@ def generate_aws_vpc_diagram(
                 private_nodes = []
                 for subnet in vpc.subnets:
                     from diagrams.aws.network import VPC as SubnetNode
+
                     if subnet.subnet_type.value == "public":
-                        public_nodes.append(SubnetNode(f"{subnet.name or subnet.id}\n{subnet.cidr}"))
+                        public_nodes.append(
+                            SubnetNode(f"{subnet.name or subnet.id}\n{subnet.cidr}")
+                        )
                     else:
-                        private_nodes.append(SubnetNode(f"{subnet.name or subnet.id}\n{subnet.cidr}"))
+                        private_nodes.append(
+                            SubnetNode(f"{subnet.name or subnet.id}\n{subnet.cidr}")
+                        )
 
         # TGW connections to VPCs via attachments
         for tgw in region_topology.transit_gateways:

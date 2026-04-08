@@ -13,6 +13,7 @@ Contract:
   - It never reads topology data or generates findings.
   - It never writes to EngagementStore.
 """
+
 from __future__ import annotations
 
 import logging
@@ -68,10 +69,10 @@ class MCPRouter:
                     finding_title=finding_title,
                 )
             else:
-                logger.warning("Unknown cloud '%s' for rule %s — no MCP client available",
-                               cloud, rule_id)
+                logger.warning(
+                    "Unknown cloud '%s' for rule %s — no MCP client available", cloud, rule_id
+                )
                 return []
         except Exception as e:
-            logger.warning("MCPRouter: error fetching recommendations for %s: %s",
-                           rule_id, e)
+            logger.warning("MCPRouter: error fetching recommendations for %s: %s", rule_id, e)
             return []

@@ -16,6 +16,7 @@ Rules:
   - Extension is always explicit (.drawio | .svg | .png | .pdf | .mmd)
   - Max 120 chars total (filesystem safe)
 """
+
 from __future__ import annotations
 
 import re
@@ -34,11 +35,11 @@ def _slug(text: str, max_len: int = 24) -> str:
 
 def diagram_filename(
     engagement_id: str,
-    platform: str,           # "aws" | "azure"
-    diagram_type: str,       # "vpc-topology" | "vnet-topology" | "tgw-topology" | etc.
-    scope: str = "",         # account_id | subscription_id | tgw_id
-    region: str = "",        # us-east-1 | eastus | etc.
-    ext: str = ".drawio",    # .drawio | .svg | .png | .pdf | .mmd
+    platform: str,  # "aws" | "azure"
+    diagram_type: str,  # "vpc-topology" | "vnet-topology" | "tgw-topology" | etc.
+    scope: str = "",  # account_id | subscription_id | tgw_id
+    region: str = "",  # us-east-1 | eastus | etc.
+    ext: str = ".drawio",  # .drawio | .svg | .png | .pdf | .mmd
 ) -> str:
     """Produce a canonical diagram filename.
 

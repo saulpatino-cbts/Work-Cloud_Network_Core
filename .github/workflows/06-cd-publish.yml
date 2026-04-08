@@ -5,7 +5,7 @@
 # Required repository secrets:
 #   CNA_AWS_ROLE_ARN     — IAM role ARN for CNA-Publish (OIDC)
 #   CNA_PUBLISH_BUCKET   — S3 bucket name
-#   (Azure variant: CNA_AZURE_CLIENT_ID, CNA_AZURE_TENANT_ID, CNA_AZURE_SUBSCRIPTION_ID)
+#   AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID — same as all other workflows
 #
 # Design:
 #   - Uses OIDC (no long-lived AWS keys stored as secrets)
@@ -47,27 +47,27 @@ jobs:
       IMAGE_NAME: ${{ github.repository }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@v4
 
       # AWS OIDC — no long-lived keys
       - name: Configure AWS credentials (OIDC)
         if: inputs.cloud == 'aws'
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.CNA_AWS_ROLE_ARN }}
           aws-region: us-east-1
 
-      # Azure OIDC
+      # Azure OIDC — uses same AZURE_* secrets as all other workflows
       - name: Configure Azure credentials (OIDC)
         if: inputs.cloud == 'azure'
-        uses: azure/login@a457da9ea143d694b8d37b84c16a66cf4db8aca3  # v2.3.0
+        uses: azure/login@v2
         with:
-          client-id: ${{ secrets.CNA_AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.CNA_AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.CNA_AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to GHCR
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

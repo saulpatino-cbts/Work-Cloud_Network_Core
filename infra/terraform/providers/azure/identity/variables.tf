@@ -23,3 +23,16 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# FinOps / Zero Trust — Key Vault hardening
+variable "key_vault_soft_delete_retention_days" {
+  description = "Soft-delete retention for Key Vault. Minimum 7 days; set to 90 when purge_protection is enabled."
+  type        = number
+  default     = 7
+}
+
+variable "key_vault_purge_protection_enabled" {
+  description = "Enable purge protection on Key Vault. Required for prod — prevents accidental permanent deletion of secrets."
+  type        = bool
+  default     = false
+}

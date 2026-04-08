@@ -35,25 +35,37 @@ jobs:
           V_CNA_ENTRA_CLIENT_SECRET:     ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
           V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
           V_GHCR_PAT:                    ${{ secrets.GHCR_PAT }}
+          # Optional — AWS publish (workflow 06 with cloud=aws)
+          V_CNA_AWS_ROLE_ARN:            ${{ secrets.CNA_AWS_ROLE_ARN }}
+          V_CNA_PUBLISH_BUCKET:          ${{ secrets.CNA_PUBLISH_BUCKET }}
+          # Optional — customer-managed TLS cert rotation (workflow 03 verify)
+          V_FRONTDOOR_CERT_PFX_PASSWORD: ${{ secrets.FRONTDOOR_CERTIFICATE_PFX_PASSWORD }}
         run: |
           echo "## Secret Check" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Secret | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secret | Required For | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
 
           FAILED=0
           check_secret() {
             local name="$1"
             local value="$2"
+            local scope="${3:-all workflows}"
             if [[ -z "$value" ]]; then
-              echo "| \`$name\` | ❌ Missing |" >> "$GITHUB_STEP_SUMMARY"
-              echo "::error::Secret $name is not set"
-              FAILED=1
+              if [[ "$scope" == "all workflows" ]]; then
+                echo "| \`$name\` | $scope | ❌ Missing |" >> "$GITHUB_STEP_SUMMARY"
+                echo "::error::Secret $name is not set"
+                FAILED=1
+              else
+                echo "| \`$name\` | $scope | ⚠️ Not set (optional) |" >> "$GITHUB_STEP_SUMMARY"
+                echo "::warning::Optional secret $name not set — needed for: $scope"
+              fi
             else
-              echo "| \`$name\` | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| \`$name\` | $scope | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
             fi
           }
 
+          # Core — required for workflows 00-05
           check_secret "AZURE_CLIENT_ID"             "$V_AZURE_CLIENT_ID"
           check_secret "AZURE_TENANT_ID"             "$V_AZURE_TENANT_ID"
           check_secret "AZURE_SUBSCRIPTION_ID"       "$V_AZURE_SUBSCRIPTION_ID"
@@ -61,6 +73,11 @@ jobs:
           check_secret "CNA_ENTRA_CLIENT_SECRET"     "$V_CNA_ENTRA_CLIENT_SECRET"
           check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
           check_secret "GHCR_PAT"                    "$V_GHCR_PAT"
+
+          # Optional — required only for specific workflows
+          check_secret "CNA_AWS_ROLE_ARN"                   "$V_CNA_AWS_ROLE_ARN"            "workflow 06 (AWS publish)"
+          check_secret "CNA_PUBLISH_BUCKET"                 "$V_CNA_PUBLISH_BUCKET"          "workflow 06 (publish portal)"
+          check_secret "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" "$V_FRONTDOOR_CERT_PFX_PASSWORD" "workflow 03 verify (customer TLS)"
 
           if [[ "$FAILED" -eq 1 ]]; then
             echo ""

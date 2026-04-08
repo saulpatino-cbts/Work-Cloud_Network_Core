@@ -75,9 +75,16 @@ variable "container_app_revision_mode" {
 }
 
 variable "log_analytics_retention_in_days" {
-  description = "Retention period for Log Analytics workspace"
+  description = "Retention period for Log Analytics workspace. Use 30 for dev, 90 for prod (compliance)."
   type        = number
   default     = 30
+}
+
+# FinOps: scale-to-zero for idle environments
+variable "enable_scale_to_zero" {
+  description = "Override min_replicas to 0 for all Container Apps. Major cost saving for dev (no charge when idle). Not recommended for prod — adds cold-start latency."
+  type        = bool
+  default     = false
 }
 
 variable "api_target_port" {

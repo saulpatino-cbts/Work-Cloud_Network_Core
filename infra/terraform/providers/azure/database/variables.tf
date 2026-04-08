@@ -54,9 +54,15 @@ variable "storage_mb" {
 }
 
 variable "backup_retention_days" {
-  description = "Backup retention in days"
+  description = "Backup retention in days. Use 7 for dev, 30 for prod (compliance minimum)."
   type        = number
   default     = 7
+}
+
+variable "geo_redundant_backup_enabled" {
+  description = "Enable geo-redundant backups. Recommended true for prod — protects against regional failure."
+  type        = bool
+  default     = false
 }
 
 variable "postgres_version" {

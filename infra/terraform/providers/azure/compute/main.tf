@@ -54,7 +54,9 @@ resource "azurerm_container_app" "api" {
   }
 
   template {
-    min_replicas = var.container_app_min_replicas
+    # FinOps: scale_to_zero overrides min_replicas to 0 for dev environments.
+    # When idle, Container Apps cost $0. Cold-start is ~5-10s.
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
 
     container {
@@ -148,7 +150,7 @@ resource "azurerm_container_app" "worker" {
   }
 
   template {
-    min_replicas = 1
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
 
     container {
@@ -214,7 +216,7 @@ resource "azurerm_container_app" "web" {
   }
 
   template {
-    min_replicas = var.container_app_min_replicas
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
 
     container {

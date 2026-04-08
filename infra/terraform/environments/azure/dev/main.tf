@@ -68,6 +68,11 @@ module "storage" {
   location            = azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
   tags                = local.tags
+
+  # FinOps: LRS cheapest replication; dev data is non-critical
+  replication_type            = "LRS"
+  raw_artifact_retention_days = 30 # move to Cool after 30 days, auto-delete after 365
+  deliverable_retention_days  = 90
 }
 
 module "identity" {
@@ -77,6 +82,10 @@ module "identity" {
   name_prefix         = local.name_prefix
   tenant_id           = var.tenant_id
   tags                = local.tags
+
+  # Dev: minimal soft-delete, no purge protection (allows fast teardown)
+  key_vault_soft_delete_retention_days = 7
+  key_vault_purge_protection_enabled   = false
 }
 
 module "compute" {
@@ -92,6 +101,10 @@ module "compute" {
   ghcr_username                = var.ghcr_username
   ghcr_pat                     = var.ghcr_pat
   tags                         = local.tags
+
+  # FinOps: scale to zero when idle — no charge for idle Container Apps
+  enable_scale_to_zero            = true
+  log_analytics_retention_in_days = 30
 
   # ── Plain env vars injected at container start ──────────────────────────────
   api_env_vars = {

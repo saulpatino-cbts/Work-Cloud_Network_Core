@@ -11,11 +11,13 @@ output "managed_identity_principal_id" {
 }
 
 output "key_vault_id" {
-  value = azurerm_key_vault.this.id
+  value      = azurerm_key_vault.this.id
+  depends_on = [time_sleep.wait_for_rbac_propagation]
 }
 
 output "key_vault_name" {
-  value = azurerm_key_vault.this.name
+  value      = azurerm_key_vault.this.name
+  depends_on = [time_sleep.wait_for_rbac_propagation]
 }
 
 output "key_vault_uri" {

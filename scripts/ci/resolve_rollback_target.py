@@ -39,8 +39,8 @@ for file in catalog_dir.glob("*.json"):
             and checks.get("certificate_rotation") == "passed"
         ):
             records.append(data)
-    except Exception:
-        continue  # noqa: S112
+    except Exception:  # noqa: S112
+        continue
 
 records.sort(key=lambda r: int(r.get("workflow_run_id", 0)), reverse=True)
 

@@ -40,7 +40,7 @@ for file in catalog_dir.glob("*.json"):
         ):
             records.append(data)
     except Exception:
-        continue
+        continue  # noqa: S112
 
 records.sort(key=lambda r: int(r.get("workflow_run_id", 0)), reverse=True)
 

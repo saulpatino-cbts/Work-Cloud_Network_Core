@@ -107,7 +107,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform security scan
-        run: echo '{"status":"passed"}' > ../../../../policy-gates-${{ inputs.environment }}.json
+        run: echo '{"status":"passed"}' > $GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json
 
       - name: Upload policy gate report
         uses: actions/upload-artifact@v4
@@ -147,8 +147,8 @@ jobs:
       - name: Resolve rollback targets from release catalog
         if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '')
         env:
-          CATALOG_DIR: ../../../../.deployment-catalog/${{ inputs.environment }}
-        run: python ../../../../scripts/ci/resolve_rollback_target.py
+          CATALOG_DIR: $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
+        run: python $GITHUB_WORKSPACE/scripts/ci/resolve_rollback_target.py
 
       - name: Terraform init
         run: |
@@ -175,8 +175,8 @@ jobs:
 
       - name: Create deployment manifest
         run: |
-          mkdir -p ../../../../.deployment-catalog/${{ inputs.environment }}
-          cat > ../../../../.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json <<'MANIFEST'
+          mkdir -p $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
+          cat > $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json <<'MANIFEST'
           {
             "environment": "${{ inputs.environment }}",
             "deploy_mode": "${{ inputs.deploy_mode }}",

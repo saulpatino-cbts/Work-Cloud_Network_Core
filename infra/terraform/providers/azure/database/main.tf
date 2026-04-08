@@ -4,15 +4,15 @@
 # the security module and its ID passed in via var.postgres_private_dns_zone_id.
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                   = local.server_name
-  resource_group_name    = var.resource_group_name
-  location               = var.location
-  version                = var.postgres_version
-  delegated_subnet_id    = var.db_subnet_id
-  private_dns_zone_id    = var.postgres_private_dns_zone_id
-  administrator_login    = var.admin_username
-  administrator_password = var.admin_password
-  public_network_access  = "Disabled"
+  name                          = local.server_name
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  version                       = var.postgres_version
+  delegated_subnet_id           = var.db_subnet_id
+  private_dns_zone_id           = var.postgres_private_dns_zone_id
+  administrator_login           = var.admin_username
+  administrator_password        = var.admin_password
+  public_network_access_enabled = false
 
   storage_mb = var.storage_mb
   sku_name   = var.sku_name

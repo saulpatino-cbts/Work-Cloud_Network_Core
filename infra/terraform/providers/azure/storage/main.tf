@@ -13,10 +13,12 @@ resource "azurerm_storage_account" "this" {
     versioning_enabled = false
   }
 
-  static_website {
-    index_document     = "index.html"
-    error_404_document = "404.html"
-  }
+}
+
+resource "azurerm_storage_account_static_website" "this" {
+  storage_account_id = azurerm_storage_account.this.id
+  index_document     = "index.html"
+  error_404_document = "404.html"
 }
 
 resource "azurerm_storage_container" "containers" {

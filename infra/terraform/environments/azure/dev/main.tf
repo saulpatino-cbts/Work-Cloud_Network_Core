@@ -83,9 +83,9 @@ module "identity" {
   tenant_id           = var.tenant_id
   tags                = local.tags
 
-  # Dev: minimal soft-delete, no purge protection (allows fast teardown)
+  # Dev: minimal soft-delete, but purge protection must be enabled per Azure Policy
   key_vault_soft_delete_retention_days = 7
-  key_vault_purge_protection_enabled   = false
+  key_vault_purge_protection_enabled   = true
 }
 
 module "compute" {

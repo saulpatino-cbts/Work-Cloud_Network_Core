@@ -13,5 +13,6 @@ resource "azurerm_key_vault" "this" {
   sku_name                   = "standard"
   soft_delete_retention_days = var.key_vault_soft_delete_retention_days
   purge_protection_enabled   = var.key_vault_purge_protection_enabled
+  enable_rbac_authorization  = true
   tags                       = var.tags
 }

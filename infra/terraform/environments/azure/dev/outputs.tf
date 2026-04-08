@@ -56,9 +56,6 @@ output "storage_role_assignment_id" {
   value = module.runtime.storage_role_assignment_id
 }
 
-output "presentation_cdn_fqdn" {
-  value = module.presentation.cdn_fqdn
-}
 
 output "frontdoor_endpoint_host_name" {
   description = "Azure Front Door endpoint hostname — this is the public URL for the platform"

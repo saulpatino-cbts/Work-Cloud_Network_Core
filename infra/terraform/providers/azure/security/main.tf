@@ -154,7 +154,7 @@ resource "azurerm_private_endpoint" "openai" {
 resource "azurerm_cdn_frontdoor_profile" "platform" {
   name                = "afd-${var.name_prefix}-platform"
   resource_group_name = var.resource_group_name
-  sku_name            = "Standard_AzureFrontDoor"
+  sku_name            = "Premium_AzureFrontDoor"
 }
 
 resource "azurerm_cdn_frontdoor_secret" "platform" {
@@ -218,7 +218,7 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   # Azure requires WAF policy names to be alphanumeric only — no hyphens allowed.
   name                = "afdwaf${replace(var.name_prefix, "-", "")}platform"
   resource_group_name = var.resource_group_name
-  sku_name            = "Standard_AzureFrontDoor"
+  sku_name            = "Premium_AzureFrontDoor"
   mode                = "Prevention"
 
   managed_rule {

@@ -33,8 +33,8 @@ output "web_name" {
 }
 
 output "web_fqdn" {
-  description = "CNA Web (Next.js) Container App FQDN — used as Azure Front Door origin"
-  value       = azurerm_container_app.web.latest_revision_fqdn
+  description = "CNA Web (Next.js) Container App stable ingress FQDN — used as Azure Front Door origin. Uses the revision-agnostic ingress FQDN so the AFD origin remains valid across revision updates."
+  value       = azurerm_container_app.web.ingress[0].fqdn
 }
 
 output "log_analytics_workspace_id" {

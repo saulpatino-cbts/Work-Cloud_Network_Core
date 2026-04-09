@@ -378,7 +378,7 @@ jobs:
           METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
           THRESHOLD="${AZURE_MONITOR_HEALTH_THRESHOLD:-95}"
           VDIR=".verification/${{ inputs.environment }}"
-          MAX_WAIT=20
+          MAX_WAIT=30
           ATTEMPT=0
           while [ $ATTEMPT -lt $MAX_WAIT ]; do
             ATTEMPT=$((ATTEMPT + 1))

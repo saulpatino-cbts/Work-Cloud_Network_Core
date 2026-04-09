@@ -1,0 +1,84 @@
+# Release workflow
+# Triggered when a version tag v*.*.* is pushed.
+# Builds the Docker image, pushes to GHCR, creates a GitHub Release
+# with auto-generated changelog from PRs merged since last tag.
+#
+# Required repository secrets:
+#   None — uses GITHUB_TOKEN and OIDC for GHCR push
+#
+# Required repository settings:
+#   Actions > General > Workflow permissions: Read and write
+#   (or grant packages:write explicitly in permissions block below)
+name: "021 · Release CLI Tool"
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write    # create GitHub Release
+  packages: write    # push to GHCR
+  id-token: write    # OIDC (future Cosign signing)
+
+jobs:
+
+  release:
+    name: Build, Push, Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository_owner }}/cna
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Extract version from tag
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      # Log in to GitHub Container Registry
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker Buildx for multi-platform + cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
+
+      # Build & push image: latest + version tag
+      - name: Build and push
+        uses: docker/build-push-action@0adf9959216b96bec444f325f1e493d4aa344497  # v6.14.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            CNA_VERSION=${{ steps.version.outputs.VERSION }}
+
+      # GitHub Release with auto-generated changelog
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
+        with:
+          generate_release_notes: true
+          body: |
+            ## CNA Platform ${{ github.ref_name }}
+
+            Docker image: `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}`
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}
+            docker run --rm ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }} --help
+            ```

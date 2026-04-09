@@ -16,7 +16,7 @@ WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz libcairo2 libpango-1.0-0 \
-    libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
@@ -35,7 +35,7 @@ LABEL org.opencontainers.image.title="CNA Platform" \
 # System deps for diagram generation (runtime only)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz libcairo2 libpango-1.0-0 \
-    libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user — uid/gid 1001

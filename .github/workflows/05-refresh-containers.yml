@@ -15,6 +15,11 @@ on:
         options:
           - dev
           - prod
+      region_short:
+        description: Short region code matching Terraform config (e.g., scus, eus2)
+        required: true
+        default: scus
+        type: string
       api_image:
         description: New cna-api image (leave empty to skip)
         required: false
@@ -59,12 +64,12 @@ jobs:
       - name: Derive Container App names from environment
         id: names
         run: |
-          # Name prefix matches locals.tf: "${var.project_name}-${var.environment}"
-          PREFIX="cna-${{ inputs.environment }}"
+          # Name prefix matches locals.tf: "${var.project_name}-${var.environment}-${var.region_short}"
+          PREFIX="cna-${{ inputs.environment }}-${{ inputs.region_short }}"
           echo "api_app=ca-${PREFIX}-api"       >> "$GITHUB_OUTPUT"
           echo "worker_app=ca-${PREFIX}-worker" >> "$GITHUB_OUTPUT"
           echo "web_app=ca-${PREFIX}-web"       >> "$GITHUB_OUTPUT"
-          echo "resource_group=rg-${PREFIX}-platform" >> "$GITHUB_OUTPUT"
+          echo "resource_group=rg-${PREFIX}"    >> "$GITHUB_OUTPUT"
 
       - name: Update cna-api image
         if: inputs.api_image != ''

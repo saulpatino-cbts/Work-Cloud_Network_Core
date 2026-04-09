@@ -58,7 +58,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   TF_IN_AUTOMATION: true
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}

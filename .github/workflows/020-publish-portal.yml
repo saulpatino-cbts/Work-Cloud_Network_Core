@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 30
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: ${{ github.repository_owner }}/cna
 
     steps:
       - uses: actions/checkout@v4

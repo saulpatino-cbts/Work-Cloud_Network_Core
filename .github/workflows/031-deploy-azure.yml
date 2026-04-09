@@ -271,6 +271,43 @@ jobs:
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
 
+      - name: Run database migrations
+        run: |
+          DB_URL=$(terraform output -raw connection_string)
+          RG="rg-cna-${{ inputs.environment }}-scus"
+          CAE="cae-cna-${{ inputs.environment }}-scus-platform"
+          JOB="job-migrate-${{ github.run_id }}"
+          echo "Creating migration job $JOB..."
+          az containerapp job create \
+            --name "$JOB" \
+            --resource-group "$RG" \
+            --environment "$CAE" \
+            --trigger-type Manual \
+            --replica-timeout 300 \
+            --replica-retry-limit 1 \
+            --replica-completion-count 1 \
+            --parallelism 1 \
+            --image "ghcr.io/${{ github.repository_owner }}/cna-migrator:latest" \
+            --secrets "db-url=$DB_URL" \
+            --env-vars "DATABASE_URL=secretref:db-url" \
+            --registry-server "ghcr.io" \
+            --registry-username "${{ github.repository_owner }}" \
+            --registry-password "${{ secrets.GHCR_PAT }}"
+          echo "Starting migration..."
+          az containerapp job start --name "$JOB" --resource-group "$RG"
+          echo "Waiting for completion..."
+          for i in $(seq 1 30); do
+            STATUS=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
+              --query "[-1].properties.status" -o tsv 2>/dev/null || echo "Running")
+            echo "  [$i/30] Status: $STATUS"
+            case "$STATUS" in
+              Succeeded) echo "Migrations succeeded."; break ;;
+              Failed|Stopped) echo "Migration failed!"; az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true; exit 1 ;;
+            esac
+            [ $i -lt 30 ] && sleep 10 || echo "Timed out waiting for migration"
+          done
+          az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
+
       - name: Export platform outputs
         id: export
         run: |

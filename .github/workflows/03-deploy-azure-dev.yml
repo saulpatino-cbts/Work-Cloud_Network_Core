@@ -364,14 +364,6 @@ jobs:
 
       - name: Execute progressive Front Door promotion actions
         run: |
-          az afd origin update \
-            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/originGroups/og-cna-${{ inputs.environment }}-scus-web/origins/origin-canary" \
-            --weight "${{ env.CANARY_WEIGHT_PERCENT }}" \
-            > .verification/${{ inputs.environment }}/promotion-canary.json
-          az afd origin update \
-            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/originGroups/og-cna-${{ inputs.environment }}-scus-web/origins/origin-primary" \
-            --weight "${{ env.PRIMARY_WEIGHT_PERCENT }}" \
-            > .verification/${{ inputs.environment }}/promotion-primary.json
           az afd route show \
             --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/afdEndpoints/afd-endpoint-cna-${{ inputs.environment }}-scus/routes/route-cna-${{ inputs.environment }}-scus-web" \
             > .verification/${{ inputs.environment }}/staged-promotion.json

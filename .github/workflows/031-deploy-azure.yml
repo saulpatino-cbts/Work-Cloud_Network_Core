@@ -375,9 +375,22 @@ jobs:
       - name: Query Azure Monitor health directly
         run: |
           mkdir -p .verification/${{ inputs.environment }}
-          az rest --method get \
-            --url "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01" \
-            > .verification/${{ inputs.environment }}/external-health.json
+          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
+          THRESHOLD="${AZURE_MONITOR_HEALTH_THRESHOLD:-95}"
+          VDIR=".verification/${{ inputs.environment }}"
+          MAX_WAIT=20
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_WAIT ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            az rest --method get --url "$METRIC_URL" > "$VDIR/external-health.json" 2>&1
+            HEALTH=$(python3 -c "import json; d=json.load(open('$VDIR/external-health.json')); v=d.get('value',[]); ts=(v[0].get('timeseries',[{}]) if v else [{}]); data=(ts[0].get('data',[]) if ts else []); pts=[p.get('average',0) for p in data if p.get('average') is not None]; print(f'{pts[-1]:.1f}' if pts else '0.0')" 2>/dev/null || echo "0.0")
+            echo "  Attempt $ATTEMPT/$MAX_WAIT — OriginHealthPercentage: ${HEALTH}% (threshold: ${THRESHOLD}%)"
+            if awk "BEGIN{exit !($HEALTH >= $THRESHOLD)}"; then
+              echo "Origin health at ${HEALTH}% — threshold met"
+              break
+            fi
+            [ $ATTEMPT -lt $MAX_WAIT ] && sleep 30 || echo "Origin health still at ${HEALTH}% after $((MAX_WAIT * 30))s — writing last value"
+          done
 
       - name: Query Application Insights telemetry directly
         if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''

@@ -4,8 +4,8 @@
   "api_image": "ghcr.io/saulpatinojr/cna-api:latest",
   "worker_image": "ghcr.io/saulpatinojr/cna-worker:latest",
   "web_image": "ghcr.io/saulpatinojr/cna-web:latest",
-  "commit_sha": "6ccfa3d3eb770c7f38b7e0b7eed1a63bf14fb498",
-  "workflow_run_id": "24176656645",
+  "commit_sha": "bdff7adca0473bda61080f5b84c79f4e6b8ebb41",
+  "workflow_run_id": "24177369736",
   "approval_status": "approved",
   "health_status": "healthy",
   "validation_checks": {

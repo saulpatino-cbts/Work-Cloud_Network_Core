@@ -79,9 +79,7 @@ class DiagramExporter:
         try:
             ET.fromstring(xml.strip())  # noqa: S314 — internal XML, not user input
         except ET.ParseError as exc:
-            raise ExportPipelineError(
-                f"malformed XML for diagram '{diagram_name}': {exc}"
-            ) from exc
+            raise ExportPipelineError(f"malformed XML for diagram '{diagram_name}': {exc}") from exc
 
         # Sanitize name for filesystem
         safe_name = diagram_name.replace(" ", "-").replace("/", "_").replace("\\", "_")

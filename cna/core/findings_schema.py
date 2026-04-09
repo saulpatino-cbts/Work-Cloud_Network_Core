@@ -63,6 +63,7 @@ class Finding(BaseModel):
         if isinstance(v, str):
             return ObservedState(fact=v, evidence_ref="")
         return v
+
     affected_resources: list[str] = Field(default_factory=list)
     framework_mappings: list[FrameworkMapping] = Field(default_factory=list)
     status: FindingStatus | None = None

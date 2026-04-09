@@ -24,7 +24,7 @@ _HEDGE_PATTERNS = [
     r"\blikely\b",
     r"\bappears\b",
     r"\bseems\b",
-    r"\bsuggest\b",
+    r"\bsuggests?\b",
     r"\bindicates\b",
     r"\bpotentially\b",
     r"\bexpected\b",

@@ -73,6 +73,16 @@ class DiagramExporter:
         if not xml or not xml.strip():
             raise ExportPipelineError(f"Empty XML string for diagram '{diagram_name}'")
 
+        # Validate XML well-formedness before touching the filesystem
+        import xml.etree.ElementTree as ET
+
+        try:
+            ET.fromstring(xml.strip())  # noqa: S314 — internal XML, not user input
+        except ET.ParseError as exc:
+            raise ExportPipelineError(
+                f"malformed XML for diagram '{diagram_name}': {exc}"
+            ) from exc
+
         # Sanitize name for filesystem
         safe_name = diagram_name.replace(" ", "-").replace("/", "_").replace("\\", "_")
         paths: dict[str, Path] = {}

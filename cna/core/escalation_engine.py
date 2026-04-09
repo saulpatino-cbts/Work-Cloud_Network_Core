@@ -4,7 +4,7 @@ DD-016: Fires during DISCOVERY — not during analysis.
 Critical findings are escalated immediately, not held until final report.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 CRITICAL_TRIGGERS_AWS = [
     {"service": "ec2", "check": "sg_ingress_0000_port_22", "title": "SSH exposed to internet"},
@@ -39,6 +39,28 @@ class CriticalFindingEscalationEngine:
             if trigger["service"] == service and self._matches(resource, trigger["check"]):
                 self._escalate(resource, trigger)
 
+    def flag(self, finding) -> None:
+        """Called inline from _emit() when a CRITICAL finding is raised during analysis.
+
+        The finding is recorded in critical_log and the optional notifier is
+        invoked. This is the DD-016 real-time escalation path.
+        """
+        event = {
+            "rule_id": finding.rule_id,
+            "resource_id": finding.resource_id,
+            "severity": str(finding.severity),
+            "title": finding.title,
+            "at": datetime.now(UTC).isoformat(),
+        }
+        self.critical_log.append(event)
+        if self.notifier:
+            self.notifier.send_critical_alert(event)
+
+    def process(self, engagement_id: str, findings: list) -> None:
+        """Bulk-escalate a list of CRITICAL findings at end of analysis run."""
+        for finding in findings:
+            self.flag(finding)
+
     def _matches(self, resource: dict, check: str) -> bool:
         # TODO: Phase C — implement per-check matching logic
         return False
@@ -47,7 +69,7 @@ class CriticalFindingEscalationEngine:
         event = {
             "trigger": trigger,
             "resource_id": resource.get("id") or resource.get("ResourceId"),
-            "at": datetime.utcnow().isoformat(),
+            "at": datetime.now(UTC).isoformat(),
         }
         self.critical_log.append(event)
         if self.notifier:

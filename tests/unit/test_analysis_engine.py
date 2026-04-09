@@ -225,7 +225,7 @@ class TestAzureNetFindingRules:
             peerings=[],
         )
         sub.vnets = [vnet]
-        topo = AzureTopology(engagement_id="test", subscriptions=[sub])
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         assert any(f.rule_id == "AZ-NET-001" for f in report.findings)
 
@@ -250,7 +250,7 @@ class TestAzureNetFindingRules:
             peerings=[],
         )
         sub.vnets = [vnet]
-        topo = AzureTopology(engagement_id="test", subscriptions=[sub])
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         nsg_findings = [f for f in report.findings if f.rule_id == "AZ-NET-002"]
         assert len(nsg_findings) == 1
@@ -278,7 +278,7 @@ class TestAzureNetFindingRules:
             peerings=[],
         )
         sub.vnets = [vnet]
-        topo = AzureTopology(engagement_id="test", subscriptions=[sub])
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         nsg_findings = [f for f in report.findings if f.rule_id == "AZ-NET-002"]
         assert len(nsg_findings) == 0
@@ -294,7 +294,7 @@ class TestAzureNetFindingRules:
             threat_intel_mode="Alert",
         )
         sub.firewalls = [fw]
-        topo = AzureTopology(engagement_id="test", subscriptions=[sub])
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         fw_findings = [f for f in report.findings if f.rule_id == "AZ-NET-003"]
         assert len(fw_findings) == 1
@@ -307,7 +307,7 @@ class TestAzureNetFindingRules:
             discovery_blocked=True,
             block_reason="HTTP 403",
         )
-        topo = AzureTopology(engagement_id="test", subscriptions=[sub])
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         assert report.total_count == 0
 

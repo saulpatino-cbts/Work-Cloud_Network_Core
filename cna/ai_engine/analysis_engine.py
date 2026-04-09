@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from cna.ai_engine.observed_state_enforcer import ObservedStateEnforcer
-from cna.core.escalation_engine import EscalationEngine
+from cna.core.escalation_engine import CriticalFindingEscalationEngine
 from cna.core.findings_schema import (
     FINDINGS_SCHEMA_VERSION,
     Finding,
@@ -111,7 +111,7 @@ class AnalysisEngine:
         self.store = store
         self.opts = options or AnalysisOptions()
         self._enforcer = ObservedStateEnforcer()
-        self._escalation = EscalationEngine()
+        self._escalation = CriticalFindingEscalationEngine()
         self._seen: set[str] = set()  # deduplication register
         self._findings: list[Finding] = []
 

@@ -87,9 +87,9 @@
 <div class="section-header">All Findings ({{ total_count }}) — sorted by severity</div>
 
 {% for f in findings %}
-<div class="finding {{ f.severity.value }}">
+<div class="finding {{ f.severity.value|upper }}">
   <div class="finding-header">
-    <span class="badge {{ f.severity.value }}">{{ f.severity.value }}</span>
+    <span class="badge {{ f.severity.value|upper }}">{{ f.severity.value|upper }}</span>
     <span class="finding-title">{{ f.title }}</span>
   </div>
   <div class="finding-meta">

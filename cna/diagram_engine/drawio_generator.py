@@ -170,7 +170,7 @@ def _wrap_diagram(cells: str, label: str) -> str:
             </mxGraphModel>
           </diagram>
         </mxfile>
-    """)
+    """).strip()
 
 
 # ── VPC Topology ───────────────────────────────────────────────────────────

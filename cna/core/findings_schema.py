@@ -42,6 +42,14 @@ class FrameworkMapping(BaseModel):
     alignment: str | None = None
 
 
+class FindingRecommendation(BaseModel):
+    """A vendor recommendation sourced from an MCP server or offline library."""
+
+    source: str  # e.g. "AWS MCP Server (awslabs/mcp)" or "CNA Platform"
+    text: str
+    reference_url: str = ""
+
+
 class Finding(BaseModel):
     id: str | None = None
     rule_id: str | None = None
@@ -66,10 +74,11 @@ class Finding(BaseModel):
 
     affected_resources: list[str] = Field(default_factory=list)
     framework_mappings: list[FrameworkMapping] = Field(default_factory=list)
+    recommendations: list["FindingRecommendation"] = Field(default_factory=list)  # DD-003: from MCP
     status: FindingStatus | None = None
     data_confidence: str = "HIGH"  # HIGH | MEDIUM | LOW
-    recommendation_source: str | None = None  # MCP server reference URL
-    recommendation: str | None = None  # From MCP — not our opinion
+    recommendation_source: str | None = None  # MCP server reference URL (legacy)
+    recommendation: str | None = None  # From MCP — not our opinion (legacy flat field)
     human_reviewed: bool = False  # DD-009: must be True before report
     human_notes: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

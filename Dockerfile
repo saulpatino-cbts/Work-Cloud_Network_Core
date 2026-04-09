@@ -8,8 +8,8 @@
 #   6. HEALTHCHECK added (required for ECS/AKS task definitions)
 #   7. .dockerignore referenced — see .dockerignore in repo root
 
-# python:3.12-slim digest pinned 2026-03-05
-FROM python:3.12-slim@sha256:a5b561c9eae9a3dbf3e8929a2be2e6c7f09b7b7f9e0f0e2c1d4b5a6c9e8f1d2 AS builder
+# python:3.12-slim digest pinned 2026-04-08
+FROM python:3.12-slim@sha256:5072b08ad74609c5329ab4085a96dfa873de565fb4751a4cfcd7dcc427661df0 AS builder
 
 ARG CNA_VERSION=dev
 WORKDIR /build
@@ -23,7 +23,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir --prefix=/install -e .
 
 # ---- final stage ----
-FROM python:3.12-slim@sha256:a5b561c9eae9a3dbf3e8929a2be2e6c7f09b7b7f9e0f0e2c1d4b5a6c9e8f1d2
+FROM python:3.12-slim@sha256:5072b08ad74609c5329ab4085a96dfa873de565fb4751a4cfcd7dcc427661df0
 
 ARG CNA_VERSION=dev
 LABEL org.opencontainers.image.title="CNA Platform" \

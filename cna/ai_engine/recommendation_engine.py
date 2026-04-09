@@ -44,10 +44,17 @@ class RecommendationEngine:
 
         for finding in report.findings:
             try:
+                rt = finding.resource_type or ""
+                if rt.startswith("AWS") or rt.lower().startswith("aws/"):
+                    cloud = "aws"
+                elif rt.startswith("Microsoft.") or rt.lower().startswith("azure/"):
+                    cloud = "azure"
+                elif "/" in rt:
+                    cloud = rt.split("/")[0].lower()
+                else:
+                    cloud = "aws"
                 recs = self._router.get_recommendations(
-                    cloud=finding.resource_type.split("/")[0]
-                    if "/" in finding.resource_type
-                    else ("aws" if finding.resource_type.startswith("AWS") else "azure"),
+                    cloud=cloud,
                     rule_id=finding.rule_id,
                     resource_type=finding.resource_type,
                     finding_title=finding.title,

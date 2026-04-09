@@ -341,6 +341,11 @@ jobs:
           name: policy-gates-${{ inputs.environment }}
           path: .verification/${{ inputs.environment }}
 
+      - name: Wait for Container Apps to stabilize
+        run: |
+          echo "Waiting 3 minutes for Container Apps to pull images and pass health checks..."
+          sleep 180
+
       - name: Query Azure Monitor health directly
         run: |
           mkdir -p .verification/${{ inputs.environment }}

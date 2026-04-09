@@ -343,8 +343,34 @@ jobs:
 
       - name: Wait for Container Apps to stabilize
         run: |
-          echo "Waiting 3 minutes for Container Apps to pull images and pass health checks..."
-          sleep 180
+          MANIFEST=".deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          AFD_HOST=$(python3 -c "import json; d=json.load(open('$MANIFEST')); print(d['platform_context']['frontdoor_endpoint_host_name'])")
+          echo "AFD endpoint: $AFD_HOST"
+
+          echo "Polling https://$AFD_HOST/ until the app is reachable..."
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          REACHABLE=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$AFD_HOST/" || echo "000")
+            echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS — HTTP $HTTP_CODE"
+            # 200/302 = success; 401/403 = auth wall (app is up); 404 = not routed yet; 503 = origins down
+            if [[ "$HTTP_CODE" =~ ^(200|302|401|403)$ ]]; then
+              echo "App reachable (HTTP $HTTP_CODE) — proceeding"
+              REACHABLE=1
+              break
+            fi
+            sleep 15
+          done
+
+          if [ $REACHABLE -eq 0 ]; then
+            echo "App not reachable after $((MAX_ATTEMPTS * 15))s — waiting 5 extra minutes as fallback"
+            sleep 300
+          else
+            echo "Waiting 2 minutes for Azure Monitor metrics to propagate..."
+            sleep 120
+          fi
 
       - name: Query Azure Monitor health directly
         run: |

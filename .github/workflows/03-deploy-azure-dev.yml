@@ -58,6 +58,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   TF_IN_AUTOMATION: true
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
@@ -231,12 +232,6 @@ jobs:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
     outputs:
       frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
-      frontdoor_profile_id: ${{ steps.export.outputs.frontdoor_profile_id }}
-      frontdoor_endpoint_id: ${{ steps.export.outputs.frontdoor_endpoint_id }}
-      frontdoor_origin_group_id: ${{ steps.export.outputs.frontdoor_origin_group_id }}
-      frontdoor_route_id: ${{ steps.export.outputs.frontdoor_route_id }}
-      frontdoor_custom_domain_id: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
-      frontdoor_secret_id: ${{ steps.export.outputs.frontdoor_secret_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -281,12 +276,6 @@ jobs:
         id: export
         run: |
           echo "frontdoor_endpoint_host_name=$(terraform output -raw frontdoor_endpoint_host_name)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_profile_id=$(terraform output -raw frontdoor_profile_id)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_endpoint_id=$(terraform output -raw frontdoor_endpoint_id)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_origin_group_id=$(terraform output -raw frontdoor_origin_group_id)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_route_id=$(terraform output -raw frontdoor_route_id)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_custom_domain_id=$(terraform output -raw frontdoor_custom_domain_id 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
-          echo "frontdoor_secret_id=$(terraform output -raw frontdoor_secret_id 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
 
       - name: Download deployment manifest
         uses: actions/download-artifact@v4
@@ -303,12 +292,6 @@ jobs:
         env:
           MANIFEST_PATH: ${{ github.workspace }}/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
           FRONTDOOR_ENDPOINT_HOST_NAME: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
-          FRONTDOOR_PROFILE_ID: ${{ steps.export.outputs.frontdoor_profile_id }}
-          FRONTDOOR_ENDPOINT_ID: ${{ steps.export.outputs.frontdoor_endpoint_id }}
-          FRONTDOOR_ORIGIN_GROUP_ID: ${{ steps.export.outputs.frontdoor_origin_group_id }}
-          FRONTDOOR_ROUTE_ID: ${{ steps.export.outputs.frontdoor_route_id }}
-          FRONTDOOR_CUSTOM_DOMAIN_ID: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
-          FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
         run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 
       - name: Upload staged manifest

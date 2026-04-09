@@ -4,6 +4,9 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Required when running behind a reverse proxy (Azure Front Door / Container Apps).
+  // Auth.js v5 rejects requests from untrusted hosts without this.
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
     MicrosoftEntraID({

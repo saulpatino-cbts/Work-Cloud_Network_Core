@@ -355,8 +355,8 @@ jobs:
             ATTEMPT=$((ATTEMPT + 1))
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$AFD_HOST/" || echo "000")
             echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS — HTTP $HTTP_CODE"
-            # 200/302 = success; 401/403 = auth wall (app is up); 404 = not routed yet; 503 = origins down
-            if [[ "$HTTP_CODE" =~ ^(200|302|401|403)$ ]]; then
+            # 200/302/307 = success/redirect; 401/403 = auth wall (app is up); 404/503 = not ready
+            if [[ "$HTTP_CODE" =~ ^(200|302|307|401|403)$ ]]; then
               echo "App reachable (HTTP $HTTP_CODE) — proceeding"
               REACHABLE=1
               break

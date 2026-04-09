@@ -121,6 +121,7 @@ module "compute" {
 
   web_env_vars = {
     NEXTAUTH_URL                          = var.nextauth_url
+    AUTH_TRUST_HOST                       = "true"
     AZURE_AD_TENANT_ID                    = var.tenant_id
     AZURE_AD_CLIENT_ID                    = var.entra_client_id
     CNA_API_INTERNAL_URL                  = "http://ca-${local.name_prefix}-api"

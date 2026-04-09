@@ -271,24 +271,24 @@ all CRITICAL/HIGH findings before a Deliverable of type `SPECIALIZATION_REPORT` 
 | `ci.yml` | `08-ci.yml` | Numbered sequence; CI runs after images are built |
 | `release.yml` | `09-release.yml` | Numbered sequence; release is the final step |
 | `cd-publish.yml` | `07-cd-publish.yml` | Numbered sequence |
-| `deploy-azure-runtime.yml` | `03-deploy-azure-dev.yml` | Renamed to reflect Terraform deploy role |
+| `deploy-azure-runtime.yml` | `031-deploy-azure.yml` | Renamed to reflect Terraform deploy role |
 
 ### New Workflows
 
 | File | Purpose |
 |---|---|
-| `01-bootstrap-backend.yml` | One-time: creates Azure RG + storage account for Terraform remote backend |
+| `000-bootstrap-backend.yml` | One-time: creates Azure RG + storage account for Terraform remote backend |
 | `05-sync-env-from-keyvault.yml` | Pulls 5 KV secrets, generates populated `.env` as 1-day artifact |
 | `06-refresh-containers.yml` | Fast `az containerapp update` — no Terraform, ~2 min per image |
 
 ### Updated Workflows
 
-**`02-build-and-publish-images.yml`** (was `build-and-publish-images.yml` / implicitly pre-existing):
+**`030-build-images.yml`** (was `build-and-publish-images.yml` / implicitly pre-existing):
 - Added `apps/cna-web/**` path trigger
 - Added `build-web` job: builds `cna-web` image, runs smoke test (`/api/health` returns 200 or 503)
 - All three images tagged `:<sha>` and `:latest`
 
-**`03-deploy-azure-dev.yml`** (was `deploy-azure-runtime.yml`):
+**`031-deploy-azure.yml`** (was `deploy-azure-runtime.yml`):
 - Added `web_image` workflow input
 - Added `CNA_POSTGRES_ADMIN_PASSWORD`, `CNA_ENTRA_CLIENT_SECRET`, `CNA_NEXTAUTH_SECRET` secrets
   to Terraform plan/apply `-var` arguments

@@ -12,7 +12,7 @@
 #   - Engagement data is never checked into the repo
 #     (engagements/ is in .gitignore)
 #   - Runs in the same container image used locally for reproducibility
-name: "06 · CD — Publish Portal"
+name: "020 · Publish Delivery Portal"
 
 on:
   workflow_dispatch:

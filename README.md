@@ -132,9 +132,9 @@ Full workflow documentation with execution order, duration, and first deployment
 
 | # | File | Trigger | What It Does |
 |---|---|---|---|
-| 01 | `01-bootstrap-backend.yml` | Manual (one-time) | Creates Azure RG + Storage Account for Terraform remote backend |
-| 02 | `02-build-and-publish-images.yml` | Push to `main` (apps/**), manual | Builds and pushes cna-api, cna-worker, cna-web to GHCR; smoke tests |
-| 03 | `03-deploy-azure-dev.yml` | Manual | Terraform plan + apply for dev/prod; post-deploy health verification; nightly drift detection |
+| 01 | `000-bootstrap-backend.yml` | Manual (one-time) | Creates Azure RG + Storage Account for Terraform remote backend |
+| 02 | `030-build-images.yml` | Push to `main` (apps/**), manual | Builds and pushes cna-api, cna-worker, cna-web to GHCR; smoke tests |
+| 03 | `031-deploy-azure.yml` | Manual | Terraform plan + apply for dev/prod; post-deploy health verification; nightly drift detection |
 | 05 | `05-sync-env-from-keyvault.yml` | Manual | Pulls all platform secrets from Key Vault → 1-day `.env` artifact |
 | 06 | `06-refresh-containers.yml` | Manual | Fast image update via `az containerapp update` — no Terraform |
 | 07 | `07-cd-publish.yml` | Push to `main` | Delivers reports and assets to client portals |
@@ -188,9 +188,9 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Var
 |---|---|---|
 | `08-ci.yml` | ✅ Ready now | Nothing — runs on next push |
 | `09-release.yml` | ✅ Ready | `git tag v0.1.0 && git push --tags` |
-| `01-bootstrap-backend.yml` | ⚠ Needs OIDC secrets | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
-| `02-build-and-publish-images.yml` | ✅ Ready now | Nothing — runs on next push to `main` |
-| `03-deploy-azure-dev.yml` | ⚠ Needs all secrets + variables | Run 01 and 02 first; see `.github/workflows/README.md` checklist |
+| `000-bootstrap-backend.yml` | ⚠ Needs OIDC secrets | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
+| `030-build-images.yml` | ✅ Ready now | Nothing — runs on next push to `main` |
+| `031-deploy-azure.yml` | ⚠ Needs all secrets + variables | Run 01 and 02 first; see `.github/workflows/README.md` checklist |
 | `05-sync-env-from-keyvault.yml` | ⚠ After 03 completes | Run after first Terraform deploy to validate all KV secrets |
 | `06-refresh-containers.yml` | ⚠ After 03 completes | Use after 02 to do fast code-only deploys |
 | `07-cd-publish.yml` | ⚠ Needs AWS or Azure secrets | `CNA_AWS_ROLE_ARN` + `CNA_PUBLISH_BUCKET` (AWS) or Azure OIDC secrets |

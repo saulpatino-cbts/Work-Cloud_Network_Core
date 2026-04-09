@@ -1,4 +1,4 @@
-name: "00 · Validate Prerequisites"
+name: "010 · Validate Prerequisites"
 # Run this workflow before 01-bootstrap-backend to confirm that all required
 # GitHub Secrets, GitHub Variables, and Azure OIDC authentication are in place.
 #

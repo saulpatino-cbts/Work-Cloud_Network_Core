@@ -1,4 +1,4 @@
-name: "03 · Deploy Azure (Dev/Prod)"
+name: "031 · Deploy Azure Platform"
 
 on:
   workflow_dispatch:

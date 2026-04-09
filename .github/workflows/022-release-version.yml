@@ -9,7 +9,7 @@
 # Required repository settings:
 #   Actions > General > Workflow permissions: Read and write
 #   (or grant packages:write explicitly in permissions block below)
-name: "08 · Release"
+name: "022 · Release CLI Tool"
 
 on:
   push:

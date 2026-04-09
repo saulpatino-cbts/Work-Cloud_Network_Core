@@ -124,7 +124,7 @@ Services: `api`, `worker`, `web`
 
 | Layer | Convention | Example |
 |---|---|---|
-| GitHub Actions workflows | `NN-{slug}.yml` | `03-deploy-azure-dev.yml` |
+| GitHub Actions workflows | `NN-{slug}.yml` | `031-deploy-azure.yml` |
 | Architecture docs | `NN-{slug}.md` (sequential) | `40-naming-conventions.md` |
 | Blog posts | `YYYY-MM-DD-{slug}.md` | `2026-03-08-github-actions-azure-oidc.md` |
 | Gists | `NN-{slug}.md` (01-12) | `01-managed-identity-setup.md` |

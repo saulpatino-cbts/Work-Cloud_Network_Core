@@ -1,4 +1,4 @@
-name: "01 · Bootstrap Terraform Backend"
+name: "000 · Bootstrap Backend"
 # ONE-TIME workflow. Run this before any other workflow.
 # Creates the Azure Resource Group + Storage Account used as the
 # Terraform remote backend. After this completes, set:

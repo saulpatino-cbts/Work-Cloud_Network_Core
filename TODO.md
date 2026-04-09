@@ -61,7 +61,7 @@ Go to repo → Settings → Secrets and variables → Actions → Variables tab 
 
 ### Step 2 — Bootstrap Terraform Backend
 
-Run workflow `01-bootstrap-backend.yml` **once**. This creates:
+Run workflow `000-bootstrap-backend.yml` **once**. This creates:
 - Resource group `rg-cna-tfstate` (dedicated to Terraform state — never touched by Terraform itself)
 - Storage account `stcnatfstate`
 - Blob container `tfstate`
@@ -100,7 +100,7 @@ This builds and pushes three images to GHCR:
 
 ### Step 4 — First Terraform Deploy (dev)
 
-Run workflow `03-deploy-azure-dev.yml`.
+Run workflow `031-deploy-azure.yml`.
 
 This is the main infra deploy (~20 min). It provisions:
 - VNet + subnets + NSG (`vnet-cna-dev-scus-platform`)

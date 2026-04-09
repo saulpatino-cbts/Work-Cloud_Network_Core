@@ -1,4 +1,4 @@
-name: "02 · Build and Publish Images"
+name: "030 · Build Container Images"
 
 on:
   push:

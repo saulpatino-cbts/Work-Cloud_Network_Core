@@ -273,7 +273,7 @@ jobs:
 
       - name: Run database migrations
         run: |
-          DB_URL=$(terraform output -raw connection_string)
+          DB_URL=$(terraform output -raw database_connection_string)
           RG="rg-cna-${{ inputs.environment }}-scus"
           CAE="cae-cna-${{ inputs.environment }}-scus-platform"
           JOB="job-migrate-${{ github.run_id }}"

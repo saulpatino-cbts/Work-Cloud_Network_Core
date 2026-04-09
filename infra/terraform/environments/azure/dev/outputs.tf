@@ -105,3 +105,9 @@ output "database_server_fqdn" {
   description = "PostgreSQL Flexible Server FQDN (private DNS name — only reachable within the VNet)"
   value       = module.database.server_fqdn
 }
+
+output "database_connection_string" {
+  description = "Full DATABASE_URL for the migrator job — used by CI to run prisma migrate deploy"
+  value       = module.database.connection_string
+  sensitive   = true
+}

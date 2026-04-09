@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=75", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "cna"
@@ -94,3 +94,6 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@overload",
 ]
+
+[tool.setuptools.packages.find]
+include = ["cna*"]

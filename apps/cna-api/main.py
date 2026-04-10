@@ -352,7 +352,9 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
     progress: list[str] = []
 
     def _log(msg: str) -> None:
-        progress.append(msg)
+        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        entry = f"[{ts} UTC] {msg}"
+        progress.append(entry)
         logger.info("[job:%s] %s", job_id, msg)
         _update_job(job_id, progressLog=json.dumps(progress))
 
@@ -390,11 +392,13 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
         _insert_findings(engagement_id, all_findings)
         _advance_engagement_status(engagement_id)
 
+        topology_json = topology.model_dump_json()
         _update_job(
             job_id,
             status="COMPLETED",
             completedAt=datetime.now(timezone.utc),
             findingsCount=len(all_findings),
+            topologyJson=topology_json,
             progressLog=json.dumps(progress + ["Done."]),
         )
 

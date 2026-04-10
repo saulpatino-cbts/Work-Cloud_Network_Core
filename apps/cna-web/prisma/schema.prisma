@@ -216,6 +216,7 @@ model DiscoveryJob {
   errorMessage  String?            @db.Text
   findingsCount Int?
   progressLog   String?            @db.Text // JSON array of status messages
+  topologyJson  String?            @db.Text // Full AzureTopology JSON for inventory page
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 

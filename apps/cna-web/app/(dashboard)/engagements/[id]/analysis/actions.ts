@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { analyzeDocuments } from "@/lib/openai";
+import { analyzeDocuments, type AnalysisFocus } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 
 export async function runAnalysis(
@@ -13,6 +13,7 @@ export async function runAnalysis(
   if (!session?.user?.id) return { error: "Not authenticated." };
 
   const engagementId = formData.get("engagementId") as string | null;
+  const focus = (formData.get("focus") as AnalysisFocus | null) ?? "general";
   if (!engagementId) return { error: "Missing engagement ID." };
 
   const member = await prisma.engagementMember.findUnique({
@@ -34,6 +35,7 @@ export async function runAnalysis(
 
   const rawFindings = await analyzeDocuments(
     documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+    focus,
   );
 
   if (rawFindings.length > 0) {

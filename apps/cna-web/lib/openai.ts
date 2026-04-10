@@ -28,12 +28,37 @@ function getClient(): AzureOpenAI {
   });
 }
 
+export type AnalysisFocus =
+  | "general"
+  | "zero_trust"
+  | "compliance_nist"
+  | "compliance_cis"
+  | "well_architected"
+  | "remediation_priority";
+
+const FOCUS_PROMPTS: Record<AnalysisFocus, string> = {
+  general:
+    "Identify all network security findings across all categories.",
+  zero_trust:
+    "Focus on Zero Trust architecture gaps: micro-segmentation, identity-based access, lateral movement risks, implicit trust zones.",
+  compliance_nist:
+    "Evaluate against NIST SP 800-53 network controls (SC-7 Boundary Protection, AC-4 Information Flow, SI-3 Malicious Code Protection). Map each finding to the relevant NIST control.",
+  compliance_cis:
+    "Evaluate against CIS Azure Foundations Benchmark and CIS Controls v8. Map each finding to the relevant CIS control number.",
+  well_architected:
+    "Evaluate against the Azure Well-Architected Framework Security pillar. Focus on defense in depth, least privilege, and network segmentation best practices from WAF guidance.",
+  remediation_priority:
+    "Identify findings that represent the highest-impact quick wins. Prioritize based on exploitability, blast radius, and remediation effort. Flag anything that can be fixed in under 1 day.",
+};
+
 /**
  * Analyze network assessment documents and return structured findings.
  * Documents must have extracted text (parsedText) to be included.
+ * focus controls the analysis lens applied by the AI.
  */
 export async function analyzeDocuments(
   documents: { fileName: string; text: string }[],
+  focus: AnalysisFocus = "general",
 ): Promise<RawFinding[]> {
   const client = getClient();
 
@@ -41,9 +66,12 @@ export async function analyzeDocuments(
     .map((d, i) => `--- Document ${i + 1}: ${d.fileName} ---\n${d.text}`)
     .join("\n\n");
 
+  const focusInstruction = FOCUS_PROMPTS[focus];
+
   const systemPrompt = `You are a senior cloud network security analyst performing a Cloud Network Assessment (CNA).
-Analyze the provided network documentation and identify security findings.
+${focusInstruction}
 Each finding must be actionable and specific to the evidence in the documents.
+Avoid duplicating findings that were already identified from live discovery.
 Return ONLY a JSON object in this exact format:
 {
   "findings": [
@@ -57,7 +85,7 @@ Return ONLY a JSON object in this exact format:
   ]
 }`;
 
-  const userPrompt = `Analyze these network assessment documents and identify all security findings:\n\n${docSummary}`;
+  const userPrompt = `Analyze these network assessment documents and identify security findings:\n\n${docSummary}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
   const response = await client.chat.completions.create({

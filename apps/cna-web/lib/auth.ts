@@ -33,7 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: profile.sub,
           name: profile.name ?? profile.preferred_username,
           email: profile.email ?? profile.preferred_username,
-          image: profile.picture ?? null,
+          image: null,
         };
       },
     }),

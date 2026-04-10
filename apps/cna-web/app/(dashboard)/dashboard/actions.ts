@@ -34,3 +34,26 @@ export async function createEngagement(formData: FormData) {
   revalidatePath("/dashboard");
   redirect(`/engagements/${engagement.id}`);
 }
+
+export async function deleteEngagement(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/auth/signin");
+  }
+
+  const engagementId = (formData.get("engagementId") as string | null)?.trim();
+  if (!engagementId) return;
+
+  // Only members may delete.
+  const member = await prisma.engagementMember.findUnique({
+    where: {
+      engagementId_userId: { engagementId, userId: session.user.id },
+    },
+  });
+  if (!member) return;
+
+  await prisma.engagement.delete({ where: { id: engagementId } });
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}

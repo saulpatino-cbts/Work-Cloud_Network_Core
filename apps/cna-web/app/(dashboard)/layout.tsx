@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth, signOut } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 // All routes under (dashboard)/ require an active session.
@@ -20,7 +20,22 @@ export default async function DashboardLayout({
           <span className="text-lg font-semibold text-gray-900">
             CNA Platform
           </span>
-          <span className="text-sm text-gray-500">{session.user.email}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">{session.user.email}</span>
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/auth/signin" });
+              }}
+            >
+              <button
+                type="submit"
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </header>
       <main className="flex-1 p-6">{children}</main>

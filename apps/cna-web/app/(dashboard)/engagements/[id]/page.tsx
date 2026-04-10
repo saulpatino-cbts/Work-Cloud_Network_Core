@@ -10,6 +10,7 @@ import { UploadDocumentForm } from "./documents/upload-form";
 import { RunAnalysisForm } from "./analysis/run-form";
 import { GenerateDeliverableForm } from "./deliverables/generate-form";
 import { publishDeliverable } from "./deliverables/actions";
+import { deleteEngagement } from "@/app/(dashboard)/dashboard/actions";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -19,31 +20,43 @@ export default async function EngagementPage({ params }: PageProps) {
   const { id } = await params;
   const session = await auth();
 
-  const engagement = await prisma.engagement.findUnique({
+  // Base query — always works regardless of migration state.
+  const base = await prisma.engagement.findUnique({
     where: { id },
     include: {
       members: { include: { user: true } },
-      cloudCredentials: { orderBy: { createdAt: "asc" } },
-      discoveryJobs: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: { credential: { select: { label: true } } },
-      },
       documents: { orderBy: { createdAt: "desc" } },
       findings: { orderBy: [{ severity: "asc" }, { createdAt: "asc" }] },
       deliverables: { orderBy: { createdAt: "desc" } },
     },
   });
 
-  if (!engagement) notFound();
+  if (!base) notFound();
 
-  const isMember = engagement.members.some(
-    (m) => m.userId === session?.user?.id,
-  );
+  const isMember = base.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  // Strip credential relation from jobs for the client component (no circular refs)
-  const jobsForPanel = engagement.discoveryJobs.map((j) => ({
+  // Discovery tables may not exist yet if the migration is pending.
+  // Fail open with empty arrays so the page renders while the DB is being migrated.
+  let cloudCredentials: Awaited<ReturnType<typeof prisma.cloudCredential.findMany>> = [];
+  let rawJobs: Awaited<ReturnType<typeof prisma.discoveryJob.findMany>> = [];
+  try {
+    [cloudCredentials, rawJobs] = await Promise.all([
+      prisma.cloudCredential.findMany({
+        where: { engagementId: id },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.discoveryJob.findMany({
+        where: { engagementId: id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+  } catch {
+    // Tables not yet migrated — render the page with empty discovery state.
+  }
+
+  const jobsForPanel = rawJobs.map((j) => ({
     id: j.id,
     status: j.status,
     startedAt: j.startedAt,
@@ -54,26 +67,49 @@ export default async function EngagementPage({ params }: PageProps) {
     credentialId: j.credentialId,
   }));
 
-  const liveFindings = engagement.findings.filter((f) => !f.aiGenerated);
-  const aiFindings = engagement.findings.filter((f) => f.aiGenerated);
+  const liveFindings = base.findings.filter((f) => !f.aiGenerated);
+  const aiFindings = base.findings.filter((f) => f.aiGenerated);
 
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
-      <div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          ← Back to dashboard
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            {engagement.name}
-          </h1>
-          <StatusBadge value={engagement.status} variant="status" />
+      <div className="flex items-start justify-between">
+        <div>
+          <Link
+            href="/dashboard"
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            ← Back to dashboard
+          </Link>
+          <div className="mt-2 flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-gray-900">
+              {base.name}
+            </h1>
+            <StatusBadge value={base.status} variant="status" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500">{base.clientOrg}</p>
         </div>
-        <p className="mt-1 text-sm text-gray-500">{engagement.clientOrg}</p>
+
+        {/* Delete engagement */}
+        <form
+          action={deleteEngagement}
+          onSubmit={(e) => {
+            if (
+              !confirm(
+                `Delete "${base.name}"? This will permanently remove all documents, findings, and deliverables. This cannot be undone.`,
+              )
+            )
+              e.preventDefault();
+          }}
+        >
+          <input type="hidden" name="engagementId" value={id} />
+          <button
+            type="submit"
+            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+          >
+            Delete engagement
+          </button>
+        </form>
       </div>
 
       {/* ── Cloud Connections ── */}
@@ -82,27 +118,25 @@ export default async function EngagementPage({ params }: PageProps) {
           Cloud Connections
         </h2>
         <p className="mb-5 text-sm text-gray-500">
-          Connect directly to a cloud tenant to discover live network topology.
+          Connect directly to an Azure tenant to discover live network topology.
           This is the primary source of truth — document upload is secondary.
         </p>
 
         <DiscoveryPanel
           engagementId={id}
-          credentials={engagement.cloudCredentials}
+          credentials={cloudCredentials}
           jobs={jobsForPanel}
         />
 
-        {/* Saved credentials delete buttons */}
-        {engagement.cloudCredentials.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-2">
-            {engagement.cloudCredentials.map((cred) => (
+        {cloudCredentials.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-3">
+            {cloudCredentials.map((cred) => (
               <form key={cred.id} action={deleteCloudCredential}>
                 <input type="hidden" name="credentialId" value={cred.id} />
                 <input type="hidden" name="engagementId" value={id} />
                 <button
                   type="submit"
                   className="text-xs text-gray-400 hover:text-red-600"
-                  title={`Remove ${cred.label}`}
                 >
                   Remove "{cred.label}"
                 </button>
@@ -111,7 +145,6 @@ export default async function EngagementPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Add connection form */}
         <div className="mt-6 border-t border-gray-100 pt-5">
           <h3 className="mb-3 text-sm font-medium text-gray-700">
             Add cloud connection
@@ -120,21 +153,21 @@ export default async function EngagementPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* ── Findings (live + AI combined) ── */}
+      {/* ── Findings ── */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">
             Findings
-            {engagement.findings.length > 0 && (
+            {base.findings.length > 0 && (
               <span className="ml-1 text-base font-normal text-gray-500">
-                ({engagement.findings.length})
+                ({base.findings.length})
               </span>
             )}
           </h2>
           <RunAnalysisForm engagementId={id} />
         </div>
 
-        {engagement.findings.length === 0 ? (
+        {base.findings.length === 0 ? (
           <p className="text-sm text-gray-400">
             No findings yet. Run discovery against a live tenant, or upload
             documents and run AI analysis.
@@ -163,17 +196,17 @@ export default async function EngagementPage({ params }: PageProps) {
         )}
       </section>
 
-      {/* ── Documents (secondary source) ── */}
+      {/* ── Documents ── */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-1 text-lg font-semibold text-gray-900">Documents</h2>
         <p className="mb-4 text-sm text-gray-500">
           Secondary source — upload compliance frameworks, architecture diagrams,
-          or configuration exports that can't be auto-discovered.
+          or configuration exports that can&apos;t be auto-discovered.
         </p>
 
-        {engagement.documents.length > 0 ? (
+        {base.documents.length > 0 ? (
           <ul className="mb-6 divide-y divide-gray-100">
-            {engagement.documents.map((doc) => (
+            {base.documents.map((doc) => (
               <li
                 key={doc.id}
                 className="flex items-center justify-between py-3"
@@ -209,9 +242,9 @@ export default async function EngagementPage({ params }: PageProps) {
           Deliverables
         </h2>
 
-        {engagement.deliverables.length > 0 ? (
+        {base.deliverables.length > 0 ? (
           <ul className="mb-6 divide-y divide-gray-100">
-            {engagement.deliverables.map((d) => (
+            {base.deliverables.map((d) => (
               <li key={d.id} className="py-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -268,8 +301,6 @@ export default async function EngagementPage({ params }: PageProps) {
     </div>
   );
 }
-
-// ─── FindingList sub-component ────────────────────────────────────────────────
 
 function FindingList({
   findings,

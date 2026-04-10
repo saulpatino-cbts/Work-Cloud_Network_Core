@@ -59,7 +59,9 @@ Return ONLY a JSON object in this exact format:
 
   const userPrompt = `Analyze these network assessment documents and identify all security findings:\n\n${docSummary}`;
 
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
   const response = await client.chat.completions.create({
+    model: deployment,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },

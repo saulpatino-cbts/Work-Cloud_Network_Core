@@ -96,3 +96,10 @@ variable "nextauth_url" {
   type        = string
   default     = "https://cna.example.com"
 }
+
+# ─── Credential encryption ────────────────────────────────────────────────────
+variable "credential_encryption_key" {
+  description = "Base64-encoded 32-byte AES-256 key for encrypting SP client secrets at rest. Generate with: openssl rand -base64 32"
+  type        = string
+  sensitive   = true
+}

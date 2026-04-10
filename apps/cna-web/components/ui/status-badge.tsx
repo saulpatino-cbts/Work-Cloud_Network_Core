@@ -22,6 +22,14 @@ const DOCTYPE_COLORS: Record<string, string> = {
   OTHER: "bg-gray-100 text-gray-600",
 };
 
+const JOB_COLORS: Record<string, string> = {
+  QUEUED: "bg-gray-100 text-gray-600",
+  RUNNING: "bg-blue-100 text-blue-700",
+  COMPLETED: "bg-green-100 text-green-700",
+  FAILED: "bg-red-100 text-red-700",
+  CANCELLED: "bg-gray-100 text-gray-500",
+};
+
 const LABELS: Record<string, string> = {
   DRAFT: "Draft",
   DISCOVERY: "Discovery",
@@ -38,11 +46,16 @@ const LABELS: Record<string, string> = {
   NETWORK_DIAGRAM: "Diagram",
   CONFIGURATION_EXPORT: "Config",
   OTHER: "Other",
+  QUEUED: "Queued",
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
 };
 
 interface StatusBadgeProps {
   value: string;
-  variant: "status" | "severity" | "doctype";
+  variant: "status" | "severity" | "doctype" | "job";
 }
 
 export function StatusBadge({ value, variant }: StatusBadgeProps) {
@@ -51,7 +64,9 @@ export function StatusBadge({ value, variant }: StatusBadgeProps) {
       ? STATUS_COLORS
       : variant === "severity"
         ? SEVERITY_COLORS
-        : DOCTYPE_COLORS;
+        : variant === "job"
+          ? JOB_COLORS
+          : DOCTYPE_COLORS;
 
   const color = colorMap[value] ?? "bg-gray-100 text-gray-600";
   const label = LABELS[value] ?? value;

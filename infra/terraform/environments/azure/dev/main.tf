@@ -135,18 +135,25 @@ module "compute" {
 
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
   web_secret_env_vars = {
-    DATABASE_URL           = "database-url"
-    AUTH_SECRET            = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
-    AZURE_AD_CLIENT_SECRET = "entra-client-secret"
+    DATABASE_URL                 = "database-url"
+    AUTH_SECRET                  = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
+    AZURE_AD_CLIENT_SECRET       = "entra-client-secret"
+    CREDENTIAL_ENCRYPTION_KEY    = "credential-encryption-key"
+  }
+
+  # cna-api needs DATABASE_URL to read/write discovery jobs and findings.
+  api_secret_env_vars = {
+    DATABASE_URL = "database-url"
   }
 
   # ── Container App secrets (encrypted values stored within Container Apps) ────
-  # These are referenced by the web_secret_env_vars above. The actual values
+  # These are referenced by the *_secret_env_vars above. The actual values
   # come from Terraform variables set via GitHub Secrets in CI.
   container_app_secrets = {
-    "database-url"        = module.database.connection_string
-    "nextauth-secret"     = var.nextauth_secret
-    "entra-client-secret" = var.entra_client_secret
+    "database-url"               = module.database.connection_string
+    "nextauth-secret"            = var.nextauth_secret
+    "entra-client-secret"        = var.entra_client_secret
+    "credential-encryption-key"  = var.credential_encryption_key
   }
 }
 

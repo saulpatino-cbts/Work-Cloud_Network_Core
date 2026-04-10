@@ -84,10 +84,12 @@ model Engagement {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  members     EngagementMember[]
-  documents   IngestedDocument[]
-  findings    Finding[]
-  deliverables Deliverable[]
+  members          EngagementMember[]
+  documents        IngestedDocument[]
+  findings         Finding[]
+  deliverables     Deliverable[]
+  cloudCredentials CloudCredential[]
+  discoveryJobs    DiscoveryJob[]
 }
 
 enum EngagementStatus {
@@ -161,6 +163,64 @@ enum FindingSeverity {
   MEDIUM
   LOW
   INFORMATIONAL
+}
+
+// ─── Cloud Discovery ──────────────────────────────────────────────────────────
+
+enum CloudPlatform {
+  AZURE
+  AWS
+}
+
+enum DiscoveryJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model CloudCredential {
+  id           String        @id @default(cuid())
+  engagementId String
+  platform     CloudPlatform
+  label        String        // human-readable e.g. "ACME Corp Production"
+
+  // Azure
+  tenantId        String?
+  subscriptionIds String[]   // empty = all accessible subscriptions
+  spClientId      String?    // service principal client ID
+  spSecretEnc     String?    @db.Text // AES-256-GCM encrypted client secret
+
+  // AWS (future — fields present but UI disabled until AWS phase)
+  awsRoleArn    String?
+  awsExternalId String?
+  awsRegions    String[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  engagement   Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  jobs         DiscoveryJob[]
+
+  @@unique([engagementId, label])
+}
+
+model DiscoveryJob {
+  id            String             @id @default(cuid())
+  engagementId  String
+  credentialId  String
+  status        DiscoveryJobStatus @default(QUEUED)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  errorMessage  String?            @db.Text
+  findingsCount Int?
+  progressLog   String?            @db.Text // JSON array of status messages
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  engagement    Engagement         @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  credential    CloudCredential    @relation(fields: [credentialId], references: [id])
 }
 
 // ─── Deliverables ─────────────────────────────────────────────────────────────

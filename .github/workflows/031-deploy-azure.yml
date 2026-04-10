@@ -179,7 +179,8 @@ jobs:
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="ghcr_pat=${{ secrets.GHCR_PAT }}"
+            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"
 
       - name: Create deployment manifest
         run: |
@@ -544,4 +545,5 @@ jobs:
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="ghcr_pat=${{ secrets.GHCR_PAT }}"
+            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"

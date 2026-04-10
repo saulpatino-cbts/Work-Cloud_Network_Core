@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
+import { UserRole } from "@prisma/client";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Required when running behind a reverse proxy (Azure Front Door / Container Apps).
@@ -37,6 +38,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: profile.name ?? profile.preferred_username,
           email: profile.email ?? profile.preferred_username,
           image: null,
+          // Default role for new users. Existing users retain their DB role.
+          role: UserRole.ANALYST,
         };
       },
     }),

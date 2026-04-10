@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DeleteEngagementButton } from "@/components/ui/delete-engagement-button";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -46,25 +47,33 @@ export default async function DashboardPage() {
       ) : (
         <ul className="space-y-3">
           {engagements.map((eng) => (
-            <li key={eng.id}>
+            <li
+              key={eng.id}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow"
+            >
               <Link
                 href={`/engagements/${eng.id}`}
-                className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow"
+                className="flex flex-1 items-center justify-between p-4"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{eng.name}</p>
-                    <p className="text-sm text-gray-500">{eng.clientOrg}</p>
+                <div>
+                  <p className="font-medium text-gray-900">{eng.name}</p>
+                  <p className="text-sm text-gray-500">{eng.clientOrg}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right text-xs text-gray-400">
+                    <p>{eng._count.documents} documents</p>
+                    <p>{eng._count.findings} findings</p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right text-xs text-gray-400">
-                      <p>{eng._count.documents} documents</p>
-                      <p>{eng._count.findings} findings</p>
-                    </div>
-                    <StatusBadge value={eng.status} variant="status" />
-                  </div>
+                  <StatusBadge value={eng.status} variant="status" />
                 </div>
               </Link>
+              <div className="pr-4">
+                <DeleteEngagementButton
+                  engagementId={eng.id}
+                  engagementName={eng.name}
+                  variant="inline"
+                />
+              </div>
             </li>
           ))}
         </ul>

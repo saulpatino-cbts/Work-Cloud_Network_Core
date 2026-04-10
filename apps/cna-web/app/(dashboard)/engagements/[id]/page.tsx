@@ -10,7 +10,7 @@ import { UploadDocumentForm } from "./documents/upload-form";
 import { RunAnalysisForm } from "./analysis/run-form";
 import { GenerateDeliverableForm } from "./deliverables/generate-form";
 import { publishDeliverable } from "./deliverables/actions";
-import { deleteEngagement } from "@/app/(dashboard)/dashboard/actions";
+import { DeleteEngagementButton } from "@/components/ui/delete-engagement-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -91,25 +91,11 @@ export default async function EngagementPage({ params }: PageProps) {
         </div>
 
         {/* Delete engagement */}
-        <form
-          action={deleteEngagement}
-          onSubmit={(e) => {
-            if (
-              !confirm(
-                `Delete "${base.name}"? This will permanently remove all documents, findings, and deliverables. This cannot be undone.`,
-              )
-            )
-              e.preventDefault();
-          }}
-        >
-          <input type="hidden" name="engagementId" value={id} />
-          <button
-            type="submit"
-            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-          >
-            Delete engagement
-          </button>
-        </form>
+        <DeleteEngagementButton
+          engagementId={id}
+          engagementName={base.name}
+          variant="header"
+        />
       </div>
 
       {/* ── Cloud Connections ── */}

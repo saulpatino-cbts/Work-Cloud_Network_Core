@@ -221,15 +221,41 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   sku_name            = "Premium_AzureFrontDoor"
   mode                = "Prevention"
 
+  # ── Custom Allow rule (evaluated BEFORE managed rules) ──────────────────────
+  # Auth.js v5 Server Actions POST to /auth/signin with a Next-Action header
+  # and text/plain body — both of which trigger OWASP anomaly scoring rules in
+  # DefaultRuleSet 1.0. The OAuth callback arrives at /api/auth/callback/* with
+  # long JWT-like ?code= and ?state= params that trigger SQLI rules.
+  #
+  # An "Allow" custom rule terminates WAF evaluation immediately: managed rules
+  # never inspect the request. This is the correct pattern for auth routes that
+  # use their own PKCE/state/CSRF protection and do not need WAF scrutiny.
+  custom_rule {
+    name     = "AllowAuthPaths"
+    enabled  = true
+    priority = 10
+    type     = "MatchRule"
+    action   = "Allow"
+
+    match_condition {
+      match_variable     = "RequestUri"
+      operator           = "BeginsWith"
+      negation_condition = false
+      match_values = [
+        "/auth/",
+        "/api/auth/",
+      ]
+    }
+  }
+
   managed_rule {
     type    = "DefaultRuleSet"
     version = "1.0"
     action  = "Block"
 
-    # OAuth 2.0 callback parameters contain long encoded values (JWT-like
-    # authorization codes, base64 state tokens) that trigger OWASP SQLI rules.
-    # Exclude them from managed-rule inspection so Entra ID callbacks are not
-    # blocked. These parameters only appear in legitimate OAuth flows.
+    # Belt-and-suspenders exclusions for OAuth callback params and Auth.js
+    # cookies — these back-stop the custom Allow rule in case path matching
+    # ever needs adjustment.
     exclusion {
       match_variable = "QueryStringArgNames"
       operator       = "Equals"
@@ -242,15 +268,12 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
       selector       = "state"
     }
 
-    # Microsoft Entra ID appends session_state to the callback URL.
     exclusion {
       match_variable = "QueryStringArgNames"
       operator       = "Equals"
       selector       = "session_state"
     }
 
-    # Auth.js v5 cookies (session token, CSRF token, PKCE verifier, state)
-    # contain base64-encoded values that can trigger encoding anomaly rules.
     exclusion {
       match_variable = "RequestCookieNames"
       operator       = "StartsWith"

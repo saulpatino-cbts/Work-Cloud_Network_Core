@@ -40,3 +40,8 @@ output "web_fqdn" {
 output "log_analytics_workspace_id" {
   value = azurerm_log_analytics_workspace.compute.id
 }
+
+output "web_principal_id" {
+  description = "System-assigned managed identity principal ID of the CNA Web Container App — used for RBAC assignments (e.g. Storage Blob Data Contributor)."
+  value       = azurerm_container_app.web.identity[0].principal_id
+}

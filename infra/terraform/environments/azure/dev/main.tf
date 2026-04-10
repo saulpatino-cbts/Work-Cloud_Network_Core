@@ -177,6 +177,17 @@ module "runtime" {
   entra_client_secret           = var.entra_client_secret
 }
 
+# Grant the web Container App's system-assigned identity write access to blob
+# storage so DefaultAzureCredential can upload deliverables without a connection
+# string. The runtime module assigns Storage Blob Data Contributor to the
+# user-assigned managed identity, but Container Apps use their system-assigned
+# identity — so a separate assignment is needed here.
+resource "azurerm_role_assignment" "web_storage_blob_data_contributor" {
+  scope                = module.storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.compute.web_principal_id
+}
+
 module "security" {
   source                                 = "../../../providers/azure/security"
   resource_group_name                    = azurerm_resource_group.this.name

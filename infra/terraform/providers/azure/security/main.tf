@@ -225,6 +225,49 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
     type    = "DefaultRuleSet"
     version = "1.0"
     action  = "Block"
+
+    # OAuth 2.0 callback parameters contain long encoded values (JWT-like
+    # authorization codes, base64 state tokens) that trigger OWASP SQLI rules.
+    # Exclude them from managed-rule inspection so Entra ID callbacks are not
+    # blocked. These parameters only appear in legitimate OAuth flows.
+    exclusion {
+      match_variable = "QueryStringArgNames"
+      operator       = "Equals"
+      selector       = "code"
+    }
+
+    exclusion {
+      match_variable = "QueryStringArgNames"
+      operator       = "Equals"
+      selector       = "state"
+    }
+
+    # Microsoft Entra ID appends session_state to the callback URL.
+    exclusion {
+      match_variable = "QueryStringArgNames"
+      operator       = "Equals"
+      selector       = "session_state"
+    }
+
+    # Auth.js v5 cookies (session token, CSRF token, PKCE verifier, state)
+    # contain base64-encoded values that can trigger encoding anomaly rules.
+    exclusion {
+      match_variable = "RequestCookieNames"
+      operator       = "StartsWith"
+      selector       = "authjs."
+    }
+
+    exclusion {
+      match_variable = "RequestCookieNames"
+      operator       = "StartsWith"
+      selector       = "__Secure-authjs."
+    }
+
+    exclusion {
+      match_variable = "RequestCookieNames"
+      operator       = "StartsWith"
+      selector       = "__Host-authjs."
+    }
   }
 }
 

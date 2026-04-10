@@ -131,7 +131,7 @@ module "compute" {
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
   web_secret_env_vars = {
     DATABASE_URL           = "database-url"
-    NEXTAUTH_SECRET        = "nextauth-secret"
+    AUTH_SECRET            = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
     AZURE_AD_CLIENT_SECRET = "entra-client-secret"
   }
 

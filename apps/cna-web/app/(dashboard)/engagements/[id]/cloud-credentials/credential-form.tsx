@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { addBulkCredentials, testAzureConnection } from "./actions";
+import { SpHelpModal } from "@/components/ui/sp-help-modal";
 
 type Platform = "AZURE" | "AWS";
 
@@ -223,9 +224,12 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
         <div className="space-y-6">
           {/* ── Authentication ── */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Authentication
-            </p>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Authentication
+              </p>
+              <SpHelpModal />
+            </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700">

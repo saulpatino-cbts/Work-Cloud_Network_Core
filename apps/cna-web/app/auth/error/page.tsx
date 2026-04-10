@@ -1,5 +1,3 @@
-import { type NextSearchParams } from "next/dist/server/request/search-params";
-
 // Auth.js v5 redirects here when authentication fails.
 // The `error` query param contains the error code (e.g. "OAuthSignin",
 // "OAuthCallback", "OAuthCreateAccount", "Callback", "OAuthAccountNotLinked",
@@ -18,10 +16,10 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
 export default async function AuthErrorPage({
   searchParams,
 }: {
-  searchParams: NextSearchParams;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
-  const error = typeof params.error === "string" ? params.error : "Default";
+  const error = params.error ?? "Default";
   const message = AUTH_ERROR_MESSAGES[error] ?? AUTH_ERROR_MESSAGES.Default;
 
   return (

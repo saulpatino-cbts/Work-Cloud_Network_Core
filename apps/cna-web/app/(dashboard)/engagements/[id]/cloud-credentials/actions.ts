@@ -62,6 +62,67 @@ export async function addCloudCredential(
   return { success: true };
 }
 
+// ─── Bulk-add credentials (one per subscription) ─────────────────────────────
+
+export async function addBulkCredentials(params: {
+  engagementId: string;
+  tenantId: string;
+  spClientId: string;
+  spClientSecret: string;
+  subscriptions: { name: string; subscriptionId: string; tenantId?: string }[];
+}): Promise<{ error?: string; success?: boolean; count?: number }> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated." };
+
+  const { engagementId, tenantId, spClientId, spClientSecret, subscriptions } = params;
+
+  if (!engagementId || !tenantId || !spClientId || !spClientSecret) {
+    return { error: "Tenant ID, Client ID, and Client Secret are all required." };
+  }
+  if (!subscriptions.length) {
+    return { error: "Add at least one subscription." };
+  }
+
+  const member = await prisma.engagementMember.findUnique({
+    where: { engagementId_userId: { engagementId, userId: session.user.id } },
+  });
+  if (!member) return { error: "Access denied." };
+
+  const spSecretEnc = encrypt(spClientSecret);
+
+  // Deduplicate by label before saving (last row with same name wins).
+  const byLabel = new Map<string, (typeof subscriptions)[0]>();
+  for (const sub of subscriptions) byLabel.set(sub.name, sub);
+  const unique = Array.from(byLabel.values());
+
+  await prisma.$transaction(
+    unique.map((sub) => {
+      const effectiveTenantId = (sub.tenantId?.trim() || tenantId).trim();
+      return prisma.cloudCredential.upsert({
+        where: { engagementId_label: { engagementId, label: sub.name } },
+        create: {
+          engagementId,
+          platform: "AZURE",
+          label: sub.name,
+          tenantId: effectiveTenantId,
+          subscriptionIds: [sub.subscriptionId],
+          spClientId,
+          spSecretEnc,
+        },
+        update: {
+          tenantId: effectiveTenantId,
+          subscriptionIds: [sub.subscriptionId],
+          spClientId,
+          spSecretEnc,
+        },
+      });
+    }),
+  );
+
+  revalidatePath(`/engagements/${engagementId}`);
+  return { success: true, count: unique.length };
+}
+
 // ─── Delete credential ────────────────────────────────────────────────────────
 
 export async function deleteCloudCredential(formData: FormData) {

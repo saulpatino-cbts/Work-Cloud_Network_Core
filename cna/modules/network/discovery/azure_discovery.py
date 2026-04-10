@@ -100,7 +100,7 @@ class AzureDiscovery:
     def _list_subscriptions(self) -> list[dict]:
         """List all accessible subscriptions in the tenant."""
         subs = []
-        for sub in with_retry(self._sub_client.subscriptions.list)():
+        for sub in with_retry()(self._sub_client.subscriptions.list)():
             if sub.state != "Enabled":
                 logger.info(
                     "Skipping %s subscription %s (%s)",

@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
@@ -53,7 +53,7 @@ def _update_job(job_id: str, **kwargs: Any) -> None:
     with _get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f'UPDATE "DiscoveryJob" SET {sets}, "updatedAt" = NOW() WHERE id = %s',
+                f'UPDATE "DiscoveryJob" SET {sets}, "updatedAt" = NOW() WHERE id = %s',  # noqa: S608
                 values,
             )
         conn.commit()
@@ -81,8 +81,8 @@ def _insert_findings(engagement_id: str, findings: list[dict]) -> None:
                         f["description"],
                         f.get("recommendation", ""),
                         False,
-                        datetime.now(timezone.utc),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
+                        datetime.now(UTC),
                     )
                     for f in findings
                 ],
@@ -321,7 +321,7 @@ async def start_discovery(
 ) -> dict:
     if not request.tenant_id:
         return {"error": "tenant_id is required"}
-    _update_job(request.job_id, status="RUNNING", startedAt=datetime.now(timezone.utc))
+    _update_job(request.job_id, status="RUNNING", startedAt=datetime.now(UTC))
     background_tasks.add_task(_run_azure_discovery, request)
     return {"job_id": request.job_id, "status": "RUNNING"}
 
@@ -352,7 +352,7 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
     progress: list[str] = []
 
     def _log(msg: str) -> None:
-        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        ts = datetime.now(UTC).strftime("%H:%M:%S")
         entry = f"[{ts} UTC] {msg}"
         progress.append(entry)
         logger.info("[job:%s] %s", job_id, msg)
@@ -396,7 +396,7 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
         _update_job(
             job_id,
             status="COMPLETED",
-            completedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(UTC),
             findingsCount=len(all_findings),
             topologyJson=topology_json,
             progressLog=json.dumps(progress + ["Done."]),
@@ -408,6 +408,6 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
             job_id,
             status="FAILED",
             errorMessage=str(exc),
-            completedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(UTC),
             progressLog=json.dumps(progress),
         )

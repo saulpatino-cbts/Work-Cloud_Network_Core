@@ -15,6 +15,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       console.warn("[auth][warn]", code)
     },
   },
+  // @ts-expect-error — PrismaAdapter uses the top-level @auth/core AdapterUser type
+  // which doesn't include our User augmentations (role). The adapter works correctly
+  // at runtime; this suppresses the structural mismatch between the two @auth/core copies.
   adapter: PrismaAdapter(prisma),
   providers: [
     MicrosoftEntraID({

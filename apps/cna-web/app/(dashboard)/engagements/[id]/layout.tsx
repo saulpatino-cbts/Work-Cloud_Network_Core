@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteEngagementButton } from "@/components/ui/delete-engagement-button";
-import { EngagementTabs } from "@/components/ui/engagement-tabs";
+import { EngagementSidebar } from "@/components/ui/engagement-sidebar";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,9 +31,9 @@ export default async function EngagementLayout({
   if (!isMember) notFound();
 
   return (
-    <div className="space-y-0">
-      {/* ── Header ── */}
-      <div className="mb-6 flex items-start justify-between">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col">
+      {/* ── Top header bar ── */}
+      <div className="mb-4 flex items-start justify-between border-b border-gray-200 pb-4">
         <div>
           <Link
             href="/dashboard"
@@ -41,13 +41,13 @@ export default async function EngagementLayout({
           >
             ← Back to dashboard
           </Link>
-          <div className="mt-2 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">
+          <div className="mt-1.5 flex items-center gap-3">
+            <h1 className="text-xl font-semibold text-gray-900">
               {engagement.name}
             </h1>
             <StatusBadge value={engagement.status} variant="status" />
           </div>
-          <p className="mt-1 text-sm text-gray-500">{engagement.clientOrg}</p>
+          <p className="text-sm text-gray-500">{engagement.clientOrg}</p>
         </div>
         <DeleteEngagementButton
           engagementId={id}
@@ -56,11 +56,13 @@ export default async function EngagementLayout({
         />
       </div>
 
-      {/* ── Tab navigation ── */}
-      <EngagementTabs engagementId={id} />
-
-      {/* ── Page content ── */}
-      <div className="mt-6">{children}</div>
+      {/* ── Sidebar + content ── */}
+      <div className="flex flex-1 items-start gap-4">
+        <EngagementSidebar engagementId={id} />
+        <main className="min-w-0 flex-1">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

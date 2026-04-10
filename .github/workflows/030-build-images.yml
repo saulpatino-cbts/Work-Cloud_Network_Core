@@ -8,6 +8,7 @@ on:
       - apps/cna-api/**
       - apps/cna-worker/**
       - apps/cna-web/**
+      - cna/**
       - pyproject.toml
       - .github/workflows/02-build-and-publish-images.yml
   workflow_dispatch:

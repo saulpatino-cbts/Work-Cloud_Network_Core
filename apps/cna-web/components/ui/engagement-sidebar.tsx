@@ -76,7 +76,6 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
   const pathname = usePathname();
   const base = `/engagements/${engagementId}`;
 
-  // Read persisted collapse state from localStorage
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -93,50 +92,52 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
   function toggle() {
     setCollapsed((v) => {
       const next = !v;
-      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   }
 
-  // Avoid hydration mismatch — render collapsed=false on server, then snap to saved state
   const isCollapsed = mounted ? collapsed : false;
 
   return (
     <aside
       className={[
         "relative flex-shrink-0 transition-all duration-200",
-        isCollapsed ? "w-12" : "w-52",
+        isCollapsed ? "w-[3.25rem]" : "w-52",
       ].join(" ")}
     >
-      {/* Inner panel */}
       <div
         className={[
-          "sticky top-0 flex h-full flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden",
-          isCollapsed ? "w-12" : "w-52",
+          /* glass panel */
+          "glass sticky top-20 flex flex-col overflow-hidden",
+          isCollapsed ? "w-[3.25rem]" : "w-52",
         ].join(" ")}
       >
-        {/* Toggle button */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-2 py-2.5">
+        {/* ── Toggle row ── */}
+        <div className="flex items-center justify-between border-b border-navy-100/40 px-2 py-2.5 dark:border-navy-700/40">
           {!isCollapsed && (
-            <span className="pl-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <span className="label-caps pl-1 text-navy-300 dark:text-navy-500">
               Navigation
             </span>
           )}
           <button
+            type="button"
             onClick={toggle}
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={[
-              "flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors",
+              "flex h-7 w-7 items-center justify-center rounded-lg text-navy-300 transition-colors hover:bg-teal-50 hover:text-teal-600 dark:text-navy-500 dark:hover:bg-teal-900/30 dark:hover:text-teal-400",
               isCollapsed ? "mx-auto" : "ml-auto",
             ].join(" ")}
           >
             {isCollapsed ? (
-              // Chevron right (expand)
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             ) : (
-              // Chevron left (collapse)
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -144,7 +145,7 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
           </button>
         </div>
 
-        {/* Nav items */}
+        {/* ── Nav items ── */}
         <nav className="flex flex-col gap-0.5 p-1.5">
           {NAV_ITEMS.map((item) => {
             const href = `${base}${item.path}`;
@@ -161,8 +162,8 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
                 className={[
                   "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                    ? "nav-active font-semibold"
+                    : "text-navy-500 hover:bg-navy-50/60 hover:text-navy-800 dark:text-navy-300 dark:hover:bg-navy-800/40 dark:hover:text-navy-100",
                 ].join(" ")}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
@@ -170,7 +171,7 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
                   <span className="truncate">{item.label}</span>
                 )}
                 {isActive && !isCollapsed && (
-                  <span className="ml-auto h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600" />
+                  <span className="ml-auto h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
                 )}
               </Link>
             );

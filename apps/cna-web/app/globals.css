@@ -1,1 +1,209 @@
 @import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CBTS Design System  ·  Brand: Navy #0A1E3C  ·  Teal #3EC9B8
+───────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
+
+  /* CBTS Navy scale */
+  --color-navy-950: #030b17;
+  --color-navy-900: #06101e;
+  --color-navy-800: #0a1e3c;
+  --color-navy-700: #142d52;
+  --color-navy-600: #1a3a68;
+  --color-navy-500: #2a5298;
+  --color-navy-400: #3d6db0;
+  --color-navy-300: #6a93c8;
+  --color-navy-200: #a0bedd;
+  --color-navy-100: #d1e2f0;
+  --color-navy-50:  #eef4fb;
+
+  /* CBTS Teal scale */
+  --color-teal-900: #0d4e46;
+  --color-teal-800: #1a7169;
+  --color-teal-700: #229186;
+  --color-teal-600: #2ba898;
+  --color-teal-500: #3ec9b8;   /* ← primary accent */
+  --color-teal-400: #5dd8c9;
+  --color-teal-300: #7be0d5;
+  --color-teal-200: #a8ece7;
+  --color-teal-100: #d4f6f2;
+  --color-teal-50:  #edfcfa;
+}
+
+/* ── Design tokens — light mode ───────────────────────────────────────────── */
+
+:root {
+  --mesh-a: rgba(62, 201, 184, 0.18);
+  --mesh-b: rgba(10, 30, 60, 0.05);
+
+  --glass-bg:          rgba(255, 255, 255, 0.72);
+  --glass-border:      rgba(255, 255, 255, 0.90);
+  --glass-shadow:      0 2px 20px rgba(10, 30, 60, 0.07), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  --glass-shadow-md:   0 6px 32px rgba(10, 30, 60, 0.12), 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  --glass-shadow-lg:   0 12px 48px rgba(10, 30, 60, 0.16), 0 1px 0 rgba(255, 255, 255, 1.00) inset;
+
+  --header-bg:         rgba(255, 255, 255, 0.84);
+  --header-border:     rgba(10, 30, 60, 0.08);
+
+  --accent:            #3ec9b8;
+  --accent-hover:      #2ba898;
+  --accent-glow:       rgba(62, 201, 184, 0.32);
+  --accent-subtle:     rgba(62, 201, 184, 0.10);
+  --accent-subtle-border: rgba(62, 201, 184, 0.30);
+}
+
+/* ── Design tokens — dark mode ────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mesh-a: rgba(62, 201, 184, 0.09);
+    --mesh-b: rgba(62, 201, 184, 0.04);
+
+    --glass-bg:          rgba(255, 255, 255, 0.055);
+    --glass-border:      rgba(255, 255, 255, 0.11);
+    --glass-shadow:      0 2px 20px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    --glass-shadow-md:   0 6px 32px rgba(0, 0, 0, 0.58), 0 1px 0 rgba(255, 255, 255, 0.09) inset;
+    --glass-shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.70), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+
+    --header-bg:         rgba(6, 16, 30, 0.88);
+    --header-border:     rgba(255, 255, 255, 0.07);
+
+    --accent-subtle:     rgba(62, 201, 184, 0.12);
+    --accent-subtle-border: rgba(62, 201, 184, 0.25);
+  }
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+html {
+  -webkit-font-smoothing:  antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #eef4fb;
+  background-image:
+    radial-gradient(ellipse 80% 55% at 16% 62%, var(--mesh-a) 0%, transparent 62%),
+    radial-gradient(ellipse 55% 45% at 84% 8%,  var(--mesh-b) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 65% at 58% 108%, var(--mesh-a) 0%, transparent 52%);
+  background-attachment: fixed;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #06101e;
+  }
+}
+
+/* ── Glass card ───────────────────────────────────────────────────────────── */
+
+.glass {
+  background:             var(--glass-bg);
+  border:                 1px solid var(--glass-border);
+  box-shadow:             var(--glass-shadow);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter:        blur(14px);
+  border-radius:          1rem;
+}
+
+.glass-sm {
+  background:             var(--glass-bg);
+  border:                 1px solid var(--glass-border);
+  box-shadow:             var(--glass-shadow);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter:        blur(14px);
+  border-radius:          0.75rem;
+}
+
+.glass-hover {
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.glass-hover:hover {
+  box-shadow:  var(--glass-shadow-md);
+  transform:   translateY(-2px);
+}
+.glass-hover:active {
+  transform:   translateY(0);
+  box-shadow:  var(--glass-shadow);
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.header-glass {
+  background:              var(--header-bg);
+  border-bottom:           1px solid var(--header-border);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter:         blur(20px);
+}
+
+/* ── Teal CTA button ──────────────────────────────────────────────────────── */
+
+.btn-teal {
+  display:         inline-flex;
+  align-items:     center;
+  gap:             0.375rem;
+  padding:         0.5rem 1.25rem;
+  background:      var(--accent);
+  color:           #0a1e3c;
+  font-weight:     700;
+  font-size:       0.875rem;
+  border-radius:   0.625rem;
+  border:          none;
+  cursor:          pointer;
+  transition:      background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+  white-space:     nowrap;
+}
+.btn-teal:hover {
+  background:   var(--accent-hover);
+  box-shadow:   0 0 22px var(--accent-glow);
+  transform:    translateY(-1px);
+}
+.btn-teal:active  { transform: translateY(0); }
+.btn-teal:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ── Accent pill / badge ──────────────────────────────────────────────────── */
+
+.pill-teal {
+  background:    var(--accent-subtle);
+  border:        1px solid var(--accent-subtle-border);
+  color:         var(--accent-hover);
+  border-radius: 9999px;
+  font-weight:   600;
+  font-size:     0.7rem;
+  padding:       0.2rem 0.65rem;
+  letter-spacing: 0.01em;
+}
+
+/* ── Nav active state ─────────────────────────────────────────────────────── */
+
+.nav-active {
+  background:   var(--accent-subtle);
+  color:        var(--accent-hover);
+  border-left:  2px solid var(--accent);
+  padding-left: calc(0.5rem - 2px);
+}
+
+/* ── Section label caps ───────────────────────────────────────────────────── */
+
+.label-caps {
+  font-size:      0.64rem;
+  font-weight:    700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ── Progress bar fill (dynamic width via CSS variable) ──────────────────── */
+
+.bar-fill { width: var(--bar-pct, 0%); }
+
+/* ── Thin teal scrollbar ──────────────────────────────────────────────────── */
+
+::-webkit-scrollbar              { width: 4px; height: 4px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--accent); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--accent-hover); }

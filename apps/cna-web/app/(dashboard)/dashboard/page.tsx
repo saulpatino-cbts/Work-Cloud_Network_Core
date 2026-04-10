@@ -7,76 +7,139 @@ import { DeleteEngagementButton } from "@/components/ui/delete-engagement-button
 export default async function DashboardPage() {
   const session = await auth();
 
-  // Load the user's engagements from the database.
   const engagements = await prisma.engagement.findMany({
-    where: {
-      members: {
-        some: { userId: session!.user!.id! },
-      },
-    },
-    include: {
-      _count: { select: { findings: true, documents: true } },
-    },
+    where: { members: { some: { userId: session!.user!.id! } } },
+    include: { _count: { select: { findings: true, documents: true } } },
     orderBy: { updatedAt: "desc" },
   });
 
+  const activeCount = engagements.filter(
+    (e) => e.status !== "DELIVERED" && e.status !== "DRAFT",
+  ).length;
+
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      {/* ── Page header ── */}
+      <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Engagements</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Active and recent network assessment engagements
+          <p className="label-caps text-navy-400 dark:text-navy-300">
+            CBTS Cloud Network Assessment
           </p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-navy-800 dark:text-navy-50">
+            Engagements
+          </h1>
+          {engagements.length > 0 && (
+            <p className="mt-1.5 text-sm text-navy-400 dark:text-navy-300">
+              {engagements.length} total · {activeCount} in progress
+            </p>
+          )}
         </div>
-        <Link
-          href="/engagements/new"
-          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          + New engagement
+        <Link href="/engagements/new" className="btn-teal">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          New engagement
         </Link>
       </div>
 
-      {engagements.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
-          <p className="text-sm text-gray-500">No engagements yet.</p>
-          <p className="mt-1 text-xs text-gray-400">
-            Create an engagement to start a Cloud Network Assessment.
-          </p>
+      {/* ── Empty state ── */}
+      {engagements.length === 0 && (
+        <div className="glass flex flex-col items-center gap-4 py-20 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-900/40">
+            <svg className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-base font-semibold text-navy-700 dark:text-navy-100">
+              No engagements yet
+            </p>
+            <p className="mt-1 text-sm text-navy-400 dark:text-navy-300">
+              Create an engagement to start a Cloud Network Assessment.
+            </p>
+          </div>
+          <Link href="/engagements/new" className="btn-teal mt-2">
+            Create first engagement
+          </Link>
         </div>
-      ) : (
-        <ul className="space-y-3">
+      )}
+
+      {/* ── Bento engagement grid ── */}
+      {engagements.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {engagements.map((eng) => (
-            <li
+            <div
               key={eng.id}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow"
+              className="glass glass-hover group relative flex flex-col overflow-hidden"
             >
-              <Link
-                href={`/engagements/${eng.id}`}
-                className="flex flex-1 items-center justify-between p-4"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{eng.name}</p>
-                  <p className="text-sm text-gray-500">{eng.clientOrg}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right text-xs text-gray-400">
-                    <p>{eng._count.documents} documents</p>
-                    <p>{eng._count.findings} findings</p>
+              {/* Teal accent strip */}
+              <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-teal-400 opacity-70 group-hover:opacity-100 transition-opacity" />
+
+              <div className="flex flex-1 flex-col p-5">
+                {/* Header row */}
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-bold leading-snug text-navy-800 dark:text-navy-50">
+                      {eng.name}
+                    </p>
+                    <p className="mt-0.5 truncate text-sm text-navy-400 dark:text-navy-300">
+                      {eng.clientOrg}
+                    </p>
                   </div>
                   <StatusBadge value={eng.status} variant="status" />
                 </div>
-              </Link>
-              <div className="pr-4">
+
+                {/* Stats row */}
+                <div className="mt-auto flex items-center gap-3 pt-3 border-t border-navy-100/50 dark:border-navy-700/50">
+                  <div className="flex items-center gap-1.5 text-xs text-navy-400 dark:text-navy-300">
+                    <svg className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <span className="font-semibold text-navy-700 dark:text-navy-100">{eng._count.findings}</span> findings
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-navy-400 dark:text-navy-300">
+                    <svg className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="font-semibold text-navy-700 dark:text-navy-100">{eng._count.documents}</span> docs
+                  </div>
+                  <p className="ml-auto text-xs text-navy-300 dark:text-navy-500">
+                    {new Date(eng.updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Full-card link + delete overlay */}
+              <Link
+                href={`/engagements/${eng.id}`}
+                className="absolute inset-0 z-0"
+                aria-label={`Open ${eng.name}`}
+              />
+              <div className="absolute right-3 bottom-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DeleteEngagementButton
                   engagementId={eng.id}
                   engagementName={eng.name}
                   variant="inline"
                 />
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+
+          {/* "New" tile */}
+          <Link
+            href="/engagements/new"
+            className="glass glass-hover flex flex-col items-center justify-center gap-3 py-14 text-center opacity-60 hover:opacity-100"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-dashed border-teal-400 dark:border-teal-600">
+              <svg className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-navy-500 dark:text-navy-300">
+              New engagement
+            </p>
+          </Link>
+        </div>
       )}
     </div>
   );

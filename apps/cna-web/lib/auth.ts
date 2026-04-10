@@ -24,6 +24,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Pass the OIDC issuer URL directly; the provider appends
       // /.well-known/openid-configuration for discovery.
       issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
+      // Entra ID does not always populate the `email` claim — admin and
+      // service accounts often only have `preferred_username` (the UPN).
+      // PrismaAdapter requires a non-null email to create the User row, so
+      // we fall back to preferred_username (always non-null for org accounts).
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name ?? profile.preferred_username,
+          email: profile.email ?? profile.preferred_username,
+          image: profile.picture ?? null,
+        };
+      },
     }),
   ],
   callbacks: {

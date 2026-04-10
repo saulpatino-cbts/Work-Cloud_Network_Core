@@ -62,9 +62,10 @@ class EngagementStore:
     REPORTS_DIR = "reports"
     AUDIT_LOG_FILE = "audit.jsonl"
 
-    def __init__(self, data_dir: Path | None = None):
+    def __init__(self, data_dir: Path | None = None, engagement_id: str | None = None):
         env_dir = os.environ.get("CNA_DATA_DIR", "./engagements")
         self.data_dir = data_dir or Path(env_dir)
+        self.engagement_id = engagement_id  # optional; set by callers that own a specific engagement
 
     def engagement_dir(self, engagement_id: str) -> Path:
         return self.data_dir / engagement_id

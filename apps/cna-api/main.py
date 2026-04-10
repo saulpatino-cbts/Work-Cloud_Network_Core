@@ -359,7 +359,7 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
     try:
         _log("Initialising discovery engine…")
         tmpdir = Path(mkdtemp(prefix="cna-discovery-"))
-        store = EngagementStore(data_dir=tmpdir)
+        store = EngagementStore(data_dir=tmpdir, engagement_id=engagement_id)
 
         options = AzureDiscoveryOptions(
             tenant_id=request.tenant_id,  # type: ignore[arg-type]

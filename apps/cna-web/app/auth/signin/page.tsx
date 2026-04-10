@@ -13,7 +13,7 @@ export default function SignInPage() {
         <form
           action={async () => {
             "use server";
-            await signIn("microsoft-entra-id");
+            await signIn("microsoft-entra-id", { redirectTo: "/" });
           }}
         >
           <button

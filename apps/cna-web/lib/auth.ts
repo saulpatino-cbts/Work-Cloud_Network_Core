@@ -29,23 +29,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // PrismaAdapter requires a non-null email to create the User row, so
       // we fall back to preferred_username (always non-null for org accounts).
       profile(profile) {
-        console.log("[auth][profile] raw claims:", JSON.stringify({
-          sub: profile.sub,
-          name: profile.name,
-          email: profile.email,
-          preferred_username: profile.preferred_username,
-          unique_name: (profile as any).unique_name,
-          upn: (profile as any).upn,
-        }));
-        const email = profile.email
-          ?? profile.preferred_username
-          ?? (profile as any).unique_name
-          ?? (profile as any).upn
-          ?? null;
         return {
           id: profile.sub,
           name: profile.name ?? profile.preferred_username,
-          email,
+          email: profile.email ?? profile.preferred_username,
           image: null,
         };
       },

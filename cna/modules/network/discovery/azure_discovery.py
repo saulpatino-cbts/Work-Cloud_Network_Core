@@ -264,7 +264,7 @@ class AzureDiscovery:
                 if hub.virtual_wan and hub.virtual_wan.id == vwan.id:
                     connected_vnets = [
                         vc.remote_virtual_network.id
-                        for vc in (hub.virtual_network_connections or [])
+                        for vc in (getattr(hub, "virtual_network_connections", None) or [])
                         if vc.remote_virtual_network
                     ]
                     hubs.append(
@@ -465,8 +465,8 @@ class AzureDiscovery:
             self.store.write_discovery_checkpoint(
                 engagement_id,
                 "azure",
-                account_id=sub_id,
-                data=json.loads(sub_topo.model_dump_json()),
+                sub_id,
+                json.loads(sub_topo.model_dump_json()),
             )
 
             vnet_count = len(sub_topo.vnets)

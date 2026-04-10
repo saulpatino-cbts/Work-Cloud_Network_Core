@@ -43,7 +43,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, user }) {
       if (session.user && user) {
         session.user.id = user.id;
-        // @ts-expect-error — role is added to User model via Prisma schema
         session.user.role = user.role;
       }
       return session;

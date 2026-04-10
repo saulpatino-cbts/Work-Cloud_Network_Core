@@ -16,10 +16,12 @@
     "@auth/prisma-adapter": "^2.7.4",
     "@azure/identity": "^4.5.0",
     "@azure/keyvault-secrets": "^4.9.0",
+    "@azure/storage-blob": "^12.31.0",
     "@prisma/client": "^6.3.1",
     "clsx": "^2.1.1",
     "next": "^15.5.12",
     "next-auth": "5.0.0-beta.30",
+    "openai": "^6.34.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.0"

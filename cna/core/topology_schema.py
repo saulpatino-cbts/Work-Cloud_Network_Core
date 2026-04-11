@@ -410,7 +410,9 @@ class AzurePublicIP(BaseModel):
     zones: list[str] = Field(default_factory=list)
     # What it's attached to
     associated_resource_id: str | None = None
-    associated_resource_type: str | None = None  # "NIC" | "LB" | "AppGW" | "Firewall" | "Bastion" | "VpnGateway"
+    associated_resource_type: str | None = (
+        None  # "NIC" | "LB" | "AppGW" | "Firewall" | "Bastion" | "VpnGateway"
+    )
     idle_timeout_minutes: int = 4
     ddos_protection_mode: str = "VirtualNetworkInherited"
     tags: dict = Field(default_factory=dict)

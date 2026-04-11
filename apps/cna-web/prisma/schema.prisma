@@ -209,7 +209,7 @@ model CloudCredential {
 model DiscoveryJob {
   id            String             @id @default(cuid())
   engagementId  String
-  credentialId  String
+  credentialId  String?            // nullable: SET NULL when credential is removed
   status        DiscoveryJobStatus @default(QUEUED)
   startedAt     DateTime?
   completedAt   DateTime?
@@ -221,7 +221,7 @@ model DiscoveryJob {
   updatedAt     DateTime           @updatedAt
 
   engagement    Engagement         @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  credential    CloudCredential    @relation(fields: [credentialId], references: [id])
+  credential    CloudCredential?   @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 }
 
 // ─── Deliverables ─────────────────────────────────────────────────────────────

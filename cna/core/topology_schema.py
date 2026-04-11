@@ -1,9 +1,19 @@
 """Topology data contracts — bridge between discovery (Phase C) and diagram engine (Phase B).
 
-Version 1.1.0 — Phase B Gap 8 closure.
+Version 1.2.0 — Comprehensive Azure network data expansion.
+  Added Azure: NSGSecurityRule, AzureNSG, AzurePublicIP, AzureLBFrontendIP,
+               AzureLBRule, AzureLoadBalancer, AzureGatewayConnection,
+               AzureVirtualNetworkGateway, AzurePrivateEndpoint,
+               AzureNatGateway, AzureBastionHost
+  Expanded: AzureSubnet (nsg_name, route_table_name, nat_gateway_id,
+            default_outbound_access, private_link_service_network_policies),
+            VNet (dns_servers, flow_logs_enabled, ddos_protection_plan_id,
+            encryption_enabled),
+            AzureSubscriptionTopology (nsgs, route_tables,
+            virtual_network_gateways, load_balancers, public_ips,
+            private_endpoints, nat_gateways, bastion_hosts)
   Added AWS: SecurityGroup, NACL, VpnGateway, NetworkFirewallPolicy
-  Added Azure: AzureFirewall, ApplicationGateway, PrivateDnsZone, ExpressRouteCircuit
-  All new fields are Optional with default_factory so v1.0.0 data remains valid.
+  All new fields are Optional with default_factory so v1.x data remains valid.
 """
 
 from __future__ import annotations
@@ -12,7 +22,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-TOPOLOGY_SCHEMA_VERSION = "1.1.0"
+TOPOLOGY_SCHEMA_VERSION = "1.2.0"
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
@@ -238,26 +248,35 @@ class AzureSubnet(BaseModel):
     name: str
     address_prefix: str
     nsg_id: str | None = None
+    nsg_name: str | None = None
     route_table_id: str | None = None
+    route_table_name: str | None = None
+    nat_gateway_id: str | None = None
     service_endpoints: list[str] = Field(default_factory=list)
     private_endpoint_network_policies: str = "Enabled"
+    private_link_service_network_policies: str = "Enabled"
+    default_outbound_access: bool = True
     delegation: str | None = None
+    address_prefixes: list[str] = Field(default_factory=list)  # dual-stack
 
 
 class AzureRouteEntry(BaseModel):
     name: str
     address_prefix: str
-    next_hop_type: str
+    next_hop_type: str  # VirtualNetworkGateway | VnetLocal | Internet | VirtualAppliance | None
     next_hop_ip: str | None = None
+    has_bgp_override: bool = False
 
 
 class AzureRouteTable(BaseModel):
     id: str
     name: str
     location: str
+    resource_group: str
     routes: list[AzureRouteEntry] = Field(default_factory=list)
     associated_subnet_ids: list[str] = Field(default_factory=list)
     disable_bgp_route_propagation: bool = False
+    tags: dict = Field(default_factory=dict)
 
 
 class VNetPeering(BaseModel):
@@ -270,6 +289,8 @@ class VNetPeering(BaseModel):
     allow_forwarded_traffic: bool
     allow_gateway_transit: bool
     use_remote_gateways: bool
+    do_not_verify_remote_gateways: bool = False
+    peer_complete_vnets: bool = True
 
 
 class AzureFirewall(BaseModel):
@@ -282,6 +303,8 @@ class AzureFirewall(BaseModel):
     public_ip_ids: list[str] = Field(default_factory=list)
     policy_id: str | None = None
     threat_intel_mode: str = "Alert"
+    zones: list[str] = Field(default_factory=list)
+    tags: dict = Field(default_factory=dict)
 
 
 class ApplicationGateway(BaseModel):
@@ -290,9 +313,18 @@ class ApplicationGateway(BaseModel):
     location: str
     resource_group: str
     sku_name: str  # "Standard_v2" | "WAF_v2"
+    sku_capacity: int | None = None
     subnet_id: str
     waf_enabled: bool = False
+    waf_mode: str | None = None  # "Detection" | "Prevention"
+    waf_rule_set_type: str | None = None
+    waf_rule_set_version: str | None = None
     frontend_ip_configs: list[str] = Field(default_factory=list)
+    ssl_policy_name: str | None = None
+    autoscale_min: int | None = None
+    autoscale_max: int | None = None
+    zones: list[str] = Field(default_factory=list)
+    tags: dict = Field(default_factory=dict)
 
 
 class PrivateDnsZone(BaseModel):
@@ -300,7 +332,10 @@ class PrivateDnsZone(BaseModel):
     name: str  # e.g. "privatelink.blob.core.windows.net"
     resource_group: str
     linked_vnet_ids: list[str] = Field(default_factory=list)
+    linked_vnet_names: list[str] = Field(default_factory=list)
+    auto_registration_enabled: bool = False
     record_count: int = 0
+    soa_record: str | None = None
 
 
 class ExpressRouteCircuit(BaseModel):
@@ -314,6 +349,227 @@ class ExpressRouteCircuit(BaseModel):
     sku_tier: str = "Standard"  # "Standard" | "Premium"
     sku_family: str = "MeteredData"  # "MeteredData" | "UnlimitedData"
     circuit_provisioning_state: str = "Enabled"
+    global_reach_enabled: bool = False
+    allow_classic_operations: bool = False
+    peering_types: list[str] = Field(default_factory=list)  # AzurePrivatePeering, MicrosoftPeering
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: NSG ───────────────────────────────────────────────────────────────
+
+
+class NSGSecurityRule(BaseModel):
+    name: str
+    priority: int
+    direction: str  # "Inbound" | "Outbound"
+    access: str  # "Allow" | "Deny"
+    protocol: str  # "Tcp" | "Udp" | "Icmp" | "*"
+    source_port_range: str | None = None
+    source_port_ranges: list[str] = Field(default_factory=list)
+    destination_port_range: str | None = None
+    destination_port_ranges: list[str] = Field(default_factory=list)
+    source_address_prefix: str | None = None
+    source_address_prefixes: list[str] = Field(default_factory=list)
+    source_asgs: list[str] = Field(default_factory=list)  # ASG resource IDs
+    destination_address_prefix: str | None = None
+    destination_address_prefixes: list[str] = Field(default_factory=list)
+    destination_asgs: list[str] = Field(default_factory=list)
+    description: str | None = None
+    is_default_rule: bool = False
+    provisioning_state: str = "Succeeded"
+
+
+class AzureNSG(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    security_rules: list[NSGSecurityRule] = Field(default_factory=list)
+    default_security_rules: list[NSGSecurityRule] = Field(default_factory=list)
+    associated_subnet_ids: list[str] = Field(default_factory=list)
+    associated_nic_ids: list[str] = Field(default_factory=list)
+    flow_logs_enabled: bool = False
+    flow_logs_workspace_id: str | None = None
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: Public IP ─────────────────────────────────────────────────────────
+
+
+class AzurePublicIP(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_name: str = "Standard"  # "Basic" | "Standard"
+    allocation_method: str = "Static"  # "Static" | "Dynamic"
+    ip_address: str | None = None
+    ip_version: str = "IPv4"  # "IPv4" | "IPv6"
+    dns_label: str | None = None
+    fqdn: str | None = None
+    zones: list[str] = Field(default_factory=list)
+    # What it's attached to
+    associated_resource_id: str | None = None
+    associated_resource_type: str | None = None  # "NIC" | "LB" | "AppGW" | "Firewall" | "Bastion" | "VpnGateway"
+    idle_timeout_minutes: int = 4
+    ddos_protection_mode: str = "VirtualNetworkInherited"
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: Load Balancer ─────────────────────────────────────────────────────
+
+
+class AzureLBFrontendIP(BaseModel):
+    name: str
+    public_ip_id: str | None = None
+    private_ip_address: str | None = None
+    private_ip_allocation_method: str | None = None
+    subnet_id: str | None = None
+    zones: list[str] = Field(default_factory=list)
+
+
+class AzureLBRule(BaseModel):
+    name: str
+    protocol: str  # "Tcp" | "Udp" | "All"
+    frontend_port: int
+    backend_port: int
+    enable_floating_ip: bool = False
+    enable_tcp_reset: bool = False
+    idle_timeout_minutes: int = 4
+    load_distribution: str = "Default"
+    disable_outbound_snat: bool = False
+
+
+class AzureLBProbe(BaseModel):
+    name: str
+    protocol: str  # "Http" | "Https" | "Tcp"
+    port: int
+    interval_seconds: int = 15
+    number_of_probes: int = 2
+    request_path: str | None = None
+
+
+class AzureLoadBalancer(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_name: str = "Standard"  # "Basic" | "Standard" | "Gateway"
+    lb_type: str = "Public"  # "Public" | "Internal"
+    frontend_ip_configs: list[AzureLBFrontendIP] = Field(default_factory=list)
+    lb_rules: list[AzureLBRule] = Field(default_factory=list)
+    probes: list[AzureLBProbe] = Field(default_factory=list)
+    backend_pool_ids: list[str] = Field(default_factory=list)
+    inbound_nat_rule_count: int = 0
+    zones: list[str] = Field(default_factory=list)
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: VPN / VNet Gateway ────────────────────────────────────────────────
+
+
+class AzureGatewayConnection(BaseModel):
+    id: str
+    name: str
+    connection_type: str  # "IPsec" | "ExpressRoute" | "VNet2VNet" | "VPNClient"
+    connection_status: str
+    remote_vnet_id: str | None = None
+    local_network_gateway_id: str | None = None
+    express_route_circuit_id: str | None = None
+    routing_weight: int = 10
+    enable_bgp: bool = False
+    use_policy_based_traffic_selectors: bool = False
+    dpd_timeout_seconds: int | None = None
+    egress_bytes_transferred: int = 0
+    ingress_bytes_transferred: int = 0
+    shared_key_set: bool = False  # never store the actual key
+
+
+class AzureVirtualNetworkGateway(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    gateway_type: str  # "Vpn" | "ExpressRoute" | "LocalGateway"
+    vpn_type: str | None = None  # "RouteBased" | "PolicyBased"
+    sku_name: str = "VpnGw1"
+    sku_tier: str = "VpnGw1"
+    active_active: bool = False
+    enable_bgp: bool = False
+    bgp_asn: int | None = None
+    bgp_peering_address: str | None = None
+    public_ip_ids: list[str] = Field(default_factory=list)
+    subnet_id: str | None = None  # GatewaySubnet
+    vpn_client_address_pool: list[str] = Field(default_factory=list)
+    connections: list[AzureGatewayConnection] = Field(default_factory=list)
+    generation: str | None = None  # "Generation1" | "Generation2"
+    zones: list[str] = Field(default_factory=list)
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: Private Endpoint ──────────────────────────────────────────────────
+
+
+class AzurePrivateEndpointConnection(BaseModel):
+    connection_name: str
+    private_link_service_id: str
+    group_ids: list[str] = Field(default_factory=list)  # e.g. ["blob", "file"]
+    connection_state: str  # "Approved" | "Pending" | "Rejected"
+
+
+class AzurePrivateEndpoint(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    subnet_id: str
+    private_ip_addresses: list[str] = Field(default_factory=list)
+    service_connections: list[AzurePrivateEndpointConnection] = Field(default_factory=list)
+    dns_zone_group_names: list[str] = Field(default_factory=list)
+    custom_dns_configs: list[str] = Field(default_factory=list)  # FQDNs with overrides
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: NAT Gateway ───────────────────────────────────────────────────────
+
+
+class AzureNatGateway(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_name: str = "Standard"
+    idle_timeout_minutes: int = 4
+    public_ip_ids: list[str] = Field(default_factory=list)
+    public_ip_prefix_ids: list[str] = Field(default_factory=list)
+    associated_subnet_ids: list[str] = Field(default_factory=list)
+    zones: list[str] = Field(default_factory=list)
+    provisioning_state: str = "Succeeded"
+    tags: dict = Field(default_factory=dict)
+
+
+# ── NEW: Bastion Host ──────────────────────────────────────────────────────
+
+
+class AzureBastionHost(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    sku_name: str = "Standard"  # "Basic" | "Standard" | "Premium"
+    subnet_id: str | None = None  # AzureBastionSubnet
+    public_ip_id: str | None = None
+    scale_units: int = 2
+    # Feature flags
+    tunneling_enabled: bool = False
+    shareable_link_enabled: bool = False
+    ip_connect_enabled: bool = False
+    file_copy_enabled: bool = False
+    kerberos_enabled: bool = False
+    tags: dict = Field(default_factory=dict)
+
+
+# ── Core VNet / VNet models (expanded) ────────────────────────────────────
 
 
 class VNet(BaseModel):
@@ -323,10 +579,15 @@ class VNet(BaseModel):
     resource_group: str
     subscription_id: str
     address_space: list[str] = Field(default_factory=list)
+    dns_servers: list[str] = Field(default_factory=list)
     subnets: list[AzureSubnet] = Field(default_factory=list)
     route_tables: list[AzureRouteTable] = Field(default_factory=list)
     peerings: list[VNetPeering] = Field(default_factory=list)
     ddos_protection_enabled: bool = False
+    ddos_protection_plan_id: str | None = None
+    flow_logs_enabled: bool = False
+    encryption_enabled: bool = False
+    vm_protection_enabled: bool = False
     tags: dict = Field(default_factory=dict)
 
 
@@ -342,6 +603,8 @@ class AzureVHub(BaseModel):
     express_route_gateway_id: str | None = None
     azure_firewall_id: str | None = None
     routing_state: str
+    virtual_router_asn: int | None = None
+    virtual_router_ips: list[str] = Field(default_factory=list)
 
 
 class AzureVWan(BaseModel):
@@ -350,6 +613,9 @@ class AzureVWan(BaseModel):
     resource_group: str
     sku: str
     hubs: list[AzureVHub] = Field(default_factory=list)
+    allow_vnet_to_vnet_traffic: bool = True
+    allow_branch_to_branch_traffic: bool = True
+    tags: dict = Field(default_factory=dict)
 
 
 class ManagementGroup(BaseModel):
@@ -366,6 +632,14 @@ class AzureSubscriptionTopology(BaseModel):
     subscription_name: str | None = None
     tenant_id: str
     vnets: list[VNet] = Field(default_factory=list)
+    nsgs: list[AzureNSG] = Field(default_factory=list)
+    route_tables: list[AzureRouteTable] = Field(default_factory=list)
+    virtual_network_gateways: list[AzureVirtualNetworkGateway] = Field(default_factory=list)
+    load_balancers: list[AzureLoadBalancer] = Field(default_factory=list)
+    public_ips: list[AzurePublicIP] = Field(default_factory=list)
+    private_endpoints: list[AzurePrivateEndpoint] = Field(default_factory=list)
+    nat_gateways: list[AzureNatGateway] = Field(default_factory=list)
+    bastion_hosts: list[AzureBastionHost] = Field(default_factory=list)
     virtual_wans: list[AzureVWan] = Field(default_factory=list)
     firewalls: list[AzureFirewall] = Field(default_factory=list)
     application_gateways: list[ApplicationGateway] = Field(default_factory=list)

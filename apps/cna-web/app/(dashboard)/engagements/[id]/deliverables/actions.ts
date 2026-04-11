@@ -3,87 +3,9 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadDeliverable } from "@/lib/blob";
+import { generateDeliverableContent } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
-import type { DeliverableType, Engagement, Finding } from "@prisma/client";
-
-// ─── Report builder ───────────────────────────────────────────────────────────
-
-function buildReport(
-  type: string,
-  title: string,
-  engagement: Engagement,
-  findings: Finding[],
-): string {
-  const date = new Date().toISOString().split("T")[0];
-  const bySev = (sev: string) => findings.filter((f) => f.severity === sev);
-  const SEVERITIES = [
-    "CRITICAL",
-    "HIGH",
-    "MEDIUM",
-    "LOW",
-    "INFORMATIONAL",
-  ] as const;
-
-  const lines: string[] = [
-    `# ${title}`,
-    ``,
-    `**Client:** ${engagement.clientOrg}  `,
-    `**Engagement:** ${engagement.name}  `,
-    `**Date:** ${date}  `,
-    `**Type:** ${type.replace(/_/g, " ")}`,
-    ``,
-    `---`,
-    ``,
-  ];
-
-  if (type === "EXECUTIVE_SUMMARY") {
-    lines.push(
-      `## Executive Summary`,
-      ``,
-      `This Cloud Network Assessment identified **${findings.length} findings** across the ${engagement.clientOrg} environment.`,
-      ``,
-      `| Severity | Count |`,
-      `|----------|-------|`,
-      ...SEVERITIES.map((s) => `| ${s} | ${bySev(s).length} |`),
-      ``,
-    );
-  } else if (type === "TECHNICAL_FINDINGS" || type === "SPECIALIZATION_REPORT") {
-    lines.push(`## Findings`, ``);
-    for (const sev of SEVERITIES) {
-      const group = bySev(sev);
-      if (!group.length) continue;
-      lines.push(`### ${sev}`, ``);
-      for (const f of group) {
-        lines.push(
-          `#### ${f.title}`,
-          ``,
-          `**Category:** ${f.category}  `,
-          `**Severity:** ${f.severity}`,
-          ``,
-          f.description,
-          ``,
-          `**Recommendation:** ${f.recommendation ?? "Review and address the identified issue."}`,
-          ``,
-        );
-      }
-    }
-  } else if (type === "REMEDIATION_PLAN") {
-    lines.push(`## Remediation Plan`, ``);
-    let i = 1;
-    for (const sev of SEVERITIES) {
-      for (const f of bySev(sev)) {
-        lines.push(
-          `### ${i++}. ${f.title} (${f.severity})`,
-          ``,
-          f.recommendation ?? "Review and address the identified issue.",
-          ``,
-        );
-      }
-    }
-  }
-
-  return lines.join("\n");
-}
+import type { DeliverableType } from "@prisma/client";
 
 // ─── Server Actions ───────────────────────────────────────────────────────────
 
@@ -97,6 +19,7 @@ export async function generateDeliverable(
   const engagementId = formData.get("engagementId") as string | null;
   const type = formData.get("type") as string | null;
   const title = (formData.get("title") as string | null)?.trim() ?? "";
+  const customerLogoUrl = (formData.get("customerLogoUrl") as string | null) ?? null;
 
   if (!engagementId || !type || !title) {
     return { error: "All fields are required." };
@@ -107,17 +30,45 @@ export async function generateDeliverable(
   });
   if (!member) return { error: "Access denied." };
 
-  const [engagement, findings] = await Promise.all([
+  // Gather all context sources in parallel
+  const [engagement, findings, documents, latestJob] = await Promise.all([
     prisma.engagement.findUnique({ where: { id: engagementId } }),
     prisma.finding.findMany({
       where: { engagementId },
       orderBy: [{ severity: "asc" }, { createdAt: "asc" }],
     }),
+    prisma.ingestedDocument.findMany({
+      where: { engagementId, parsedText: { not: null } },
+      select: { fileName: true, parsedText: true },
+    }),
+    prisma.discoveryJob
+      .findFirst({
+        where: { engagementId, status: "COMPLETED" },
+        orderBy: { completedAt: "desc" },
+        select: { topologyJson: true },
+      })
+      .catch(() => null),
   ]);
 
   if (!engagement) return { error: "Engagement not found." };
+  if (findings.length === 0) {
+    return {
+      error:
+        "No findings yet. Run discovery and/or AI analysis before generating deliverables.",
+    };
+  }
 
-  const content = buildReport(type, title, engagement, findings);
+  const content = await generateDeliverableContent({
+    type: type as DeliverableType,
+    title,
+    clientOrg: engagement.clientOrg,
+    engagementName: engagement.name,
+    findings,
+    topologyJson: latestJob?.topologyJson ?? null,
+    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+    customerLogoUrl,
+  });
+
   const fileName = `${type.toLowerCase()}-${Date.now()}.md`;
   const blobPath = await uploadDeliverable(engagementId, fileName, content);
 

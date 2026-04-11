@@ -12,34 +12,30 @@ const DELIVERABLE_TEMPLATES = [
   {
     type: "EXECUTIVE_SUMMARY",
     label: "Executive Summary",
-    icon: "📋",
-    desc: "High-level overview for leadership: finding counts by severity, top risks, and business impact summary. No technical jargon.",
-    sections: ["Finding severity breakdown", "Top 3 risks", "Business impact", "Recommended next steps"],
-    audience: "CxO, CISO, Board",
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    desc: "Top 5 risks in business language, severity breakdown, 30/60/90-day action roadmap.",
+    audience: "CxO / CISO / Board",
   },
   {
     type: "TECHNICAL_FINDINGS",
-    label: "Technical Findings Report",
-    icon: "🔍",
-    desc: "Full engineering report: every finding grouped by severity and category, with detailed descriptions and remediation steps.",
-    sections: ["All findings by severity", "Detailed descriptions", "Remediation guidance", "Resource references"],
-    audience: "Security Engineer, Network Architect",
+    label: "Technical Findings",
+    icon: "M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z",
+    desc: "Every finding with root cause, Azure CLI remediation steps, NIST/CIS mapping, and MS Learn links.",
+    audience: "Security Engineers / Architects",
   },
   {
     type: "REMEDIATION_PLAN",
     label: "Remediation Plan",
-    icon: "🛠️",
-    desc: "Ordered task list: findings sorted by priority with specific remediation steps and estimated effort.",
-    sections: ["Prioritized task list", "Remediation steps", "Effort estimates", "Dependencies"],
-    audience: "IT / Platform team",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+    desc: "Prioritized task list: numbered steps, validation checks, rollback procedures, effort estimates.",
+    audience: "IT / Platform Team",
   },
   {
     type: "SPECIALIZATION_REPORT",
     label: "Specialization Report",
-    icon: "🏗️",
-    desc: "Deep-dive on a specific domain such as Zero Trust, compliance (NIST/CIS), or connectivity architecture.",
-    sections: ["Domain-specific findings", "Framework mapping", "Gap analysis", "Roadmap recommendations"],
-    audience: "Security Architect, Compliance team",
+    icon: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z",
+    desc: "Framework gap analysis (NIST/CIS/WAF), maturity scoring, compliance gap register, architecture recommendations.",
+    audience: "Security Architect / Compliance",
   },
 ];
 
@@ -61,147 +57,140 @@ export default async function DeliverablesPage({ params }: PageProps) {
   if (!isMember) notFound();
 
   const { deliverables, findings } = engagement;
-  const hasFindngs = findings.length > 0;
 
   return (
-    <div className="space-y-6">
-      {/* ── Generated deliverables list ── */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-1 text-lg font-semibold text-gray-900">
-          Generated Deliverables
-        </h2>
-        <p className="mb-5 text-sm text-gray-500">
-          Reports generated from your findings data. Publish when reviewed to
-          mark the engagement as delivered.
-        </p>
+    <div className="space-y-5">
+      {/* ── Generated deliverables ── */}
+      <div className="glass p-6">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <p className="label-caps text-navy-300 dark:text-navy-500">Generated Deliverables</p>
+            <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">
+              Review, then publish to mark the engagement as delivered.
+            </p>
+          </div>
+          {deliverables.length > 0 && (
+            <span className="pill-teal">{deliverables.length} report{deliverables.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
 
         {deliverables.length === 0 ? (
-          <p className="mb-4 text-sm text-gray-400">
-            No deliverables yet. Generate one from a template below.
-          </p>
+          <div className="rounded-xl border border-dashed border-navy-200 px-6 py-10 text-center dark:border-navy-700">
+            <p className="text-sm font-medium text-navy-400 dark:text-navy-500">
+              No deliverables yet
+            </p>
+            <p className="mt-1 text-xs text-navy-300 dark:text-navy-600">
+              Generate one from the form below.
+            </p>
+          </div>
         ) : (
-          <ul className="mb-6 divide-y divide-gray-100">
+          <div className="divide-y divide-navy-100/40 dark:divide-navy-700/40">
             {deliverables.map((d) => {
-              const template = DELIVERABLE_TEMPLATES.find(
-                (t) => t.type === d.type,
-              );
+              const template = DELIVERABLE_TEMPLATES.find((t) => t.type === d.type);
               return (
-                <li key={d.id} className="py-4">
+                <div key={d.id} className="py-4">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{template?.icon ?? "📄"}</span>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {d.title}
-                        </p>
-                        {d.publishedAt && (
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                            Published
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 ml-7 text-xs text-gray-400">
-                        {d.type.replace(/_/g, " ")} ·{" "}
-                        {new Date(d.createdAt).toLocaleString()}
-                        {d.publishedAt &&
-                          ` · Published ${new Date(d.publishedAt).toLocaleDateString()}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!d.publishedAt && (
-                        <form action={publishDeliverable}>
-                          <input
-                            type="hidden"
-                            name="deliverableId"
-                            value={d.id}
-                          />
-                          <input
-                            type="hidden"
-                            name="engagementId"
-                            value={id}
-                          />
-                          <button
-                            type="submit"
-                            className="rounded-lg border border-green-600 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                          >
-                            Publish
-                          </button>
-                        </form>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {template && (
+                        <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
+                          <svg className="h-4 w-4 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d={template.icon} />
+                          </svg>
+                        </div>
                       )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">
+                            {d.title}
+                          </p>
+                          {d.publishedAt ? (
+                            <span className="pill-teal">Published</span>
+                          ) : (
+                            <span className="rounded-full border border-navy-100 bg-navy-50 px-2.5 py-0.5 text-xs font-semibold text-navy-400 dark:border-navy-700 dark:bg-navy-800/50 dark:text-navy-400">
+                              Draft
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">
+                          {d.type.replace(/_/g, " ")} ·{" "}
+                          {new Date(d.createdAt).toLocaleString()}
+                          {d.publishedAt &&
+                            ` · Published ${new Date(d.publishedAt).toLocaleDateString()}`}
+                        </p>
+                      </div>
                     </div>
+                    {!d.publishedAt && (
+                      <form action={publishDeliverable}>
+                        <input type="hidden" name="deliverableId" value={d.id} />
+                        <input type="hidden" name="engagementId" value={id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-teal-500 px-3 py-1.5 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-50 dark:border-teal-600 dark:text-teal-400 dark:hover:bg-teal-900/30"
+                        >
+                          Publish
+                        </button>
+                      </form>
+                    )}
                   </div>
+
                   {d.content && (
-                    <details className="ml-7 mt-3">
-                      <summary className="cursor-pointer text-xs text-blue-600 hover:underline">
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs font-medium text-teal-600 hover:underline dark:text-teal-400">
                         Preview content
                       </summary>
-                      <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-gray-50 p-4 text-xs text-gray-700 whitespace-pre-wrap">
-                        {d.content}
-                      </pre>
+                      <div className="mt-3 max-h-96 overflow-auto rounded-xl border border-navy-100/60 bg-navy-50/60 p-5 dark:border-navy-700/40 dark:bg-navy-900/40">
+                        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-navy-700 dark:text-navy-200">
+                          {d.content}
+                        </pre>
+                      </div>
                     </details>
                   )}
-                </li>
+                </div>
               );
             })}
-          </ul>
-        )}
-      </section>
-
-      {/* ── Generate new deliverable ── */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-1 text-lg font-semibold text-gray-900">
-          Generate Deliverable
-        </h2>
-        {!hasFindngs && (
-          <div className="mb-4 rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-            No findings yet — run discovery or AI analysis first to populate the
-            data that will be included in deliverables.
           </div>
         )}
-        <GenerateDeliverableForm engagementId={id} />
-      </section>
+      </div>
 
-      {/* ── Deliverable templates reference ── */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-1 text-lg font-semibold text-gray-900">
-          Deliverable Templates
-        </h2>
-        <p className="mb-5 text-sm text-gray-500">
-          Each report type serves a distinct audience. Reference the table below
-          when deciding which deliverable to generate.
+      {/* ── Generate new deliverable ── */}
+      <div className="glass p-6">
+        <p className="label-caps mb-1 text-navy-300 dark:text-navy-500">Generate Deliverable</p>
+        <p className="mb-5 text-xs text-navy-400 dark:text-navy-400">
+          AI-powered generation using live topology, uploaded documents, and all findings.
+          {findings.length === 0 && (
+            <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">
+              No findings yet — run discovery or AI analysis first.
+            </span>
+          )}
         </p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <GenerateDeliverableForm engagementId={id} />
+      </div>
+
+      {/* ── Templates reference ── */}
+      <div className="glass p-6">
+        <p className="label-caps mb-4 text-navy-300 dark:text-navy-500">Report Types</p>
+        <div className="grid gap-3 sm:grid-cols-2">
           {DELIVERABLE_TEMPLATES.map((t) => (
             <div
               key={t.type}
-              className="rounded-lg border border-gray-200 p-4"
+              className="rounded-xl border border-navy-100/60 bg-white/30 p-4 dark:border-navy-700/40 dark:bg-navy-800/20"
             >
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-xl">{t.icon}</span>
-                <p className="text-sm font-semibold text-gray-900">
-                  {t.label}
-                </p>
+              <div className="mb-2 flex items-center gap-2.5">
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
+                  <svg className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{t.label}</p>
+                  <p className="text-xs text-teal-600 dark:text-teal-400">{t.audience}</p>
+                </div>
               </div>
-              <p className="mb-3 text-xs text-gray-500">{t.desc}</p>
-              <div className="mb-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  Sections
-                </p>
-                <ul className="mt-1 space-y-0.5">
-                  {t.sections.map((s) => (
-                    <li key={s} className="text-xs text-gray-600">
-                      · {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <p className="text-xs text-gray-400">
-                <span className="font-semibold">Audience:</span> {t.audience}
-              </p>
+              <p className="text-xs text-navy-400 dark:text-navy-400">{t.desc}</p>
             </div>
           ))}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

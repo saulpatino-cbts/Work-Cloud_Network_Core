@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { analyzeDocuments, type AnalysisFocus } from "@/lib/openai";
+import { analyzeEngagement, type AnalysisFocus } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 
 export async function runAnalysis(
@@ -21,22 +21,41 @@ export async function runAnalysis(
   });
   if (!member) return { error: "Access denied." };
 
-  const documents = await prisma.ingestedDocument.findMany({
-    where: { engagementId, parsedText: { not: null } },
-    select: { fileName: true, parsedText: true },
-  });
+  // Gather all three data sources in parallel
+  const [documents, existingFindings, latestJob] = await Promise.all([
+    prisma.ingestedDocument.findMany({
+      where: { engagementId, parsedText: { not: null } },
+      select: { fileName: true, parsedText: true },
+    }),
+    prisma.finding.findMany({
+      where: { engagementId },
+      select: { title: true, severity: true, category: true, description: true },
+    }),
+    prisma.discoveryJob
+      .findFirst({
+        where: { engagementId, status: "COMPLETED" },
+        orderBy: { completedAt: "desc" },
+        select: { topologyJson: true },
+      })
+      .catch(() => null), // table may not be migrated in all envs
+  ]);
 
-  if (documents.length === 0) {
+  const hasTopology = !!latestJob?.topologyJson;
+  const hasDocs = documents.length > 0;
+
+  if (!hasTopology && !hasDocs) {
     return {
       error:
-        "No analyzable documents found. Upload text-based files (CSV, TXT, JSON, YAML) first.",
+        "No data to analyze. Run a discovery first to capture topology, or upload network documents.",
     };
   }
 
-  const rawFindings = await analyzeDocuments(
-    documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+  const rawFindings = await analyzeEngagement({
+    topologyJson: latestJob?.topologyJson ?? null,
+    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+    existingFindings,
     focus,
-  );
+  });
 
   if (rawFindings.length > 0) {
     await prisma.finding.createMany({

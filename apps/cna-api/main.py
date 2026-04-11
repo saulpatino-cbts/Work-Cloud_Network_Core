@@ -622,12 +622,6 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
 
     # ── NAT Gateway checks ────────────────────────────────────────────────────
     # Subnets with direct Internet route but no NAT gateway (outbound SNAT exhaustion risk)
-    all_subnet_names = {
-        s.get("name")
-        for v in vnets
-        for s in v.get("subnets", [])
-        if s.get("name") not in _PLATFORM_SUBNETS
-    }
     nat_covered_subnets: set[str] = set()
     for ng in nat_gateways:
         for sid in ng.get("associated_subnet_ids", []):

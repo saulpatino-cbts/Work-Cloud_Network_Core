@@ -36,10 +36,10 @@ from cna.core.topology_schema import (
     AzureBastionHost,
     AzureFirewall,
     AzureGatewayConnection,
-    AzureLoadBalancer,
     AzureLBFrontendIP,
     AzureLBProbe,
     AzureLBRule,
+    AzureLoadBalancer,
     AzureNatGateway,
     AzureNSG,
     AzurePrivateEndpoint,
@@ -78,9 +78,7 @@ def _rg_from_id(resource_id: str) -> str:
     """Extract resource group name from an Azure resource ID."""
     parts = resource_id.split("/")
     try:
-        idx = next(
-            i for i, p in enumerate(parts) if p.lower() == "resourcegroups"
-        )
+        idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
         return parts[idx + 1]
     except (StopIteration, IndexError):
         return parts[4] if len(parts) > 4 else ""
@@ -90,9 +88,7 @@ def _sub_from_id(resource_id: str) -> str:
     """Extract subscription ID from an Azure resource ID."""
     parts = resource_id.split("/")
     try:
-        idx = next(
-            i for i, p in enumerate(parts) if p.lower() == "subscriptions"
-        )
+        idx = next(i for i, p in enumerate(parts) if p.lower() == "subscriptions")
         return parts[idx + 1]
     except (StopIteration, IndexError):
         return ""
@@ -284,15 +280,14 @@ class AzureDiscovery:
 
                 pl_svc_policy = "Enabled"
                 if hasattr(s, "private_link_service_network_policies"):
-                    pl_svc_policy = str(
-                        s.private_link_service_network_policies or "Enabled"
-                    )
+                    pl_svc_policy = str(s.private_link_service_network_policies or "Enabled")
 
                 subnets.append(
                     AzureSubnet(
                         id=s.id,
                         name=s.name,
-                        address_prefix=s.address_prefix or (extra_prefixes[0] if extra_prefixes else ""),
+                        address_prefix=s.address_prefix
+                        or (extra_prefixes[0] if extra_prefixes else ""),
                         nsg_id=s.network_security_group.id if s.network_security_group else None,
                         nsg_name=nsg_name,
                         route_table_id=s.route_table.id if s.route_table else None,
@@ -329,9 +324,7 @@ class AzureDiscovery:
                         do_not_verify_remote_gateways=bool(
                             getattr(p, "do_not_verify_remote_gateways", False)
                         ),
-                        peer_complete_vnets=bool(
-                            getattr(p, "peer_complete_vnets", True)
-                        ),
+                        peer_complete_vnets=bool(getattr(p, "peer_complete_vnets", True)),
                     )
                 )
 
@@ -394,13 +387,13 @@ class AzureDiscovery:
                     source_address_prefix=r.source_address_prefix,
                     source_address_prefixes=list(r.source_address_prefixes or []),
                     source_asgs=[
-                        asg.id for asg in (r.source_application_security_groups or [])
-                        if asg.id
+                        asg.id for asg in (r.source_application_security_groups or []) if asg.id
                     ],
                     destination_address_prefix=r.destination_address_prefix,
                     destination_address_prefixes=list(r.destination_address_prefixes or []),
                     destination_asgs=[
-                        asg.id for asg in (r.destination_application_security_groups or [])
+                        asg.id
+                        for asg in (r.destination_application_security_groups or [])
                         if asg.id
                     ],
                     description=r.description,
@@ -409,14 +402,12 @@ class AzureDiscovery:
                 )
 
             security_rules = [_map_rule(r) for r in (nsg.security_rules or [])]
-            default_rules = [_map_rule(r, is_default=True) for r in (nsg.default_security_rules or [])]
+            default_rules = [
+                _map_rule(r, is_default=True) for r in (nsg.default_security_rules or [])
+            ]
 
-            subnet_ids = [
-                s.id for s in (nsg.subnets or []) if s.id
-            ]
-            nic_ids = [
-                ni.id for ni in (nsg.network_interfaces or []) if ni.id
-            ]
+            subnet_ids = [s.id for s in (nsg.subnets or []) if s.id]
+            nic_ids = [ni.id for ni in (nsg.network_interfaces or []) if ni.id]
 
             nsgs.append(
                 AzureNSG(
@@ -548,9 +539,9 @@ class AzureDiscovery:
                         name=fic.name,
                         public_ip_id=fic.public_ip_address.id if fic.public_ip_address else None,
                         private_ip_address=fic.private_ip_address,
-                        private_ip_allocation_method=str(
-                            fic.private_ip_allocation_method or ""
-                        ) if is_private else None,
+                        private_ip_allocation_method=str(fic.private_ip_allocation_method or "")
+                        if is_private
+                        else None,
                         subnet_id=fic.subnet.id if fic.subnet else None,
                         zones=list(getattr(fic, "zones", None) or []),
                     )
@@ -585,9 +576,7 @@ class AzureDiscovery:
                     )
                 )
 
-            pool_ids = [
-                pool.id for pool in (lb.backend_address_pools or []) if pool.id
-            ]
+            pool_ids = [pool.id for pool in (lb.backend_address_pools or []) if pool.id]
             nat_rule_count = len(lb.inbound_nat_rules or [])
 
             # Collect zones from frontend configs
@@ -680,9 +669,7 @@ class AzureDiscovery:
     ) -> list[AzureGatewayConnection]:
         connections = []
         try:
-            for conn in _safe_list(
-                net.virtual_network_gateway_connections.list(resource_group)
-            ):
+            for conn in _safe_list(net.virtual_network_gateway_connections.list(resource_group)):
                 # Only include connections that reference this gateway
                 gw_ref = ""
                 if conn.virtual_network_gateway1:
@@ -702,13 +689,9 @@ class AzureDiscovery:
                             else None
                         ),
                         local_network_gateway_id=(
-                            conn.local_network_gateway2.id
-                            if conn.local_network_gateway2
-                            else None
+                            conn.local_network_gateway2.id if conn.local_network_gateway2 else None
                         ),
-                        express_route_circuit_id=(
-                            conn.peer.id if conn.peer else None
-                        ),
+                        express_route_circuit_id=(conn.peer.id if conn.peer else None),
                         routing_weight=int(conn.routing_weight or 10),
                         enable_bgp=bool(conn.enable_bgp),
                         use_policy_based_traffic_selectors=bool(
@@ -794,15 +777,9 @@ class AzureDiscovery:
             if ng.sku:
                 sku_name = str(ng.sku.name or "Standard")
 
-            pip_ids = [
-                pip.id for pip in (ng.public_ip_addresses or []) if pip.id
-            ]
-            prefix_ids = [
-                pfx.id for pfx in (ng.public_ip_prefixes or []) if pfx.id
-            ]
-            subnet_ids = [
-                s.id for s in (ng.subnets or []) if s.id
-            ]
+            pip_ids = [pip.id for pip in (ng.public_ip_addresses or []) if pip.id]
+            prefix_ids = [pfx.id for pfx in (ng.public_ip_prefixes or []) if pfx.id]
+            subnet_ids = [s.id for s in (ng.subnets or []) if s.id]
 
             nat_gws.append(
                 AzureNatGateway(
@@ -890,9 +867,7 @@ class AzureDiscovery:
                             ),
                             routing_state=str(hub.routing_state or "None"),
                             virtual_router_asn=getattr(hub, "virtual_router_asn", None),
-                            virtual_router_ips=list(
-                                getattr(hub, "virtual_router_ips", None) or []
-                            ),
+                            virtual_router_ips=list(getattr(hub, "virtual_router_ips", None) or []),
                         )
                     )
             vwans.append(
@@ -1027,9 +1002,7 @@ class AzureDiscovery:
                 linked_vnets = []
                 linked_names = []
                 auto_reg = False
-                for link in _safe_list(
-                    dns_client.virtual_network_links.list(rg, zone.name)
-                ):
+                for link in _safe_list(dns_client.virtual_network_links.list(rg, zone.name)):
                     if link.virtual_network:
                         linked_vnets.append(link.virtual_network.id)
                     if link.registration_enabled:
@@ -1071,9 +1044,7 @@ class AzureDiscovery:
                 peering_loc = erc.service_provider_properties.peering_location
                 bw = erc.service_provider_properties.bandwidth_in_mbps
 
-            peering_types = [
-                p.peering_type for p in (erc.peerings or []) if p.peering_type
-            ]
+            peering_types = [p.peering_type for p in (erc.peerings or []) if p.peering_type]
 
             circuits.append(
                 ExpressRouteCircuit(

@@ -58,16 +58,25 @@ export async function generateDeliverable(
     };
   }
 
-  const content = await generateDeliverableContent({
-    type: type as DeliverableType,
-    title,
-    clientOrg: engagement.clientOrg,
-    engagementName: engagement.name,
-    findings,
-    topologyJson: latestJob?.topologyJson ?? null,
-    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
-    customerLogoUrl,
-  });
+  let content: string;
+  try {
+    content = await generateDeliverableContent({
+      type: type as DeliverableType,
+      title,
+      clientOrg: engagement.clientOrg,
+      engagementName: engagement.name,
+      findings,
+      topologyJson: latestJob?.topologyJson ?? null,
+      documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+      customerLogoUrl,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
+      return { error: "AI generation failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource. Ask your Azure admin to grant it to the managed identity." };
+    }
+    return { error: `AI generation failed: ${msg.slice(0, 200)}` };
+  }
 
   const fileName = `${type.toLowerCase()}-${Date.now()}.md`;
   const blobPath = await uploadDeliverable(engagementId, fileName, content);

@@ -50,12 +50,21 @@ export async function runAnalysis(
     };
   }
 
-  const rawFindings = await analyzeEngagement({
-    topologyJson: latestJob?.topologyJson ?? null,
-    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
-    existingFindings,
-    focus,
-  });
+  let rawFindings;
+  try {
+    rawFindings = await analyzeEngagement({
+      topologyJson: latestJob?.topologyJson ?? null,
+      documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+      existingFindings,
+      focus,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
+      return { error: "AI analysis failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
+    }
+    return { error: `AI analysis failed: ${msg.slice(0, 200)}` };
+  }
 
   if (rawFindings.length > 0) {
     await prisma.finding.createMany({

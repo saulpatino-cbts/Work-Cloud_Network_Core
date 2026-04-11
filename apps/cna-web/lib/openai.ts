@@ -284,9 +284,10 @@ export async function analyzeEngagement(
     documents?: { fileName: string; text: string }[];
     existingFindings?: { title: string; severity: string; category: string; description: string }[];
     focus: AnalysisFocus;
+    extraInstruction?: string;
   },
 ): Promise<RawFinding[]> {
-  const { topologyJson, documents = [], existingFindings = [], focus } = options;
+  const { topologyJson, documents = [], existingFindings = [], focus, extraInstruction } = options;
   const client = getClient();
   const focusInstruction = FOCUS_PROMPTS[focus];
 
@@ -332,7 +333,7 @@ ${FINDING_SCHEMA}`;
     return [];
   }
 
-  const userPrompt = `Perform a ${FOCUS_LABELS[focus]} analysis on the following network assessment data. Identify security findings not already covered by existing findings:\n\n${parts.join("\n\n")}`;
+  const userPrompt = `Perform a ${FOCUS_LABELS[focus]} analysis on the following network assessment data. Identify security findings not already covered by existing findings:${extraInstruction ? `\n\n${extraInstruction}` : ""}\n\n${parts.join("\n\n")}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
   const response = await client.chat.completions.create({
@@ -343,7 +344,7 @@ ${FINDING_SCHEMA}`;
     ],
     response_format: { type: "json_object" },
     temperature: 0.15,
-    max_tokens: 4000,
+    max_tokens: 8000,
   });
 
   const raw = response.choices[0]?.message?.content ?? "{}";
@@ -500,7 +501,7 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
       { role: "user", content: userPrompt },
     ],
     temperature: 0.2,
-    max_tokens: 6000,
+    max_tokens: 16000,
   });
 
   return response.choices[0]?.message?.content ?? "# Error generating content\n\nPlease try again.";

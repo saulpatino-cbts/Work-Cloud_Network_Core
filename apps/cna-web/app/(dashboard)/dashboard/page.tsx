@@ -86,7 +86,16 @@ export default async function DashboardPage() {
                       {eng.clientOrg}
                     </p>
                   </div>
-                  <StatusBadge value={eng.status} variant="status" />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StatusBadge value={eng.status} variant="status" />
+                    <div className="z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DeleteEngagementButton
+                        engagementId={eng.id}
+                        engagementName={eng.name}
+                        variant="inline"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Stats row */}
@@ -109,19 +118,12 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              {/* Full-card link + delete overlay */}
+              {/* Full-card link */}
               <Link
                 href={`/engagements/${eng.id}`}
                 className="absolute inset-0 z-0"
                 aria-label={`Open ${eng.name}`}
               />
-              <div className="absolute right-3 bottom-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <DeleteEngagementButton
-                  engagementId={eng.id}
-                  engagementName={eng.name}
-                  variant="inline"
-                />
-              </div>
             </div>
           ))}
 

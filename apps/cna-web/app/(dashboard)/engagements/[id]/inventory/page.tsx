@@ -312,8 +312,8 @@ export default async function InventoryPage({ params }: PageProps) {
 
   // ── Flatten all-subscription data ──────────────────────────────────────────
   const subs = topology.subscriptions;
-  const allVnets     = subs.flatMap((s) => s.vnets.map((v) => ({ ...v, _sub: s.subscription_name ?? s.subscription_id })));
-  const allSubnets   = allVnets.flatMap((v) => v.subnets.map((s) => ({ ...s, _vnet: v.name, _loc: v.location, _sub: v._sub })));
+  const allVnets     = subs.flatMap((s) => (s.vnets ?? []).map((v) => ({ ...v, _sub: s.subscription_name ?? s.subscription_id })));
+  const allSubnets   = allVnets.flatMap((v) => (v.subnets ?? []).map((s) => ({ ...s, _vnet: v.name, _loc: v.location, _sub: v._sub })));
   const allNsgs      = subs.flatMap((s) => (s.nsgs ?? []).map((n) => ({ ...n, _sub: s.subscription_name ?? s.subscription_id })));
   const allRts       = subs.flatMap((s) => (s.route_tables ?? []).map((r) => ({ ...r, _sub: s.subscription_name ?? s.subscription_id })));
   const allFirewalls = subs.flatMap((s) => (s.firewalls ?? []).map((f) => ({ ...f, _sub: s.subscription_name ?? s.subscription_id })));
@@ -359,7 +359,7 @@ export default async function InventoryPage({ params }: PageProps) {
       </div>
 
       {/* ── Subscriptions ── */}
-      <InvCard title="Subscriptions" count={subs.length}>
+      <InvCard title="Subscriptions" count={subs.length} table>
         <THead cols={["Subscription", "VNets", "NSGs", "Firewalls", "LBs", "Gateways", "PEs", "Status"]} />
         <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
           {subs.map((s) => (
@@ -392,7 +392,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── VNets ── */}
       {allVnets.length > 0 && (
-        <InvCard title="Virtual Networks" count={allVnets.length}>
+        <InvCard title="Virtual Networks" count={allVnets.length} table>
           <THead cols={["Name", "Location", "Resource Group", "Address Space", "DNS Servers", "Subnets", "Peerings", "DDoS", "Encrypted"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allVnets.map((v) => (
@@ -424,6 +424,7 @@ export default async function InventoryPage({ params }: PageProps) {
         count={allSubnets.length}
         badge={subnetsNoNsg.length > 0 ? `${subnetsNoNsg.length} unprotected` : "All protected"}
         badgeVariant={subnetsNoNsg.length > 0 ? "warn" : "ok"}
+        table
       >
         <THead cols={["Subnet", "VNet", "CIDR", "NSG", "Route Table", "NAT GW", "Delegation", "Svc Endpoints"]} />
         <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
@@ -564,7 +565,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── Firewalls ── */}
       {allFirewalls.length > 0 && (
-        <InvCard title="Azure Firewalls" count={allFirewalls.length}>
+        <InvCard title="Azure Firewalls" count={allFirewalls.length} table>
           <THead cols={["Name", "Location", "Resource Group", "SKU", "Threat Intel", "Public IPs", "Zones"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allFirewalls.map((f) => (
@@ -590,7 +591,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── Application Gateways ── */}
       {allAppGws.length > 0 && (
-        <InvCard title="Application Gateways" count={allAppGws.length}>
+        <InvCard title="Application Gateways" count={allAppGws.length} table>
           <THead cols={["Name", "Location", "Resource Group", "SKU", "WAF", "WAF Mode", "Rule Set", "Zones"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allAppGws.map((a) => (
@@ -703,7 +704,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── Private Endpoints ── */}
       {allPEs.length > 0 && (
-        <InvCard title="Private Endpoints" count={allPEs.length}>
+        <InvCard title="Private Endpoints" count={allPEs.length} table>
           <THead cols={["Name", "Location", "Resource Group", "Subnet", "Services", "DNS Configs"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allPEs.map((pe) => (
@@ -736,6 +737,7 @@ export default async function InventoryPage({ params }: PageProps) {
           count={allPIPs.length}
           badge={unassocPIPs.length > 0 ? `${unassocPIPs.length} unassociated` : undefined}
           badgeVariant="warn"
+          table
         >
           <THead cols={["Name", "IP Address", "SKU", "Allocation", "Version", "Associated To", "Zones"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
@@ -758,7 +760,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── NAT Gateways ── */}
       {allNats.length > 0 && (
-        <InvCard title="NAT Gateways" count={allNats.length}>
+        <InvCard title="NAT Gateways" count={allNats.length} table>
           <THead cols={["Name", "Location", "Resource Group", "Public IPs", "Subnets", "Timeout (min)", "Zones"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allNats.map((ng) => (
@@ -778,7 +780,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── Bastion Hosts ── */}
       {allBastions.length > 0 && (
-        <InvCard title="Bastion Hosts" count={allBastions.length}>
+        <InvCard title="Bastion Hosts" count={allBastions.length} table>
           <THead cols={["Name", "Location", "Resource Group", "SKU", "Tunneling", "Shareable Link"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allBastions.map((b) => (
@@ -799,7 +801,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── Private DNS Zones ── */}
       {allDnsZones.length > 0 && (
-        <InvCard title="Private DNS Zones" count={allDnsZones.length}>
+        <InvCard title="Private DNS Zones" count={allDnsZones.length} table>
           <THead cols={["Zone Name", "Resource Group", "Records", "Linked VNets", "Auto-Registration"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allDnsZones.map((z) => (
@@ -817,7 +819,7 @@ export default async function InventoryPage({ params }: PageProps) {
 
       {/* ── ExpressRoute Circuits ── */}
       {allERs.length > 0 && (
-        <InvCard title="ExpressRoute Circuits" count={allERs.length}>
+        <InvCard title="ExpressRoute Circuits" count={allERs.length} table>
           <THead cols={["Name", "Provider", "Peering Location", "Bandwidth", "SKU", "Peering Types", "Global Reach", "State"]} />
           <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
             {allERs.map((er) => (
@@ -852,12 +854,14 @@ function InvCard({
   count,
   badge,
   badgeVariant = "ok",
+  table = false,
   children,
 }: {
   title: string;
   count: number;
   badge?: string;
   badgeVariant?: "ok" | "warn";
+  table?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -871,7 +875,9 @@ function InvCard({
           </span>
         )}
       </div>
-      <div className="overflow-x-auto">{children}</div>
+      <div className="overflow-x-auto">
+        {table ? <table className="min-w-full">{children}</table> : children}
+      </div>
     </div>
   );
 }

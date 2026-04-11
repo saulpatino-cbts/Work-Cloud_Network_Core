@@ -22,32 +22,29 @@ export function UploadDocumentForm({ engagementId }: { engagementId: string }) {
       <input type="hidden" name="engagementId" value={engagementId} />
 
       {state?.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg border border-red-800/40 bg-red-900/20 px-3 py-2 text-sm text-red-400">
           {state.error}
         </p>
       )}
       {state?.success && (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+        <p className="rounded-lg border border-teal-800/40 bg-teal-900/20 px-3 py-2 text-sm text-teal-300">
           Document uploaded successfully.
         </p>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label
-            htmlFor="docType"
-            className="block text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="docType" className="block text-sm font-medium text-navy-300">
             Document type
           </label>
           <select
             id="docType"
             name="docType"
             required
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-lg border border-navy-600/50 bg-navy-800/60 px-3 py-2 text-sm text-navy-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             {DOC_TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
+              <option key={opt.value} value={opt.value} className="bg-navy-900">
                 {opt.label}
               </option>
             ))}
@@ -55,10 +52,7 @@ export function UploadDocumentForm({ engagementId }: { engagementId: string }) {
         </div>
 
         <div>
-          <label
-            htmlFor="file"
-            className="block text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="file" className="block text-sm font-medium text-navy-300">
             File
           </label>
           <input
@@ -67,11 +61,10 @@ export function UploadDocumentForm({ engagementId }: { engagementId: string }) {
             type="file"
             required
             accept={ACCEPTED}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-blue-700 focus:outline-none"
+            className="mt-1 block w-full rounded-lg border border-navy-600/50 bg-navy-800/60 px-3 py-2 text-sm text-navy-300 file:mr-3 file:rounded file:border-0 file:bg-teal-900/40 file:px-3 file:py-1 file:text-xs file:font-medium file:text-teal-300 focus:outline-none"
           />
-          <p className="mt-1 text-xs text-gray-400">
-            CSV, TXT, JSON, YAML — text files are parsed for AI analysis. PDF,
-            XLSX stored as-is.
+          <p className="mt-1 text-xs text-navy-500">
+            CSV, TXT, JSON, YAML — text files are parsed for AI analysis. PDF, XLSX stored as-is.
           </p>
         </div>
       </div>

@@ -9,7 +9,7 @@ type Platform = "AZURE" | "AWS";
 interface Subscription {
   name: string;
   subscriptionId: string;
-  tenantId?: string; // per-row override from CSV
+  tenantId?: string;
 }
 
 const GUID_RE =
@@ -26,7 +26,6 @@ function parseSubscriptionCsv(text: string): {
     .filter(Boolean);
   if (!lines.length) return { subs: [], errors: ["CSV file is empty."] };
 
-  // Skip header row if it contains the word "subscription"
   const dataLines = lines[0].toLowerCase().includes("subscription")
     ? lines.slice(1)
     : lines;
@@ -76,22 +75,22 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
+const INPUT_CLS =
+  "mt-1 block w-full rounded-lg border border-navy-600/50 bg-navy-800/60 px-3 py-2 text-sm text-navy-100 placeholder-navy-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500";
+
 export function CredentialForm({ engagementId }: { engagementId: string }) {
   const [platform, setPlatform] = useState<Platform>("AZURE");
 
-  // Auth fields
   const [tenantId, setTenantId] = useState("");
   const [spClientId, setSpClientId] = useState("");
   const [spClientSecret, setSpClientSecret] = useState("");
 
-  // Subscription list (pending — not yet saved)
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [manualName, setManualName] = useState("");
   const [manualSubId, setManualSubId] = useState("");
   const [manualSubIdError, setManualSubIdError] = useState("");
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
 
-  // Results
   const [testResult, setTestResult] = useState<{
     ok: boolean;
     subscriptions?: string[];
@@ -110,27 +109,21 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
   function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const { subs, errors } = parseSubscriptionCsv(text);
       setCsvErrors(errors);
       setSaveResult(null);
-
       if (subs.length > 0) {
-        // Auto-fill tenant ID from first row if the field is blank
         if (!tenantId && subs[0].tenantId) setTenantId(subs[0].tenantId);
-
         setSubscriptions((prev) => {
           const existing = new Set(prev.map((s) => s.subscriptionId));
-          const newOnes = subs.filter((s) => !existing.has(s.subscriptionId));
-          return [...prev, ...newOnes];
+          return [...prev, ...subs.filter((s) => !existing.has(s.subscriptionId))];
         });
       }
     };
     reader.readAsText(file);
-    // Reset so the same file can be re-uploaded after edits
     e.target.value = "";
   }
 
@@ -201,8 +194,8 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
           onClick={() => setPlatform("AZURE")}
           className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
             platform === "AZURE"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-teal-700 text-white"
+              : "bg-navy-700/60 text-navy-300 hover:bg-navy-700"
           }`}
         >
           Azure
@@ -211,10 +204,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
           type="button"
           disabled
           title="AWS support coming soon"
-          className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed"
+          className="flex items-center gap-1.5 rounded-lg bg-navy-700/30 px-4 py-1.5 text-sm font-medium text-navy-500 cursor-not-allowed"
         >
           AWS
-          <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+          <span className="rounded-full bg-navy-700/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-400">
             soon
           </span>
         </button>
@@ -225,47 +218,39 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
           {/* ── Authentication ── */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Authentication
-              </p>
+              <p className="label-caps text-navy-400">Authentication</p>
               <SpHelpModal />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Tenant ID
-                </label>
+                <label className="block text-sm font-medium text-navy-300">Tenant ID</label>
                 <input
                   type="text"
                   value={tenantId}
                   onChange={(e) => setTenantId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={INPUT_CLS}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  SP Client ID
-                </label>
+                <label className="block text-sm font-medium text-navy-300">SP Client ID</label>
                 <input
                   type="text"
                   value={spClientId}
                   onChange={(e) => setSpClientId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={INPUT_CLS}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  SP Client Secret
-                </label>
+                <label className="block text-sm font-medium text-navy-300">SP Client Secret</label>
                 <input
                   type="password"
                   value={spClientSecret}
                   onChange={(e) => setSpClientSecret(e.target.value)}
                   placeholder="••••••••••••••••"
                   autoComplete="new-password"
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={INPUT_CLS}
                 />
               </div>
             </div>
@@ -274,23 +259,19 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
           {/* ── Subscriptions ── */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <p className="label-caps text-navy-400">
                 Subscriptions
                 {subscriptions.length > 0 && (
-                  <span className="ml-1.5 font-normal normal-case text-gray-400">
+                  <span className="ml-1.5 font-normal normal-case text-navy-500">
                     ({subscriptions.length} pending)
                   </span>
                 )}
               </p>
               <div className="flex items-center gap-4 text-xs">
-                <button
-                  type="button"
-                  onClick={downloadTemplate}
-                  className="text-blue-600 hover:underline"
-                >
+                <button type="button" onClick={downloadTemplate} className="text-teal-400 hover:underline">
                   Download template
                 </button>
-                <label className="cursor-pointer text-blue-600 hover:underline">
+                <label className="cursor-pointer text-teal-400 hover:underline">
                   Import CSV
                   <input
                     ref={fileInputRef}
@@ -303,31 +284,25 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            {/* CSV parse errors */}
             {csvErrors.length > 0 && (
-              <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                {csvErrors.map((err, i) => (
-                  <p key={i}>{err}</p>
-                ))}
+              <div className="mb-3 rounded-lg border border-amber-800/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-400">
+                {csvErrors.map((err, i) => <p key={i}>{err}</p>)}
               </div>
             )}
 
-            {/* Chips */}
             {subscriptions.length > 0 && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {subscriptions.map((sub) => (
                   <span
                     key={sub.subscriptionId}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-800"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-teal-800/40 bg-teal-900/20 px-3 py-1 text-xs text-teal-300"
                   >
                     <span className="font-medium">{sub.name}</span>
-                    <span className="text-blue-400">
-                      {sub.subscriptionId.slice(0, 8)}…
-                    </span>
+                    <span className="text-teal-500">{sub.subscriptionId.slice(0, 8)}…</span>
                     <button
                       type="button"
                       onClick={() => removeSubscription(sub.subscriptionId)}
-                      className="ml-0.5 rounded-full p-0.5 text-blue-400 hover:bg-blue-200 hover:text-blue-700"
+                      className="ml-0.5 rounded-full p-0.5 text-teal-400 hover:bg-teal-800/40"
                       title={`Remove ${sub.name}`}
                     >
                       ✕
@@ -337,67 +312,53 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
               </div>
             )}
 
-            {/* Manual add row */}
             <div className="flex gap-2">
               <input
                 type="text"
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Subscription name"
-                className="w-48 shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-48 shrink-0 rounded-lg border border-navy-600/50 bg-navy-800/60 px-3 py-2 text-sm text-navy-100 placeholder-navy-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <div className="flex flex-1 flex-col">
                 <input
                   type="text"
                   value={manualSubId}
-                  onChange={(e) => {
-                    setManualSubId(e.target.value);
-                    setManualSubIdError("");
-                  }}
+                  onChange={(e) => { setManualSubId(e.target.value); setManualSubIdError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addManual()}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className={`block w-full rounded-lg border px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 ${
+                  className={`block w-full rounded-lg border px-3 py-2 text-sm text-navy-100 placeholder-navy-500 focus:outline-none focus:ring-1 bg-navy-800/60 ${
                     manualSubIdError
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-300"
-                      : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      ? "border-red-700/60 focus:border-red-500 focus:ring-red-500"
+                      : "border-navy-600/50 focus:border-teal-500 focus:ring-teal-500"
                   }`}
                 />
                 {manualSubIdError && (
-                  <p className="mt-1 text-xs text-red-600">{manualSubIdError}</p>
+                  <p className="mt-1 text-xs text-red-400">{manualSubIdError}</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={addManual}
                 disabled={!manualSubId.trim()}
-                className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 rounded-lg border border-navy-600/50 bg-navy-700/40 px-3 py-2 text-sm font-medium text-navy-200 hover:bg-navy-700/60 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Add
               </button>
             </div>
-            <p className="mt-1.5 text-xs text-gray-400">
-              Add subscriptions individually or import a CSV (subscription_name, subscription_id, tenant_id).
-              Tenant ID from CSV auto-fills the field above if blank.
+            <p className="mt-1.5 text-xs text-navy-500">
+              Add subscriptions individually or import a CSV. Tenant ID from CSV auto-fills above if blank.
             </p>
           </div>
 
-          {/* Test connection result */}
           {testResult && (
-            <div
-              className={`rounded-lg px-3 py-2 text-sm ${
-                testResult.ok
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-700"
-              }`}
-            >
+            <div className={`rounded-lg px-3 py-2 text-sm ${testResult.ok ? "border border-teal-800/40 bg-teal-900/20 text-teal-300" : "border border-red-800/40 bg-red-900/20 text-red-400"}`}>
               {testResult.ok ? (
                 <>
                   <p className="font-medium">Connection successful</p>
                   {testResult.subscriptions && testResult.subscriptions.length > 0 && (
                     <ul className="mt-1 list-disc pl-4 text-xs">
-                      {testResult.subscriptions.slice(0, 10).map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
+                      {testResult.subscriptions.slice(0, 10).map((s) => <li key={s}>{s}</li>)}
                       {testResult.subscriptions.length > 10 && (
                         <li>+{testResult.subscriptions.length - 10} more</li>
                       )}
@@ -410,28 +371,20 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
             </div>
           )}
 
-          {/* Save result */}
           {saveResult && (
-            <div
-              className={`rounded-lg px-3 py-2 text-sm ${
-                saveResult.success
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-700"
-              }`}
-            >
+            <div className={`rounded-lg px-3 py-2 text-sm ${saveResult.success ? "border border-teal-800/40 bg-teal-900/20 text-teal-300" : "border border-red-800/40 bg-red-900/20 text-red-400"}`}>
               {saveResult.success
                 ? `${saveResult.count} subscription${saveResult.count !== 1 ? "s" : ""} saved.`
                 : saveResult.error}
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-1">
             <button
               type="button"
               onClick={handleTest}
               disabled={isTesting || !canTest}
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center rounded-lg border border-navy-600/50 bg-navy-700/40 px-4 py-2 text-sm font-medium text-navy-200 hover:bg-navy-700/60 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isTesting ? "Testing…" : "Test connection"}
             </button>
@@ -439,7 +392,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
               type="button"
               onClick={handleSave}
               disabled={!canSave}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving
                 ? "Saving…"
@@ -452,11 +405,9 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
       )}
 
       {platform === "AWS" && (
-        <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center">
-          <p className="text-sm text-gray-500">AWS discovery is coming soon.</p>
-          <p className="mt-1 text-xs text-gray-400">
-            Switch to Azure to add a connection now.
-          </p>
+        <div className="rounded-xl border border-dashed border-navy-600/40 p-8 text-center">
+          <p className="text-sm text-navy-400">AWS discovery is coming soon.</p>
+          <p className="mt-1 text-xs text-navy-500">Switch to Azure to add a connection now.</p>
         </div>
       )}
     </div>

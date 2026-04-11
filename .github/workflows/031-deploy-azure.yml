@@ -269,6 +269,51 @@ jobs:
           name: tfplan-${{ inputs.environment }}
           path: infra/terraform/environments/azure/${{ inputs.environment }}
 
+      - name: Import pre-existing OpenAI role assignments
+        run: |
+          ENV="${{ inputs.environment }}"
+          RG="rg-cna-${ENV}-scus"
+
+          # Resolve OpenAI account resource ID
+          OPENAI_ID=$(az cognitiveservices account list \
+            --resource-group "$RG" \
+            --query "[0].id" -o tsv 2>/dev/null || true)
+
+          if [ -z "$OPENAI_ID" ]; then
+            echo "No OpenAI account found in $RG — skipping role assignment import"
+            exit 0
+          fi
+          echo "OpenAI scope: $OPENAI_ID"
+
+          # Map Terraform resource → Container App name
+          declare -A APP_TF_MAP=(
+            ["azurerm_role_assignment.web_openai_user"]="ca-cna-${ENV}-scus-web"
+            ["azurerm_role_assignment.api_openai_user"]="ca-cna-${ENV}-scus-api"
+            ["azurerm_role_assignment.worker_openai_user"]="ca-cna-${ENV}-scus-worker"
+          )
+
+          for TF_RESOURCE in "${!APP_TF_MAP[@]}"; do
+            APP_NAME="${APP_TF_MAP[$TF_RESOURCE]}"
+            PRINCIPAL_ID=$(az containerapp show \
+              --name "$APP_NAME" \
+              --resource-group "$RG" \
+              --query "identity.principalId" -o tsv 2>/dev/null || true)
+
+            [ -z "$PRINCIPAL_ID" ] && { echo "$APP_NAME not found, skipping"; continue; }
+
+            RA_NAME=$(az role assignment list \
+              --scope "$OPENAI_ID" \
+              --role "Cognitive Services OpenAI User" \
+              --assignee "$PRINCIPAL_ID" \
+              --query "[0].name" -o tsv 2>/dev/null || true)
+
+            [ -z "$RA_NAME" ] && { echo "No existing assignment for $APP_NAME, skipping"; continue; }
+
+            RESOURCE_ID="${OPENAI_ID}/providers/Microsoft.Authorization/roleAssignments/${RA_NAME}"
+            echo "Importing $TF_RESOURCE <- $RESOURCE_ID"
+            terraform import "$TF_RESOURCE" "$RESOURCE_ID" 2>&1 || true
+          done
+
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
 

@@ -276,6 +276,7 @@ export function ConnectionsPanel({
 }: ConnectionsPanelProps) {
   const latestJobByCredential = new Map<string, JobSummary>();
   for (const job of jobs) {
+    if (!job.credentialId) continue; // credential was deleted; skip orphaned job
     if (!latestJobByCredential.has(job.credentialId)) {
       latestJobByCredential.set(job.credentialId, job);
     }

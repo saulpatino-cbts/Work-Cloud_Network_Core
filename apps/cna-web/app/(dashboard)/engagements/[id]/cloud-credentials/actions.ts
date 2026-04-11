@@ -138,15 +138,20 @@ export async function deleteCloudCredential(formData: FormData) {
   });
   if (!member) return;
 
-  // Null out credentialId on any discovery jobs that reference this credential
-  // before deleting so the FK constraint is not violated. The migration
-  // (20260411000003) sets ON DELETE SET NULL, but this guard handles older DBs.
-  await prisma.discoveryJob.updateMany({
-    where: { credentialId },
-    data: { credentialId: null },
-  });
-  await prisma.cloudCredential.delete({ where: { id: credentialId } });
-  revalidatePath(`/engagements/${engagementId}`);
+  try {
+    // Null out credentialId on any discovery jobs referencing this credential
+    // before deleting to satisfy the FK constraint on older DB migrations.
+    await prisma.discoveryJob.updateMany({
+      where: { credentialId },
+      data: { credentialId: null },
+    });
+    await prisma.cloudCredential.delete({ where: { id: credentialId } });
+  } catch {
+    // If the record is already gone or another constraint fires, exit silently.
+    return;
+  }
+
+  revalidatePath(`/engagements/${engagementId}/connections`);
 }
 
 // ─── Test Azure connection ────────────────────────────────────────────────────

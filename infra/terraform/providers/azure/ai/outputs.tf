@@ -18,3 +18,7 @@ output "azure_openai_account_name" {
 output "azure_openai_endpoint" {
   value = azurerm_cognitive_account.this.endpoint
 }
+
+output "openai_deployment_name" {
+  value = azurerm_cognitive_deployment.gpt4o.name
+}

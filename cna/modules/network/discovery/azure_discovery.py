@@ -1089,7 +1089,24 @@ class AzureDiscovery:
         # Subscriptions
         all_subs = self._list_subscriptions()
         if self.opts.subscription_ids:
-            all_subs = [s for s in all_subs if s["id"] in self.opts.subscription_ids]
+            # Case-insensitive match: Azure SDK returns lowercase GUIDs; user input may vary.
+            wanted = {sid.lower().strip() for sid in self.opts.subscription_ids}
+            matched = [s for s in all_subs if s["id"].lower() in wanted]
+            if len(matched) < len(self.opts.subscription_ids):
+                accessible_ids = {s["id"].lower() for s in all_subs}
+                missing = [
+                    sid for sid in self.opts.subscription_ids if sid.lower() not in accessible_ids
+                ]
+                logger.warning(
+                    "[%s] Subscription filter: %d requested, %d accessible to SP, %d matched. "
+                    "Not accessible: %s",
+                    engagement_id,
+                    len(self.opts.subscription_ids),
+                    len(all_subs),
+                    len(matched),
+                    missing,
+                )
+            all_subs = matched
 
         logger.info("[%s] Discovering %d subscriptions", engagement_id, len(all_subs))
 

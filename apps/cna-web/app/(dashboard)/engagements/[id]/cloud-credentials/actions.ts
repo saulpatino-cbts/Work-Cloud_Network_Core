@@ -125,20 +125,23 @@ export async function addBulkCredentials(params: {
 
 // ─── Delete credential ────────────────────────────────────────────────────────
 
-export async function deleteCloudCredential(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return;
-
-  const credentialId = formData.get("credentialId") as string | null;
-  const engagementId = formData.get("engagementId") as string | null;
-  if (!credentialId || !engagementId) return;
-
-  const member = await prisma.engagementMember.findUnique({
-    where: { engagementId_userId: { engagementId, userId: session.user.id } },
-  });
-  if (!member) return;
-
+export async function deleteCloudCredential(
+  _prev: { error?: string; deleted?: boolean } | null,
+  formData: FormData,
+): Promise<{ error?: string; deleted?: boolean }> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Not authenticated." };
+
+    const credentialId = formData.get("credentialId") as string | null;
+    const engagementId = formData.get("engagementId") as string | null;
+    if (!credentialId || !engagementId) return { error: "Missing parameters." };
+
+    const member = await prisma.engagementMember.findUnique({
+      where: { engagementId_userId: { engagementId, userId: session.user.id } },
+    });
+    if (!member) return { error: "Access denied." };
+
     // Null out credentialId on any discovery jobs referencing this credential
     // before deleting to satisfy the FK constraint on older DB migrations.
     await prisma.discoveryJob.updateMany({
@@ -146,12 +149,11 @@ export async function deleteCloudCredential(formData: FormData) {
       data: { credentialId: null },
     });
     await prisma.cloudCredential.delete({ where: { id: credentialId } });
-  } catch {
-    // If the record is already gone or another constraint fires, exit silently.
-    return;
-  }
 
-  revalidatePath(`/engagements/${engagementId}/connections`);
+    return { deleted: true };
+  } catch {
+    return { error: "Failed to delete credential. Please try again." };
+  }
 }
 
 // ─── Test Azure connection ────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { startDiscovery } from "../discovery/actions";
 import { deleteCloudCredential } from "../cloud-credentials/actions";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -223,27 +224,42 @@ function DeleteCredentialButton({
   engagementId: string;
   label: string;
 }) {
+  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const [state, action, isPending] = useActionState(deleteCloudCredential, null);
+
+  // After a successful delete, refresh the page via a normal GET instead of
+  // triggering an RSC re-render from within the server action (which caused 500s).
+  useEffect(() => {
+    if (state?.deleted) router.refresh();
+  }, [state, router]);
 
   if (confirming) {
     return (
-      <form action={deleteCloudCredential} className="inline-flex items-center gap-1.5">
+      <form action={action} className="inline-flex flex-col items-start gap-1">
         <input type="hidden" name="credentialId" value={credentialId} />
         <input type="hidden" name="engagementId" value={engagementId} />
-        <span className="text-xs text-navy-400">Remove {label}?</span>
-        <button
-          type="submit"
-          className="rounded bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-400 hover:bg-red-900/60"
-        >
-          Confirm
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          className="rounded bg-navy-700/40 px-2 py-0.5 text-xs text-navy-400 hover:bg-navy-700/60"
-        >
-          Cancel
-        </button>
+        {state?.error && (
+          <span className="text-xs text-red-400">{state.error}</span>
+        )}
+        <div className="inline-flex items-center gap-1.5">
+          <span className="text-xs text-navy-400">Remove {label}?</span>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-400 hover:bg-red-900/60 disabled:opacity-50"
+          >
+            {isPending ? "Removing…" : "Confirm"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={isPending}
+            className="rounded bg-navy-700/40 px-2 py-0.5 text-xs text-navy-400 hover:bg-navy-700/60 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
       </form>
     );
   }

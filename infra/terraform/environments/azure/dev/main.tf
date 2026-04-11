@@ -177,15 +177,47 @@ module "runtime" {
   entra_client_secret           = var.entra_client_secret
 }
 
-# Grant the web Container App's system-assigned identity write access to blob
-# storage so DefaultAzureCredential can upload deliverables without a connection
-# string. The runtime module assigns Storage Blob Data Contributor to the
-# user-assigned managed identity, but Container Apps use their system-assigned
-# identity — so a separate assignment is needed here.
+# ─── Container App RBAC ───────────────────────────────────────────────────────
+# Each Container App uses its system-assigned managed identity via
+# DefaultAzureCredential. All required role assignments are declared here so
+# Terraform owns the full identity surface — no manual az role assignment calls.
+
+# Storage: web uploads deliverables; api + worker read/write raw artifacts.
 resource "azurerm_role_assignment" "web_storage_blob_data_contributor" {
   scope                = module.storage.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = module.compute.web_principal_id
+}
+
+resource "azurerm_role_assignment" "api_storage_blob_data_contributor" {
+  scope                = module.storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.compute.api_principal_id
+}
+
+resource "azurerm_role_assignment" "worker_storage_blob_data_contributor" {
+  scope                = module.storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.compute.worker_principal_id
+}
+
+# Azure OpenAI: all three apps call the completions API via managed identity.
+resource "azurerm_role_assignment" "web_openai_user" {
+  scope                = module.ai.azure_openai_account_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = module.compute.web_principal_id
+}
+
+resource "azurerm_role_assignment" "api_openai_user" {
+  scope                = module.ai.azure_openai_account_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = module.compute.api_principal_id
+}
+
+resource "azurerm_role_assignment" "worker_openai_user" {
+  scope                = module.ai.azure_openai_account_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = module.compute.worker_principal_id
 }
 
 module "security" {

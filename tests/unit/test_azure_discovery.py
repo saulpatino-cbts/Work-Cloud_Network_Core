@@ -75,6 +75,7 @@ class TestCollectVNets:
         subnet.service_endpoints = []
         subnet.private_endpoint_network_policies = "Enabled"
         subnet.delegations = []
+        subnet.nat_gateway = None
         vnet.subnets = [subnet]
         return vnet
 

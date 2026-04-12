@@ -577,8 +577,9 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
   const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} deliverable using this engagement data:\n\n${parts.join("\n")}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
-  // Comprehensive assessment needs maximum token budget for the full HTML page
-  const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
+  // Comprehensive assessment uses the model's maximum completion token limit.
+  // gpt-4o caps at 16,384 — update this when a higher-limit model is deployed.
+  const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 16384 : 16000;
 
   const response = await client.chat.completions.create({
     model: deployment,

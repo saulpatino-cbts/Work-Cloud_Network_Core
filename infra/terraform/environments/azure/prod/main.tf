@@ -164,7 +164,7 @@ module "ai" {
   # The cognitive account is deployed to eastus2 while all other resources stay in southcentralus.
   # TODO: switch to gpt-5.4 once quota is approved in eastus2 for this subscription.
   openai_location            = "eastus2"
-  openai_model_name          = "gpt-5.2"
+  openai_model_name          = "gpt-5.2-chat"
   openai_model_version       = "2026-02-10"
   openai_api_version         = "2026-01-01-preview"
   openai_deployment_capacity = 30

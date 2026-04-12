@@ -344,7 +344,7 @@ ${FINDING_SCHEMA}`;
     ],
     response_format: { type: "json_object" },
     temperature: 0.15,
-    max_tokens: 8000,
+    max_completion_tokens: 8000,
   });
 
   const raw = response.choices[0]?.message?.content ?? "{}";
@@ -587,7 +587,7 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
       { role: "user", content: userPrompt },
     ],
     temperature: 0.2,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   });
 
   return response.choices[0]?.message?.content ?? "# Error generating content\n\nPlease try again.";

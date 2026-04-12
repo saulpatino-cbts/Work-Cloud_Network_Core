@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { runAnalysis } from "../analysis/actions";
+import { runAllAnalysis } from "../analysis/actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 const ANALYSIS_OPTIONS = [
@@ -72,67 +73,108 @@ const ANALYSIS_OPTIONS = [
   },
 ];
 
+const CARD_BASE =
+  "flex cursor-pointer items-start gap-3 rounded-xl border border-navy-700 bg-navy-800/30 p-3 transition-colors hover:border-teal-600/60 hover:bg-teal-900/20";
+const CARD_CHECKED =
+  "has-[:checked]:border-teal-500 has-[:checked]:bg-teal-900/30";
+
 export function AiAnalysisForm({ engagementId }: { engagementId: string }) {
   const [state, action] = useActionState(runAnalysis, null);
+  const [allState, allAction] = useActionState(runAllAnalysis, null);
 
   return (
-    <form action={action} className="space-y-5">
-      <input type="hidden" name="engagementId" value={engagementId} />
+    <div className="space-y-5">
+      {/* ── Single focus form ── */}
+      <form action={action} className="space-y-4">
+        <input type="hidden" name="engagementId" value={engagementId} />
 
-      {state?.error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {state.error}
-        </p>
-      )}
-      {state?.success && (
-        <p className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-700 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-300">
-          Analysis complete — <strong>{state.count}</strong> new finding
-          {state.count !== 1 ? "s" : ""} generated.
-        </p>
-      )}
+        {state?.error && (
+          <p className="rounded-xl border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-400">
+            {state.error}
+          </p>
+        )}
+        {state?.success && (
+          <p className="rounded-xl border border-teal-800 bg-teal-900/20 px-4 py-3 text-sm text-teal-300">
+            Analysis complete —{" "}
+            <strong className="text-teal-200">{state.count}</strong> new finding
+            {state.count !== 1 ? "s" : ""} generated.
+          </p>
+        )}
 
-      <div className="space-y-4">
-        {ANALYSIS_OPTIONS.map((group) => (
-          <div key={group.group}>
-            <p className="label-caps mb-2 text-navy-300 dark:text-navy-500">
-              {group.group}
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {group.items.map((opt, i) => (
-                <label
-                  key={opt.value}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-navy-100 bg-white/40 p-3 transition-colors hover:border-teal-400/60 hover:bg-teal-50/40 has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50/60 dark:border-navy-700 dark:bg-navy-800/30 dark:hover:border-teal-600/60 dark:hover:bg-teal-900/20 dark:has-[:checked]:border-teal-500 dark:has-[:checked]:bg-teal-900/30"
-                >
-                  <input
-                    type="radio"
-                    name="focus"
-                    value={opt.value}
-                    defaultChecked={i === 0 && group.group === "Security Frameworks"}
-                    className="mt-0.5 accent-teal-600"
-                  />
-                  <div>
-                    <p className="text-xs font-semibold text-navy-700 dark:text-navy-100">
-                      {opt.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">
-                      {opt.desc}
-                    </p>
-                  </div>
-                </label>
-              ))}
+        <div className="space-y-4">
+          {ANALYSIS_OPTIONS.map((group) => (
+            <div key={group.group}>
+              <p className="label-caps mb-2 text-navy-500">{group.group}</p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {group.items.map((opt, i) => (
+                  <label key={opt.value} className={`${CARD_BASE} ${CARD_CHECKED}`}>
+                    <input
+                      type="radio"
+                      name="focus"
+                      value={opt.value}
+                      defaultChecked={i === 0 && group.group === "Security Frameworks"}
+                      className="mt-0.5 accent-teal-500"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-navy-100">{opt.label}</p>
+                      <p className="mt-0.5 text-xs text-navy-400">{opt.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-navy-500">
+          Analysis uses live topology data, uploaded documents, and existing findings as
+          context. Duplicate findings are not re-created.
+        </p>
+
+        <div className="flex items-center justify-end gap-3">
+          <SubmitButton
+            loadingText="Analyzing…"
+            className="bg-teal-700 hover:bg-teal-600 focus:ring-teal-500"
+          >
+            Run AI analysis
+          </SubmitButton>
+        </div>
+      </form>
+
+      {/* ── Run All Analysis form ── */}
+      <div className="border-t border-navy-700/40 pt-4">
+        <form action={allAction}>
+          <input type="hidden" name="engagementId" value={engagementId} />
+
+          {allState?.error && (
+            <p className="mb-3 rounded-xl border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-400">
+              {allState.error}
+            </p>
+          )}
+          {allState?.success && (
+            <p className="mb-3 rounded-xl border border-teal-800 bg-teal-900/20 px-4 py-3 text-sm text-teal-300">
+              All analyses complete —{" "}
+              <strong className="text-teal-200">{allState.count}</strong> unique new
+              finding{allState.count !== 1 ? "s" : ""} generated across all 11 focus types.
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-navy-700/40 bg-navy-800/20 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold text-navy-200">Run All Analysis</p>
+              <p className="mt-0.5 text-xs text-navy-500">
+                Runs all 11 focus types in parallel. May take a few minutes.
+              </p>
+            </div>
+            <SubmitButton
+              loadingText="Running all…"
+              className="shrink-0 bg-navy-700 hover:bg-navy-600 focus:ring-navy-500"
+            >
+              Run all analysis
+            </SubmitButton>
           </div>
-        ))}
+        </form>
       </div>
-
-      <p className="text-xs text-navy-400 dark:text-navy-500">
-        Analysis uses live topology data, uploaded documents, and existing findings as context.
-        Run multiple types to build a comprehensive picture — duplicate findings are not re-created.
-      </p>
-
-      <div className="flex justify-end">
-        <SubmitButton loadingText="Analyzing…">Run AI analysis</SubmitButton>
-      </div>
-    </form>
+    </div>
   );
 }

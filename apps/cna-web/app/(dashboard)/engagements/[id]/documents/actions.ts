@@ -9,6 +9,8 @@ import type { DocumentType } from "@prisma/client";
 
 // ─── Compliance check ─────────────────────────────────────────────────────────
 
+const ALL_FRAMEWORKS = ["nist", "cis", "soc2", "hipaa", "pci", "waf"] as const;
+
 // Map each compliance framework to the closest available analysis focus
 const FRAMEWORK_FOCUS: Record<string, AnalysisFocus> = {
   nist: "compliance_nist",
@@ -103,6 +105,94 @@ export async function runComplianceCheck(
 
   revalidatePath(`/engagements/${engagementId}`);
   return { success: true, count: rawFindings.length };
+}
+
+export async function runAllComplianceChecks(
+  _prev: { error?: string; success?: boolean; count?: number } | null,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean; count?: number }> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated." };
+
+  const engagementId = formData.get("engagementId") as string | null;
+  if (!engagementId) return { error: "Missing engagement ID." };
+
+  const member = await prisma.engagementMember.findUnique({
+    where: { engagementId_userId: { engagementId, userId: session.user.id } },
+  });
+  if (!member) return { error: "Access denied." };
+
+  const [documents, existingFindings, latestJob] = await Promise.all([
+    prisma.ingestedDocument.findMany({
+      where: { engagementId, parsedText: { not: null } },
+      select: { fileName: true, parsedText: true },
+    }),
+    prisma.finding.findMany({
+      where: { engagementId },
+      select: { title: true, severity: true, category: true, description: true },
+    }),
+    prisma.discoveryJob
+      .findFirst({
+        where: { engagementId, status: "COMPLETED" },
+        orderBy: { completedAt: "desc" },
+        select: { topologyJson: true },
+      })
+      .catch(() => null),
+  ]);
+
+  if (!latestJob?.topologyJson && documents.length === 0) {
+    return { error: "No data to analyze. Run discovery first or upload documents." };
+  }
+
+  const docInput = documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! }));
+  const topologyJson = latestJob?.topologyJson ?? null;
+
+  // Run all frameworks in parallel
+  const settled = await Promise.allSettled(
+    ALL_FRAMEWORKS.map((fw) => {
+      const focus = FRAMEWORK_FOCUS[fw] ?? "compliance_nist";
+      const hint = FRAMEWORK_HINT[fw] ?? "";
+      return analyzeEngagement({
+        topologyJson,
+        documents: docInput,
+        existingFindings,
+        focus,
+        extraInstruction: hint || undefined,
+      });
+    }),
+  );
+
+  const allRaw = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+
+  const seen = new Set(existingFindings.map((f) => f.title.toLowerCase()));
+  const unique = allRaw.filter((f) => {
+    const key = f.title.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (unique.length > 0) {
+    await prisma.finding.createMany({
+      data: unique.map((f) => ({
+        engagementId,
+        title: f.title,
+        severity: f.severity,
+        category: f.category,
+        description: f.description,
+        recommendation: f.recommendation,
+        aiGenerated: true,
+      })),
+    });
+  }
+
+  const failed = settled.filter((r) => r.status === "rejected").length;
+  if (failed > 0 && unique.length === 0) {
+    return { error: `All ${failed} compliance checks failed. Check Azure OpenAI connectivity.` };
+  }
+
+  revalidatePath(`/engagements/${engagementId}`);
+  return { success: true, count: unique.length };
 }
 
 export async function uploadDocument(

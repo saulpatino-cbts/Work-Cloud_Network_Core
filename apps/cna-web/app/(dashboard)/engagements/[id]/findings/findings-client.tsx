@@ -1,0 +1,352 @@
+"use client";
+
+import { useState, useMemo } from "react";
+
+type Sev = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFORMATIONAL";
+
+export interface FindingItem {
+  id: string;
+  title: string;
+  category: string;
+  severity: string;
+  description: string;
+  recommendation: string | null;
+  aiGenerated: boolean;
+  msLearnUrl: string;
+}
+
+const SEV_ORDER: Sev[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"];
+
+const SEV_META: Record<Sev, { label: string; dot: string; border: string; badge: string; bar: string }> = {
+  CRITICAL:      { label: "Critical", dot: "bg-red-500",    border: "border-l-red-500",    badge: "bg-red-900/30 text-red-300 border border-red-800/40",         bar: "bg-red-500" },
+  HIGH:          { label: "High",     dot: "bg-orange-500", border: "border-l-orange-500", badge: "bg-orange-900/30 text-orange-300 border border-orange-800/40", bar: "bg-orange-500" },
+  MEDIUM:        { label: "Medium",   dot: "bg-yellow-400", border: "border-l-yellow-400", badge: "bg-yellow-900/30 text-yellow-300 border border-yellow-800/40", bar: "bg-yellow-400" },
+  LOW:           { label: "Low",      dot: "bg-blue-400",   border: "border-l-blue-400",   badge: "bg-blue-900/30 text-blue-300 border border-blue-800/40",       bar: "bg-blue-400" },
+  INFORMATIONAL: { label: "Info",     dot: "bg-navy-400",   border: "border-l-navy-500",   badge: "bg-navy-800/50 text-navy-300 border border-navy-700/40",       bar: "bg-navy-500" },
+};
+
+// Risk matrix constants
+const CATEGORY_ORDER = [
+  "Access Control", "Network Security", "Network Segmentation", "Network Protection",
+  "Application Security", "Routing & Transit", "Encryption", "Compliance", "Configuration",
+];
+
+const MATRIX_SEV_DOT: Record<Sev, string> = {
+  CRITICAL: "bg-red-500", HIGH: "bg-orange-500", MEDIUM: "bg-yellow-400",
+  LOW: "bg-blue-400", INFORMATIONAL: "bg-navy-400",
+};
+
+interface Props {
+  findings: FindingItem[];
+}
+
+export function FindingsClient({ findings }: Props) {
+  const [sevFilter, setSevFilter] = useState<Sev | "ALL">("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [sourceFilter, setSourceFilter] = useState<"ALL" | "LIVE" | "AI">("ALL");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const liveCount = useMemo(() => findings.filter((f) => !f.aiGenerated).length, [findings]);
+  const aiCount = useMemo(() => findings.filter((f) => f.aiGenerated).length, [findings]);
+
+  const sevCounts = useMemo(() => {
+    const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFORMATIONAL: 0 } as Record<Sev, number>;
+    for (const f of findings) c[f.severity as Sev]++;
+    return c;
+  }, [findings]);
+
+  const categories = useMemo(
+    () => [...new Set(findings.map((f) => f.category))].sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a), bi = CATEGORY_ORDER.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1; if (bi === -1) return -1;
+      return ai - bi;
+    }),
+    [findings],
+  );
+
+  const filtered = useMemo(() => findings.filter((f) => {
+    if (sevFilter !== "ALL" && f.severity !== sevFilter) return false;
+    if (categoryFilter !== "ALL" && f.category !== categoryFilter) return false;
+    if (sourceFilter === "LIVE" && f.aiGenerated) return false;
+    if (sourceFilter === "AI" && !f.aiGenerated) return false;
+    return true;
+  }), [findings, sevFilter, categoryFilter, sourceFilter]);
+
+  if (findings.length === 0) {
+    return (
+      <div className="glass rounded-xl border border-dashed border-navy-600 p-10 text-center">
+        <svg className="mx-auto mb-3 h-8 w-8 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+        </svg>
+        <p className="text-sm font-medium text-navy-400">No findings yet.</p>
+        <p className="mt-1 text-xs text-navy-600">
+          Run discovery on the Connections tab, or upload documents and run AI analysis on the Documents tab.
+        </p>
+      </div>
+    );
+  }
+
+  const total = findings.length;
+
+  return (
+    <div className="space-y-4">
+      {/* ── Summary header ── */}
+      <div className="glass p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-navy-100">
+              Findings
+              <span className="ml-2 text-base font-normal text-navy-400">({total})</span>
+            </h2>
+            <p className="mt-0.5 text-xs text-navy-500">
+              {liveCount} live discovery · {aiCount} AI analysis
+            </p>
+          </div>
+
+          {/* Severity pills */}
+          <div className="flex flex-wrap gap-2">
+            {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
+              <div key={sev} className="flex items-center gap-1.5 rounded-full border border-navy-700/40 bg-navy-800/40 px-3 py-1">
+                <span className={`h-2 w-2 rounded-full ${SEV_META[sev].dot}`} />
+                <span className="text-xs font-semibold text-navy-200">{SEV_META[sev].label}</span>
+                <span className="text-xs text-navy-400">{sevCounts[sev]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Proportional severity bar */}
+        <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full">
+          {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
+            <div
+              key={sev}
+              title={`${SEV_META[sev].label}: ${sevCounts[sev]}`}
+              className={`${SEV_META[sev].bar} rounded-full transition-all`}
+              style={{ width: `${(sevCounts[sev] / total) * 100}%` }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Risk matrix ── */}
+      {categories.length > 0 && (
+        <div className="glass p-5">
+          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-navy-500">
+            Risk Matrix — Severity × Category
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="border-b border-navy-700/40">
+                  <th className="w-40 pb-2 text-left text-xs font-semibold text-navy-400">Category</th>
+                  {SEV_ORDER.map((sev) => (
+                    <th key={sev} className="pb-2 text-center font-semibold text-navy-400">
+                      {SEV_META[sev].label}
+                    </th>
+                  ))}
+                  <th className="pb-2 text-center font-semibold text-navy-400">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-700/30">
+                {categories.map((cat) => {
+                  const rowTotal = SEV_ORDER.reduce(
+                    (s, sev) => s + findings.filter((f) => f.category === cat && f.severity === sev).length, 0,
+                  );
+                  return (
+                    <tr key={cat} className="hover:bg-navy-800/20">
+                      <td className="py-2 pr-4 text-xs font-medium text-navy-200">{cat}</td>
+                      {SEV_ORDER.map((sev) => {
+                        const count = findings.filter((f) => f.category === cat && f.severity === sev).length;
+                        return (
+                          <td key={sev} className="py-2 text-center">
+                            {count > 0 ? (
+                              <span className={`inline-flex h-6 w-6 items-center justify-center rounded font-bold text-xs text-white ${MATRIX_SEV_DOT[sev]}`}>
+                                {count}
+                              </span>
+                            ) : (
+                              <span className="text-navy-700">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 text-center text-xs font-semibold text-navy-300">{rowTotal}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Filter toolbar ── */}
+      <div className="glass p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Severity toggles */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSevFilter("ALL")}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                sevFilter === "ALL"
+                  ? "bg-navy-600 text-navy-100"
+                  : "bg-navy-800/40 text-navy-400 hover:text-navy-300 hover:bg-navy-700/40"
+              }`}
+            >
+              All
+            </button>
+            {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
+              <button
+                key={sev}
+                onClick={() => setSevFilter(sevFilter === sev ? "ALL" : sev)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  sevFilter === sev
+                    ? SEV_META[sev].badge
+                    : "bg-navy-800/40 text-navy-400 hover:text-navy-300 hover:bg-navy-700/40"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${SEV_META[sev].dot}`} />
+                {SEV_META[sev].label}
+                <span className="opacity-60">{sevCounts[sev]}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Category + source selects */}
+          <div className="ml-auto flex gap-2">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            >
+              <option value="ALL">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value as "ALL" | "LIVE" | "AI")}
+              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            >
+              <option value="ALL">All Sources</option>
+              <option value="LIVE">Live Discovery</option>
+              <option value="AI">AI Analysis</option>
+            </select>
+          </div>
+        </div>
+
+        {filtered.length !== findings.length && (
+          <p className="mt-2 text-xs text-navy-600">
+            Showing {filtered.length} of {total} findings
+          </p>
+        )}
+      </div>
+
+      {/* ── Finding list ── */}
+      {filtered.length === 0 ? (
+        <div className="glass rounded-xl border border-dashed border-navy-700 p-6 text-center">
+          <p className="text-sm text-navy-400">No findings match the current filters.</p>
+        </div>
+      ) : (
+        <div className="glass overflow-hidden divide-y divide-navy-700/30">
+          {SEV_ORDER.flatMap((sev) =>
+            filtered
+              .filter((f) => f.severity === sev)
+              .map((f) => {
+                const meta = SEV_META[sev];
+                const isExpanded = expandedId === f.id;
+
+                return (
+                  <div
+                    key={f.id}
+                    className={`border-l-4 ${meta.border} transition-colors ${
+                      isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
+                    }`}
+                  >
+                    {/* Collapsed row — clickable */}
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                      className="w-full px-5 py-3.5 text-left"
+                      aria-expanded={isExpanded}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Severity badge */}
+                        <span
+                          className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}
+                        >
+                          {meta.label}
+                        </span>
+
+                        {/* Title + meta tags */}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold leading-snug text-navy-100">
+                            {f.title}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
+                              {f.category}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
+                                f.aiGenerated
+                                  ? "border-teal-800/40 bg-teal-900/20 text-teal-400"
+                                  : "border-violet-800/40 bg-violet-900/20 text-violet-400"
+                              }`}
+                            >
+                              {f.aiGenerated ? "AI Analysis" : "Live Discovery"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Chevron */}
+                        <svg
+                          className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="px-5 pb-5">
+                        <p className="mb-3 text-sm leading-relaxed text-navy-300">
+                          {f.description}
+                        </p>
+                        {f.recommendation && (
+                          <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
+                            <p className="text-xs leading-relaxed text-teal-300">
+                              <span className="font-semibold text-teal-200">Recommendation: </span>
+                              {f.recommendation}
+                            </p>
+                            <a
+                              href={f.msLearnUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
+                            >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              MS Learn docs
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

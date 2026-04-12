@@ -5,6 +5,20 @@ import { prisma } from "@/lib/prisma";
 import { analyzeEngagement, type AnalysisFocus } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 
+const ALL_FOCUSES: AnalysisFocus[] = [
+  "general",
+  "zero_trust",
+  "compliance_nist",
+  "compliance_cis",
+  "well_architected",
+  "remediation_priority",
+  "traffic_flow",
+  "dependency_chains",
+  "interconnect",
+  "routing_decisions",
+  "resilience",
+];
+
 export async function runAnalysis(
   _prev: { error?: string; success?: boolean; count?: number } | null,
   formData: FormData,
@@ -87,4 +101,90 @@ export async function runAnalysis(
 
   revalidatePath(`/engagements/${engagementId}`);
   return { success: true, count: rawFindings.length };
+}
+
+export async function runAllAnalysis(
+  _prev: { error?: string; success?: boolean; count?: number } | null,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean; count?: number }> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated." };
+
+  const engagementId = formData.get("engagementId") as string | null;
+  if (!engagementId) return { error: "Missing engagement ID." };
+
+  const member = await prisma.engagementMember.findUnique({
+    where: { engagementId_userId: { engagementId, userId: session.user.id } },
+  });
+  if (!member) return { error: "Access denied." };
+
+  const [documents, existingFindings, latestJob] = await Promise.all([
+    prisma.ingestedDocument.findMany({
+      where: { engagementId, parsedText: { not: null } },
+      select: { fileName: true, parsedText: true },
+    }),
+    prisma.finding.findMany({
+      where: { engagementId },
+      select: { title: true, severity: true, category: true, description: true },
+    }),
+    prisma.discoveryJob
+      .findFirst({
+        where: { engagementId, status: "COMPLETED" },
+        orderBy: { completedAt: "desc" },
+        select: { topologyJson: true },
+      })
+      .catch(() => null),
+  ]);
+
+  if (!latestJob?.topologyJson && documents.length === 0) {
+    return { error: "No data to analyze. Run a discovery first or upload documents." };
+  }
+
+  const docInput = documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! }));
+  const topologyJson = latestJob?.topologyJson ?? null;
+
+  // Run all focuses in parallel; collect any that succeed
+  const settled = await Promise.allSettled(
+    ALL_FOCUSES.map((focus) =>
+      analyzeEngagement({ topologyJson, documents: docInput, existingFindings, focus }),
+    ),
+  );
+
+  const allRaw = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+
+  // Deduplicate by title (case-insensitive) against each other + existing
+  const seen = new Set(existingFindings.map((f) => f.title.toLowerCase()));
+  const unique = allRaw.filter((f) => {
+    const key = f.title.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (unique.length > 0) {
+    await prisma.finding.createMany({
+      data: unique.map((f) => ({
+        engagementId,
+        title: f.title,
+        severity: f.severity,
+        category: f.category,
+        description: f.description,
+        recommendation: f.recommendation,
+        aiGenerated: true,
+      })),
+    });
+  }
+
+  await prisma.engagement.update({
+    where: { id: engagementId },
+    data: { status: "ANALYSIS" },
+  });
+
+  const failed = settled.filter((r) => r.status === "rejected").length;
+  if (failed > 0 && unique.length === 0) {
+    return { error: `All ${failed} analysis types failed. Check Azure OpenAI connectivity.` };
+  }
+
+  revalidatePath(`/engagements/${engagementId}`);
+  return { success: true, count: unique.length };
 }

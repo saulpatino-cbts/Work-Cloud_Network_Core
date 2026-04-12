@@ -168,6 +168,18 @@ jobs:
             -backend-config="use_oidc=true"
 
       - name: Import pre-existing OpenAI role assignments
+        # terraform import requires all declared variables to be satisfied — even for
+        # resources that don't use them. Export TF_VAR_* so the import commands don't
+        # fail with "No value for required variable" and get silently swallowed by || true.
+        env:
+          TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_entra_client_id: ${{ vars.CNA_ENTRA_CLIENT_ID }}
+          TF_VAR_entra_client_secret: ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
+          TF_VAR_nextauth_secret: ${{ secrets.CNA_NEXTAUTH_SECRET }}
+          TF_VAR_nextauth_url: ${{ vars.CNA_NEXTAUTH_URL }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_ghcr_pat: ${{ secrets.GHCR_PAT }}
+          TF_VAR_credential_encryption_key: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
         run: |
           ENV="${{ inputs.environment }}"
           RG="rg-cna-${ENV}-scus"

@@ -279,8 +279,14 @@ class AzureDiscovery:
     # ------------------------------------------------------------------ per-subscription
 
     def _discover_subscription(self, sub_id: str, sub_name: str) -> AzureSubscriptionTopology:
-        """Run full network discovery for one Azure subscription."""
+        """Run full network discovery for one Azure subscription.
+
+        Each collector runs independently — a failure in one (e.g. missing
+        permission for a specific resource type) is logged but does not block
+        the rest of the subscription from being discovered.
+        """
         from azure.mgmt.network import NetworkManagementClient
+        from azure.mgmt.resource import ResourceManagementClient
 
         topo = AzureSubscriptionTopology(
             subscription_id=sub_id,
@@ -288,38 +294,54 @@ class AzureDiscovery:
             tenant_id=self.opts.tenant_id,
         )
 
+        errors: list[str] = []
+
+        def _run(attr: str, collector, *args):
+            """Run one collector; on failure log and record the error, don't abort."""
+            try:
+                setattr(topo, attr, collector(*args))
+            except HttpResponseError as e:
+                msg = f"{attr}: HTTP {e.status_code} — {e.message}"
+                logger.warning("[%s] %s", sub_id, msg)
+                errors.append(msg)
+            except Exception as e:
+                msg = f"{attr}: {e}"
+                logger.warning("[%s] %s", sub_id, msg)
+                errors.append(msg)
+
         try:
             net = NetworkManagementClient(self._credential, sub_id)
-
-            # Order matters: collect flat resources first so VNets can ref them
-            topo.public_ips = self._collect_public_ips(net, sub_id)
-            topo.nsgs = self._collect_nsgs(net, sub_id)
-            topo.route_tables = self._collect_route_tables(net, sub_id)
-            topo.nat_gateways = self._collect_nat_gateways(net, sub_id)
-            topo.vnets = self._collect_vnets(net, sub_id)
-            topo.virtual_wans = self._collect_vwans(net, sub_id)
-            topo.firewalls = self._collect_firewalls(net, sub_id)
-            topo.application_gateways = self._collect_appgws(net, sub_id)
-            topo.load_balancers = self._collect_load_balancers(net, sub_id)
-            topo.virtual_network_gateways = self._collect_vnet_gateways(net, sub_id)
-            topo.private_endpoints = self._collect_private_endpoints(net, sub_id)
-            topo.bastion_hosts = self._collect_bastion_hosts(net, sub_id)
-            topo.private_dns_zones = self._collect_private_dns(sub_id)
-            topo.express_route_circuits = self._collect_er_circuits(net, sub_id)
-        except HttpResponseError as e:
-            status = e.status_code
-            if status in (401, 403):
-                logger.warning("Permission denied in subscription %s: %s", sub_id, e.message)
-                topo.discovery_blocked = True
-                topo.block_reason = f"HTTP {status}: {e.message}"
-            else:
-                logger.error("Unexpected HTTP error in subscription %s: %s", sub_id, e)
-                topo.discovery_blocked = True
-                topo.block_reason = f"HTTP {status}: {e.message}"
+            rmc = ResourceManagementClient(self._credential, sub_id)
+            rg_names = [rg.name for rg in _safe_list(rmc.resource_groups.list()) if rg.name]
         except Exception as e:
-            logger.error("Discovery failed for subscription %s: %s", sub_id, e)
             topo.discovery_blocked = True
             topo.block_reason = str(e)
+            return topo
+
+        # Order matters: collect flat resources first so VNets can ref them
+        _run("public_ips", self._collect_public_ips, net, sub_id)
+        _run("nsgs", self._collect_nsgs, net, sub_id)
+        _run("route_tables", self._collect_route_tables, net, sub_id)
+        _run("nat_gateways", self._collect_nat_gateways, net, sub_id)
+        _run("vnets", self._collect_vnets, net, sub_id)
+        _run("virtual_wans", self._collect_vwans, net, sub_id)
+        _run("firewalls", self._collect_firewalls, net, sub_id)
+        _run("application_gateways", self._collect_appgws, net, sub_id)
+        _run("load_balancers", self._collect_load_balancers, net, sub_id)
+        _run("virtual_network_gateways", self._collect_vnet_gateways, net, sub_id, rg_names)
+        _run("private_endpoints", self._collect_private_endpoints, net, sub_id)
+        _run("bastion_hosts", self._collect_bastion_hosts, net, sub_id)
+        _run("private_dns_zones", self._collect_private_dns, sub_id)
+        _run("express_route_circuits", self._collect_er_circuits, net, sub_id)
+
+        if errors:
+            topo.block_reason = "; ".join(errors)
+            # Only mark fully blocked if every collector failed (nothing discovered)
+            all_empty = (
+                not topo.vnets and not topo.nsgs and not topo.public_ips and not topo.load_balancers
+            )
+            if all_empty:
+                topo.discovery_blocked = True
 
         return topo
 
@@ -681,62 +703,67 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ VNet Gateways
 
-    def _collect_vnet_gateways(self, net, sub_id: str) -> list[AzureVirtualNetworkGateway]:
+    def _collect_vnet_gateways(
+        self, net, sub_id: str, rg_names: list[str]
+    ) -> list[AzureVirtualNetworkGateway]:
+        # VirtualNetworkGatewaysOperations has no list_all(); iterate per resource group.
         gateways = []
-        for gw in _safe_list(net.virtual_network_gateways.list_all()):
-            rg = _rg_from_id(gw.id)
+        for rg_name in rg_names:
+            for gw in _safe_list(net.virtual_network_gateways.list(rg_name)):
+                rg = _rg_from_id(gw.id)
 
-            sku_name = "VpnGw1"
-            sku_tier = "VpnGw1"
-            if gw.sku:
-                sku_name = str(gw.sku.name or "VpnGw1")
-                sku_tier = str(gw.sku.tier or "VpnGw1")
+                sku_name = "VpnGw1"
+                sku_tier = "VpnGw1"
+                if gw.sku:
+                    sku_name = str(gw.sku.name or "VpnGw1")
+                    sku_tier = str(gw.sku.tier or "VpnGw1")
 
-            bgp_asn = None
-            bgp_ip = None
-            if gw.bgp_settings:
-                bgp_asn = gw.bgp_settings.asn
-                bgp_ip = gw.bgp_settings.bgp_peering_address
+                bgp_asn = None
+                bgp_ip = None
+                if gw.bgp_settings:
+                    bgp_asn = gw.bgp_settings.asn
+                    bgp_ip = gw.bgp_settings.bgp_peering_address
 
-            pip_ids = []
-            subnet_id = None
-            vpn_client_pools: list[str] = []
-            for ipc in gw.ip_configurations or []:
-                if ipc.public_ip_address:
-                    pip_ids.append(ipc.public_ip_address.id)
-                if ipc.subnet:
-                    subnet_id = ipc.subnet.id
+                pip_ids = []
+                subnet_id = None
+                vpn_client_pools: list[str] = []
+                for ipc in gw.ip_configurations or []:
+                    if ipc.public_ip_address:
+                        pip_ids.append(ipc.public_ip_address.id)
+                    if ipc.subnet:
+                        subnet_id = ipc.subnet.id
 
-            if gw.vpn_client_configuration:
-                for pool in gw.vpn_client_configuration.vpn_client_address_pool or []:
-                    vpn_client_pools.append(pool.address_prefixes or [])
+                if gw.vpn_client_configuration:
+                    for pool in gw.vpn_client_configuration.vpn_client_address_pool or []:
+                        vpn_client_pools.append(pool.address_prefixes or [])
 
-            # Collect connections for this gateway
-            connections = self._collect_gateway_connections(net, rg, gw.name)
+                connections = self._collect_gateway_connections(net, rg, gw.name)
 
-            gateways.append(
-                AzureVirtualNetworkGateway(
-                    id=gw.id,
-                    name=gw.name,
-                    location=gw.location,
-                    resource_group=rg,
-                    gateway_type=str(gw.gateway_type or "Vpn"),
-                    vpn_type=str(gw.vpn_type or "RouteBased") if gw.gateway_type == "Vpn" else None,
-                    sku_name=sku_name,
-                    sku_tier=sku_tier,
-                    active_active=bool(gw.active_active),
-                    enable_bgp=bool(gw.enable_bgp),
-                    bgp_asn=bgp_asn,
-                    bgp_peering_address=bgp_ip,
-                    public_ip_ids=pip_ids,
-                    subnet_id=subnet_id,
-                    vpn_client_address_pool=vpn_client_pools,
-                    connections=connections,
-                    generation=str(gw.vpn_gateway_generation or ""),
-                    zones=list(gw.zones or []),
-                    tags=dict(gw.tags or {}),
+                gateways.append(
+                    AzureVirtualNetworkGateway(
+                        id=gw.id,
+                        name=gw.name,
+                        location=gw.location,
+                        resource_group=rg,
+                        gateway_type=str(gw.gateway_type or "Vpn"),
+                        vpn_type=str(gw.vpn_type or "RouteBased")
+                        if gw.gateway_type == "Vpn"
+                        else None,
+                        sku_name=sku_name,
+                        sku_tier=sku_tier,
+                        active_active=bool(gw.active_active),
+                        enable_bgp=bool(gw.enable_bgp),
+                        bgp_asn=bgp_asn,
+                        bgp_peering_address=bgp_ip,
+                        public_ip_ids=pip_ids,
+                        subnet_id=subnet_id,
+                        vpn_client_address_pool=vpn_client_pools,
+                        connections=connections,
+                        generation=str(gw.vpn_gateway_generation or ""),
+                        zones=list(gw.zones or []),
+                        tags=dict(gw.tags or {}),
+                    )
                 )
-            )
         return gateways
 
     def _collect_gateway_connections(

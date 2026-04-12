@@ -64,11 +64,11 @@ export function SpHelpModal() {
               <div className="rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-800">
                 <p className="font-semibold">Why is this needed?</p>
                 <p className="mt-1">
-                  CNA needs read-only access to your Azure environment to
-                  discover network topology, NSG rules, VNets, and firewall
-                  configurations. A Service Principal acts like a dedicated
-                  "robot user" — it only gets the permissions you explicitly
-                  grant (minimum: <strong>Reader</strong> on each subscription).
+                  CNA needs access to your Azure environment to discover network
+                  topology, NSG rules, VNets, and firewall configurations. A
+                  Service Principal acts like a dedicated "robot user" — it only
+                  gets the permissions you explicitly grant (minimum:{" "}
+                  <strong>Network Contributor</strong> on each subscription).
                   No personal account credentials are ever stored.
                 </p>
               </div>
@@ -151,7 +151,7 @@ export function SpHelpModal() {
               </Step>
 
               {/* Step 4 */}
-              <Step number={4} title="Grant Reader access to your subscriptions">
+              <Step number={4} title="Grant Network Contributor access to your subscriptions">
                 <p className="mb-2 text-gray-600">
                   Repeat for each subscription you want CNA to discover:
                 </p>
@@ -172,7 +172,7 @@ export function SpHelpModal() {
                   </li>
                   <li>
                     <strong>Role:</strong> search for and select{" "}
-                    <Code>Reader</Code>
+                    <Code>Network Contributor</Code>
                   </li>
                   <li>
                     <strong>Members:</strong> click "+ Select members" and
@@ -184,25 +184,33 @@ export function SpHelpModal() {
                   </li>
                 </ol>
                 <p className="mt-2 text-xs text-gray-500">
-                  Tip: if you have hundreds of subscriptions, assign Reader at
+                  Tip: if you have hundreds of subscriptions, assign Network Contributor at
                   the Management Group level and it propagates to all child
                   subscriptions automatically.
                 </p>
               </Step>
 
               {/* Minimum permissions callout */}
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs">
-                <p className="mb-1.5 font-semibold text-gray-700">
-                  Minimum required permissions (all covered by Reader)
+              <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs">
+                <p className="mb-1.5 font-semibold text-amber-800">
+                  Why Network Contributor and not Reader?
                 </p>
+                <p className="text-amber-700 mb-2">
+                  Some Azure network APIs (e.g. Virtual Network Gateways) require
+                  Network Contributor to enumerate resources across resource groups.
+                  CNA only reads — it never creates, modifies, or deletes anything.
+                </p>
+                <p className="font-semibold text-gray-700 mb-1">Key permissions granted by Network Contributor:</p>
                 <ul className="space-y-0.5 text-gray-500">
                   {[
-                    "Microsoft.Resources/subscriptions/read",
                     "Microsoft.Network/virtualNetworks/read",
                     "Microsoft.Network/networkSecurityGroups/read",
                     "Microsoft.Network/azureFirewalls/read",
                     "Microsoft.Network/virtualNetworkGateways/read",
-                    "Microsoft.Network/virtualNetworkPeerings/read",
+                    "Microsoft.Network/virtualNetworkGateways/list",
+                    "Microsoft.Network/loadBalancers/read",
+                    "Microsoft.Network/privateDnsZones/read",
+                    "Microsoft.Resources/subscriptions/resourceGroups/read",
                   ].map((p) => (
                     <li key={p}>
                       <Code>{p}</Code>

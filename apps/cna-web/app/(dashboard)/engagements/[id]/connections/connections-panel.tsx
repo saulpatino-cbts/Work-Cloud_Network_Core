@@ -300,7 +300,7 @@ function CredentialCard({
   initialJobs: JobSummary[];
   engagementId: string;
 }) {
-  // Live job map: starts from server-rendered data, updated by JobEntry polling.
+  // Live job map: starts from server-rendered data, updated by polling.
   const [liveJobMap, setLiveJobMap] = useState<Map<string, JobSummary>>(
     () => new Map(initialJobs.map((j) => [j.id, j])),
   );
@@ -309,6 +309,31 @@ function CredentialCard({
   const latestJob = liveJobs[0];
   const isActive = liveJobs.some((j) => ACTIVE_STATUSES.has(j.status));
   const hasCompleted = liveJobs.some((j) => j.status === "COMPLETED");
+
+  // Poll the latest active job at the card level — independent of whether the
+  // <details> runs list is open. This keeps the spinner + button state live.
+  const activeJobId = liveJobs.find((j) => ACTIVE_STATUSES.has(j.status))?.id;
+  const cardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!activeJobId) return;
+    function poll() {
+      fetch(`/api/discovery-jobs/${activeJobId}`)
+        .then((r) => r.json())
+        .then((data: JobSummary) => {
+          setLiveJobMap((prev) => new Map(prev).set(data.id, data));
+          if (ACTIVE_STATUSES.has(data.status)) {
+            cardTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+          }
+        })
+        .catch(() => {
+          cardTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS * 2);
+        });
+    }
+    cardTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+    return () => {
+      if (cardTimerRef.current) clearTimeout(cardTimerRef.current);
+    };
+  }, [activeJobId]);
 
   function handleJobUpdate(updated: JobSummary) {
     setLiveJobMap((prev) => new Map(prev).set(updated.id, updated));

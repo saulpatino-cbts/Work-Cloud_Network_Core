@@ -209,4 +209,6 @@ jobs:
           git add .deployment-catalog/latest-build.json
           git diff --cached --quiet && echo "No changes to commit" && exit 0
           git commit -m "chore(build): update latest-build manifest to sha-$(echo '${{ github.sha }}' | cut -c1-7) [skip ci]"
+          # Pull rebase in case main moved while builds were running (common in parallel jobs)
+          git pull --rebase origin main
           git push

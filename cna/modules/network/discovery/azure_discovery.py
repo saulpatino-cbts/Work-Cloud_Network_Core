@@ -1229,14 +1229,18 @@ class AzureDiscovery:
 
             vnet_count = len(sub_topo.vnets)
             nsg_count = len(sub_topo.nsgs)
-            blocked = " [BLOCKED]" if sub_topo.discovery_blocked else ""
-            summary = (
-                f"  {sub_name}: {vnet_count} VNet(s), {nsg_count} NSG(s), "
-                f"{len(sub_topo.load_balancers)} LB(s), "
-                f"{len(sub_topo.virtual_network_gateways)} GW(s), "
-                f"{len(sub_topo.private_endpoints)} PE(s){blocked}"
-            )
-            self._progress(summary)
+            if sub_topo.discovery_blocked:
+                self._progress(
+                    f"  {sub_name}: BLOCKED — {sub_topo.block_reason or 'unknown error'}"
+                )
+            else:
+                summary = (
+                    f"  {sub_name}: {vnet_count} VNet(s), {nsg_count} NSG(s), "
+                    f"{len(sub_topo.load_balancers)} LB(s), "
+                    f"{len(sub_topo.virtual_network_gateways)} GW(s), "
+                    f"{len(sub_topo.private_endpoints)} PE(s)"
+                )
+                self._progress(summary)
             logger.info(
                 "[%s] %s: %d VNets, %d NSGs, %d LBs, %d GWs, %d PEs%s",
                 engagement_id,
@@ -1246,7 +1250,7 @@ class AzureDiscovery:
                 len(sub_topo.load_balancers),
                 len(sub_topo.virtual_network_gateways),
                 len(sub_topo.private_endpoints),
-                blocked,
+                " [BLOCKED]" if sub_topo.discovery_blocked else "",
             )
 
         logger.info(

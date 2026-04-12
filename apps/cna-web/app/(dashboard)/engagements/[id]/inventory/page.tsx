@@ -358,6 +358,23 @@ export default async function InventoryPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* ── Blocked subscription banner ── */}
+      {subs.some((s) => s.discovery_blocked) && (
+        <div className="rounded-xl border border-red-800/40 bg-red-900/20 p-4">
+          <p className="text-sm font-semibold text-red-400">Discovery blocked on {subs.filter((s) => s.discovery_blocked).length} subscription(s)</p>
+          <p className="mt-1 text-xs text-red-400/80">
+            The service principal was found and authenticated, but ARM returned an error when listing network resources.
+            The most common cause is missing <strong>Reader</strong> role on the subscription or its resource groups.
+            Check the error below and re-run discovery after granting access.
+          </p>
+          {subs.filter((s) => s.discovery_blocked && s.block_reason).map((s) => (
+            <div key={s.subscription_id} className="mt-2 rounded border border-red-800/40 bg-red-950/40 p-2 font-mono text-xs text-red-400 break-all">
+              <span className="font-semibold">{s.subscription_name ?? s.subscription_id}: </span>{s.block_reason}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Subscriptions ── */}
       <InvCard title="Subscriptions" count={subs.length} table>
         <THead cols={["Subscription", "VNets", "NSGs", "Firewalls", "LBs", "Gateways", "PEs", "Status"]} />
@@ -380,7 +397,12 @@ export default async function InventoryPage({ params }: PageProps) {
               <Td>{s.private_endpoints?.length ?? 0}</Td>
               <td className="py-2 text-center">
                 {s.discovery_blocked ? (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">Blocked</span>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">Blocked</span>
+                    {s.block_reason && (
+                      <span className="max-w-[16rem] text-left font-mono text-[10px] text-red-500 dark:text-red-400 break-all">{s.block_reason}</span>
+                    )}
+                  </div>
                 ) : (
                   <span className="pill-teal">OK</span>
                 )}

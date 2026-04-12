@@ -4,8 +4,14 @@ variable "resource_group_name" {
 }
 
 variable "location" {
-  description = "Azure location"
+  description = "Azure location for App Insights (matches the workload RG)"
   type        = string
+}
+
+variable "openai_location" {
+  description = "Azure region for the Azure OpenAI cognitive account. Defaults to var.location but can be overridden when the target model is only available in specific regions (e.g. eastus2 for gpt-5.x)."
+  type        = string
+  default     = ""
 }
 
 variable "name_prefix" {

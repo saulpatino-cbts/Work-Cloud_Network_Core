@@ -8,7 +8,7 @@ resource "azurerm_application_insights" "this" {
 
 resource "azurerm_cognitive_account" "this" {
   name                  = local.cognitive_account_name
-  location              = var.location
+  location              = local.openai_location
   resource_group_name   = var.resource_group_name
   kind                  = "OpenAI"
   sku_name              = "S0"

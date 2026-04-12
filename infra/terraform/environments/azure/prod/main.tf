@@ -159,12 +159,14 @@ module "ai" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  # Model — update here when upgrading; all downstream env vars pick up automatically
-  # gpt-5.x (5.2/5.3/5.4) requires SpecialFeatureOrQuotaIdRequired approval for this subscription.
-  # TODO: switch to gpt-5.4 once quota is approved via Azure portal → Cognitive Services → Quotas
-  openai_model_name          = "gpt-4o"
-  openai_model_version       = "2024-11-20"
-  openai_api_version         = "2024-12-01-preview"
+  # Model — update here when upgrading; all downstream env vars pick up automatically.
+  # gpt-5.2 (2026-02-10) is only available in eastus2 for this subscription.
+  # The cognitive account is deployed to eastus2 while all other resources stay in southcentralus.
+  # TODO: switch to gpt-5.4 once quota is approved in eastus2 for this subscription.
+  openai_location            = "eastus2"
+  openai_model_name          = "gpt-5.2"
+  openai_model_version       = "2026-02-10"
+  openai_api_version         = "2026-01-01-preview"
   openai_deployment_capacity = 30
 }
 

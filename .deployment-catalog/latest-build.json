@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-83ae72d",
   "commit": "83ae72d662224d67b3b8825f3eca49eea0cd8f1b",
-  "built_at": "2026-04-12T23:12:42Z",
-  "run_id": "24318639341",
+  "built_at": "2026-04-12T23:13:29Z",
+  "run_id": "24318639785",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-83ae72d",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-83ae72d",

@@ -160,9 +160,11 @@ module "ai" {
   tags                = local.tags
 
   # Model — update here when upgrading; all downstream env vars pick up automatically
-  openai_model_name          = "gpt-5.4"
-  openai_model_version       = "2026-03-05"
-  openai_api_version         = "2026-04-01-preview"
+  # gpt-5.2 is the latest plain gpt-5.x (gpt-5.3 is codex-only; no plain gpt-5.3 exists)
+  # TODO: switch to gpt-5.4 / 2026-03-05 once quota access is approved for this subscription
+  openai_model_name          = "gpt-5.2"
+  openai_model_version       = "2025-12-11"
+  openai_api_version         = "2026-01-01-preview"
   openai_deployment_capacity = 30
 }
 

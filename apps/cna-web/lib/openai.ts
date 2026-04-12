@@ -25,8 +25,8 @@ function getClient(): AzureOpenAI {
   return new AzureOpenAI({
     endpoint,
     azureADTokenProvider,
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2026-04-01-preview",
-    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.4",
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2026-01-01-preview",
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2",
   });
 }
 
@@ -335,7 +335,7 @@ ${FINDING_SCHEMA}`;
 
   const userPrompt = `Perform a ${FOCUS_LABELS[focus]} analysis on the following network assessment data. Identify security findings not already covered by existing findings:${extraInstruction ? `\n\n${extraInstruction}` : ""}\n\n${parts.join("\n\n")}`;
 
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2";
   const response = await client.chat.completions.create({
     model: deployment,
     messages: [
@@ -576,8 +576,8 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
 
   const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} deliverable using this engagement data:\n\n${parts.join("\n")}`;
 
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
-  // gpt-5.4 supports 32k completion tokens. Other types use 16k.
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2";
+  // gpt-5.2 supports 32k completion tokens. Other types use 16k.
   const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
 
   const response = await client.chat.completions.create({

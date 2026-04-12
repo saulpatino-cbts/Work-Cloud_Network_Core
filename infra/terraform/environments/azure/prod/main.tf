@@ -129,7 +129,7 @@ module "compute" {
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
     AZURE_OPENAI_ENDPOINT                 = module.ai.azure_openai_endpoint
     AZURE_OPENAI_DEPLOYMENT               = module.ai.openai_deployment_name
-    AZURE_OPENAI_API_VERSION              = "2024-12-01-preview"
+    AZURE_OPENAI_API_VERSION              = module.ai.openai_api_version
   }
 
   # Secret-backed env vars — reference Container App secrets by name
@@ -158,6 +158,12 @@ module "ai" {
   location            = azurerm_resource_group.this.location
   name_prefix         = local.name_prefix
   tags                = local.tags
+
+  # Model — update here when upgrading; all downstream env vars pick up automatically
+  openai_model_name          = "gpt-5.4"
+  openai_model_version       = "2026-03-05"
+  openai_api_version         = "2026-04-01-preview"
+  openai_deployment_capacity = 30
 }
 
 

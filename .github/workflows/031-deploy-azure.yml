@@ -171,6 +171,8 @@ jobs:
         # terraform import requires all declared variables to be satisfied — even for
         # resources that don't use them. Export TF_VAR_* so the import commands don't
         # fail with "No value for required variable" and get silently swallowed by || true.
+        # Also moves the renamed cognitive deployment resource in state (gpt4o → model)
+        # so Terraform does not destroy-and-recreate it unnecessarily.
         env:
           TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
           TF_VAR_entra_client_id: ${{ vars.CNA_ENTRA_CLIENT_ID }}
@@ -182,6 +184,12 @@ jobs:
           TF_VAR_credential_encryption_key: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
         run: |
           ENV="${{ inputs.environment }}"
+          # Move renamed cognitive deployment resource in state (one-time, idempotent).
+          # Old name: module.ai.azurerm_cognitive_deployment.gpt4o
+          # New name: module.ai.azurerm_cognitive_deployment.model
+          terraform state mv \
+            "module.ai.azurerm_cognitive_deployment.gpt4o" \
+            "module.ai.azurerm_cognitive_deployment.model" 2>&1 || true
           RG="rg-cna-${ENV}-scus"
 
           # Resolve OpenAI account resource ID

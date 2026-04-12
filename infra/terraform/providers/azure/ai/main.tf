@@ -16,18 +16,18 @@ resource "azurerm_cognitive_account" "this" {
   tags                  = var.tags
 }
 
-resource "azurerm_cognitive_deployment" "gpt4o" {
-  name                 = "gpt-4o"
+resource "azurerm_cognitive_deployment" "model" {
+  name                 = var.openai_model_name
   cognitive_account_id = azurerm_cognitive_account.this.id
 
   model {
     format  = "OpenAI"
-    name    = "gpt-4o"
-    version = "2024-11-20"
+    name    = var.openai_model_name
+    version = var.openai_model_version
   }
 
   sku {
     name     = "GlobalStandard"
-    capacity = 30 # 30K tokens-per-minute; raise for production
+    capacity = var.openai_deployment_capacity
   }
 }

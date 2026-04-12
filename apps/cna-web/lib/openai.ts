@@ -25,8 +25,8 @@ function getClient(): AzureOpenAI {
   return new AzureOpenAI({
     endpoint,
     azureADTokenProvider,
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-12-01-preview",
-    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2026-04-01-preview",
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.4",
   });
 }
 
@@ -577,9 +577,8 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
   const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} deliverable using this engagement data:\n\n${parts.join("\n")}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
-  // Comprehensive assessment uses the model's maximum completion token limit.
-  // gpt-4o caps at 16,384 — update this when a higher-limit model is deployed.
-  const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 16384 : 16000;
+  // gpt-5.4 supports 32k completion tokens. Other types use 16k.
+  const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
 
   const response = await client.chat.completions.create({
     model: deployment,

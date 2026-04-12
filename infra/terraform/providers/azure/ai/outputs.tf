@@ -20,5 +20,10 @@ output "azure_openai_endpoint" {
 }
 
 output "openai_deployment_name" {
-  value = azurerm_cognitive_deployment.gpt4o.name
+  value = azurerm_cognitive_deployment.model.name
+}
+
+output "openai_api_version" {
+  description = "Azure OpenAI API version to use — consumed by environment env vars"
+  value       = var.openai_api_version
 }

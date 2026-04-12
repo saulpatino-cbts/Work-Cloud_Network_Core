@@ -167,6 +167,36 @@ jobs:
             -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
+      - name: Resolve image references from build manifest
+        # When images are not explicitly provided (or still `:latest`), read the
+        # SHA-tagged references written by 030-build-images so the plan always uses
+        # an immutable, traceable image digest rather than the floating :latest tag.
+        working-directory: ${{ github.workspace }}
+        run: |
+          MANIFEST=".deployment-catalog/latest-build.json"
+          resolve() {
+            local INPUT="$1" KEY="$2"
+            if [[ -z "$INPUT" || "$INPUT" == *":latest"* ]]; then
+              if [ -f "$MANIFEST" ]; then
+                jq -r ".images.${KEY}" "$MANIFEST"
+              else
+                echo "$INPUT"
+              fi
+            else
+              echo "$INPUT"
+            fi
+          }
+          API_IMG=$(resolve "${{ env.EFFECTIVE_API_IMAGE }}" "api")
+          WORKER_IMG=$(resolve "${{ env.EFFECTIVE_WORKER_IMAGE }}" "worker")
+          WEB_IMG=$(resolve "${{ env.EFFECTIVE_WEB_IMAGE }}" "web")
+          echo "EFFECTIVE_API_IMAGE=${API_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_WORKER_IMAGE=${WORKER_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_WEB_IMAGE=${WEB_IMG}" >> "$GITHUB_ENV"
+          echo "Resolved images:"
+          echo "  api:    ${API_IMG}"
+          echo "  worker: ${WORKER_IMG}"
+          echo "  web:    ${WEB_IMG}"
+
       - name: Import pre-existing OpenAI role assignments
         # terraform import requires all declared variables to be satisfied — even for
         # resources that don't use them. Export TF_VAR_* so the import commands don't

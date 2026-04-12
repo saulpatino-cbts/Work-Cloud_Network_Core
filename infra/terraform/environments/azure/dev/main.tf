@@ -165,11 +165,11 @@ module "ai" {
   tags                = local.tags
 
   # Model — update here when upgrading; all downstream env vars pick up automatically
-  # gpt-5.2 is the latest plain gpt-5.x (no plain gpt-5.3 exists; gpt-5.3 = codex only)
-  # TODO: switch to gpt-5.4 / 2026-03-05 once quota access is approved for this subscription
-  openai_model_name          = "gpt-5.2"
-  openai_model_version       = "2025-12-11"
-  openai_api_version         = "2026-01-01-preview"
+  # gpt-5.x (5.2/5.3/5.4) requires SpecialFeatureOrQuotaIdRequired approval for this subscription.
+  # TODO: switch to gpt-5.4 once quota is approved via Azure portal → Cognitive Services → Quotas
+  openai_model_name          = "gpt-4o"
+  openai_model_version       = "2024-11-20"
+  openai_api_version         = "2024-12-01-preview"
   openai_deployment_capacity = 30
 }
 

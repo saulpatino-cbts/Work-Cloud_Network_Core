@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -170,3 +170,43 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed (status=$STATUS)"
+
+  publish-build-manifest:
+    runs-on: ubuntu-latest
+    needs: [build-api, build-worker, build-web]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need write access to push the manifest commit back to main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write build manifest
+        run: |
+          SHA_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+          OWNER="${{ github.repository_owner }}"
+          mkdir -p .deployment-catalog
+          cat > .deployment-catalog/latest-build.json <<EOF
+          {
+            "sha_tag": "${SHA_TAG}",
+            "commit": "${{ github.sha }}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run_id": "${{ github.run_id }}",
+            "images": {
+              "api":    "ghcr.io/${OWNER}/cna-api:${SHA_TAG}",
+              "worker": "ghcr.io/${OWNER}/cna-worker:${SHA_TAG}",
+              "web":    "ghcr.io/${OWNER}/cna-web:${SHA_TAG}"
+            }
+          }
+          EOF
+          echo "Manifest written:"
+          cat .deployment-catalog/latest-build.json
+
+      - name: Commit and push manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deployment-catalog/latest-build.json
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore(build): update latest-build manifest to sha-$(echo '${{ github.sha }}' | cut -c1-7) [skip ci]"
+          git push

@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-7135b21",
   "commit": "7135b218b6567e4ed4205d75edbf3432b91808ed",
-  "built_at": "2026-04-12T09:44:17Z",
-  "run_id": "24303718350",
+  "built_at": "2026-04-12T09:44:28Z",
+  "run_id": "24303717744",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-7135b21",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-7135b21",

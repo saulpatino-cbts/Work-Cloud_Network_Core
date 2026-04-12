@@ -141,11 +141,20 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ subscriptions
 
+    # States where a subscription is still readable (not hard-deleted/disabled).
+    # "Warned" is common for sandbox/trial subscriptions with a payment warning —
+    # the subscription is fully accessible for read operations.
+    _ACTIVE_SUB_STATES = {"Enabled", "Warned", "PastDue"}
+
     def _list_subscriptions(self) -> list[dict]:
-        """List all accessible subscriptions in the tenant."""
+        """List all accessible subscriptions in the tenant.
+
+        Includes Enabled, Warned, and PastDue states.  Only Deleted and
+        Disabled subscriptions are excluded — they are genuinely inaccessible.
+        """
         subs = []
         for sub in with_retry()(self._sub_client.subscriptions.list)():
-            if sub.state != "Enabled":
+            if sub.state not in self._ACTIVE_SUB_STATES:
                 logger.info(
                     "Skipping %s subscription %s (%s)",
                     sub.state,
@@ -161,6 +170,20 @@ class AzureDiscovery:
                 }
             )
         return subs
+
+    def _get_subscription_direct(self, subscription_id: str) -> dict | None:
+        """Fetch a single subscription by ID — fallback when list() misses it."""
+        try:
+            sub = with_retry()(self._sub_client.subscriptions.get)(subscription_id)
+            if sub and sub.subscription_id:
+                return {
+                    "id": sub.subscription_id,
+                    "name": sub.display_name or subscription_id,
+                    "tenant_id": self.opts.tenant_id,
+                }
+        except Exception as e:
+            logger.warning("Direct get failed for subscription %s: %s", subscription_id, e)
+        return None
 
     # ------------------------------------------------------------------ management groups
 
@@ -1088,27 +1111,44 @@ class AzureDiscovery:
 
         # Subscriptions
         all_subs = self._list_subscriptions()
+        logger.info("[%s] SP can see %d subscription(s) via list()", engagement_id, len(all_subs))
+
         if self.opts.subscription_ids:
             # Case-insensitive match: Azure SDK returns lowercase GUIDs; user input may vary.
             wanted = {sid.lower().strip() for sid in self.opts.subscription_ids}
             matched = [s for s in all_subs if s["id"].lower() in wanted]
-            if len(matched) < len(self.opts.subscription_ids):
+
+            if len(matched) < len(wanted):
                 accessible_ids = {s["id"].lower() for s in all_subs}
-                missing = [
+                missing_ids = [
                     sid for sid in self.opts.subscription_ids if sid.lower() not in accessible_ids
                 ]
                 logger.warning(
-                    "[%s] Subscription filter: %d requested, %d accessible to SP, %d matched. "
-                    "Not accessible: %s",
+                    "[%s] Subscription filter: %d requested, %d via list, %d matched. "
+                    "Attempting direct get for: %s",
                     engagement_id,
                     len(self.opts.subscription_ids),
                     len(all_subs),
                     len(matched),
-                    missing,
+                    missing_ids,
                 )
+                # Fallback: subscriptions.list() can miss subs in some RBAC configurations
+                # (e.g. SP has Reader on the sub but not on the tenant root).
+                # subscriptions.get() by ID is a direct ARM call that bypasses list paging.
+                for missing_id in missing_ids:
+                    direct = self._get_subscription_direct(missing_id.strip())
+                    if direct:
+                        matched.append(direct)
+                        logger.info(
+                            "[%s] Direct get succeeded for %s (%s)",
+                            engagement_id,
+                            direct["id"],
+                            direct["name"],
+                        )
+
             all_subs = matched
 
-        logger.info("[%s] Discovering %d subscriptions", engagement_id, len(all_subs))
+        logger.info("[%s] Discovering %d subscription(s)", engagement_id, len(all_subs))
 
         for sub in all_subs:
             sub_id = sub["id"]

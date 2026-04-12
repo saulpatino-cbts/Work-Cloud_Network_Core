@@ -783,7 +783,14 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
             client_secret=request.sp_client_secret,
         )
 
-        _log(f"Connecting to tenant {request.tenant_id}…")
+        using_sp = bool(request.sp_client_id and request.sp_client_secret)
+        auth_method = "service principal" if using_sp else "managed identity"
+        _log(f"Connecting to tenant {request.tenant_id} using {auth_method}…")
+        if request.subscription_ids:
+            sub_list = ", ".join(request.subscription_ids)
+            _log(f"Targeting {len(request.subscription_ids)} subscription(s): {sub_list}")
+        else:
+            _log("No subscription filter — will discover all accessible subscriptions.")
         discovery = AzureDiscovery(store, options)
 
         _log("Running discovery — this may take a few minutes…")

@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { AiAnalysisForm } from "./ai-analysis-form";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -115,17 +114,6 @@ export default async function FindingsPage({ params }: PageProps) {
   if (!isMember) notFound();
 
   const { findings } = engagement;
-
-  // Check if there's any data to analyze (topology OR documents)
-  const [hasTopology, hasDocuments] = await Promise.all([
-    prisma.discoveryJob
-      .count({ where: { engagementId: id, status: "COMPLETED" } })
-      .catch(() => 0),
-    prisma.ingestedDocument
-      .count({ where: { engagementId: id, parsedText: { not: null } } })
-      .catch(() => 0),
-  ]);
-  const hasAnalysisData = hasTopology > 0 || hasDocuments > 0;
 
   // Build severity × category matrix
   const categories = [
@@ -249,27 +237,6 @@ export default async function FindingsPage({ params }: PageProps) {
           </div>
         </div>
       )}
-
-      {/* ── AI analysis section ── */}
-      <div className="glass p-5">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-navy-100">AI Analysis</h2>
-            <p className="mt-0.5 text-sm text-navy-400">
-              Run a focused security analysis on your discovered topology and uploaded
-              documents. Each focus type uses a different lens.
-            </p>
-          </div>
-        </div>
-        {!hasAnalysisData ? (
-          <p className="rounded-lg border border-amber-800/40 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
-            No data to analyze yet. Run discovery on the Connections tab to capture live
-            topology, or upload documents on the Documents tab.
-          </p>
-        ) : (
-          <AiAnalysisForm engagementId={id} />
-        )}
-      </div>
 
       {/* ── Findings list grouped by category ── */}
       {findings.length === 0 ? (

@@ -367,7 +367,8 @@ export type DeliverableType =
   | "EXECUTIVE_SUMMARY"
   | "TECHNICAL_FINDINGS"
   | "REMEDIATION_PLAN"
-  | "SPECIALIZATION_REPORT";
+  | "SPECIALIZATION_REPORT"
+  | "COMPREHENSIVE_ASSESSMENT";
 
 export interface DeliverableContext {
   type: DeliverableType;
@@ -392,8 +393,9 @@ const DELIVERABLE_PROMPTS: Record<DeliverableType, string> = {
   EXECUTIVE_SUMMARY: `You are producing a board-ready Executive Summary for a Cloud Network Assessment.
 REQUIREMENTS:
 - Open with a 2-3 sentence plain-English risk posture statement (no jargon).
-- Identify the Top 5 most critical findings by name and explain their business risk (not technical details).
-- Include a severity breakdown table (CRITICAL/HIGH/MEDIUM/LOW/INFO counts).
+- Cover ALL findings by name and explain their business risk — do NOT limit to top 5 or any subset. Every finding must appear.
+- Group findings by severity (CRITICAL first) with a business-impact explanation for each.
+- Include a severity breakdown table (CRITICAL/HIGH/MEDIUM/LOW/INFO counts and percentages).
 - Write a "Business Impact" section mapping network risks to business outcomes (downtime, data breach, compliance penalty).
 - Write "Recommended Next Steps" as a prioritized action list with 30/60/90-day horizon.
 - Include 2-3 Microsoft Learn links for key best practices.
@@ -436,6 +438,87 @@ REQUIREMENTS:
 - Include 4-5 Microsoft Learn links per major section.
 - Add a compliance gap register table: control ID, requirement, current state, gap, remediation.
 - Format: professional Markdown with executive and technical layers.`,
+
+  COMPREHENSIVE_ASSESSMENT: `You are acting as a Principal Network Architect, Security Analyst, and Enterprise Systems Auditor combined.
+Your objective is to produce the most exhaustive, analytical, and insight-driven network assessment possible, leaving no dimension unexplored.
+
+GOAL: Produce a fully comprehensive network assessment that:
+- Captures all available data
+- Performs deep analysis across every relevant domain
+- Surfaces insights, risks, correlations, and improvement opportunities
+- Presents results in a single interactive static web page (HTML/CSS/JS — no backend, no external CDN dependencies)
+
+Nothing should be assumed as "out of scope" unless explicitly stated.
+
+SCOPE — You MUST cover ALL of the following dimensions:
+
+1. Network Architecture
+   - Physical & logical topology; segmentation, routing, switching, overlays
+   - Dependency mapping and traffic flows
+
+2. Performance & Reliability
+   - Latency, throughput, packet loss, jitter
+   - Bottlenecks, saturation points, SPOFs; historical trends and anomaly detection
+
+3. Security & Risk
+   - Attack surface analysis; trust boundaries, exposure points
+   - Control gaps, misconfigurations, threat modeling
+   - Risk scoring and prioritization matrix
+
+4. Operational Maturity
+   - Monitoring, alerting, observability coverage
+   - Incident response readiness; change management and operational debt
+
+5. Compliance & Governance
+   - Alignment to NIST, ISO, CIS (conceptually)
+   - Policy adherence vs. actual state; audit readiness indicators
+
+6. Scalability & Future Readiness
+   - Growth constraints; cloud/hybrid implications
+   - Automation and programmability gaps
+
+7. Cost & Efficiency
+   - Resource utilization; redundancy vs. waste
+   - Cost-risk-performance tradeoffs
+
+DATA UTILIZATION RULES:
+- Use all provided data; do not summarize away detail.
+- If data is incomplete, explicitly identify gaps, infer cautiously, and label assumptions.
+- Cross-correlate data between domains (e.g., performance issues tied to security controls or architecture decisions).
+
+REQUIRED OUTPUTS (Non-Negotiable):
+1. Structured Tables & Matrices
+   - Risk matrix (impact × likelihood)
+   - Control coverage matrix
+   - Dependency and failure-impact matrix
+   - Findings-to-recommendations traceability table
+
+2. Narrative Analysis
+   - What is happening; why it matters
+   - What breaks under stress; second- and third-order effects
+
+3. Visual Representations
+   - Logical topology diagrams (text-described using ASCII/Unicode)
+   - Flow and dependency representations (Unicode box-drawing or ASCII)
+
+QUALITY & COMPLETENESS: Before finalizing, self-audit:
+- List all covered domains
+- Explicitly state what was analyzed
+- Explicitly state what could NOT be analyzed and why
+- Confirm no major network assessment dimension was omitted
+
+TONE & STYLE: Analytical, precise, and executive-ready. No fluff, no generic advice. Insight-dense and thought-provoking.
+
+CRITICAL OUTPUT REQUIREMENT:
+Output ONLY a complete, self-contained HTML document.
+- Start with <!DOCTYPE html>
+- All CSS must be inline in a <style> block — dark professional theme (dark navy/slate background, teal accents)
+- All JavaScript must be inline in <script> blocks
+- Implement: section navigation (sticky top nav), expand/collapse sections, interactive sortable/filterable tables, clear visual hierarchy
+- No external CDN links — no Bootstrap, no Tailwind CDN, no external fonts (use system fonts)
+- The page must work when opened directly in a browser from disk
+- Include a "Print to PDF" button that triggers window.print() with appropriate print CSS (@media print)
+- NO markdown — pure HTML/CSS/JS output only`,
 };
 
 /**
@@ -494,6 +577,9 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
   const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} deliverable using this engagement data:\n\n${parts.join("\n")}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
+  // Comprehensive assessment needs maximum token budget for the full HTML page
+  const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
+
   const response = await client.chat.completions.create({
     model: deployment,
     messages: [
@@ -501,7 +587,7 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
       { role: "user", content: userPrompt },
     ],
     temperature: 0.2,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
   });
 
   return response.choices[0]?.message?.content ?? "# Error generating content\n\nPlease try again.";

@@ -6,10 +6,16 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 const DELIVERABLE_TYPES = [
   {
+    value: "COMPREHENSIVE_ASSESSMENT",
+    label: "Comprehensive Assessment",
+    audience: "All Stakeholders",
+    desc: "Interactive HTML page covering all dimensions: architecture, security, compliance, resilience, cost. All findings. Sortable tables, section nav, topology diagrams. Open in browser → print to PDF.",
+  },
+  {
     value: "EXECUTIVE_SUMMARY",
     label: "Executive Summary",
     audience: "CxO / CISO / Board",
-    desc: "Top 5 risks in business language, severity breakdown, 30/60/90-day recommendations.",
+    desc: "ALL risks in business language with impact per finding, severity breakdown, 30/60/90-day recommendations.",
   },
   {
     value: "TECHNICAL_FINDINGS",

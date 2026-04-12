@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { UploadDocumentForm } from "./upload-form";
 import { ComplianceReportPanel } from "./compliance-report-panel";
+import { AiAnalysisForm } from "../findings/ai-analysis-form";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,19 +64,48 @@ export default async function DocumentsPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  // Check if we have topology data for Generate buttons
+  // Check topology + documents for AI analysis availability
   let hasTopology = false;
+  let hasDocumentsParsed = false;
   try {
-    const job = await prisma.discoveryJob.findFirst({
-      where: { engagementId: id, status: "COMPLETED" },
-      select: { id: true },
-    });
+    const [job, docCount] = await Promise.all([
+      prisma.discoveryJob.findFirst({
+        where: { engagementId: id, status: "COMPLETED" },
+        select: { id: true },
+      }),
+      prisma.ingestedDocument.count({
+        where: { engagementId: id, parsedText: { not: null } },
+      }),
+    ]);
     hasTopology = !!job;
+    hasDocumentsParsed = docCount > 0;
   } catch { /* migration pending */ }
+  const hasAnalysisData = hasTopology || hasDocumentsParsed;
 
   return (
     <div className="space-y-6">
-      {/* ── Uploaded documents ── */}
+      {/* 1 ── AI Analysis ── */}
+      <section className="glass p-6">
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">AI Analysis</h2>
+        <p className="mb-4 text-sm text-navy-400">
+          Run a focused security analysis on your discovered topology and uploaded
+          documents. Each focus type uses a different analytical lens. Results are
+          added to the Findings tab.
+        </p>
+        {!hasAnalysisData ? (
+          <p className="rounded-lg border border-amber-800/40 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
+            No data to analyze yet. Run discovery on the Connections tab to capture live
+            topology, or upload documents below.
+          </p>
+        ) : (
+          <AiAnalysisForm engagementId={id} />
+        )}
+      </section>
+
+      {/* 2 ── Compliance Check ── */}
+      <ComplianceReportPanel engagementId={id} hasTopology={hasTopology} />
+
+      {/* 3 ── Uploaded documents ── */}
       <section className="glass p-6">
         <h2 className="mb-1 text-lg font-semibold text-navy-100">
           Uploaded Documents
@@ -112,10 +142,7 @@ export default async function DocumentsPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* ── Compliance Check ── */}
-      <ComplianceReportPanel engagementId={id} hasTopology={hasTopology} />
-
-      {/* ── Document templates ── */}
+      {/* 4 ── Document templates ── */}
       <section className="glass p-6">
         <h2 className="mb-1 text-lg font-semibold text-navy-100">
           Document Templates

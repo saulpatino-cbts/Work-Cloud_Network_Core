@@ -78,7 +78,9 @@ export async function generateDeliverable(
     return { error: `AI generation failed: ${msg.slice(0, 200)}` };
   }
 
-  const fileName = `${type.toLowerCase()}-${Date.now()}.md`;
+  // Comprehensive assessment outputs HTML; all other types output Markdown.
+  const ext = type === "COMPREHENSIVE_ASSESSMENT" ? "html" : "md";
+  const fileName = `${type.toLowerCase()}-${Date.now()}.${ext}`;
   const blobPath = await uploadDeliverable(engagementId, fileName, content);
 
   await prisma.deliverable.create({

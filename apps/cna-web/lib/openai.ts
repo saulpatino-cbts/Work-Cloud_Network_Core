@@ -343,7 +343,6 @@ ${FINDING_SCHEMA}`;
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.15,
     max_completion_tokens: 8000,
   });
 
@@ -586,7 +585,6 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.2,
     max_completion_tokens: maxTokens,
   });
 

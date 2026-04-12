@@ -1162,39 +1162,42 @@ class AzureDiscovery:
         )
 
         # Subscriptions
-        all_subs = self._list_subscriptions()
-        logger.info("[%s] SP can see %d subscription(s) via list()", engagement_id, len(all_subs))
-
+        # When specific IDs are provided, bypass subscriptions.list() entirely.
+        # list() requires Reader on the tenant root or management group — permissions
+        # that a subscription-scoped SP won't have.  We already know the IDs; we just
+        # need the display names (best-effort via subscriptions.get()).
         if self.opts.subscription_ids:
-            # Case-insensitive match: Azure SDK returns lowercase GUIDs; user input may vary.
-            wanted = {sid.lower().strip() for sid in self.opts.subscription_ids}
-            matched = [s for s in all_subs if s["id"].lower() in wanted]
-
-            if len(matched) < len(wanted):
-                accessible_ids = {s["id"].lower() for s in all_subs}
-                missing_ids = [
-                    sid for sid in self.opts.subscription_ids if sid.lower() not in accessible_ids
-                ]
-                self._progress(
-                    f"Filter: {len(self.opts.subscription_ids)} requested, "
-                    f"{len(all_subs)} via list(), {len(matched)} matched — "
-                    f"trying direct get for: {', '.join(missing_ids)}"
-                )
-                # Fallback: subscriptions.list() can miss subs in some RBAC configurations
-                # (e.g. SP has Reader on the sub but not on the tenant root).
-                # subscriptions.get() by ID is a direct ARM call that bypasses list paging.
-                for missing_id in missing_ids:
-                    direct = self._get_subscription_direct(missing_id.strip())
-                    if direct:
-                        matched.append(direct)
-                        self._progress(f"  Direct get OK: {direct['id']} ({direct['name']})")
-                    else:
-                        self._progress(
-                            f"  Direct get FAILED for {missing_id} — SP may lack "
-                            f"Reader role on this subscription."
-                        )
-
-            all_subs = matched
+            self._progress(
+                f"Specific subscription IDs provided — skipping list(), "
+                f"going direct to {len(self.opts.subscription_ids)} subscription(s)."
+            )
+            all_subs = []
+            for raw_id in self.opts.subscription_ids:
+                sub_id = raw_id.strip()
+                direct = self._get_subscription_direct(sub_id)
+                if direct:
+                    all_subs.append(direct)
+                    self._progress(
+                        f"  Confirmed: {direct['name']} ({direct['id']}) — state accessible"
+                    )
+                else:
+                    # subscriptions.get() failed (insufficient permission on sub metadata),
+                    # but the SP may still have network-level Reader and can run discovery.
+                    # Use the ID as the name and proceed — ARM network calls will succeed
+                    # or fail on their own with informative errors.
+                    all_subs.append(
+                        {"id": sub_id, "name": sub_id, "tenant_id": self.opts.tenant_id}
+                    )
+                    self._progress(
+                        f"  subscriptions.get({sub_id}) failed — proceeding with "
+                        f"discovery anyway (SP may have network-only Reader)."
+                    )
+        else:
+            # No filter — list all accessible subscriptions in the tenant.
+            all_subs = self._list_subscriptions()
+            logger.info(
+                "[%s] SP can see %d subscription(s) via list()", engagement_id, len(all_subs)
+            )
 
         self._progress(f"Discovering {len(all_subs)} subscription(s)…")
         logger.info("[%s] Discovering %d subscription(s)", engagement_id, len(all_subs))

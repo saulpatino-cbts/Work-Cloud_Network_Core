@@ -48,9 +48,9 @@ variable "openai_model_version" {
 }
 
 variable "openai_api_version" {
-  description = "Azure OpenAI REST API version used by the application (e.g. 2026-04-01-preview)"
+  description = "Azure OpenAI REST API version used by the application (e.g. 2024-12-01-preview)"
   type        = string
-  default     = "2026-04-01-preview"
+  default     = "2024-12-01-preview"
 }
 
 variable "openai_deployment_capacity" {

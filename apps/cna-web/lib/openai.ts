@@ -25,7 +25,7 @@ function getClient(): AzureOpenAI {
   return new AzureOpenAI({
     endpoint,
     azureADTokenProvider,
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2026-01-01-preview",
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-12-01-preview",
     deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2-chat",
   });
 }

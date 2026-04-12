@@ -171,7 +171,7 @@ module "ai" {
   openai_location            = "eastus2"
   openai_model_name          = "gpt-5.2-chat"
   openai_model_version       = "2026-02-10"
-  openai_api_version         = "2026-01-01-preview"
+  openai_api_version         = "2024-12-01-preview"
   openai_deployment_capacity = 30
 }
 

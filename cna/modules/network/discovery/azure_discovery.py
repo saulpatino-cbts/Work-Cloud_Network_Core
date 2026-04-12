@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from azure.core.exceptions import HttpResponseError
@@ -106,9 +107,15 @@ def _safe_list(iterable):
 class AzureDiscovery:
     """Orchestrates Azure network discovery across all subscriptions."""
 
-    def __init__(self, store: EngagementStore, options: AzureDiscoveryOptions):
+    def __init__(
+        self,
+        store: EngagementStore,
+        options: AzureDiscoveryOptions,
+        progress_callback: Callable[[str], None] | None = None,
+    ):
         self.store = store
         self.opts = options
+        self._progress = progress_callback or (lambda msg: None)
         self._credential = None
         self._sub_client = None
 
@@ -139,6 +146,45 @@ class AzureDiscovery:
                 "azure-mgmt-network azure-mgmt-resource"
             ) from e
 
+    def validate_access(self) -> None:
+        """Pre-flight: verify SP credentials and subscription access before discovery.
+
+        Emits results via progress_callback so they appear in the UI progress log.
+        Raises on hard auth failures; logs warnings for partial access issues.
+        """
+        self._init_credentials()
+
+        # 1. Verify the SP can obtain an ARM token.
+        self._progress("Pre-check: verifying SP token…")
+        try:
+            token = self._credential.get_token("https://management.azure.com/.default")
+            self._progress(f"Pre-check: token OK (expires ~{token.expires_on})")
+        except Exception as e:
+            raise CNAAuthError(f"SP authentication failed — cannot obtain ARM token: {e}") from e
+
+        # 2. For each requested subscription, call subscriptions.get() directly.
+        #    This tells us: is the sub accessible? What state is it in?
+        if not self.opts.subscription_ids:
+            self._progress("Pre-check: no subscription filter — will list all accessible.")
+            return
+
+        for sub_id in self.opts.subscription_ids:
+            try:
+                sub = self._sub_client.subscriptions.get(sub_id)
+                self._progress(
+                    f"Pre-check: subscription {sub_id} ({sub.display_name}) — state: {sub.state}"
+                )
+                if sub.state not in self._ACTIVE_SUB_STATES:
+                    self._progress(
+                        f"  WARNING: state '{sub.state}' may limit discoverability. "
+                        f"Expected: Enabled, Warned, or PastDue."
+                    )
+            except Exception as e:
+                self._progress(
+                    f"Pre-check: subscription {sub_id} NOT accessible — {e}. "
+                    f"Verify SP has Reader role on this subscription."
+                )
+
     # ------------------------------------------------------------------ subscriptions
 
     # States where a subscription is still readable (not hard-deleted/disabled).
@@ -153,6 +199,7 @@ class AzureDiscovery:
         Disabled subscriptions are excluded — they are genuinely inaccessible.
         """
         subs = []
+        skipped = []
         for sub in with_retry()(self._sub_client.subscriptions.list)():
             if sub.state not in self._ACTIVE_SUB_STATES:
                 logger.info(
@@ -161,6 +208,7 @@ class AzureDiscovery:
                     sub.subscription_id,
                     sub.display_name,
                 )
+                skipped.append(f"{sub.display_name} [{sub.state}]")
                 continue
             subs.append(
                 {
@@ -169,6 +217,10 @@ class AzureDiscovery:
                     "tenant_id": self.opts.tenant_id,
                 }
             )
+        self._progress(
+            f"SP list(): {len(subs)} accessible subscription(s)"
+            + (f"; skipped {len(skipped)}: {', '.join(skipped)}" if skipped else "")
+        )
         return subs
 
     def _get_subscription_direct(self, subscription_id: str) -> dict | None:
@@ -1096,7 +1148,7 @@ class AzureDiscovery:
         engagement_id = self.store.engagement_id
         logger.info("[%s] Azure discovery starting (v1.2.0)", engagement_id)
 
-        self._init_credentials()
+        self.validate_access()
 
         topology = AzureTopology(
             engagement_id=engagement_id,
@@ -1123,14 +1175,10 @@ class AzureDiscovery:
                 missing_ids = [
                     sid for sid in self.opts.subscription_ids if sid.lower() not in accessible_ids
                 ]
-                logger.warning(
-                    "[%s] Subscription filter: %d requested, %d via list, %d matched. "
-                    "Attempting direct get for: %s",
-                    engagement_id,
-                    len(self.opts.subscription_ids),
-                    len(all_subs),
-                    len(matched),
-                    missing_ids,
+                self._progress(
+                    f"Filter: {len(self.opts.subscription_ids)} requested, "
+                    f"{len(all_subs)} via list(), {len(matched)} matched — "
+                    f"trying direct get for: {', '.join(missing_ids)}"
                 )
                 # Fallback: subscriptions.list() can miss subs in some RBAC configurations
                 # (e.g. SP has Reader on the sub but not on the tenant root).
@@ -1139,15 +1187,16 @@ class AzureDiscovery:
                     direct = self._get_subscription_direct(missing_id.strip())
                     if direct:
                         matched.append(direct)
-                        logger.info(
-                            "[%s] Direct get succeeded for %s (%s)",
-                            engagement_id,
-                            direct["id"],
-                            direct["name"],
+                        self._progress(f"  Direct get OK: {direct['id']} ({direct['name']})")
+                    else:
+                        self._progress(
+                            f"  Direct get FAILED for {missing_id} — SP may lack "
+                            f"Reader role on this subscription."
                         )
 
             all_subs = matched
 
+        self._progress(f"Discovering {len(all_subs)} subscription(s)…")
         logger.info("[%s] Discovering %d subscription(s)", engagement_id, len(all_subs))
 
         for sub in all_subs:
@@ -1163,6 +1212,7 @@ class AzureDiscovery:
                     continue
 
             logger.info("[%s] Subscription: %s (%s)", engagement_id, sub_id, sub_name)
+            self._progress(f"Scanning subscription: {sub_name} ({sub_id})…")
             sub_topo = self._discover_subscription(sub_id, sub_name)
             topology.subscriptions.append(sub_topo)
 
@@ -1177,6 +1227,13 @@ class AzureDiscovery:
             vnet_count = len(sub_topo.vnets)
             nsg_count = len(sub_topo.nsgs)
             blocked = " [BLOCKED]" if sub_topo.discovery_blocked else ""
+            summary = (
+                f"  {sub_name}: {vnet_count} VNet(s), {nsg_count} NSG(s), "
+                f"{len(sub_topo.load_balancers)} LB(s), "
+                f"{len(sub_topo.virtual_network_gateways)} GW(s), "
+                f"{len(sub_topo.private_endpoints)} PE(s){blocked}"
+            )
+            self._progress(summary)
             logger.info(
                 "[%s] %s: %d VNets, %d NSGs, %d LBs, %d GWs, %d PEs%s",
                 engagement_id,

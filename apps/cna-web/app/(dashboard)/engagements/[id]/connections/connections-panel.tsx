@@ -50,7 +50,13 @@ const SEVERITY_STYLE: Record<string, string> = {
 
 // ─── Inline job entry (inside collapsible) ────────────────────────────────────
 
-function JobEntry({ initial }: { initial: JobSummary }) {
+function JobEntry({
+  initial,
+  onUpdate,
+}: {
+  initial: JobSummary;
+  onUpdate?: (job: JobSummary) => void;
+}) {
   const [job, setJob] = useState(initial);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -61,6 +67,7 @@ function JobEntry({ initial }: { initial: JobSummary }) {
         .then((r) => r.json())
         .then((data: JobSummary) => {
           setJob(data);
+          onUpdate?.(data);
           if (ACTIVE_STATUSES.has(data.status)) {
             timerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
           }
@@ -276,13 +283,110 @@ function DeleteCredentialButton({
   );
 }
 
-// ─── Main panel ───────────────────────────────────────────────────────────────
-
 interface ConnectionsPanelProps {
   engagementId: string;
   credentials: Pick<CloudCredential, "id" | "label" | "platform" | "tenantId" | "subscriptionIds">[];
   jobs: JobSummary[];
 }
+
+// ─── Per-credential card (manages live job state) ─────────────────────────────
+
+function CredentialCard({
+  cred,
+  initialJobs,
+  engagementId,
+}: {
+  cred: ConnectionsPanelProps["credentials"][number];
+  initialJobs: JobSummary[];
+  engagementId: string;
+}) {
+  // Live job map: starts from server-rendered data, updated by JobEntry polling.
+  const [liveJobMap, setLiveJobMap] = useState<Map<string, JobSummary>>(
+    () => new Map(initialJobs.map((j) => [j.id, j])),
+  );
+
+  const liveJobs = initialJobs.map((j) => liveJobMap.get(j.id) ?? j);
+  const latestJob = liveJobs[0];
+  const isActive = liveJobs.some((j) => ACTIVE_STATUSES.has(j.status));
+  const hasCompleted = liveJobs.some((j) => j.status === "COMPLETED");
+
+  function handleJobUpdate(updated: JobSummary) {
+    setLiveJobMap((prev) => new Map(prev).set(updated.id, updated));
+  }
+
+  return (
+    <div className="rounded-xl border border-navy-700/40 bg-navy-800/20 p-4">
+      {/* Credential header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-navy-100">{cred.label}</p>
+            {isActive && (
+              <svg className="h-3.5 w-3.5 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+          </div>
+          <p className="text-xs text-navy-400">
+            {cred.platform} · Tenant: {cred.tenantId?.slice(0, 8)}…
+            {cred.subscriptionIds.length > 0
+              ? ` · ${cred.subscriptionIds.length} subscription(s)`
+              : " · All subscriptions"}
+          </p>
+
+          {/* Last run + collapsible toggle */}
+          {liveJobs.length > 0 && (
+            <details className="mt-1 group/runs">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200">
+                <svg
+                  className="h-3 w-3 transition-transform group-open/runs:rotate-90"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                {liveJobs.length} run{liveJobs.length !== 1 ? "s" : ""} ·{" "}
+                Last:{" "}
+                {latestJob.status === "COMPLETED"
+                  ? `Completed ${new Date(latestJob.completedAt!).toLocaleDateString()}`
+                  : latestJob.status === "FAILED"
+                  ? "Failed"
+                  : latestJob.status}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {liveJobs.map((job) => (
+                  <JobEntry key={job.id} initial={job} onUpdate={handleJobUpdate} />
+                ))}
+              </div>
+            </details>
+          )}
+          {liveJobs.length === 0 && (
+            <p className="mt-1 text-xs text-navy-500">No runs yet</p>
+          )}
+        </div>
+
+        {/* Actions column */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <StartDiscoveryForm
+            engagementId={engagementId}
+            credentialId={cred.id}
+            hasCompleted={hasCompleted}
+          />
+          <DeleteCredentialButton
+            credentialId={cred.id}
+            engagementId={engagementId}
+            label={cred.label}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({
   engagementId,
@@ -305,87 +409,14 @@ export function ConnectionsPanel({
           No connections yet. Add one in the section below.
         </p>
       ) : (
-        credentials.map((cred) => {
-          const credJobs = jobsByCredential.get(cred.id) ?? [];
-          const latestJob = credJobs[0];
-          const hasCompleted = credJobs.some((j) => j.status === "COMPLETED");
-          const activeJob = credJobs.find((j) => ACTIVE_STATUSES.has(j.status));
-          const isActive = !!activeJob;
-
-          return (
-            <div
-              key={cred.id}
-              className="rounded-xl border border-navy-700/40 bg-navy-800/20 p-4"
-            >
-              {/* Credential header */}
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-navy-100">{cred.label}</p>
-                    {isActive && (
-                      <svg className="h-3.5 w-3.5 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    )}
-                  </div>
-                  <p className="text-xs text-navy-400">
-                    {cred.platform} · Tenant: {cred.tenantId?.slice(0, 8)}…
-                    {cred.subscriptionIds.length > 0
-                      ? ` · ${cred.subscriptionIds.length} subscription(s)`
-                      : " · All subscriptions"}
-                  </p>
-
-                  {/* Last run + collapsible toggle */}
-                  {credJobs.length > 0 && (
-                    <details className="mt-1 group/runs">
-                      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200">
-                        <svg
-                          className="h-3 w-3 transition-transform group-open/runs:rotate-90"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.5}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                        {credJobs.length} run{credJobs.length !== 1 ? "s" : ""} ·{" "}
-                        Last:{" "}
-                        {latestJob.status === "COMPLETED"
-                          ? `Completed ${new Date(latestJob.completedAt!).toLocaleDateString()}`
-                          : latestJob.status === "FAILED"
-                          ? "Failed"
-                          : latestJob.status}
-                      </summary>
-                      <div className="mt-2 space-y-2">
-                        {credJobs.map((job) => (
-                          <JobEntry key={job.id} initial={job} />
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                  {credJobs.length === 0 && (
-                    <p className="mt-1 text-xs text-navy-500">No runs yet</p>
-                  )}
-                </div>
-
-                {/* Actions column */}
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <StartDiscoveryForm
-                    engagementId={engagementId}
-                    credentialId={cred.id}
-                    hasCompleted={hasCompleted}
-                  />
-                  <DeleteCredentialButton
-                    credentialId={cred.id}
-                    engagementId={engagementId}
-                    label={cred.label}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })
+        credentials.map((cred) => (
+          <CredentialCard
+            key={cred.id}
+            cred={cred}
+            initialJobs={jobsByCredential.get(cred.id) ?? []}
+            engagementId={engagementId}
+          />
+        ))
       )}
     </div>
   );

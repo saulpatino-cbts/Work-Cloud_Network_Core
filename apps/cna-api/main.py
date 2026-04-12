@@ -784,14 +784,16 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
         )
 
         using_sp = bool(request.sp_client_id and request.sp_client_secret)
-        auth_method = "service principal" if using_sp else "managed identity"
-        _log(f"Connecting to tenant {request.tenant_id} using {auth_method}…")
+        auth_method = "service principal" if using_sp else "managed identity (no SP secret)"
+        _log(f"Auth: {auth_method} | tenant {request.tenant_id}")
         if request.subscription_ids:
             sub_list = ", ".join(request.subscription_ids)
             _log(f"Targeting {len(request.subscription_ids)} subscription(s): {sub_list}")
         else:
             _log("No subscription filter — will discover all accessible subscriptions.")
-        discovery = AzureDiscovery(store, options)
+
+        # Wire the discovery engine's internal progress into the job's progress log.
+        discovery = AzureDiscovery(store, options, progress_callback=_log)
 
         _log("Running discovery — this may take a few minutes…")
         topology = discovery.run()

@@ -127,13 +127,17 @@ module "compute" {
     AZURE_AD_CLIENT_ID                    = var.entra_client_id
     CNA_API_INTERNAL_URL                  = "http://ca-${local.name_prefix}-api"
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
+    AZURE_OPENAI_ENDPOINT                 = module.ai.azure_openai_endpoint
+    AZURE_OPENAI_DEPLOYMENT               = module.ai.openai_deployment_name
+    AZURE_OPENAI_API_VERSION              = "2024-12-01-preview"
   }
 
   # Secret-backed env vars — reference Container App secrets by name
   web_secret_env_vars = {
-    DATABASE_URL           = "database-url"
-    AUTH_SECRET            = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
-    AZURE_AD_CLIENT_SECRET = "entra-client-secret"
+    DATABASE_URL              = "database-url"
+    AUTH_SECRET               = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
+    AZURE_AD_CLIENT_SECRET    = "entra-client-secret"
+    CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key"
   }
 
   # Container App secrets — encrypted values stored within the Container App.
@@ -141,9 +145,10 @@ module "compute" {
   # The runtime module persists them in KV for the 05-sync-env workflow;
   # these direct injections ensure the Container App can start before KV sync runs.
   container_app_secrets = {
-    "database-url"        = module.database.connection_string
-    "nextauth-secret"     = var.nextauth_secret
-    "entra-client-secret" = var.entra_client_secret
+    "database-url"                 = module.database.connection_string
+    "nextauth-secret"              = var.nextauth_secret
+    "entra-client-secret"          = var.entra_client_secret
+    "credential-encryption-key"    = var.credential_encryption_key
   }
 }
 

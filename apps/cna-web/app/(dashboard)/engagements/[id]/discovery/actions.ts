@@ -5,6 +5,65 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { revalidatePath } from "next/cache";
 
+export async function startAllDiscovery(
+  engagementId: string,
+): Promise<{ error?: string; started?: number }> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated." };
+
+  const member = await prisma.engagementMember.findUnique({
+    where: { engagementId_userId: { engagementId, userId: session.user.id } },
+  });
+  if (!member) return { error: "Access denied." };
+
+  const credentials = await prisma.cloudCredential.findMany({
+    where: { engagementId },
+  });
+  if (!credentials.length) return { error: "No credentials configured." };
+
+  const apiUrl = process.env.CNA_API_INTERNAL_URL;
+  if (!apiUrl) return { error: "Discovery API is not configured." };
+
+  let started = 0;
+  for (const cred of credentials) {
+    const job = await prisma.discoveryJob.create({
+      data: { engagementId, credentialId: cred.id, status: "QUEUED" },
+    });
+    const spSecret = cred.spSecretEnc ? decrypt(cred.spSecretEnc) : null;
+    try {
+      const res = await fetch(`${apiUrl}/discovery/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: job.id,
+          engagement_id: engagementId,
+          tenant_id: cred.tenantId,
+          subscription_ids: cred.subscriptionIds,
+          sp_client_id: cred.spClientId,
+          sp_client_secret: spSecret,
+        }),
+      });
+      if (!res.ok) {
+        await prisma.discoveryJob.update({
+          where: { id: job.id },
+          data: { status: "FAILED", errorMessage: `API error ${res.status}` },
+        });
+      } else {
+        started++;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.discoveryJob.update({
+        where: { id: job.id },
+        data: { status: "FAILED", errorMessage: message },
+      });
+    }
+  }
+
+  revalidatePath(`/engagements/${engagementId}`);
+  return { started };
+}
+
 export async function startDiscovery(
   _prev: { error?: string; jobId?: string } | null,
   formData: FormData,

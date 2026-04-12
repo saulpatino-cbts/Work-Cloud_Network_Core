@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { startDiscovery } from "../discovery/actions";
+import { startDiscovery, startAllDiscovery } from "../discovery/actions";
 import { deleteCloudCredential } from "../cloud-credentials/actions";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -411,6 +411,75 @@ function CredentialCard({
   );
 }
 
+// ─── Bulk discover / re-sync button ──────────────────────────────────────────
+
+function BulkDiscoverButton({
+  engagementId,
+  allHaveRun,
+  noneHaveRun,
+  anyActive,
+}: {
+  engagementId: string;
+  allHaveRun: boolean;
+  noneHaveRun: boolean;
+  anyActive: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const canRun = allHaveRun || noneHaveRun;
+  const label = allHaveRun ? "↺ Re-sync all data" : "▶ Discover all";
+  const loadingLabel = allHaveRun ? "Queuing re-sync…" : "Queuing discovery…";
+
+  const activeStyle = allHaveRun
+    ? "bg-teal-700 hover:bg-teal-600 focus:ring-teal-500 text-white"
+    : "bg-blue-700 hover:bg-blue-600 focus:ring-blue-500 text-white";
+  const disabledStyle =
+    "bg-navy-700/40 text-navy-500 cursor-not-allowed";
+
+  function handleClick() {
+    setError(null);
+    startTransition(async () => {
+      const result = await startAllDiscovery(engagementId);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1 pt-1">
+      {error && <span className="text-xs text-red-400">{error}</span>}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!canRun || anyActive || isPending}
+        title={
+          anyActive
+            ? "A discovery is already running"
+            : !canRun
+            ? "Some connections have never been run — start each individually first"
+            : undefined
+        }
+        className={[
+          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1",
+          canRun && !anyActive && !isPending ? activeStyle : disabledStyle,
+        ].join(" ")}
+      >
+        {isPending ? loadingLabel : label}
+      </button>
+      {!canRun && !anyActive && (
+        <p className="text-[10px] text-navy-500 max-w-[16rem] text-right">
+          Run each connection individually at least once to unlock bulk actions.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({
@@ -427,6 +496,13 @@ export function ConnectionsPanel({
     jobsByCredential.set(job.credentialId, existing);
   }
 
+  const credentialsWithJobs = new Set(jobs.map((j) => j.credentialId).filter(Boolean));
+  const allHaveRun =
+    credentials.length > 0 && credentials.every((c) => credentialsWithJobs.has(c.id));
+  const noneHaveRun =
+    credentials.length > 0 && credentials.every((c) => !credentialsWithJobs.has(c.id));
+  const anyActive = jobs.some((j) => ACTIVE_STATUSES.has(j.status));
+
   return (
     <div className="space-y-3">
       {credentials.length === 0 ? (
@@ -434,14 +510,22 @@ export function ConnectionsPanel({
           No connections yet. Add one in the section below.
         </p>
       ) : (
-        credentials.map((cred) => (
-          <CredentialCard
-            key={cred.id}
-            cred={cred}
-            initialJobs={jobsByCredential.get(cred.id) ?? []}
+        <>
+          {credentials.map((cred) => (
+            <CredentialCard
+              key={cred.id}
+              cred={cred}
+              initialJobs={jobsByCredential.get(cred.id) ?? []}
+              engagementId={engagementId}
+            />
+          ))}
+          <BulkDiscoverButton
             engagementId={engagementId}
+            allHaveRun={allHaveRun}
+            noneHaveRun={noneHaveRun}
+            anyActive={anyActive}
           />
-        ))
+        </>
       )}
     </div>
   );

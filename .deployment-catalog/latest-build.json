@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-d25146a",
   "commit": "d25146a1a49e5c4325e77850981a98301b3edeb9",
-  "built_at": "2026-04-12T18:20:49Z",
-  "run_id": "24313200523",
+  "built_at": "2026-04-12T18:21:31Z",
+  "run_id": "24313199598",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-d25146a",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-d25146a",

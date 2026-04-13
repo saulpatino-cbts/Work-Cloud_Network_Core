@@ -38,9 +38,9 @@ cna = "cna.cli.main:cli"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3",
-    "pytest-cov>=6.0",               # coverage plugin (was missing from dev deps)
-    "ruff>=0.8",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
+    "ruff>=0.15.10",
     "pre-commit>=4.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]

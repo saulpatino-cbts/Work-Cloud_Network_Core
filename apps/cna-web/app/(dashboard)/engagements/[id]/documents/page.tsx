@@ -3,17 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { UploadDocumentForm } from "./upload-form";
-import { ComplianceReportPanel } from "./compliance-report-panel";
-import { AiAnalysisForm } from "../findings/ai-analysis-form";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Templates in the user-specified order:
-// Row 1: Azure Subscriptions, Firewall Policies
-// Row 2: NSG Rules, Route Table
-// Row 3: Network Architecture Notes (centered)
 const TEMPLATES = [
   {
     name: "Azure Subscription Inventory.csv",
@@ -64,66 +58,41 @@ export default async function DocumentsPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  // Check topology + documents for AI analysis availability
+  // hasTopology is needed to show the "Generate from live data" button on templates
   let hasTopology = false;
-  let hasDocumentsParsed = false;
   try {
-    const [job, docCount] = await Promise.all([
-      prisma.discoveryJob.findFirst({
-        where: { engagementId: id, status: "COMPLETED" },
-        select: { id: true },
-      }),
-      prisma.ingestedDocument.count({
-        where: { engagementId: id, parsedText: { not: null } },
-      }),
-    ]);
+    const job = await prisma.discoveryJob.findFirst({
+      where: { engagementId: id, status: "COMPLETED" },
+      select: { id: true },
+    });
     hasTopology = !!job;
-    hasDocumentsParsed = docCount > 0;
   } catch { /* migration pending */ }
-  const hasAnalysisData = hasTopology || hasDocumentsParsed;
 
   return (
     <div className="space-y-6">
-      {/* 1 ── AI Analysis ── */}
+      {/* ── Uploaded Documents ── */}
       <section className="glass p-6">
-        <h2 className="mb-1 text-lg font-semibold text-navy-100">AI Analysis</h2>
-        <p className="mb-4 text-sm text-navy-400">
-          Run a focused security analysis on your discovered topology and uploaded
-          documents. Each focus type uses a different analytical lens. Results are
-          added to the Findings tab.
-        </p>
-        {!hasAnalysisData ? (
-          <p className="rounded-lg border border-amber-800/40 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
-            No data to analyze yet. Run discovery on the Connections tab to capture live
-            topology, or upload documents below.
-          </p>
-        ) : (
-          <AiAnalysisForm engagementId={id} />
-        )}
-      </section>
-
-      {/* 2 ── Compliance Check ── */}
-      <ComplianceReportPanel engagementId={id} hasTopology={hasTopology} />
-
-      {/* 3 ── Uploaded documents ── */}
-      <section className="glass p-6">
-        <h2 className="mb-1 text-lg font-semibold text-navy-100">
-          Uploaded Documents
-        </h2>
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">Uploaded Documents</h2>
         <p className="mb-5 text-sm text-navy-400">
-          Secondary source — upload compliance frameworks, architecture notes,
-          NSG exports, or route tables. Text files are parsed for AI analysis.
+          Upload compliance frameworks, architecture notes, NSG exports, or route tables.
+          Text files are parsed and used as context for AI Analysis.
         </p>
 
         {engagement.documents.length === 0 ? (
-          <p className="mb-4 text-sm text-navy-500">No documents uploaded yet.</p>
+          <div className="mb-6 rounded-xl border border-dashed border-navy-700 px-6 py-8 text-center">
+            <svg className="mx-auto mb-3 h-8 w-8 text-navy-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <p className="text-sm font-medium text-navy-400">No documents uploaded yet.</p>
+            <p className="mt-1 text-xs text-navy-600">Use the upload form below to add your first document.</p>
+          </div>
         ) : (
           <ul className="mb-6 divide-y divide-navy-700/30">
             {engagement.documents.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium text-navy-100">{doc.fileName}</p>
-                  <p className="text-xs text-navy-400">
+              <li key={doc.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-navy-100">{doc.fileName}</p>
+                  <p className="mt-0.5 text-xs text-navy-500">
                     {new Date(doc.createdAt).toLocaleString()}
                     {doc.parsedText
                       ? " · text extracted — ready for AI analysis"
@@ -142,31 +111,24 @@ export default async function DocumentsPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* 4 ── Document templates ── */}
+      {/* ── Document Templates ── */}
       <section className="glass p-6">
-        <h2 className="mb-1 text-lg font-semibold text-navy-100">
-          Document Templates
-        </h2>
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">Document Templates</h2>
         <p className="mb-5 text-sm text-navy-400">
-          Download a pre-structured template, fill it in with data from the
-          customer environment, then upload it above for AI analysis.
+          Download a pre-structured template, fill it in with data from the customer
+          environment, then upload it above. CSV and text files are parsed for AI analysis.
         </p>
 
-        {/* Row 1: Azure Subscriptions + Firewall Policies */}
         <div className="mb-4 grid gap-4 sm:grid-cols-2">
           {TEMPLATES.slice(0, 2).map((t) => (
             <TemplateCard key={t.name} t={t} engagementId={id} hasTopology={hasTopology} />
           ))}
         </div>
-
-        {/* Row 2: NSG Rules + Route Table */}
         <div className="mb-4 grid gap-4 sm:grid-cols-2">
           {TEMPLATES.slice(2, 4).map((t) => (
             <TemplateCard key={t.name} t={t} engagementId={id} hasTopology={hasTopology} />
           ))}
         </div>
-
-        {/* Row 3: Network Architecture Notes — centered */}
         <div className="flex justify-center">
           <div className="w-full sm:w-1/2">
             <TemplateCard t={TEMPLATES[4]} engagementId={id} hasTopology={hasTopology} />
@@ -214,41 +176,23 @@ function TemplateCard({
         <a
           href={`data:${mime};base64,${encoded}`}
           download={t.name}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 hover:bg-navy-700/60 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700/60"
         >
           ↓ Download template
         </a>
         {isCsv && hasTopology && (
-          <GenerateFromTopologyButton
-            engagementId={engagementId}
-            templateName={t.name}
-          />
+          <a
+            href={`/api/generate-csv?engagementId=${engagementId}&template=${encodeURIComponent(t.name)}`}
+            download={t.name}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-700/60 bg-teal-900/30 px-3 py-1.5 text-xs font-medium text-teal-300 transition-colors hover:bg-teal-900/50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Generate from live data
+          </a>
         )}
       </div>
     </div>
-  );
-}
-
-// ─── Generate from topology (client component placeholder) ────────────────────
-// This renders a link to the generate API route
-
-function GenerateFromTopologyButton({
-  engagementId,
-  templateName,
-}: {
-  engagementId: string;
-  templateName: string;
-}) {
-  return (
-    <a
-      href={`/api/generate-csv?engagementId=${engagementId}&template=${encodeURIComponent(templateName)}`}
-      download={templateName}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-teal-700/60 bg-teal-900/30 px-3 py-1.5 text-xs font-medium text-teal-300 hover:bg-teal-900/50 transition-colors"
-    >
-      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      Generate from live data
-    </a>
   );
 }

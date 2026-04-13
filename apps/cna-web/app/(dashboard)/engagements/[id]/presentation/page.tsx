@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { PrintButton } from "./print-button";
 
 interface PageProps {
@@ -80,12 +81,134 @@ export default async function PresentationPage({ params }: PageProps) {
     (n, s) => n + s.vnets.reduce((m, v) => m + (v.subnets?.length ?? 0), 0), 0
   ) ?? 0;
 
+  const comprehensiveAssessment = engagement.deliverables.find(
+    (d) => d.type === "COMPREHENSIVE_ASSESSMENT",
+  );
+  const otherAssessments = engagement.deliverables.filter(
+    (d) => d.type !== "COMPREHENSIVE_ASSESSMENT",
+  );
+
+  const TYPE_LABEL: Record<string, string> = {
+    EXECUTIVE_SUMMARY: "Executive Summary",
+    TECHNICAL_FINDINGS: "Technical Findings",
+    REMEDIATION_PLAN: "Remediation Plan",
+    SPECIALIZATION_REPORT: "Specialization Report",
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 print:max-w-full print:space-y-6">
-      {/* Print button */}
+      {/* ── Action bar ── */}
       <div className="flex items-center justify-between print:hidden">
-        <p className="label-caps text-navy-300 dark:text-navy-500">Full Report View</p>
-        <PrintButton />
+        <p className="label-caps text-navy-500">Presentation</p>
+        <div className="flex items-center gap-2">
+          {comprehensiveAssessment && (
+            <a
+              href={`/api/deliverables/${comprehensiveAssessment.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700/60"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Open full screen
+            </a>
+          )}
+          <PrintButton />
+        </div>
+      </div>
+
+      {/* ── Comprehensive Assessment window pane ── */}
+      {comprehensiveAssessment ? (
+        <div className="glass overflow-hidden print:hidden">
+          {/* Pane header */}
+          <div className="flex items-center justify-between border-b border-navy-700/40 px-5 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-navy-100">
+                {comprehensiveAssessment.title}
+              </p>
+              <p className="text-xs text-navy-500">
+                Comprehensive Assessment ·{" "}
+                {new Date(comprehensiveAssessment.createdAt).toLocaleDateString("en-US", {
+                  month: "short", day: "numeric", year: "numeric",
+                })}
+              </p>
+            </div>
+            <a
+              href={`/api/deliverables/${comprehensiveAssessment.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-4 shrink-0 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
+            >
+              Open in new tab →
+            </a>
+          </div>
+
+          {/* iframe */}
+          <iframe
+            src={`/api/deliverables/${comprehensiveAssessment.id}`}
+            className="h-[78vh] w-full border-0 bg-white"
+            title={comprehensiveAssessment.title}
+          />
+        </div>
+      ) : (
+        <div className="glass flex items-center gap-4 rounded-xl border border-dashed border-navy-700 px-6 py-5 print:hidden">
+          <svg className="h-6 w-6 shrink-0 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-navy-300">No Comprehensive Assessment yet.</p>
+            <p className="mt-0.5 text-xs text-navy-500">
+              Generate one on the{" "}
+              <Link
+                href={`/engagements/${id}/deliverables`}
+                className="text-teal-400 hover:text-teal-300 hover:underline"
+              >
+                Assessments tab
+              </Link>{" "}
+              to see it embedded here.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Other generated assessments ── */}
+      {otherAssessments.length > 0 && (
+        <div className="glass p-5 print:hidden">
+          <p className="label-caps mb-3 text-navy-500">Other Assessments</p>
+          <div className="divide-y divide-navy-700/30">
+            {otherAssessments.map((d) => (
+              <div key={d.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-navy-100">{d.title}</p>
+                  <p className="mt-0.5 text-xs text-navy-500">
+                    {TYPE_LABEL[d.type] ?? d.type.replace(/_/g, " ")} ·{" "}
+                    {new Date(d.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <a
+                  href={`/api/deliverables/${d.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700/60"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Static report divider ── */}
+      <div className="flex items-center gap-3 print:hidden">
+        <div className="h-px flex-1 bg-navy-700/40" />
+        <p className="label-caps text-navy-600">Static Report</p>
+        <div className="h-px flex-1 bg-navy-700/40" />
       </div>
 
       {/* ── Cover ── */}

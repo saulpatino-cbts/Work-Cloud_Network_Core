@@ -691,7 +691,7 @@ class AzureNVA(BaseModel):
 class BgpPeerStatus(BaseModel):
     peer_ip: str
     peer_asn: int | None = None
-    state: str = "Unknown"          # Connected | Disconnected | Idle | Unknown
+    state: str = "Unknown"  # Connected | Disconnected | Idle | Unknown
     messages_sent: int = 0
     messages_received: int = 0
     routes_received: int = 0
@@ -704,7 +704,7 @@ class GatewayBgpData(BaseModel):
     bgp_enabled: bool = False
     bgp_asn: int | None = None
     peers: list[BgpPeerStatus] = Field(default_factory=list)
-    learned_routes: list[str] = Field(default_factory=list)    # sampled CIDR prefixes
+    learned_routes: list[str] = Field(default_factory=list)  # sampled CIDR prefixes
     learned_routes_count: int = 0
     advertised_routes: list[str] = Field(default_factory=list)
     advertised_routes_count: int = 0
@@ -737,7 +737,7 @@ class ObservabilityData(BaseModel):
 
 class GatewayMetric(BaseModel):
     gateway_name: str
-    gateway_type: str       # Vpn | ExpressRoute
+    gateway_type: str  # Vpn | ExpressRoute
     ingress_bytes_24h: float | None = None
     egress_bytes_24h: float | None = None
     bandwidth_mbps_provisioned: float | None = None

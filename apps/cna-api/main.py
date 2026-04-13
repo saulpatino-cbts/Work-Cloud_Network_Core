@@ -717,9 +717,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
             )
 
         zones: list = gw.get("zones", [])
-        if gw_type == "Vpn" and sku not in ("Basic",) and (
-            not zones or len(zones) < 2
-        ):
+        if gw_type == "Vpn" and sku not in ("Basic",) and (not zones or len(zones) < 2):
             findings.append(
                 {
                     "title": f"VPN Gateway '{gw_name}' is not zone-redundant",
@@ -744,10 +742,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
     if nvas:
         findings.append(
             {
-                "title": (
-                    f"{len(nvas)} Network Virtual Appliance(s) detected "
-                    f"in '{sub_name}'"
-                ),
+                "title": (f"{len(nvas)} Network Virtual Appliance(s) detected in '{sub_name}'"),
                 "severity": "INFORMATIONAL",
                 "category": "Network Appliances",
                 "description": (
@@ -801,16 +796,11 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
             )
 
         # NVA NIC without an NSG — management plane exposed
-        mgmt_nics_without_nsg = [
-            n for n in nics if not n.get("nsg_id")
-        ]
+        mgmt_nics_without_nsg = [n for n in nics if not n.get("nsg_id")]
         if mgmt_nics_without_nsg:
             findings.append(
                 {
-                    "title": (
-                        f"NVA '{nva_name}': "
-                        f"{len(mgmt_nics_without_nsg)} NIC(s) without NSG"
-                    ),
+                    "title": (f"NVA '{nva_name}': {len(mgmt_nics_without_nsg)} NIC(s) without NSG"),
                     "severity": "MEDIUM",
                     "category": "Network Appliances",
                     "description": (
@@ -835,10 +825,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
         if method == "ip_forwarding":
             findings.append(
                 {
-                    "title": (
-                        f"VM '{nva_name}' has IP forwarding enabled — "
-                        "verify intent"
-                    ),
+                    "title": (f"VM '{nva_name}' has IP forwarding enabled — verify intent"),
                     "severity": "MEDIUM",
                     "category": "Network Appliances",
                     "description": (
@@ -870,10 +857,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
 
         if not bgp_enabled:
             # Only flag if the gateway has VPN connections
-            matching_gw = next(
-                (g for g in vnet_gateways
-                 if g.get("name") == gw_name), {}
-            )
+            matching_gw = next((g for g in vnet_gateways if g.get("name") == gw_name), {})
             has_connections = bool(matching_gw.get("connections"))
             if has_connections:
                 findings.append(
@@ -898,10 +882,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
             continue
 
         # BGP peer state checks
-        disconnected = [
-            p for p in peers
-            if p.get("state") not in ("Connected", "Unknown")
-        ]
+        disconnected = [p for p in peers if p.get("state") not in ("Connected", "Unknown")]
         for peer in disconnected:
             findings.append(
                 {
@@ -930,9 +911,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
         # No routes learned
         learned_count = bgp.get("learned_routes_count", 0)
         if bgp_enabled and learned_count == 0 and peers:
-            connected_peers = [
-                p for p in peers if p.get("state") == "Connected"
-            ]
+            connected_peers = [p for p in peers if p.get("state") == "Connected"]
             if connected_peers:
                 findings.append(
                     {
@@ -972,7 +951,8 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
                         + (
                             f"Sample learned prefixes: "
                             f"{', '.join(bgp.get('learned_routes', [])[:5])}."
-                            if bgp.get("learned_routes") else ""
+                            if bgp.get("learned_routes")
+                            else ""
                         )
                     ),
                     "recommendation": (
@@ -987,9 +967,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
     obs: dict = sub_topo.get("observability") or {}
 
     if obs:
-        nw_regions = {
-            nw.get("location", "") for nw in obs.get("network_watchers", [])
-        }
+        nw_regions = {nw.get("location", "") for nw in obs.get("network_watchers", [])}
         vnet_regions = {v.get("location", "") for v in vnets}
         missing_nw = vnet_regions - nw_regions
 
@@ -1048,8 +1026,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
                 findings.append(
                     {
                         "title": (
-                            f"Log Analytics workspace '{ws_name}' "
-                            f"has short retention ({ret} days)"
+                            f"Log Analytics workspace '{ws_name}' has short retention ({ret} days)"
                         ),
                         "severity": "MEDIUM",
                         "category": "Observability",
@@ -1078,8 +1055,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
             findings.append(
                 {
                     "title": (
-                        f"{missing_fl} of {fl_total} NSG(s) missing "
-                        f"flow logs in '{sub_name}'"
+                        f"{missing_fl} of {fl_total} NSG(s) missing flow logs in '{sub_name}'"
                     ),
                     "severity": "MEDIUM",
                     "category": "Observability",
@@ -1112,10 +1088,7 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
             if util and util > 80:
                 findings.append(
                     {
-                        "title": (
-                            f"High bandwidth utilization on "
-                            f"'{gm_name}' ({util:.0f}%)"
-                        ),
+                        "title": (f"High bandwidth utilization on '{gm_name}' ({util:.0f}%)"),
                         "severity": "HIGH",
                         "category": "Performance",
                         "description": (
@@ -1134,17 +1107,13 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
                 )
 
             # Zero traffic on a gateway with connections
-            matching_gw = next(
-                (g for g in vnet_gateways
-                 if g.get("name") == gm_name), {}
-            )
+            matching_gw = next((g for g in vnet_gateways if g.get("name") == gm_name), {})
             has_connections = bool(matching_gw.get("connections"))
             if has_connections and ingress == 0 and egress == 0:
                 findings.append(
                     {
                         "title": (
-                            f"VPN Gateway '{gm_name}' shows zero "
-                            "traffic in the last 24 hours"
+                            f"VPN Gateway '{gm_name}' shows zero traffic in the last 24 hours"
                         ),
                         "severity": "MEDIUM",
                         "category": "Performance",
@@ -1167,14 +1136,12 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
         # Latency / throughput summary (informational)
         gw_metrics_list: list[dict] = net_metrics.get("gateway_metrics", [])
         if gw_metrics_list:
-            total_in_gb = sum(
-                (gm.get("ingress_bytes_24h") or 0)
-                for gm in gw_metrics_list
-            ) / 1_000_000_000
-            total_out_gb = sum(
-                (gm.get("egress_bytes_24h") or 0)
-                for gm in gw_metrics_list
-            ) / 1_000_000_000
+            total_in_gb = (
+                sum((gm.get("ingress_bytes_24h") or 0) for gm in gw_metrics_list) / 1_000_000_000
+            )
+            total_out_gb = (
+                sum((gm.get("egress_bytes_24h") or 0) for gm in gw_metrics_list) / 1_000_000_000
+            )
             findings.append(
                 {
                     "title": (

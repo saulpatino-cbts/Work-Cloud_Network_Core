@@ -357,42 +357,27 @@ class AzureDiscovery:
         )
 
         # ── Phase 2: Extended assessment data ─────────────────────────────────
-        self._progress(
-            f"[{sub_name}] Scanning for NVAs / NGFWs…"
-        )
+        self._progress(f"[{sub_name}] Scanning for NVAs / NGFWs…")
         try:
             topo.nvas = self._collect_nvas(net, sub_id)
             if topo.nvas:
                 names = ", ".join(n.name for n in topo.nvas[:5])
-                extra = (
-                    f" (+{len(topo.nvas) - 5} more)"
-                    if len(topo.nvas) > 5
-                    else ""
-                )
-                self._progress(
-                    f"[{sub_name}] NVAs found: "
-                    f"{len(topo.nvas)} — {names}{extra}"
-                )
+                extra = f" (+{len(topo.nvas) - 5} more)" if len(topo.nvas) > 5 else ""
+                self._progress(f"[{sub_name}] NVAs found: {len(topo.nvas)} — {names}{extra}")
             else:
-                self._progress(
-                    f"[{sub_name}] No NVAs / NGFWs detected"
-                )
+                self._progress(f"[{sub_name}] No NVAs / NGFWs detected")
         except Exception as e:
             self._progress(f"[{sub_name}] NVA scan skipped: {e}")
 
         self._progress(f"[{sub_name}] Querying BGP peer status…")
         try:
-            topo.bgp_data = self._collect_bgp_data(
-                net, sub_id, topo.virtual_network_gateways
-            )
+            topo.bgp_data = self._collect_bgp_data(net, sub_id, topo.virtual_network_gateways)
         except Exception as e:
             self._progress(f"[{sub_name}] BGP data skipped: {e}")
 
         self._progress(f"[{sub_name}] Collecting observability data…")
         try:
-            topo.observability = self._collect_observability(
-                net, sub_id, len(topo.nsgs)
-            )
+            topo.observability = self._collect_observability(net, sub_id, len(topo.nsgs))
             obs = topo.observability
             self._progress(
                 f"[{sub_name}] Observability: "
@@ -402,22 +387,15 @@ class AzureDiscovery:
                 f"{obs.nsg_flow_logs_total} NSG flow logs enabled"
             )
         except Exception as e:
-            self._progress(
-                f"[{sub_name}] Observability data skipped: {e}"
-            )
+            self._progress(f"[{sub_name}] Observability data skipped: {e}")
 
-        self._progress(
-            f"[{sub_name}] Collecting network metrics (last 24 h)…"
-        )
+        self._progress(f"[{sub_name}] Collecting network metrics (last 24 h)…")
         try:
             topo.network_metrics = self._collect_network_metrics(
                 sub_id, topo.virtual_network_gateways
             )
             if topo.network_metrics.collection_error:
-                self._progress(
-                    f"[{sub_name}] Metrics: "
-                    f"{topo.network_metrics.collection_error}"
-                )
+                self._progress(f"[{sub_name}] Metrics: {topo.network_metrics.collection_error}")
             else:
                 self._progress(
                     f"[{sub_name}] Metrics collected for "
@@ -1265,25 +1243,25 @@ class AzureDiscovery:
 
     # Known marketplace publishers for NGFW and network virtual appliances.
     # Matched against plan.publisher or image_reference.publisher (lower-cased).
-    _NGFW_PUBLISHERS: frozenset[str] = frozenset({
-        "paloaltonetworks",      # Palo Alto VM-Series
-        "fortinet",              # FortiGate
-        "checkpoint",            # Check Point CloudGuard
-        "cisco",                 # Cisco ASAv / FTDv / CSR1000v
-        "barracudanetworks",     # Barracuda CloudGen Firewall
-        "junipernetworks",       # Juniper vSRX / vMX
-        "sophos",                # Sophos XG / UTM
-        "f5-networks",           # F5 BIG-IP
-        "zscaler",               # Zscaler Private Access
-        "stormshield",           # Stormshield Network Security
-        "watchguard-technologies",
-        "hillstone-networks",
-        "viptela",               # Cisco SD-WAN (now Cisco)
-    })
+    _NGFW_PUBLISHERS: frozenset[str] = frozenset(
+        {
+            "paloaltonetworks",  # Palo Alto VM-Series
+            "fortinet",  # FortiGate
+            "checkpoint",  # Check Point CloudGuard
+            "cisco",  # Cisco ASAv / FTDv / CSR1000v
+            "barracudanetworks",  # Barracuda CloudGen Firewall
+            "junipernetworks",  # Juniper vSRX / vMX
+            "sophos",  # Sophos XG / UTM
+            "f5-networks",  # F5 BIG-IP
+            "zscaler",  # Zscaler Private Access
+            "stormshield",  # Stormshield Network Security
+            "watchguard-technologies",
+            "hillstone-networks",
+            "viptela",  # Cisco SD-WAN (now Cisco)
+        }
+    )
 
-    def _collect_nvas(
-        self, net, sub_id: str
-    ) -> list[AzureNVA]:
+    def _collect_nvas(self, net, sub_id: str) -> list[AzureNVA]:
         """Discover Network Virtual Appliances in a subscription.
 
         Identification strategy (in order):
@@ -1298,9 +1276,7 @@ class AzureDiscovery:
         try:
             from azure.mgmt.compute import ComputeManagementClient
         except ImportError:
-            logger.warning(
-                "azure-mgmt-compute not installed — NVA discovery skipped"
-            )
+            logger.warning("azure-mgmt-compute not installed — NVA discovery skipped")
             return []
 
         cmc = ComputeManagementClient(self._credential, sub_id)
@@ -1323,11 +1299,7 @@ class AzureDiscovery:
 
             # ── Strategy 2: image reference publisher ──────────────────
             if not identification_method:
-                img = (
-                    vm.storage_profile.image_reference
-                    if vm.storage_profile
-                    else None
-                )
+                img = vm.storage_profile.image_reference if vm.storage_profile else None
                 if img and img.publisher:
                     pub_lower = img.publisher.lower()
                     if pub_lower in self._NGFW_PUBLISHERS:
@@ -1348,12 +1320,8 @@ class AzureDiscovery:
                 try:
                     nic_rg = _rg_from_id(nic_ref.id)
                     nic_name = nic_ref.id.split("/")[-1]
-                    nic = net.network_interfaces.get(
-                        nic_rg, nic_name
-                    )
-                    ip_fwd = bool(
-                        getattr(nic, "enable_ip_forwarding", False)
-                    )
+                    nic = net.network_interfaces.get(nic_rg, nic_name)
+                    ip_fwd = bool(getattr(nic, "enable_ip_forwarding", False))
                     if ip_fwd:
                         has_ip_forwarding = True
 
@@ -1364,13 +1332,8 @@ class AzureDiscovery:
                         if ipc.subnet and ipc.subnet.id:
                             subnet_ids.append(ipc.subnet.id)
                         if ipc.private_ip_address:
-                            private_ips.append(
-                                ipc.private_ip_address
-                            )
-                        if (
-                            ipc.public_ip_address
-                            and ipc.public_ip_address.id
-                        ):
+                            private_ips.append(ipc.private_ip_address)
+                        if ipc.public_ip_address and ipc.public_ip_address.id:
                             public_ip_id = ipc.public_ip_address.id
 
                     vm_nics.append(
@@ -1393,9 +1356,7 @@ class AzureDiscovery:
                         )
                     )
                 except Exception as nic_exc:
-                    logger.debug(
-                        "NIC fetch failed %s: %s", nic_ref.id, nic_exc
-                    )
+                    logger.debug("NIC fetch failed %s: %s", nic_ref.id, nic_exc)
 
             # ── Strategy 3: IP forwarding on any NIC ──────────────────
             if not identification_method and has_ip_forwarding:
@@ -1407,15 +1368,11 @@ class AzureDiscovery:
             rg = _rg_from_id(vm.id or "")
             os_type: str | None = None
             if vm.storage_profile and vm.storage_profile.os_disk:
-                os_type = str(
-                    vm.storage_profile.os_disk.os_type or ""
-                ) or None
+                os_type = str(vm.storage_profile.os_disk.os_type or "") or None
 
             vm_size: str | None = None
             if vm.hardware_profile:
-                vm_size = str(
-                    vm.hardware_profile.vm_size or ""
-                ) or None
+                vm_size = str(vm.hardware_profile.vm_size or "") or None
 
             nvas.append(
                 AzureNVA(
@@ -1467,32 +1424,20 @@ class AzureDiscovery:
 
             # BGP peer status (long-running operation)
             try:
-                self._progress(
-                    f"BGP: querying peers for '{gw_name}'…"
+                self._progress(f"BGP: querying peers for '{gw_name}'…")
+                result = net.virtual_network_gateways.begin_get_bgp_peer_status(rg, gw_name).result(
+                    timeout=90
                 )
-                result = net.virtual_network_gateways\
-                    .begin_get_bgp_peer_status(rg, gw_name)\
-                    .result(timeout=90)
-                for peer in (result.value or []):
+                for peer in result.value or []:
                     item.peers.append(
                         BgpPeerStatus(
                             peer_ip=peer.neighbor or "",
                             peer_asn=getattr(peer, "asn", None),
-                            state=str(
-                                peer.bgp_peer_state or "Unknown"
-                            ),
-                            messages_sent=int(
-                                peer.messages_sent or 0
-                            ),
-                            messages_received=int(
-                                peer.messages_received or 0
-                            ),
-                            routes_received=int(
-                                peer.routes_received or 0
-                            ),
-                            connected_duration=str(
-                                peer.connected_duration or ""
-                            ) or None,
+                            state=str(peer.bgp_peer_state or "Unknown"),
+                            messages_sent=int(peer.messages_sent or 0),
+                            messages_received=int(peer.messages_received or 0),
+                            routes_received=int(peer.routes_received or 0),
+                            connected_duration=str(peer.connected_duration or "") or None,
                         )
                     )
             except Exception as e:
@@ -1500,36 +1445,28 @@ class AzureDiscovery:
 
             # Learned routes
             try:
-                result = net.virtual_network_gateways\
-                    .begin_get_learned_routes(rg, gw_name)\
-                    .result(timeout=90)
+                result = net.virtual_network_gateways.begin_get_learned_routes(rg, gw_name).result(
+                    timeout=90
+                )
                 all_routes = result.value or []
                 item.learned_routes_count = len(all_routes)
-                item.learned_routes = [
-                    r.network for r in all_routes[:50]
-                    if r.network
-                ]
+                item.learned_routes = [r.network for r in all_routes[:50] if r.network]
             except Exception as e:
                 err = f"Learned routes: {e}"
                 item.collection_error = (
-                    f"{item.collection_error}; {err}"
-                    if item.collection_error else err
+                    f"{item.collection_error}; {err}" if item.collection_error else err
                 )
 
             # Advertised routes (use first peer)
             try:
                 if item.peers:
                     peer_ip = item.peers[0].peer_ip
-                    result = net.virtual_network_gateways\
-                        .begin_get_advertised_routes(
-                            rg, gw_name, peer_ip
-                        ).result(timeout=90)
+                    result = net.virtual_network_gateways.begin_get_advertised_routes(
+                        rg, gw_name, peer_ip
+                    ).result(timeout=90)
                     all_adv = result.value or []
                     item.advertised_routes_count = len(all_adv)
-                    item.advertised_routes = [
-                        r.network for r in all_adv[:50]
-                        if r.network
-                    ]
+                    item.advertised_routes = [r.network for r in all_adv[:50] if r.network]
             except Exception as exc:  # noqa: BLE001
                 logger.debug("advertised routes unavailable: %s", exc)
 
@@ -1539,9 +1476,7 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ Observability
 
-    def _collect_observability(
-        self, net, sub_id: str, nsg_count: int
-    ) -> ObservabilityData:
+    def _collect_observability(self, net, sub_id: str, nsg_count: int) -> ObservabilityData:
         """Collect Network Watcher, Log Analytics, and flow log data."""
         obs = ObservabilityData(nsg_flow_logs_total=nsg_count)
 
@@ -1552,15 +1487,14 @@ class AzureDiscovery:
                     NetworkWatcherInfo(
                         location=nw.location or "unknown",
                         name=nw.name or "unknown",
-                        provisioning_state=str(
-                            nw.provisioning_state or "Unknown"
-                        ),
+                        provisioning_state=str(nw.provisioning_state or "Unknown"),
                     )
                 )
         except Exception as e:
             logger.warning(
                 "[%s] Network Watcher listing failed: %s",
-                sub_id, e,
+                sub_id,
+                e,
             )
 
         # NSG flow log count (via flow_logs API per Network Watcher)
@@ -1568,9 +1502,7 @@ class AzureDiscovery:
         for nw_info in obs.network_watchers:
             try:
                 nw_rg = "NetworkWatcherRG"
-                for fl in _safe_list(
-                    net.flow_logs.list(nw_rg, nw_info.name)
-                ):
+                for fl in _safe_list(net.flow_logs.list(nw_rg, nw_info.name)):
                     if getattr(fl, "enabled", False):
                         flow_enabled += 1
             except Exception as exc:  # noqa: BLE001
@@ -1582,9 +1514,8 @@ class AzureDiscovery:
             from azure.mgmt.loganalytics import (
                 LogAnalyticsManagementClient,
             )
-            la = LogAnalyticsManagementClient(
-                self._credential, sub_id
-            )
+
+            la = LogAnalyticsManagementClient(self._credential, sub_id)
             for ws in _safe_list(la.workspaces.list()):
                 obs.log_analytics_workspaces.append(
                     LogAnalyticsWorkspace(
@@ -1592,23 +1523,16 @@ class AzureDiscovery:
                         name=ws.name or "unknown",
                         resource_group=_rg_from_id(ws.id or ""),
                         location=ws.location or "unknown",
-                        retention_days=int(
-                            ws.retention_in_days or 30
-                        ),
-                        sku=str(
-                            ws.sku.name if ws.sku else "PerGB2018"
-                        ),
+                        retention_days=int(ws.retention_in_days or 30),
+                        sku=str(ws.sku.name if ws.sku else "PerGB2018"),
                     )
                 )
         except ImportError:
             logger.warning(
-                "azure-mgmt-loganalytics not installed — "
-                "Log Analytics workspace query skipped"
+                "azure-mgmt-loganalytics not installed — Log Analytics workspace query skipped"
             )
         except Exception as e:
-            logger.warning(
-                "[%s] Log Analytics listing failed: %s", sub_id, e
-            )
+            logger.warning("[%s] Log Analytics listing failed: %s", sub_id, e)
 
         return obs
 
@@ -1621,29 +1545,26 @@ class AzureDiscovery:
     ) -> NetworkMetrics:
         """Collect 24-hour bandwidth metrics for VPN gateways."""
         from datetime import timedelta
+
         metrics = NetworkMetrics()
 
         try:
             from azure.mgmt.monitor import MonitorManagementClient
         except ImportError:
-            metrics.collection_error = (
-                "azure-mgmt-monitor not installed"
-            )
+            metrics.collection_error = "azure-mgmt-monitor not installed"
             return metrics
 
         try:
             import datetime as _dt
-            monitor = MonitorManagementClient(
-                self._credential, sub_id
-            )
+
+            monitor = MonitorManagementClient(self._credential, sub_id)
             end = _dt.datetime.now(_dt.UTC)
             start = end - timedelta(hours=24)
             timespan = (
-                f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/"
-                f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+                f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
             )
 
-            for gw in gateways[:5]:   # cap to avoid rate limits
+            for gw in gateways[:5]:  # cap to avoid rate limits
                 gm = GatewayMetric(
                     gateway_name=gw.name,
                     gateway_type=gw.gateway_type,
@@ -1653,22 +1574,17 @@ class AzureDiscovery:
                         resource_uri=gw.id,
                         timespan=timespan,
                         interval="PT1H",
-                        metricnames=(
-                            "TunnelIngressBytes,TunnelEgressBytes"
-                        ),
+                        metricnames=("TunnelIngressBytes,TunnelEgressBytes"),
                         aggregation="Total",
                     )
-                    for metric in (result.value or []):
+                    for metric in result.value or []:
                         total = sum(
                             dp.total or 0
                             for ts in metric.timeseries
                             for dp in ts.data
                             if dp.total is not None
                         )
-                        mn = (
-                            metric.name.value
-                            if metric.name else ""
-                        )
+                        mn = metric.name.value if metric.name else ""
                         if mn == "TunnelIngressBytes":
                             gm.ingress_bytes_24h = total
                         elif mn == "TunnelEgressBytes":
@@ -1676,7 +1592,9 @@ class AzureDiscovery:
                 except Exception as e:
                     logger.debug(
                         "[%s] Metrics for %s failed: %s",
-                        sub_id, gw.name, e,
+                        sub_id,
+                        gw.name,
+                        e,
                     )
                 metrics.gateway_metrics.append(gm)
 

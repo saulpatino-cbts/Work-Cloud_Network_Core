@@ -53,6 +53,7 @@ export async function startAllDiscovery(
         body: JSON.stringify({
           job_id: job.id,
           engagement_id: engagementId,
+          credential_id: primary.id,
           tenant_id: primary.tenantId,
           subscription_ids: allSubIds,
           sp_client_id: primary.spClientId,
@@ -125,6 +126,7 @@ export async function startDiscovery(
       body: JSON.stringify({
         job_id: job.id,
         engagement_id: engagementId,
+        credential_id: cred.id,
         tenant_id: cred.tenantId,
         subscription_ids: cred.subscriptionIds,
         sp_client_id: cred.spClientId,

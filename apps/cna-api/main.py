@@ -60,34 +60,48 @@ def _update_job(job_id: str, **kwargs: Any) -> None:
         conn.commit()
 
 
-def _insert_findings(engagement_id: str, findings: list[dict]) -> None:
-    if not DATABASE_URL or not findings:
+def _replace_discovery_findings(
+    engagement_id: str, credential_id: str | None, findings: list[dict]
+) -> None:
+    """Replace discovery findings for a specific credential (subscription sync group).
+
+    On success: delete old non-AI findings for this credential, then insert fresh ones.
+    On failure: this function is never called, so old data is preserved.
+    """
+    if not DATABASE_URL:
         return
     with _get_db() as conn:
         with conn.cursor() as cur:
-            psycopg2.extras.execute_values(
-                cur,
-                """INSERT INTO "Finding"
-                     (id, "engagementId", title, severity, category,
-                      description, recommendation, "aiGenerated", "createdAt", "updatedAt")
-                   VALUES %s
-                   ON CONFLICT DO NOTHING""",
-                [
-                    (
-                        str(uuid.uuid4()),
-                        engagement_id,
-                        f["title"],
-                        f["severity"],
-                        f["category"],
-                        f["description"],
-                        f.get("recommendation", ""),
-                        False,
-                        datetime.now(UTC),
-                        datetime.now(UTC),
-                    )
-                    for f in findings
-                ],
-            )
+            if credential_id:
+                # Remove stale findings for this subscription — other subscriptions untouched
+                cur.execute(
+                    'DELETE FROM "Finding" WHERE "engagementId" = %s AND "credentialId" = %s AND "aiGenerated" = false',
+                    (engagement_id, credential_id),
+                )
+            if findings:
+                psycopg2.extras.execute_values(
+                    cur,
+                    """INSERT INTO "Finding"
+                         (id, "engagementId", "credentialId", title, severity, category,
+                          description, recommendation, "aiGenerated", "createdAt", "updatedAt")
+                       VALUES %s""",
+                    [
+                        (
+                            str(uuid.uuid4()),
+                            engagement_id,
+                            credential_id,
+                            f["title"],
+                            f["severity"],
+                            f["category"],
+                            f["description"],
+                            f.get("recommendation", ""),
+                            False,
+                            datetime.now(UTC),
+                            datetime.now(UTC),
+                        )
+                        for f in findings
+                    ],
+                )
         conn.commit()
 
 
@@ -1217,6 +1231,7 @@ async def test_connection(request: TestConnectionRequest) -> dict:
 class DiscoveryStartRequest(BaseModel):
     job_id: str
     engagement_id: str
+    credential_id: str | None = None
     tenant_id: str | None = None
     subscription_ids: list[str] = []
     sp_client_id: str | None = None
@@ -1307,7 +1322,7 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
             )
 
         _log(f"Writing {len(all_findings)} finding(s) to database…")
-        _insert_findings(engagement_id, all_findings)
+        _replace_discovery_findings(engagement_id, request.credential_id, all_findings)
         _advance_engagement_status(engagement_id)
 
         topology_json = topology.model_dump_json()

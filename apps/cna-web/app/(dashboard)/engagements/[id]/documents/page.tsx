@@ -70,47 +70,6 @@ export default async function DocumentsPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* ── Uploaded Documents ── */}
-      <section className="glass p-6">
-        <h2 className="mb-1 text-lg font-semibold text-navy-100">Uploaded Documents</h2>
-        <p className="mb-5 text-sm text-navy-400">
-          Upload compliance frameworks, architecture notes, NSG exports, or route tables.
-          Text files are parsed and used as context for AI Analysis.
-        </p>
-
-        {engagement.documents.length === 0 ? (
-          <div className="mb-6 rounded-xl border border-dashed border-navy-700 px-6 py-8 text-center">
-            <svg className="mx-auto mb-3 h-8 w-8 text-navy-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-            </svg>
-            <p className="text-sm font-medium text-navy-400">No documents uploaded yet.</p>
-            <p className="mt-1 text-xs text-navy-600">Use the upload form below to add your first document.</p>
-          </div>
-        ) : (
-          <ul className="mb-6 divide-y divide-navy-700/30">
-            {engagement.documents.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-navy-100">{doc.fileName}</p>
-                  <p className="mt-0.5 text-xs text-navy-500">
-                    {new Date(doc.createdAt).toLocaleString()}
-                    {doc.parsedText
-                      ? " · text extracted — ready for AI analysis"
-                      : " · binary — stored as-is"}
-                  </p>
-                </div>
-                <StatusBadge value={doc.docType} variant="doctype" />
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="border-t border-navy-700/30 pt-5">
-          <h3 className="mb-3 text-sm font-semibold text-navy-300">Upload document</h3>
-          <UploadDocumentForm engagementId={id} />
-        </div>
-      </section>
-
       {/* ── Document Templates ── */}
       <section className="glass p-6">
         <h2 className="mb-1 text-lg font-semibold text-navy-100">Document Templates</h2>
@@ -134,6 +93,52 @@ export default async function DocumentsPage({ params }: PageProps) {
             <TemplateCard t={TEMPLATES[4]} engagementId={id} hasTopology={hasTopology} />
           </div>
         </div>
+      </section>
+
+      {/* ── Uploaded Documents ── */}
+      <section className="glass p-6">
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">Uploaded Documents</h2>
+        <p className="mb-5 text-sm text-navy-400">
+          Upload compliance frameworks, architecture notes, NSG exports, or route tables.
+          Text files are parsed and used as context for AI Analysis.
+        </p>
+
+        {engagement.documents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-navy-700 px-6 py-8 text-center">
+            <svg className="mx-auto mb-3 h-8 w-8 text-navy-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <p className="text-sm font-medium text-navy-400">No documents uploaded yet.</p>
+            <p className="mt-1 text-xs text-navy-600">Use the upload form below to add your first document.</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-navy-700/30">
+            {engagement.documents.map((doc) => (
+              <li key={doc.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-navy-100">{doc.fileName}</p>
+                  <p className="mt-0.5 text-xs text-navy-500">
+                    {new Date(doc.createdAt).toLocaleString()}
+                    {doc.parsedText
+                      ? " · text extracted — ready for AI analysis"
+                      : " · binary — stored as-is"}
+                  </p>
+                </div>
+                <StatusBadge value={doc.docType} variant="doctype" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ── Upload a Document ── */}
+      <section className="glass p-6">
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">Upload a Document</h2>
+        <p className="mb-5 text-sm text-navy-400">
+          Upload compliance frameworks, architecture notes, NSG exports, or route tables.
+          Text files are parsed and used as context for AI Analysis.
+        </p>
+        <UploadDocumentForm engagementId={id} />
       </section>
     </div>
   );

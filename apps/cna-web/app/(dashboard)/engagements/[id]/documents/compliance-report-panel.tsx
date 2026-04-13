@@ -18,12 +18,13 @@ type Framework = (typeof FRAMEWORKS)[number]["value"];
 interface Props {
   engagementId: string;
   hasTopology: boolean;
+  needsResync?: boolean;
 }
 
 const CARD_BASE =
   "flex cursor-pointer items-start gap-3 rounded-xl border border-navy-700 bg-navy-800/30 p-3 transition-colors hover:border-teal-600/60 hover:bg-teal-900/20";
 
-export function ComplianceReportPanel({ engagementId, hasTopology }: Props) {
+export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }: Props) {
   const [framework, setFramework] = useState<Framework>("nist");
   const [state, action, isPending] = useActionState(runComplianceCheck, null);
   const [allState, allAction] = useActionState(runAllComplianceChecks, null);
@@ -40,6 +41,17 @@ export function ComplianceReportPanel({ engagementId, hasTopology }: Props) {
         <p className="mb-4 rounded-lg border border-amber-800/40 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
           No discovery data yet. Run discovery on the Connections tab first.
         </p>
+      )}
+
+      {needsResync && hasTopology && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3">
+          <svg className="h-4 w-4 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm0 6a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-amber-300">
+            <span className="font-semibold">Subscriptions changed</span> — re-sync before running compliance checks.
+          </p>
+        </div>
       )}
 
       {/* ── Single framework form ── */}

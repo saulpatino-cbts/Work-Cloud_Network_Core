@@ -142,6 +142,9 @@ export async function deleteCloudCredential(
     });
     if (!member) return { error: "Access denied." };
 
+    // Delete all discovery findings tied to this subscription before removing the credential
+    await prisma.finding.deleteMany({ where: { credentialId, aiGenerated: false } });
+
     // Null out credentialId on any discovery jobs referencing this credential
     // before deleting to satisfy the FK constraint on older DB migrations.
     await prisma.discoveryJob.updateMany({

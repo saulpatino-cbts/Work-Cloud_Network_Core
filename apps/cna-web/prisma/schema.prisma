@@ -142,6 +142,7 @@ model Finding {
   id           String         @id @default(cuid())
   engagementId String
   documentId   String?
+  credentialId String?          // discovery source: which subscription generated this finding
   title        String
   severity     FindingSeverity
   category     String
@@ -155,6 +156,7 @@ model Finding {
 
   engagement   Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   document     IngestedDocument? @relation(fields: [documentId], references: [id])
+  credential   CloudCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 }
 
 enum FindingSeverity {
@@ -200,8 +202,9 @@ model CloudCredential {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  engagement   Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  jobs         DiscoveryJob[]
+  engagement         Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  jobs               DiscoveryJob[]
+  discoveryFindings  Finding[]
 
   @@unique([engagementId, label])
 }

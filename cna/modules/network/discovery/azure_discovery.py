@@ -1530,8 +1530,8 @@ class AzureDiscovery:
                         r.network for r in all_adv[:50]
                         if r.network
                     ]
-            except Exception:
-                pass  # advertised routes optional
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("advertised routes unavailable: %s", exc)
 
             results.append(item)
 
@@ -1573,8 +1573,8 @@ class AzureDiscovery:
                 ):
                     if getattr(fl, "enabled", False):
                         flow_enabled += 1
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("flow log enumeration unavailable: %s", exc)
         obs.nsg_flow_logs_enabled = flow_enabled
 
         # Log Analytics workspaces

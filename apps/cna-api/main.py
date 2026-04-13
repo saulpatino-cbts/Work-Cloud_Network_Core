@@ -670,7 +670,6 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
                 )
 
     # ── Gateway SKU checks ────────────────────────────────────────────────────
-    _BASIC_GW_SKUS = {"Basic", "VpnGw1", "VpnGw1AZ"}
     for gw in vnet_gateways:
         gw_name = gw.get("name", "unknown")
         sku = gw.get("sku_name", "") or gw.get("sku_tier", "")

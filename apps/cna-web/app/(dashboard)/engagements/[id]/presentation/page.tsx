@@ -2,24 +2,180 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PrintButton } from "./print-button";
+import {
+  computeRiskScore,
+  getRiskLabel,
+  computeMaturityDimensions,
+  getTopologyStats,
+  SEV_ORDER,
+  SEV_COLORS,
+  type Topology,
+  type Finding,
+} from "./_lib/metrics";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"] as const;
-type Sev = typeof SEV_ORDER[number];
+// ── Risk Gauge SVG ─────────────────────────────────────────────────────────────
+function RiskGauge({ score, color }: { score: number; color: string }) {
+  const r = 68;
+  const circ = 2 * Math.PI * r;            // ≈ 427.3
+  const arcLen = (270 / 360) * circ;       // ≈ 320.5  (270° sweep)
+  const filled = (score / 100) * arcLen;
 
-const SEV_STYLE: Record<Sev, { bar: string; text: string; bg: string; badge: string }> = {
-  CRITICAL:      { bar: "bg-red-500",    text: "text-red-600 dark:text-red-400",       bg: "border-red-200 bg-red-50/60 dark:border-red-800/40 dark:bg-red-900/10",          badge: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  HIGH:          { bar: "bg-orange-500", text: "text-orange-600 dark:text-orange-400", bg: "border-orange-200 bg-orange-50/60 dark:border-orange-800/40 dark:bg-orange-900/10", badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
-  MEDIUM:        { bar: "bg-amber-400",  text: "text-amber-600 dark:text-amber-400",   bg: "border-amber-200 bg-amber-50/60 dark:border-amber-800/40 dark:bg-amber-900/10",   badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  LOW:           { bar: "bg-blue-400",   text: "text-blue-600 dark:text-blue-400",     bg: "border-blue-200 bg-blue-50/60 dark:border-blue-800/40 dark:bg-blue-900/10",       badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  INFORMATIONAL: { bar: "bg-navy-300",   text: "text-navy-500 dark:text-navy-300",     bg: "border-navy-100 bg-navy-50/60 dark:border-navy-700/40 dark:bg-navy-800/20",       badge: "bg-navy-100 text-navy-500 dark:bg-navy-700/40 dark:text-navy-300" },
-};
+  return (
+    <svg viewBox="0 0 180 180" className="h-44 w-44">
+      {/* Track */}
+      <circle
+        cx="90" cy="90" r={r}
+        fill="none"
+        stroke="#1e2d3d"
+        strokeWidth="14"
+        strokeLinecap="round"
+        strokeDasharray={`${arcLen} ${circ}`}
+        transform="rotate(-135 90 90)"
+      />
+      {/* Value arc */}
+      <circle
+        cx="90" cy="90" r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="14"
+        strokeLinecap="round"
+        strokeDasharray={`${filled} ${circ}`}
+        transform="rotate(-135 90 90)"
+      />
+      {/* Score */}
+      <text
+        x="90" y="88"
+        textAnchor="middle"
+        fontSize="38"
+        fontWeight="900"
+        fill="white"
+        fontFamily="sans-serif"
+      >
+        {score}
+      </text>
+      <text
+        x="90" y="110"
+        textAnchor="middle"
+        fontSize="9"
+        fill="#64748b"
+        fontFamily="sans-serif"
+        letterSpacing="1"
+      >
+        RISK SCORE
+      </text>
+    </svg>
+  );
+}
 
-export default async function PresentationPage({ params }: PageProps) {
+// ── Maturity Radar SVG ─────────────────────────────────────────────────────────
+function MaturityRadar({ dims }: { dims: { label: string; score: number }[] }) {
+  const cx = 110, cy = 110, R = 72;
+  const n = dims.length;
+
+  const angleFor = (i: number) => (i * 2 * Math.PI) / n - Math.PI / 2;
+
+  // Axis end-points
+  const axes = dims.map((d, i) => ({
+    x: cx + R * Math.cos(angleFor(i)),
+    y: cy + R * Math.sin(angleFor(i)),
+    lx: cx + (R + 22) * Math.cos(angleFor(i)),
+    ly: cy + (R + 22) * Math.sin(angleFor(i)),
+    label: d.label,
+    score: d.score,
+  }));
+
+  // Grid rings at 20 / 40 / 60 / 80 / 100 % of R
+  const gridRings = [2, 4, 6, 8, 10].map((level) => {
+    const rr = (level / 10) * R;
+    return dims
+      .map((_, i) => `${cx + rr * Math.cos(angleFor(i))},${cy + rr * Math.sin(angleFor(i))}`)
+      .join(" ");
+  });
+
+  // Data polygon
+  const dataPolygon = dims
+    .map((d, i) => {
+      const rr = (d.score / 10) * R;
+      return `${cx + rr * Math.cos(angleFor(i))},${cy + rr * Math.sin(angleFor(i))}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox="0 0 220 220" className="h-48 w-48">
+      {/* Grid rings */}
+      {gridRings.map((pts, i) => (
+        <polygon key={i} points={pts} fill="none" stroke="#1e2d3d" strokeWidth="0.75" />
+      ))}
+      {/* Axes */}
+      {axes.map((ax, i) => (
+        <line key={i} x1={cx} y1={cy} x2={ax.x} y2={ax.y} stroke="#1e2d3d" strokeWidth="0.75" />
+      ))}
+      {/* Data fill */}
+      <polygon points={dataPolygon} fill="rgba(20,184,166,0.18)" stroke="#14b8a6" strokeWidth="2" />
+      {/* Axis labels */}
+      {axes.map((ax, i) => (
+        <text
+          key={i}
+          x={ax.lx}
+          y={ax.ly}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize="7.5"
+          fill="#94a3b8"
+          fontFamily="sans-serif"
+        >
+          {ax.label}
+        </text>
+      ))}
+      {/* Score dots */}
+      {dims.map((d, i) => {
+        const rr = (d.score / 10) * R;
+        const sx = cx + rr * Math.cos(angleFor(i));
+        const sy = cy + rr * Math.sin(angleFor(i));
+        return <circle key={i} cx={sx} cy={sy} r="3" fill="#14b8a6" />;
+      })}
+    </svg>
+  );
+}
+
+// ── Nav Card ───────────────────────────────────────────────────────────────────
+function NavCard({
+  href,
+  label,
+  description,
+  accent,
+  children,
+}: {
+  href: string;
+  label: string;
+  description: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group glass flex flex-col gap-3 rounded-xl border border-navy-700/40 p-5 transition-all hover:border-teal-600/40 hover:shadow-lg"
+    >
+      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accent}`}>
+        {children}
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-navy-100 group-hover:text-white">{label}</p>
+        <p className="mt-0.5 text-xs text-navy-400">{description}</p>
+      </div>
+      <span className="mt-auto text-xs font-medium text-teal-500 group-hover:text-teal-400">
+        View →
+      </span>
+    </Link>
+  );
+}
+
+export default async function PresentationOverviewPage({ params }: PageProps) {
   const { id } = await params;
   const session = await auth();
 
@@ -28,31 +184,14 @@ export default async function PresentationPage({ params }: PageProps) {
     include: {
       members: true,
       findings: { orderBy: [{ severity: "asc" }, { category: "asc" }] },
-      deliverables: { orderBy: { createdAt: "desc" } },
-      documents: { select: { id: true, fileName: true, docType: true, createdAt: true } },
     },
   });
   if (!engagement) notFound();
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  let topology: {
-    subscriptions: {
-      subscription_name: string | null;
-      subscription_id: string;
-      vnets: {
-        name: string;
-        address_space: string[];
-        location: string;
-        subnets: { name: string; address_prefix: string; nsg_name: string | null; nsg_id: string | null }[];
-      }[];
-      firewalls: { name: string; sku_tier: string; threat_intel_mode: string }[];
-      load_balancers: { name: string; sku_name: string; lb_type: string }[];
-      nsgs: { name: string; security_rules: unknown[] }[];
-    }[];
-  } | null = null;
+  let topology: Topology | null = null;
   let jobDate: Date | null = null;
-
   try {
     const job = await prisma.discoveryJob.findFirst({
       where: { engagementId: id, status: "COMPLETED" },
@@ -65,496 +204,221 @@ export default async function PresentationPage({ params }: PageProps) {
     jobDate = job?.completedAt ?? null;
   } catch { /* migration pending */ }
 
-  const { findings } = engagement;
-  const bySev: Record<Sev, typeof findings> = {} as Record<Sev, typeof findings>;
-  for (const sev of SEV_ORDER) {
-    bySev[sev] = findings.filter((f) => f.severity === sev);
-  }
+  const findings = engagement.findings as Finding[];
+  const riskScore = computeRiskScore(findings);
+  const riskInfo  = getRiskLabel(riskScore);
+  const dims      = computeMaturityDimensions(topology, findings);
+  const stats     = getTopologyStats(topology);
 
-  const categories = [...new Set(findings.map((f) => f.category))].sort();
-  const date = new Date().toLocaleDateString("en-US", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  const bySev = Object.fromEntries(
+    SEV_ORDER.map((sev) => [sev, findings.filter((f) => f.severity === sev)]),
+  ) as Record<string, typeof findings>;
 
-  const totalVnets = topology?.subscriptions.reduce((n, s) => n + (s.vnets?.length ?? 0), 0) ?? 0;
-  const totalSubnets = topology?.subscriptions.reduce(
-    (n, s) => n + s.vnets.reduce((m, v) => m + (v.subnets?.length ?? 0), 0), 0
-  ) ?? 0;
+  const maxSevCount = Math.max(...SEV_ORDER.map((s) => bySev[s]?.length ?? 0), 1);
 
-  const comprehensiveAssessment = engagement.deliverables.find(
-    (d) => d.type === "COMPREHENSIVE_ASSESSMENT",
-  );
-  const otherAssessments = engagement.deliverables.filter(
-    (d) => d.type !== "COMPREHENSIVE_ASSESSMENT",
-  );
-
-  const TYPE_LABEL: Record<string, string> = {
-    EXECUTIVE_SUMMARY: "Executive Summary",
-    TECHNICAL_FINDINGS: "Technical Findings",
-    REMEDIATION_PLAN: "Remediation Plan",
-    SPECIALIZATION_REPORT: "Specialization Report",
-  };
+  const base = `/engagements/${id}/presentation`;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 print:max-w-full print:space-y-6">
-      {/* ── Action bar ── */}
-      <div className="flex items-center justify-between print:hidden">
-        <p className="label-caps text-navy-500">Presentation</p>
-        <div className="flex items-center gap-2">
-          {comprehensiveAssessment && (
-            <a
-              href={`/api/deliverables/${comprehensiveAssessment.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700/60"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              Open full screen
-            </a>
-          )}
-          <PrintButton />
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="label-caps text-navy-500">Assessment Overview</p>
+          <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
         </div>
-      </div>
-
-      {/* ── Comprehensive Assessment window pane ── */}
-      {comprehensiveAssessment ? (
-        <div className="glass overflow-hidden print:hidden">
-          {/* Pane header */}
-          <div className="flex items-center justify-between border-b border-navy-700/40 px-5 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-navy-100">
-                {comprehensiveAssessment.title}
-              </p>
-              <p className="text-xs text-navy-500">
-                Comprehensive Assessment ·{" "}
-                {new Date(comprehensiveAssessment.createdAt).toLocaleDateString("en-US", {
-                  month: "short", day: "numeric", year: "numeric",
-                })}
-              </p>
-            </div>
-            <a
-              href={`/api/deliverables/${comprehensiveAssessment.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-4 shrink-0 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
-            >
-              Open in new tab →
-            </a>
-          </div>
-
-          {/* iframe */}
-          <iframe
-            src={`/api/deliverables/${comprehensiveAssessment.id}`}
-            className="h-[78vh] w-full border-0 bg-white"
-            title={comprehensiveAssessment.title}
-          />
-        </div>
-      ) : (
-        <div className="glass flex items-center gap-4 rounded-xl border border-dashed border-navy-700 px-6 py-5 print:hidden">
-          <svg className="h-6 w-6 shrink-0 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-          </svg>
-          <div>
-            <p className="text-sm font-semibold text-navy-300">No Comprehensive Assessment yet.</p>
-            <p className="mt-0.5 text-xs text-navy-500">
-              Generate one on the{" "}
-              <Link
-                href={`/engagements/${id}/deliverables`}
-                className="text-teal-400 hover:text-teal-300 hover:underline"
-              >
-                Assessments tab
-              </Link>{" "}
-              to see it embedded here.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Other generated assessments ── */}
-      {otherAssessments.length > 0 && (
-        <div className="glass p-5 print:hidden">
-          <p className="label-caps mb-3 text-navy-500">Other Assessments</p>
-          <div className="divide-y divide-navy-700/30">
-            {otherAssessments.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-navy-100">{d.title}</p>
-                  <p className="mt-0.5 text-xs text-navy-500">
-                    {TYPE_LABEL[d.type] ?? d.type.replace(/_/g, " ")} ·{" "}
-                    {new Date(d.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <a
-                  href={`/api/deliverables/${d.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-600/60 bg-navy-700/40 px-3 py-1.5 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700/60"
-                >
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Static report divider ── */}
-      <div className="flex items-center gap-3 print:hidden">
-        <div className="h-px flex-1 bg-navy-700/40" />
-        <p className="label-caps text-navy-600">Static Report</p>
-        <div className="h-px flex-1 bg-navy-700/40" />
-      </div>
-
-      {/* ── Cover ── */}
-      <div className="glass p-8 print:break-inside-avoid">
-        <p className="label-caps text-teal-600 dark:text-teal-400">Cloud Network Assessment</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight text-navy-800 dark:text-navy-50">
-          {engagement.clientOrg}
-        </h1>
-        <p className="mt-2 text-xl font-medium text-navy-500 dark:text-navy-300">
-          {engagement.name}
-        </p>
-        <p className="mt-2 text-sm text-navy-400 dark:text-navy-400">{date}</p>
         {jobDate && (
-          <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-500">
-            Discovery completed: {new Date(jobDate).toLocaleDateString()}
-          </p>
-        )}
-
-        {findings.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {SEV_ORDER.map((sev) => bySev[sev].length > 0 ? (
-              <div key={sev} className={`rounded-xl border p-3 text-center ${SEV_STYLE[sev].bg}`}>
-                <p className={`text-2xl font-black ${SEV_STYLE[sev].text}`}>
-                  {bySev[sev].length}
-                </p>
-                <p className={`mt-0.5 text-xs font-semibold ${SEV_STYLE[sev].text}`}>
-                  {sev[0] + sev.slice(1).toLowerCase()}
-                </p>
-              </div>
-            ) : null)}
-          </div>
-        )}
-
-        {/* Severity bar */}
-        {findings.length > 0 && (
-          <div className="mt-4">
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full">
-              {SEV_ORDER.map((sev) => {
-                const pct = (bySev[sev].length / findings.length) * 100;
-                return pct > 0 ? (
-                  <div
-                    key={sev}
-                    className={`bar-fill ${SEV_STYLE[sev].bar}`}
-                    style={{ '--bar-pct': `${pct}%` } as React.CSSProperties}
-                    title={`${sev}: ${bySev[sev].length}`}
-                  />
-                ) : null;
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Table of Contents ── */}
-      <div className="glass p-6 print:break-inside-avoid">
-        <h2 className="mb-4 text-base font-bold text-navy-700 dark:text-navy-100">
-          Table of Contents
-        </h2>
-        <nav className="grid gap-2 sm:grid-cols-2">
-          {[
-            { href: "#executive-summary", label: "1. Executive Summary" },
-            { href: "#risk-matrix", label: "2. Risk Matrix" },
-            { href: "#finding-details", label: "3. Finding Details" },
-            topology && { href: "#network-inventory", label: "4. Network Inventory" },
-            engagement.deliverables.length > 0 && { href: "#deliverables", label: "5. Deliverables" },
-            engagement.documents.length > 0 && { href: "#documents", label: "6. Reference Documents" },
-          ].filter(Boolean).map((item) => item && (
-            <a
-              key={item.href}
-              href={item.href}
-              className="rounded-lg border border-navy-100/60 px-3 py-2 text-sm text-teal-600 transition-colors hover:border-teal-400/40 hover:bg-teal-50/40 dark:border-navy-700/40 dark:text-teal-400 dark:hover:border-teal-600/40 dark:hover:bg-teal-900/20"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      </div>
-
-      {/* ── Executive Summary ── */}
-      <div id="executive-summary" className="glass p-6 print:break-inside-avoid">
-        <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-          1. Executive Summary
-        </h2>
-        <p className="text-sm leading-relaxed text-navy-600 dark:text-navy-200">
-          This Cloud Network Assessment identified{" "}
-          <strong className="text-navy-800 dark:text-navy-50">{findings.length} security finding{findings.length !== 1 ? "s" : ""}</strong>{" "}
-          across the {engagement.clientOrg} Azure environment
-          {topology ? ` spanning ${topology.subscriptions.length} subscription${topology.subscriptions.length !== 1 ? "s" : ""}, ${totalVnets} VNet${totalVnets !== 1 ? "s" : ""}, and ${totalSubnets} subnets` : ""}.
-        </p>
-        {findings.length > 0 && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-5">
-            {SEV_ORDER.map((sev) => (
-              <div key={sev} className={`rounded-xl border p-4 text-center ${SEV_STYLE[sev].bg}`}>
-                <p className={`text-3xl font-black ${SEV_STYLE[sev].text}`}>
-                  {bySev[sev].length}
-                </p>
-                <p className={`mt-0.5 text-xs font-bold uppercase tracking-wide ${SEV_STYLE[sev].text}`}>
-                  {sev[0] + sev.slice(1).toLowerCase()}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-        {findings.length === 0 && (
-          <p className="mt-4 text-sm text-navy-400 dark:text-navy-500">
-            No findings recorded yet. Run discovery and AI analysis to populate the report.
+          <p className="text-xs text-navy-500">
+            Last discovery:{" "}
+            {new Date(jobDate).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
           </p>
         )}
       </div>
 
-      {/* ── Risk Matrix ── */}
-      {findings.length > 0 && categories.length > 0 && (
-        <div id="risk-matrix" className="glass overflow-hidden p-6 print:break-inside-avoid">
-          <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-            2. Risk Matrix
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="border-b border-navy-100/40 dark:border-navy-700/40">
-                  <th className="pb-2.5 text-left text-xs font-semibold text-navy-400 dark:text-navy-500">Category</th>
-                  {SEV_ORDER.map((s) => (
-                    <th key={s} className={`pb-2.5 text-center text-xs font-semibold ${SEV_STYLE[s].text}`}>
-                      {s[0] + s.slice(1).toLowerCase()}
-                    </th>
-                  ))}
-                  <th className="pb-2.5 text-center text-xs font-semibold text-navy-400 dark:text-navy-500">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
-                {categories.map((cat) => {
-                  const cells = SEV_ORDER.map((sev) =>
-                    findings.filter((f) => f.category === cat && f.severity === sev).length,
-                  );
-                  const total = cells.reduce((a, b) => a + b, 0);
-                  return (
-                    <tr key={cat}>
-                      <td className="py-2 pr-4 text-xs font-medium text-navy-700 dark:text-navy-200">{cat}</td>
-                      {cells.map((count, i) => (
-                        <td key={i} className="py-2 text-center">
-                          {count > 0 ? (
-                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold text-white ${SEV_STYLE[SEV_ORDER[i]].bar}`}>
-                              {count}
-                            </span>
-                          ) : (
-                            <span className="text-navy-200 dark:text-navy-700">—</span>
-                          )}
-                        </td>
-                      ))}
-                      <td className="py-2 text-center text-xs font-bold text-navy-700 dark:text-navy-200">{total}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── Finding Details ── */}
-      {findings.length > 0 && (
-        <div id="finding-details" className="glass p-6 print:break-inside-avoid">
-          <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-            3. Finding Details
-          </h2>
-          <div className="space-y-5">
-            {SEV_ORDER.map((sev) =>
-              bySev[sev].length > 0 ? (
-                <div key={sev}>
-                  <p className={`mb-3 text-xs font-bold uppercase tracking-widest ${SEV_STYLE[sev].text}`}>
-                    {sev[0] + sev.slice(1).toLowerCase()} ({bySev[sev].length})
-                  </p>
-                  <div className="space-y-3">
-                    {bySev[sev].map((f) => (
-                      <div
-                        key={f.id}
-                        className={`rounded-xl border p-4 ${SEV_STYLE[sev as Sev].bg} print:break-inside-avoid`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-navy-800 dark:text-navy-50">
-                            {f.title}
-                          </p>
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${SEV_STYLE[sev as Sev].badge}`}>
-                            {f.category}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm leading-relaxed text-navy-600 dark:text-navy-200">
-                          {f.description}
-                        </p>
-                        {f.recommendation && (
-                          <div className="mt-3 rounded-lg bg-white/60 px-4 py-3 text-xs text-navy-700 dark:bg-navy-900/40 dark:text-navy-200">
-                            <span className="font-bold text-navy-800 dark:text-navy-100">
-                              Recommendation:{" "}
-                            </span>
-                            {f.recommendation}
-                          </div>
-                        )}
-                        {f.aiGenerated && (
-                          <p className="mt-2 text-xs text-navy-400 dark:text-navy-500">
-                            Source: AI Analysis
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null,
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Network Inventory ── */}
-      {topology && (
-        <div id="network-inventory" className="glass p-6 print:break-inside-avoid">
-          <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-            4. Network Inventory
-          </h2>
-
-          {/* Summary stats */}
-          <div className="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-            {[
-              { label: "Subscriptions", value: topology.subscriptions.length },
-              { label: "VNets", value: totalVnets },
-              { label: "Subnets", value: totalSubnets },
-              { label: "Firewalls", value: topology.subscriptions.reduce((n, s) => n + (s.firewalls?.length ?? 0), 0) },
-              { label: "Load Balancers", value: topology.subscriptions.reduce((n, s) => n + (s.load_balancers?.length ?? 0), 0) },
-              { label: "NSGs", value: topology.subscriptions.reduce((n, s) => n + (s.nsgs?.length ?? 0), 0) },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-navy-100/60 bg-white/40 p-3 text-center dark:border-navy-700/40 dark:bg-navy-800/30">
-                <p className="text-2xl font-black text-navy-700 dark:text-navy-100">{stat.value}</p>
-                <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {topology.subscriptions.map((sub) => (
-            <div key={sub.subscription_id} className="mb-5 last:mb-0">
-              <p className="label-caps mb-2 text-navy-400 dark:text-navy-500">
-                {sub.subscription_name ?? sub.subscription_id}
-              </p>
-              {sub.vnets.map((vnet) => (
-                <div key={vnet.name} className="mb-3 overflow-hidden rounded-xl border border-navy-100/60 dark:border-navy-700/40 last:mb-0">
-                  <div className="flex items-center justify-between bg-navy-50/60 px-4 py-2.5 dark:bg-navy-800/40">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-navy-700 dark:text-navy-100">
-                        {vnet.name}
-                      </span>
-                      <span className="text-xs text-navy-400 dark:text-navy-500">
-                        {vnet.location}
-                      </span>
-                    </div>
-                    <span className="font-mono text-xs text-navy-500 dark:text-navy-400">
-                      {vnet.address_space?.join(", ")}
-                    </span>
-                  </div>
-                  {vnet.subnets?.length > 0 && (
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-navy-100/40 dark:border-navy-700/40">
-                          <th className="px-4 py-1.5 text-left font-medium text-navy-400 dark:text-navy-500">Subnet</th>
-                          <th className="px-4 py-1.5 text-left font-medium text-navy-400 dark:text-navy-500">CIDR</th>
-                          <th className="px-4 py-1.5 text-center font-medium text-navy-400 dark:text-navy-500">NSG</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-navy-50/60 dark:divide-navy-800/40">
-                        {vnet.subnets.map((s) => {
-                          const platformSubnet = [
-                            "GatewaySubnet", "AzureBastionSubnet", "AzureFirewallSubnet",
-                            "AzureFirewallManagementSubnet", "RouteServerSubnet",
-                          ].includes(s.name);
-                          const missingNsg = !s.nsg_id && !platformSubnet;
-                          return (
-                            <tr key={s.name} className={missingNsg ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}>
-                              <td className="px-4 py-1.5 text-navy-700 dark:text-navy-200">{s.name}</td>
-                              <td className="px-4 py-1.5 font-mono text-navy-500 dark:text-navy-400">{s.address_prefix}</td>
-                              <td className="px-4 py-1.5 text-center">
-                                {s.nsg_name ? (
-                                  <span className="text-teal-600 dark:text-teal-400" title={s.nsg_name}>✓</span>
-                                ) : platformSubnet ? (
-                                  <span className="text-navy-300 dark:text-navy-600">—</span>
-                                ) : (
-                                  <span className="font-medium text-amber-600 dark:text-amber-400">None</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
+      {/* ── Row 1: Gauge + Radar ── */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {/* Risk Gauge */}
+        <div className="glass flex flex-col items-center gap-4 rounded-xl p-6 sm:flex-row">
+          <RiskGauge score={riskScore} color={riskInfo.color} />
+          <div className="text-center sm:text-left">
+            <p className={`text-2xl font-black ${riskInfo.textClass}`}>{riskInfo.label}</p>
+            <p className="mt-1 text-sm text-navy-400">
+              Based on {findings.filter((f) => f.severity !== "INFORMATIONAL").length} actionable
+              finding{findings.filter((f) => f.severity !== "INFORMATIONAL").length !== 1 ? "s" : ""}
+            </p>
+            <div className="mt-4 space-y-1.5">
+              {SEV_ORDER.filter((s) => s !== "INFORMATIONAL" && (bySev[s]?.length ?? 0) > 0).map((sev) => (
+                <div key={sev} className="flex items-center gap-2">
+                  <span className={`text-xs font-semibold w-20 ${SEV_COLORS[sev as keyof typeof SEV_COLORS].text}`}>
+                    {sev[0] + sev.slice(1).toLowerCase()}
+                  </span>
+                  <span className="text-sm font-black text-navy-100">{bySev[sev]?.length ?? 0}</span>
                 </div>
               ))}
             </div>
-          ))}
+          </div>
         </div>
-      )}
 
-      {/* ── Deliverables ── */}
-      {engagement.deliverables.length > 0 && (
-        <div id="deliverables" className="glass p-6 print:break-inside-avoid">
-          <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-            5. Deliverables
-          </h2>
-          <ul className="divide-y divide-navy-100/40 dark:divide-navy-700/40">
-            {engagement.deliverables.map((d) => (
-              <li key={d.id} className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{d.title}</p>
-                  <p className="text-xs text-navy-400 dark:text-navy-400">
-                    {d.type.replace(/_/g, " ")} · {new Date(d.createdAt).toLocaleDateString()}
+        {/* Maturity Radar */}
+        <div className="glass flex flex-col items-center gap-3 rounded-xl p-6 sm:flex-row">
+          <MaturityRadar dims={dims} />
+          <div className="w-full space-y-2">
+            <p className="label-caps text-navy-500">Maturity Dimensions</p>
+            {dims.map((d) => (
+              <div key={d.label} className="flex items-center gap-2">
+                <span className="w-24 truncate text-xs text-navy-400">{d.fullLabel}</span>
+                <div className="flex-1 overflow-hidden rounded-full bg-navy-800">
+                  {/* eslint-disable-next-line react/forbid-dom-props */}
+                  <div
+                    className="h-1.5 rounded-full bg-teal-500"
+                    style={{ width: `${(d.score / 10) * 100}%` }}
+                  />
+                </div>
+                <span className="w-5 text-right text-xs font-bold text-teal-400">{d.score}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 2: Severity Distribution ── */}
+      {findings.length > 0 && (
+        <div className="glass rounded-xl p-5">
+          <p className="label-caps mb-4 text-navy-500">Severity Distribution</p>
+          <div className="grid grid-cols-5 gap-3">
+            {SEV_ORDER.map((sev) => {
+              const count = bySev[sev]?.length ?? 0;
+              const barPct = (count / maxSevCount) * 100;
+              const style = SEV_COLORS[sev as keyof typeof SEV_COLORS];
+              return (
+                <div key={sev} className="flex flex-col items-center gap-2">
+                  <div className="flex h-16 w-full flex-col items-center justify-end">
+                    {/* eslint-disable-next-line react/forbid-dom-props */}
+                    <div
+                      className={`w-full rounded-t ${style.bar}`}
+                      style={{ height: `${Math.max(barPct, count > 0 ? 8 : 0)}%` }}
+                    />
+                  </div>
+                  <p className={`text-xl font-black ${style.text}`}>{count}</p>
+                  <p className={`text-xs font-semibold uppercase tracking-wide ${style.text}`}>
+                    {sev === "INFORMATIONAL" ? "Info" : sev[0] + sev.slice(1).toLowerCase()}
                   </p>
                 </div>
-                {d.publishedAt ? (
-                  <span className="pill-teal">Published</span>
-                ) : (
-                  <span className="text-xs text-navy-400 dark:text-navy-500">Draft</span>
-                )}
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
+          {/* Stacked bar */}
+          <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full">
+            {SEV_ORDER.map((sev) => {
+              const pct = ((bySev[sev]?.length ?? 0) / Math.max(findings.length, 1)) * 100;
+              return pct > 0 ? (
+                /* eslint-disable-next-line react/forbid-dom-props */
+                <div
+                  key={sev}
+                  className={SEV_COLORS[sev as keyof typeof SEV_COLORS].bar}
+                  style={{ width: `${pct}%` }}
+                  title={`${sev}: ${bySev[sev]?.length ?? 0}`}
+                />
+              ) : null;
+            })}
+          </div>
         </div>
       )}
 
-      {/* ── Documents ── */}
-      {engagement.documents.length > 0 && (
-        <div id="documents" className="glass p-6 print:break-inside-avoid">
-          <h2 className="mb-4 border-b border-navy-100/40 pb-2 text-base font-bold text-navy-700 dark:border-navy-700/40 dark:text-navy-100">
-            6. Reference Documents
-          </h2>
-          <ul className="divide-y divide-navy-100/40 dark:divide-navy-700/40">
-            {engagement.documents.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between py-2.5">
-                <p className="text-sm text-navy-700 dark:text-navy-200">{doc.fileName}</p>
-                <span className="text-xs text-navy-400 dark:text-navy-400">
-                  {doc.docType.replace(/_/g, " ")} · {new Date(doc.createdAt).toLocaleDateString()}
-                </span>
-              </li>
+      {/* ── Row 3: Infrastructure Stats ── */}
+      {topology && (
+        <div className="glass rounded-xl p-5">
+          <p className="label-caps mb-4 text-navy-500">Infrastructure Topology</p>
+          <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">
+            {[
+              { label: "Subscriptions", value: stats.subscriptions },
+              { label: "VNets",         value: stats.vnets         },
+              { label: "Subnets",       value: stats.subnets       },
+              { label: "Firewalls",     value: stats.firewalls     },
+              { label: "NVA / NGFW",   value: stats.nvas          },
+              { label: "NSGs",          value: stats.nsgs          },
+              { label: "Load Balancers",value: stats.loadBalancers },
+              { label: "Public IPs",    value: stats.publicIps     },
+              { label: "Private Eps",   value: stats.privateEndpoints },
+              { label: "NAT Gateways",  value: stats.natGateways   },
+              { label: "App Gateways",  value: stats.appGateways   },
+              { label: "ExpressRoutes", value: stats.expressRoutes },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="col-span-2 flex flex-col items-center rounded-xl border border-navy-700/40 bg-navy-800/30 p-3 text-center"
+              >
+                <p className="text-2xl font-black text-navy-100">{s.value}</p>
+                <p className="mt-0.5 text-xs text-navy-400">{s.label}</p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="pb-6 text-center text-xs text-navy-400 dark:text-navy-600 print:pt-4">
-        Generated by CBTS CNA Platform · {date}
+      {!topology && findings.length === 0 && (
+        <div className="glass flex flex-col items-center gap-3 rounded-xl border border-dashed border-navy-700 px-8 py-10 text-center">
+          <svg className="h-8 w-8 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.633 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+          </svg>
+          <p className="text-sm font-semibold text-navy-300">No assessment data yet</p>
+          <p className="text-xs text-navy-500">
+            Run discovery and AI analysis to populate this dashboard.
+          </p>
+        </div>
+      )}
+
+      {/* ── Row 4: Navigation Cards ── */}
+      <div>
+        <p className="label-caps mb-3 text-navy-500">Explore the Assessment</p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <NavCard
+            href={`${base}/executive`}
+            label="Executive Summary"
+            description="Risk posture, key metrics, and leadership narrative"
+            accent="bg-red-900/40 text-red-400"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </NavCard>
+
+          <NavCard
+            href={`${base}/technical`}
+            label="Technical Findings"
+            description="Full findings list, risk matrix, and network inventory"
+            accent="bg-orange-900/40 text-orange-400"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+            </svg>
+          </NavCard>
+
+          <NavCard
+            href={`${base}/remediation`}
+            label="Remediation Plan"
+            description="Phased action plan with timelines and priorities"
+            accent="bg-amber-900/40 text-amber-400"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </NavCard>
+
+          <NavCard
+            href={`${base}/compliance`}
+            label="Compliance & Maturity"
+            description="Maturity radar, dimension scores, and framework mapping"
+            accent="bg-teal-900/40 text-teal-400"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </NavCard>
+        </div>
       </div>
     </div>
   );

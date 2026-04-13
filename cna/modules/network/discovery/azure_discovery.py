@@ -305,16 +305,18 @@ class AzureDiscovery:
         errors: list[str] = []
 
         def _run(attr: str, collector, *args):
-            """Run one collector; on failure log and record the error, don't abort."""
+            """Run one collector; on failure log, emit progress, and record the error."""
             try:
                 setattr(topo, attr, collector(*args))
             except HttpResponseError as e:
                 msg = f"{attr}: HTTP {e.status_code} — {e.message}"
                 logger.warning("[%s] %s", sub_id, msg)
+                self._progress(f"[{sub_name}] WARNING — {msg}")
                 errors.append(msg)
             except Exception as e:
                 msg = f"{attr}: {e}"
                 logger.warning("[%s] %s", sub_id, msg)
+                self._progress(f"[{sub_name}] WARNING — {msg}")
                 errors.append(msg)
 
         try:
@@ -341,6 +343,17 @@ class AzureDiscovery:
         _run("bastion_hosts", self._collect_bastion_hosts, net, sub_id)
         _run("private_dns_zones", self._collect_private_dns, sub_id)
         _run("express_route_circuits", self._collect_er_circuits, net, sub_id)
+
+        # Diagnostic summary after Phase 1 — makes undercount visible in the progress log
+        self._progress(
+            f"[{sub_name}] Phase 1 complete: "
+            f"{len(topo.vnets)} VNet(s), "
+            f"{sum(len(v.subnets) for v in topo.vnets)} subnet(s), "
+            f"{len(topo.nsgs)} NSG(s), "
+            f"{len(topo.virtual_network_gateways)} gateway(s), "
+            f"{len(topo.firewalls)} firewall(s)"
+            + (f" | {len(errors)} collector error(s)" if errors else "")
+        )
 
         # ── Phase 2: Extended assessment data ─────────────────────────────────
         self._progress(f"[{sub_name}] Collecting workload inventory…")
@@ -1242,15 +1255,31 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ Workload inventory
 
+    # OData filter covering only the resource types we care about.
+    # This is orders of magnitude faster than listing all resources and avoids
+    # rate-limit cascades that can corrupt VNet collection in subsequent subscriptions.
+    _WORKLOAD_FILTER = (
+        "resourceType eq 'Microsoft.Compute/virtualMachines'"
+        " or resourceType eq 'Microsoft.App/containerApps'"
+        " or resourceType eq 'Microsoft.ContainerService/managedClusters'"
+        " or resourceType eq 'Microsoft.Web/sites'"
+        " or resourceType eq 'Microsoft.ContainerRegistry/registries'"
+    )
+
     def _collect_workload_inventory(
         self, rmc, sub_id: str
     ) -> WorkloadSummary:
-        """Count workloads by resource type using the Resource Management client."""
+        """Count workloads by resource type using a type-filtered ARM query.
+
+        Uses an OData filter so only the 5 relevant resource types are fetched,
+        avoiding the cost and rate-limit risk of listing every resource in the
+        subscription.
+        """
         inv = WorkloadSummary()
         vm_details: list[dict] = []
         aks_details: list[dict] = []
 
-        for resource in _safe_list(rmc.resources.list()):
+        for resource in _safe_list(rmc.resources.list(filter=self._WORKLOAD_FILTER)):
             rtype = (resource.type or "").lower()
             rg = _rg_from_id(resource.id or "")
             loc = getattr(resource, "location", None) or ""

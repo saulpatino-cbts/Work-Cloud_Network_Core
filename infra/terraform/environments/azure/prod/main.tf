@@ -97,7 +97,7 @@ module "compute" {
   api_image                    = var.api_image
   worker_image                 = var.worker_image
   web_image                    = var.web_image
-  container_apps_internal_only = true # Internal LB — traffic only via Front Door
+  container_apps_internal_only = false # External LB — AFD reaches origin over public FQDN (Private Link not configured)
   infrastructure_subnet_id     = azurerm_subnet.container_apps_infra.id
   ghcr_username                = var.ghcr_username
   ghcr_pat                     = var.ghcr_pat

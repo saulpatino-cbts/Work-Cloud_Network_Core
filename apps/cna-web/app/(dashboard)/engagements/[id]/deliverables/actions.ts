@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadDeliverable } from "@/lib/blob";
 import { generateDeliverableContent } from "@/lib/openai";
+import type { DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 import type { DeliverableType } from "@prisma/client";
 
@@ -15,7 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   SPECIALIZATION_REPORT: "Specialization Report",
 };
 
-const ALL_TYPES: DeliverableType[] = [
+const ALL_TYPES: OpenAIDeliverableType[] = [
   "COMPREHENSIVE_ASSESSMENT",
   "EXECUTIVE_SUMMARY",
   "TECHNICAL_FINDINGS",
@@ -79,7 +80,7 @@ export async function generateDeliverable(
   let content: string;
   try {
     content = await generateDeliverableContent({
-      type: type as DeliverableType,
+      type: type as OpenAIDeliverableType,
       title,
       clientOrg: engagement.clientOrg,
       engagementName: engagement.name,

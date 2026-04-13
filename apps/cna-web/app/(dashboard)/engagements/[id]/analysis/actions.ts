@@ -80,9 +80,12 @@ export async function runAnalysis(
     return { error: `AI analysis failed: ${msg.slice(0, 200)}` };
   }
 
-  if (rawFindings.length > 0) {
+  const existingTitles = new Set(existingFindings.map((f) => f.title.toLowerCase().trim()));
+  const newFindings = rawFindings.filter((f) => !existingTitles.has(f.title.toLowerCase().trim()));
+
+  if (newFindings.length > 0) {
     await prisma.finding.createMany({
-      data: rawFindings.map((f) => ({
+      data: newFindings.map((f) => ({
         engagementId,
         title: f.title,
         severity: f.severity,
@@ -100,7 +103,7 @@ export async function runAnalysis(
   });
 
   revalidatePath(`/engagements/${engagementId}`);
-  return { success: true, count: rawFindings.length };
+  return { success: true, count: newFindings.length };
 }
 
 export async function runAllAnalysis(
@@ -117,6 +120,11 @@ export async function runAllAnalysis(
     where: { engagementId_userId: { engagementId, userId: session.user.id } },
   });
   if (!member) return { error: "Access denied." };
+
+  // Delete stale AI findings before re-running — gives replace semantics
+  await prisma.finding.deleteMany({
+    where: { engagementId, aiGenerated: true },
+  });
 
   const [documents, existingFindings, latestJob] = await Promise.all([
     prisma.ingestedDocument.findMany({

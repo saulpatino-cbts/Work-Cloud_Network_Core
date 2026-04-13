@@ -1,4 +1,6 @@
+import { prisma } from "@/lib/prisma";
 import { PresentationNavBar } from "./_components/nav-bar";
+import { CreateInteractiveAssessmentButton } from "./_components/create-assessment-button";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +10,33 @@ interface LayoutProps {
 export default async function PresentationLayout({ children, params }: LayoutProps) {
   const { id } = await params;
   const base = `/engagements/${id}/presentation`;
+
+  // Check if interactive assessment deliverable exists
+  let hasAssessment = false;
+  try {
+    const record = await prisma.deliverable.findFirst({
+      where: { engagementId: id, type: "INTERACTIVE_ASSESSMENT" },
+      select: { id: true },
+    });
+    hasAssessment = !!record;
+  } catch { /* migration pending */ }
+
+  if (!hasAssessment) {
+    return (
+      <div className="glass flex min-h-[50vh] flex-col items-center justify-center rounded-xl p-12 text-center">
+        <svg className="mb-4 h-12 w-12 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+        <h2 className="text-lg font-semibold text-navy-200">No interactive assessment yet</h2>
+        <p className="mt-2 text-sm text-navy-400">
+          Create an interactive assessment to enable this presentation site.
+        </p>
+        <div className="mt-6">
+          <CreateInteractiveAssessmentButton engagementId={id} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

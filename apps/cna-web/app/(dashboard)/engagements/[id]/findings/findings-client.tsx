@@ -2,6 +2,47 @@
 
 import { useState, useMemo } from "react";
 
+// ─── InstanceRow helper ───────────────────────────────────────────────────────
+
+function InstanceRow({ f, idx, total }: { f: FindingItem; idx: number; total: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100"
+      >
+        <svg className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${open ? "rotate-90" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="text-xs font-semibold text-navy-400">Instance {idx + 1} of {total}</span>
+      </button>
+      {open && (
+        <div className="pb-4 pl-5">
+          <p className="mb-2.5 text-sm leading-relaxed text-navy-300">{f.description}</p>
+          {f.recommendation && (
+            <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
+              <p className="text-xs leading-relaxed text-teal-300">
+                <span className="font-semibold text-teal-200">Recommendation: </span>
+                {f.recommendation}
+              </p>
+              <a href={f.msLearnUrl} target="_blank" rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                MS Learn docs
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type Sev = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFORMATIONAL";
 
 export interface FindingItem {
@@ -44,7 +85,7 @@ export function FindingsClient({ findings }: Props) {
   const [sevFilter, setSevFilter] = useState<Sev | "ALL">("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "LIVE" | "AI">("ALL");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
 
   const liveCount = useMemo(() => findings.filter((f) => !f.aiGenerated).length, [findings]);
   const aiCount = useMemo(() => findings.filter((f) => f.aiGenerated).length, [findings]);
@@ -72,6 +113,23 @@ export function FindingsClient({ findings }: Props) {
     if (sourceFilter === "AI" && !f.aiGenerated) return false;
     return true;
   }), [findings, sevFilter, categoryFilter, sourceFilter]);
+
+  // Group findings by normalized title — identical issues on different resources collapse into one row
+  const grouped = useMemo(() => {
+    const map = new Map<string, FindingItem[]>();
+    for (const f of filtered) {
+      const key = `${f.severity}::${f.category}::${f.title.toLowerCase().trim()}`;
+      const arr = map.get(key) ?? [];
+      arr.push(f);
+      map.set(key, arr);
+    }
+    // Preserve severity sort order
+    return Array.from(map.entries()).sort(([ka], [kb]) => {
+      const sa = ka.split("::")[0] as Sev;
+      const sb = kb.split("::")[0] as Sev;
+      return SEV_ORDER.indexOf(sa) - SEV_ORDER.indexOf(sb);
+    });
+  }, [filtered]);
 
   if (findings.length === 0) {
     return (
@@ -243,95 +301,86 @@ export function FindingsClient({ findings }: Props) {
         )}
       </div>
 
-      {/* ── Finding list ── */}
-      {filtered.length === 0 ? (
+      {/* ── Finding list (grouped) ── */}
+      {grouped.length === 0 ? (
         <div className="glass rounded-xl border border-dashed border-navy-700 p-6 text-center">
           <p className="text-sm text-navy-400">No findings match the current filters.</p>
         </div>
       ) : (
         <div className="glass overflow-hidden divide-y divide-navy-700/30">
-          {SEV_ORDER.flatMap((sev) =>
-            filtered
-              .filter((f) => f.severity === sev)
-              .map((f) => {
-                const meta = SEV_META[sev];
-                const isExpanded = expandedId === f.id;
+          {grouped.map(([groupKey, items]) => {
+            const rep = items[0];
+            const sev = rep.severity as Sev;
+            const meta = SEV_META[sev];
+            const isGroup = items.length > 1;
+            const isExpanded = expandedGroupKey === groupKey;
 
-                return (
-                  <div
-                    key={f.id}
-                    className={`border-l-4 ${meta.border} transition-colors ${
-                      isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
-                    }`}
-                  >
-                    {/* Collapsed row — clickable */}
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : f.id)}
-                      className="w-full px-5 py-3.5 text-left"
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Severity badge */}
-                        <span
-                          className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}
-                        >
-                          {meta.label}
+            return (
+              <div key={groupKey} className={`border-l-4 ${meta.border}`}>
+                {/* Group / single header row */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroupKey(isExpanded ? null : groupKey)}
+                  className={`w-full px-5 py-3.5 text-left transition-colors ${
+                    isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
+                  }`}
+                  aria-expanded={isExpanded ? "true" : "false"}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}>
+                      {meta.label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-navy-100">
+                        {rep.title}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
+                          {rep.category}
                         </span>
-
-                        {/* Title + meta tags */}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold leading-snug text-navy-100">
-                            {f.title}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
-                              {f.category}
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
-                                f.aiGenerated
-                                  ? "border-teal-800/40 bg-teal-900/20 text-teal-400"
-                                  : "border-violet-800/40 bg-violet-900/20 text-violet-400"
-                              }`}
-                            >
-                              {f.aiGenerated ? "AI Analysis" : "Live Discovery"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Chevron */}
-                        <svg
-                          className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${
-                            isExpanded ? "rotate-180" : ""
-                          }`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
+                          rep.aiGenerated
+                            ? "border-teal-800/40 bg-teal-900/20 text-teal-400"
+                            : "border-violet-800/40 bg-violet-900/20 text-violet-400"
+                        }`}>
+                          {rep.aiGenerated ? "AI Analysis" : "Live Discovery"}
+                        </span>
+                        {isGroup && (
+                          <span className="inline-flex items-center rounded-full border border-navy-600/40 bg-navy-700/40 px-2 py-0.5 text-xs font-semibold text-navy-300">
+                            {items.length} instances
+                          </span>
+                        )}
                       </div>
-                    </button>
+                    </div>
+                    <svg
+                      className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
 
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div className="px-5 pb-5">
-                        <p className="mb-3 text-sm leading-relaxed text-navy-300">
-                          {f.description}
-                        </p>
-                        {f.recommendation && (
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div className="divide-y divide-navy-700/20 bg-navy-800/10">
+                    {isGroup ? (
+                      /* Multiple instances — show each one */
+                      items.map((f, idx) => (
+                        <InstanceRow key={f.id} f={f} idx={idx} total={items.length} />
+                      ))
+                    ) : (
+                      /* Single finding — show detail inline */
+                      <div className="px-5 pb-5 pt-2">
+                        <p className="mb-3 text-sm leading-relaxed text-navy-300">{rep.description}</p>
+                        {rep.recommendation && (
                           <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
                             <p className="text-xs leading-relaxed text-teal-300">
                               <span className="font-semibold text-teal-200">Recommendation: </span>
-                              {f.recommendation}
+                              {rep.recommendation}
                             </p>
-                            <a
-                              href={f.msLearnUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
-                            >
+                            <a href={rep.msLearnUrl} target="_blank" rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline">
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
@@ -342,9 +391,10 @@ export function FindingsClient({ findings }: Props) {
                       </div>
                     )}
                   </div>
-                );
-              }),
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

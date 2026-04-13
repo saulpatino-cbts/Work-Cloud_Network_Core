@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir \
     "azure-mgmt-network>=25.0" \
     "azure-mgmt-resource>=23.2" \
     "azure-mgmt-subscription>=3.1" \
+    "azure-mgmt-monitor>=6.0" \
+    "azure-mgmt-loganalytics>=14.0" \
     "tenacity>=8.4" \
     "click>=8.1" \
     "rich>=13.7"

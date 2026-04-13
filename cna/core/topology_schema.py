@@ -629,6 +629,84 @@ class ManagementGroup(BaseModel):
     child_mg_ids: list[str] = Field(default_factory=list)
 
 
+# ── v1.3.0: Extended assessment data ──────────────────────────────────────────
+
+
+class WorkloadSummary(BaseModel):
+    """Workload inventory for a subscription — resource counts by type."""
+
+    vm_count: int = 0
+    aca_count: int = 0              # Azure Container Apps
+    aks_cluster_count: int = 0      # AKS managed clusters
+    app_service_count: int = 0      # App Service web apps
+    function_app_count: int = 0     # Azure Functions
+    container_registry_count: int = 0
+    # Lightweight detail records (capped) — never store secrets
+    vm_details: list[dict] = Field(default_factory=list)
+    aks_details: list[dict] = Field(default_factory=list)
+
+
+class BgpPeerStatus(BaseModel):
+    peer_ip: str
+    peer_asn: int | None = None
+    state: str = "Unknown"          # Connected | Disconnected | Idle | Unknown
+    messages_sent: int = 0
+    messages_received: int = 0
+    routes_received: int = 0
+    connected_duration: str | None = None
+
+
+class GatewayBgpData(BaseModel):
+    gateway_id: str
+    gateway_name: str
+    bgp_enabled: bool = False
+    bgp_asn: int | None = None
+    peers: list[BgpPeerStatus] = Field(default_factory=list)
+    learned_routes: list[str] = Field(default_factory=list)    # sampled CIDR prefixes
+    learned_routes_count: int = 0
+    advertised_routes: list[str] = Field(default_factory=list)
+    advertised_routes_count: int = 0
+    collection_error: str | None = None
+
+
+class NetworkWatcherInfo(BaseModel):
+    location: str
+    name: str
+    provisioning_state: str = "Succeeded"
+
+
+class LogAnalyticsWorkspace(BaseModel):
+    id: str
+    name: str
+    resource_group: str
+    location: str
+    retention_days: int = 30
+    sku: str = "PerGB2018"
+
+
+class ObservabilityData(BaseModel):
+    network_watchers: list[NetworkWatcherInfo] = Field(default_factory=list)
+    log_analytics_workspaces: list[LogAnalyticsWorkspace] = Field(default_factory=list)
+    nsg_flow_logs_enabled: int = 0
+    nsg_flow_logs_total: int = 0
+    gateways_with_diagnostics: int = 0
+    gateways_total: int = 0
+
+
+class GatewayMetric(BaseModel):
+    gateway_name: str
+    gateway_type: str       # Vpn | ExpressRoute
+    ingress_bytes_24h: float | None = None
+    egress_bytes_24h: float | None = None
+    bandwidth_mbps_provisioned: float | None = None
+    utilization_pct: float | None = None
+
+
+class NetworkMetrics(BaseModel):
+    gateway_metrics: list[GatewayMetric] = Field(default_factory=list)
+    collection_error: str | None = None
+
+
 class AzureSubscriptionTopology(BaseModel):
     subscription_id: str
     subscription_name: str | None = None
@@ -647,6 +725,11 @@ class AzureSubscriptionTopology(BaseModel):
     application_gateways: list[ApplicationGateway] = Field(default_factory=list)
     private_dns_zones: list[PrivateDnsZone] = Field(default_factory=list)
     express_route_circuits: list[ExpressRouteCircuit] = Field(default_factory=list)
+    # v1.3.0 — extended assessment data
+    workload_inventory: WorkloadSummary | None = None
+    bgp_data: list[GatewayBgpData] = Field(default_factory=list)
+    observability: ObservabilityData | None = None
+    network_metrics: NetworkMetrics | None = None
     discovery_blocked: bool = False
     block_reason: str | None = None
 

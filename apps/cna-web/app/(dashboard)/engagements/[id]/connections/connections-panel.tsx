@@ -17,6 +17,10 @@ type TopologySummary = {
   appGateways: number;
   dnsZones: number;
   expressRoutes: number;
+  workload?: { vmCount: number; acaCount: number; aksCount: number; fnCount: number };
+  bgp?: { gatewaysWithBgp: number; peersConnected: number; peersDisconnected: number; routesLearned: number };
+  observability?: { networkWatchers: number; logWorkspaces: number; nsgFlowLogsEnabled: number; nsgTotal: number };
+  metricsCollected?: boolean;
 };
 
 type SeverityCount = { severity: string; count: number };
@@ -156,17 +160,113 @@ function JobEntry({
 
       {/* Topology summary */}
       {isCompleted && job.topologySummary && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {[
-            { label: "VNets", value: job.topologySummary.vnets },
-            { label: "Subnets", value: job.topologySummary.subnets },
-            { label: "Firewalls", value: job.topologySummary.firewalls },
-          ].filter(({ value }) => value > 0).map(({ label, value }) => (
-            <div key={label} className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-1">
-              <span className="text-sm font-bold text-navy-100">{value}</span>
-              <span className="text-xs text-navy-400">{label}</span>
+        <div className="mt-2 space-y-2">
+          {/* Network resources row */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: "VNets", value: job.topologySummary.vnets },
+              { label: "Subnets", value: job.topologySummary.subnets },
+              { label: "Firewalls", value: job.topologySummary.firewalls },
+              { label: "AppGWs", value: job.topologySummary.appGateways },
+              { label: "DNS Zones", value: job.topologySummary.dnsZones },
+              { label: "ExpressRoute", value: job.topologySummary.expressRoutes },
+            ].filter(({ value }) => value > 0).map(({ label, value }) => (
+              <div key={label} className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-1">
+                <span className="text-sm font-bold text-navy-100">{value}</span>
+                <span className="text-xs text-navy-400">{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Workload inventory row */}
+          {job.topologySummary.workload && (
+            <div className="rounded border border-navy-700/30 bg-navy-900/30 px-2.5 py-1.5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Workload Inventory</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "VMs", value: job.topologySummary.workload.vmCount },
+                  { label: "ACA", value: job.topologySummary.workload.acaCount },
+                  { label: "AKS", value: job.topologySummary.workload.aksCount },
+                  { label: "Functions", value: job.topologySummary.workload.fnCount },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-0.5">
+                    <span className="text-xs font-bold text-navy-100">{value}</span>
+                    <span className="text-[11px] text-navy-400">{label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* BGP row */}
+          {job.topologySummary.bgp && job.topologySummary.bgp.gatewaysWithBgp > 0 && (
+            <div className="rounded border border-navy-700/30 bg-navy-900/30 px-2.5 py-1.5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-500">BGP & Routing</p>
+              <div className="flex flex-wrap gap-1.5">
+                <div className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-0.5">
+                  <span className="text-xs font-bold text-navy-100">{job.topologySummary.bgp.gatewaysWithBgp}</span>
+                  <span className="text-[11px] text-navy-400">BGP GW</span>
+                </div>
+                {job.topologySummary.bgp.peersConnected > 0 && (
+                  <div className="flex items-center gap-1 rounded border border-teal-700/40 bg-teal-900/20 px-2 py-0.5">
+                    <span className="text-xs font-bold text-teal-300">{job.topologySummary.bgp.peersConnected}</span>
+                    <span className="text-[11px] text-teal-400">peers up</span>
+                  </div>
+                )}
+                {job.topologySummary.bgp.peersDisconnected > 0 && (
+                  <div className="flex items-center gap-1 rounded border border-red-700/40 bg-red-900/20 px-2 py-0.5">
+                    <span className="text-xs font-bold text-red-300">{job.topologySummary.bgp.peersDisconnected}</span>
+                    <span className="text-[11px] text-red-400">peers down</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-0.5">
+                  <span className="text-xs font-bold text-navy-100">{job.topologySummary.bgp.routesLearned}</span>
+                  <span className="text-[11px] text-navy-400">routes learned</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Observability row */}
+          {job.topologySummary.observability && (
+            <div className="rounded border border-navy-700/30 bg-navy-900/30 px-2.5 py-1.5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Observability</p>
+              <div className="flex flex-wrap gap-1.5">
+                <div className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-0.5">
+                  <span className="text-xs font-bold text-navy-100">{job.topologySummary.observability.networkWatchers}</span>
+                  <span className="text-[11px] text-navy-400">NW regions</span>
+                </div>
+                <div className="flex items-center gap-1 rounded border border-navy-700/40 bg-navy-800/50 px-2 py-0.5">
+                  <span className="text-xs font-bold text-navy-100">{job.topologySummary.observability.logWorkspaces}</span>
+                  <span className="text-[11px] text-navy-400">Log workspaces</span>
+                </div>
+                {job.topologySummary.observability.nsgTotal > 0 && (
+                  <div className={[
+                    "flex items-center gap-1 rounded border px-2 py-0.5",
+                    job.topologySummary.observability.nsgFlowLogsEnabled >= job.topologySummary.observability.nsgTotal
+                      ? "border-teal-700/40 bg-teal-900/20"
+                      : "border-amber-700/40 bg-amber-900/20",
+                  ].join(" ")}>
+                    <span className={`text-xs font-bold ${
+                      job.topologySummary.observability.nsgFlowLogsEnabled >= job.topologySummary.observability.nsgTotal
+                        ? "text-teal-300" : "text-amber-300"
+                    }`}>
+                      {job.topologySummary.observability.nsgFlowLogsEnabled}/{job.topologySummary.observability.nsgTotal}
+                    </span>
+                    <span className={`text-[11px] ${
+                      job.topologySummary.observability.nsgFlowLogsEnabled >= job.topologySummary.observability.nsgTotal
+                        ? "text-teal-400" : "text-amber-400"
+                    }`}>NSG flow logs</span>
+                  </div>
+                )}
+                {job.topologySummary.metricsCollected && (
+                  <div className="flex items-center gap-1 rounded border border-blue-700/40 bg-blue-900/20 px-2 py-0.5">
+                    <span className="text-[11px] text-blue-300">metrics collected</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

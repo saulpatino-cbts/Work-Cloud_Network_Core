@@ -54,12 +54,20 @@ from cna.core.topology_schema import (
     AzureVHub,
     AzureVirtualNetworkGateway,
     AzureVWan,
+    BgpPeerStatus,
     ExpressRouteCircuit,
+    GatewayBgpData,
+    GatewayMetric,
+    LogAnalyticsWorkspace,
     ManagementGroup,
+    NetworkMetrics,
+    NetworkWatcherInfo,
     NSGSecurityRule,
+    ObservabilityData,
     PrivateDnsZone,
     VNet,
     VNetPeering,
+    WorkloadSummary,
 )
 
 logger = logging.getLogger("cna.discovery.azure")
@@ -333,6 +341,70 @@ class AzureDiscovery:
         _run("bastion_hosts", self._collect_bastion_hosts, net, sub_id)
         _run("private_dns_zones", self._collect_private_dns, sub_id)
         _run("express_route_circuits", self._collect_er_circuits, net, sub_id)
+
+        # ── Phase 2: Extended assessment data ─────────────────────────────────
+        self._progress(f"[{sub_name}] Collecting workload inventory…")
+        try:
+            topo.workload_inventory = self._collect_workload_inventory(
+                rmc, sub_id
+            )
+            inv = topo.workload_inventory
+            self._progress(
+                f"[{sub_name}] Workload: {inv.vm_count} VM(s), "
+                f"{inv.aks_cluster_count} AKS, {inv.aca_count} ACA, "
+                f"{inv.function_app_count} Function App(s)"
+            )
+        except Exception as e:
+            self._progress(
+                f"[{sub_name}] Workload inventory skipped: {e}"
+            )
+
+        self._progress(f"[{sub_name}] Querying BGP peer status…")
+        try:
+            topo.bgp_data = self._collect_bgp_data(
+                net, sub_id, topo.virtual_network_gateways
+            )
+        except Exception as e:
+            self._progress(f"[{sub_name}] BGP data skipped: {e}")
+
+        self._progress(f"[{sub_name}] Collecting observability data…")
+        try:
+            topo.observability = self._collect_observability(
+                net, sub_id, len(topo.nsgs)
+            )
+            obs = topo.observability
+            self._progress(
+                f"[{sub_name}] Observability: "
+                f"{len(obs.network_watchers)} Network Watcher region(s), "
+                f"{len(obs.log_analytics_workspaces)} Log Analytics "
+                f"workspace(s), {obs.nsg_flow_logs_enabled}/"
+                f"{obs.nsg_flow_logs_total} NSG flow logs enabled"
+            )
+        except Exception as e:
+            self._progress(
+                f"[{sub_name}] Observability data skipped: {e}"
+            )
+
+        self._progress(
+            f"[{sub_name}] Collecting network metrics (last 24 h)…"
+        )
+        try:
+            topo.network_metrics = self._collect_network_metrics(
+                sub_id, topo.virtual_network_gateways
+            )
+            if topo.network_metrics.collection_error:
+                self._progress(
+                    f"[{sub_name}] Metrics: "
+                    f"{topo.network_metrics.collection_error}"
+                )
+            else:
+                self._progress(
+                    f"[{sub_name}] Metrics collected for "
+                    f"{len(topo.network_metrics.gateway_metrics)} "
+                    "gateway(s)"
+                )
+        except Exception as e:
+            self._progress(f"[{sub_name}] Metrics skipped: {e}")
 
         if errors:
             topo.block_reason = "; ".join(errors)
@@ -1167,6 +1239,303 @@ class AzureDiscovery:
                 )
             )
         return circuits
+
+    # ------------------------------------------------------------------ Workload inventory
+
+    def _collect_workload_inventory(
+        self, rmc, sub_id: str
+    ) -> WorkloadSummary:
+        """Count workloads by resource type using the Resource Management client."""
+        inv = WorkloadSummary()
+        vm_details: list[dict] = []
+        aks_details: list[dict] = []
+
+        for resource in _safe_list(rmc.resources.list()):
+            rtype = (resource.type or "").lower()
+            rg = _rg_from_id(resource.id or "")
+            loc = getattr(resource, "location", None) or ""
+            if rtype == "microsoft.compute/virtualmachines":
+                inv.vm_count += 1
+                sku_name = None
+                if getattr(resource, "sku", None):
+                    sku_name = resource.sku.name
+                vm_details.append(
+                    {"name": resource.name, "rg": rg,
+                     "location": loc, "size": sku_name}
+                )
+            elif rtype == "microsoft.app/containerapps":
+                inv.aca_count += 1
+            elif rtype == (
+                "microsoft.containerservice/managedclusters"
+            ):
+                inv.aks_cluster_count += 1
+                aks_details.append(
+                    {"name": resource.name, "rg": rg,
+                     "location": loc}
+                )
+            elif rtype == "microsoft.web/sites":
+                kind = (getattr(resource, "kind", None) or "").lower()
+                if "functionapp" in kind:
+                    inv.function_app_count += 1
+                else:
+                    inv.app_service_count += 1
+            elif rtype == (
+                "microsoft.containerregistry/registries"
+            ):
+                inv.container_registry_count += 1
+
+        inv.vm_details = vm_details[:20]   # cap detail lists
+        inv.aks_details = aks_details[:10]
+        return inv
+
+    # ------------------------------------------------------------------ BGP data
+
+    def _collect_bgp_data(
+        self,
+        net,
+        sub_id: str,
+        gateways: list[AzureVirtualNetworkGateway],
+    ) -> list[GatewayBgpData]:
+        """Query BGP peer status and routes for each VPN gateway."""
+        results: list[GatewayBgpData] = []
+
+        for gw in gateways:
+            if gw.gateway_type != "Vpn":
+                continue
+
+            item = GatewayBgpData(
+                gateway_id=gw.id,
+                gateway_name=gw.name,
+                bgp_enabled=gw.enable_bgp,
+                bgp_asn=gw.bgp_asn,
+            )
+
+            if not gw.enable_bgp:
+                results.append(item)
+                continue
+
+            rg = gw.resource_group
+            gw_name = gw.name
+
+            # BGP peer status (long-running operation)
+            try:
+                self._progress(
+                    f"BGP: querying peers for '{gw_name}'…"
+                )
+                result = net.virtual_network_gateways\
+                    .begin_get_bgp_peer_status(rg, gw_name)\
+                    .result(timeout=90)
+                for peer in (result.value or []):
+                    item.peers.append(
+                        BgpPeerStatus(
+                            peer_ip=peer.neighbor or "",
+                            peer_asn=getattr(peer, "asn", None),
+                            state=str(
+                                peer.bgp_peer_state or "Unknown"
+                            ),
+                            messages_sent=int(
+                                peer.messages_sent or 0
+                            ),
+                            messages_received=int(
+                                peer.messages_received or 0
+                            ),
+                            routes_received=int(
+                                peer.routes_received or 0
+                            ),
+                            connected_duration=str(
+                                peer.connected_duration or ""
+                            ) or None,
+                        )
+                    )
+            except Exception as e:
+                item.collection_error = f"BGP peers: {e}"
+
+            # Learned routes
+            try:
+                result = net.virtual_network_gateways\
+                    .begin_get_learned_routes(rg, gw_name)\
+                    .result(timeout=90)
+                all_routes = result.value or []
+                item.learned_routes_count = len(all_routes)
+                item.learned_routes = [
+                    r.network for r in all_routes[:50]
+                    if r.network
+                ]
+            except Exception as e:
+                err = f"Learned routes: {e}"
+                item.collection_error = (
+                    f"{item.collection_error}; {err}"
+                    if item.collection_error else err
+                )
+
+            # Advertised routes (use first peer)
+            try:
+                if item.peers:
+                    peer_ip = item.peers[0].peer_ip
+                    result = net.virtual_network_gateways\
+                        .begin_get_advertised_routes(
+                            rg, gw_name, peer_ip
+                        ).result(timeout=90)
+                    all_adv = result.value or []
+                    item.advertised_routes_count = len(all_adv)
+                    item.advertised_routes = [
+                        r.network for r in all_adv[:50]
+                        if r.network
+                    ]
+            except Exception:
+                pass  # advertised routes optional
+
+            results.append(item)
+
+        return results
+
+    # ------------------------------------------------------------------ Observability
+
+    def _collect_observability(
+        self, net, sub_id: str, nsg_count: int
+    ) -> ObservabilityData:
+        """Collect Network Watcher, Log Analytics, and flow log data."""
+        obs = ObservabilityData(nsg_flow_logs_total=nsg_count)
+
+        # Network Watcher presence per region
+        try:
+            for nw in _safe_list(net.network_watchers.list_all()):
+                obs.network_watchers.append(
+                    NetworkWatcherInfo(
+                        location=nw.location or "unknown",
+                        name=nw.name or "unknown",
+                        provisioning_state=str(
+                            nw.provisioning_state or "Unknown"
+                        ),
+                    )
+                )
+        except Exception as e:
+            logger.warning(
+                "[%s] Network Watcher listing failed: %s",
+                sub_id, e,
+            )
+
+        # NSG flow log count (via flow_logs API per Network Watcher)
+        flow_enabled = 0
+        for nw_info in obs.network_watchers:
+            try:
+                nw_rg = "NetworkWatcherRG"
+                for fl in _safe_list(
+                    net.flow_logs.list(nw_rg, nw_info.name)
+                ):
+                    if getattr(fl, "enabled", False):
+                        flow_enabled += 1
+            except Exception:
+                pass
+        obs.nsg_flow_logs_enabled = flow_enabled
+
+        # Log Analytics workspaces
+        try:
+            from azure.mgmt.loganalytics import (
+                LogAnalyticsManagementClient,
+            )
+            la = LogAnalyticsManagementClient(
+                self._credential, sub_id
+            )
+            for ws in _safe_list(la.workspaces.list()):
+                obs.log_analytics_workspaces.append(
+                    LogAnalyticsWorkspace(
+                        id=ws.id or "",
+                        name=ws.name or "unknown",
+                        resource_group=_rg_from_id(ws.id or ""),
+                        location=ws.location or "unknown",
+                        retention_days=int(
+                            ws.retention_in_days or 30
+                        ),
+                        sku=str(
+                            ws.sku.name if ws.sku else "PerGB2018"
+                        ),
+                    )
+                )
+        except ImportError:
+            logger.warning(
+                "azure-mgmt-loganalytics not installed — "
+                "Log Analytics workspace query skipped"
+            )
+        except Exception as e:
+            logger.warning(
+                "[%s] Log Analytics listing failed: %s", sub_id, e
+            )
+
+        return obs
+
+    # ------------------------------------------------------------------ Network metrics
+
+    def _collect_network_metrics(
+        self,
+        sub_id: str,
+        gateways: list[AzureVirtualNetworkGateway],
+    ) -> NetworkMetrics:
+        """Collect 24-hour bandwidth metrics for VPN gateways."""
+        from datetime import timedelta
+        metrics = NetworkMetrics()
+
+        try:
+            from azure.mgmt.monitor import MonitorManagementClient
+        except ImportError:
+            metrics.collection_error = (
+                "azure-mgmt-monitor not installed"
+            )
+            return metrics
+
+        try:
+            import datetime as _dt
+            monitor = MonitorManagementClient(
+                self._credential, sub_id
+            )
+            end = _dt.datetime.now(_dt.UTC)
+            start = end - timedelta(hours=24)
+            timespan = (
+                f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/"
+                f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            )
+
+            for gw in gateways[:5]:   # cap to avoid rate limits
+                gm = GatewayMetric(
+                    gateway_name=gw.name,
+                    gateway_type=gw.gateway_type,
+                )
+                try:
+                    result = monitor.metrics.list(
+                        resource_uri=gw.id,
+                        timespan=timespan,
+                        interval="PT1H",
+                        metricnames=(
+                            "TunnelIngressBytes,TunnelEgressBytes"
+                        ),
+                        aggregation="Total",
+                    )
+                    for metric in (result.value or []):
+                        total = sum(
+                            dp.total or 0
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.total is not None
+                        )
+                        mn = (
+                            metric.name.value
+                            if metric.name else ""
+                        )
+                        if mn == "TunnelIngressBytes":
+                            gm.ingress_bytes_24h = total
+                        elif mn == "TunnelEgressBytes":
+                            gm.egress_bytes_24h = total
+                except Exception as e:
+                    logger.debug(
+                        "[%s] Metrics for %s failed: %s",
+                        sub_id, gw.name, e,
+                    )
+                metrics.gateway_metrics.append(gm)
+
+        except Exception as e:
+            metrics.collection_error = str(e)
+
+        return metrics
 
     # ----------------------------------------------------------------- run
 

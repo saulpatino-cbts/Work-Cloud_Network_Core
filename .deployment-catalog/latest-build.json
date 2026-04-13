@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-69bcfc3",
   "commit": "69bcfc3f9844891c03f2a321bc5c4b296ec3c46f",
-  "built_at": "2026-04-13T01:35:29Z",
-  "run_id": "24321603523",
+  "built_at": "2026-04-13T01:35:33Z",
+  "run_id": "24321604381",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-69bcfc3",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-69bcfc3",

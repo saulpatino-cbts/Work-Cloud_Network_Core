@@ -633,17 +633,59 @@ class ManagementGroup(BaseModel):
 
 
 class WorkloadSummary(BaseModel):
-    """Workload inventory for a subscription — resource counts by type."""
+    """Kept for backward compatibility with existing topology JSON blobs."""
 
     vm_count: int = 0
-    aca_count: int = 0              # Azure Container Apps
-    aks_cluster_count: int = 0      # AKS managed clusters
-    app_service_count: int = 0      # App Service web apps
-    function_app_count: int = 0     # Azure Functions
+    aca_count: int = 0
+    aks_cluster_count: int = 0
+    app_service_count: int = 0
+    function_app_count: int = 0
     container_registry_count: int = 0
-    # Lightweight detail records (capped) — never store secrets
     vm_details: list[dict] = Field(default_factory=list)
     aks_details: list[dict] = Field(default_factory=list)
+
+
+class AzureNIC(BaseModel):
+    """NIC collected when attached to an NVA or has IP forwarding enabled."""
+
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    vm_id: str | None = None
+    ip_forwarding_enabled: bool = False
+    subnet_ids: list[str] = Field(default_factory=list)
+    private_ips: list[str] = Field(default_factory=list)
+    public_ip_id: str | None = None
+    nsg_id: str | None = None
+    tags: dict[str, str] = Field(default_factory=dict)
+
+
+class AzureNVA(BaseModel):
+    """Network Virtual Appliance — marketplace NGFW or IP-forwarding VM.
+
+    Identification methods:
+      marketplace     — plan.publisher matches a known NGFW vendor
+      image_reference — image publisher matches (BYOL, no explicit plan)
+      ip_forwarding   — NIC has ip_forwarding_enabled=True, vendor unknown
+    """
+
+    id: str
+    name: str
+    location: str
+    resource_group: str
+    vm_size: str | None = None
+    os_type: str | None = None
+    # e.g. paloaltonetworks, fortinet, checkpoint
+    publisher: str | None = None
+    # e.g. vmseries-flex, fortinet_fortigate-vm_v5
+    offer: str | None = None
+    # marketplace SKU / plan name
+    plan_name: str | None = None
+    # marketplace | image_reference | ip_forwarding
+    identification_method: str = "marketplace"
+    nics: list[AzureNIC] = Field(default_factory=list)
+    tags: dict[str, str] = Field(default_factory=dict)
 
 
 class BgpPeerStatus(BaseModel):
@@ -726,10 +768,12 @@ class AzureSubscriptionTopology(BaseModel):
     private_dns_zones: list[PrivateDnsZone] = Field(default_factory=list)
     express_route_circuits: list[ExpressRouteCircuit] = Field(default_factory=list)
     # v1.3.0 — extended assessment data
-    workload_inventory: WorkloadSummary | None = None
+    nvas: list[AzureNVA] = Field(default_factory=list)
     bgp_data: list[GatewayBgpData] = Field(default_factory=list)
     observability: ObservabilityData | None = None
     network_metrics: NetworkMetrics | None = None
+    # kept for backward compat — no longer actively collected
+    workload_inventory: WorkloadSummary | None = None
     discovery_blocked: bool = False
     block_reason: str | None = None
 

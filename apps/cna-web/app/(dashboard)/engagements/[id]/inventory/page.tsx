@@ -229,6 +229,34 @@ interface ExpressRoute {
   peering_types: string[];
 }
 
+interface NVANic {
+  id: string;
+  name: string;
+  location: string;
+  resource_group: string;
+  vm_id: string | null;
+  ip_forwarding_enabled: boolean;
+  subnet_ids: string[];
+  private_ips: string[];
+  public_ip_id: string | null;
+  nsg_id: string | null;
+}
+
+interface NVA {
+  id: string;
+  name: string;
+  location: string;
+  resource_group: string;
+  vm_size: string | null;
+  os_type: string | null;
+  publisher: string | null;
+  offer: string | null;
+  plan_name: string | null;
+  identification_method: string;
+  nics: NVANic[];
+  tags: Record<string, string>;
+}
+
 interface Subscription {
   subscription_id: string;
   subscription_name: string | null;
@@ -247,6 +275,7 @@ interface Subscription {
   bastion_hosts: BastionHost[];
   private_dns_zones: PrivateDnsZone[];
   express_route_circuits: ExpressRoute[];
+  nvas: NVA[];
 }
 
 interface Topology {
@@ -326,6 +355,7 @@ export default async function InventoryPage({ params }: PageProps) {
   const allBastions  = subs.flatMap((s) => (s.bastion_hosts ?? []).map((b) => ({ ...b, _sub: s.subscription_name ?? s.subscription_id })));
   const allDnsZones  = subs.flatMap((s) => (s.private_dns_zones ?? []).map((z) => ({ ...z, _sub: s.subscription_name ?? s.subscription_id })));
   const allERs       = subs.flatMap((s) => (s.express_route_circuits ?? []).map((e) => ({ ...e, _sub: s.subscription_name ?? s.subscription_id })));
+  const allNvas      = subs.flatMap((s) => (s.nvas ?? []).map((n) => ({ ...n, _sub: s.subscription_name ?? s.subscription_id })));
 
   const subnetsNoNsg = allSubnets.filter((s) => !s.nsg_id && !PLATFORM_SUBNETS.has(s.name));
   const unassocPIPs  = allPIPs.filter((p) => !p.associated_resource_type);
@@ -862,6 +892,103 @@ export default async function InventoryPage({ params }: PageProps) {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </InvCard>
+      )}
+
+      {/* ── Network Virtual Appliances (NVAs / NGFWs) ── */}
+      {allNvas.length > 0 && (
+        <InvCard title="Network Virtual Appliances" count={allNvas.length} table>
+          <THead cols={["Name", "Publisher / Offer", "Identified As", "Size", "Location", "NICs", "IP Fwd NICs", "Mgmt NSG"]} />
+          <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
+            {allNvas.map((nva) => {
+              const fwdNics = nva.nics.filter((n) => n.ip_forwarding_enabled).length;
+              const nicsNoNsg = nva.nics.filter((n) => !n.nsg_id).length;
+              const methodLabel: Record<string, string> = {
+                marketplace: "Marketplace NGFW",
+                image_reference: "Image (BYOL)",
+                ip_forwarding: "IP Forwarding",
+              };
+              return (
+                <tr key={nva.id} className={nva.identification_method === "ip_forwarding" ? "bg-amber-50/30 dark:bg-amber-900/10" : undefined}>
+                  <td className="py-2 pr-3">
+                    <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{nva.name}</p>
+                    <p className="text-xs text-navy-400 dark:text-navy-500">{nva.resource_group}</p>
+                  </td>
+                  <td className="py-2 pr-3">
+                    {nva.publisher ? (
+                      <>
+                        <p className="text-xs font-semibold text-navy-700 dark:text-navy-200">{nva.publisher}</p>
+                        <p className="text-xs text-navy-400 dark:text-navy-500">{nva.offer ?? "—"}</p>
+                      </>
+                    ) : <Dash />}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                      nva.identification_method === "marketplace"
+                        ? "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                        : nva.identification_method === "image_reference"
+                          ? "bg-navy-100 text-navy-600 dark:bg-navy-700/60 dark:text-navy-300"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                    }`}>
+                      {methodLabel[nva.identification_method] ?? nva.identification_method}
+                    </span>
+                  </td>
+                  <Mono>{nva.vm_size ?? "—"}</Mono>
+                  <Td>{nva.location}</Td>
+                  <td className="py-2 pr-3 text-center text-sm text-navy-700 dark:text-navy-200">{nva.nics.length}</td>
+                  <td className="py-2 pr-3 text-center">
+                    {fwdNics > 0
+                      ? <span className="text-xs font-semibold text-teal-600 dark:text-teal-400">{fwdNics}</span>
+                      : <Dash />}
+                  </td>
+                  <td className="py-2 text-center">
+                    {nicsNoNsg > 0
+                      ? <span className="text-xs font-semibold text-red-500 dark:text-red-400">{nicsNoNsg} missing</span>
+                      : <Ok label="All covered" />}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </InvCard>
+      )}
+
+      {/* NVA NIC detail — only when NVAs are present with multiple NICs */}
+      {allNvas.some((n) => n.nics.length > 0) && (
+        <InvCard title="NVA Network Interfaces" count={allNvas.reduce((a, n) => a + n.nics.length, 0)} table>
+          <THead cols={["NVA", "NIC Name", "Private IPs", "Subnets", "IP Forwarding", "NSG"]} />
+          <tbody className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
+            {allNvas.flatMap((nva) =>
+              nva.nics.map((nic) => (
+                <tr key={nic.id} className={nic.ip_forwarding_enabled ? "bg-teal-50/20 dark:bg-teal-900/10" : undefined}>
+                  <td className="py-2 pr-3 text-xs font-semibold text-navy-600 dark:text-navy-300">{nva.name}</td>
+                  <Mono>{nic.name}</Mono>
+                  <td className="py-2 pr-3">
+                    {nic.private_ips.length > 0
+                      ? nic.private_ips.map((ip) => (
+                          <span key={ip} className="mr-1 font-mono text-xs text-navy-700 dark:text-navy-200">{ip}</span>
+                        ))
+                      : <Dash />}
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-navy-500 dark:text-navy-400">
+                    {nic.subnet_ids.length > 0
+                      ? nic.subnet_ids.map((s) => s.split("/").pop()).join(", ")
+                      : "—"}
+                  </td>
+                  <td className="py-2 pr-3 text-center">
+                    {nic.ip_forwarding_enabled
+                      ? <Ok label="Enabled" />
+                      : <Dash />}
+                  </td>
+                  <td className="py-2 text-center">
+                    {nic.nsg_id
+                      ? <Ok label={nic.nsg_id.split("/").pop() ?? "yes"} />
+                      : <Warn label="None" />}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </InvCard>
       )}

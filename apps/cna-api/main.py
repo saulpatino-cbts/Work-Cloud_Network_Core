@@ -739,74 +739,127 @@ def _topology_to_findings(sub_topo: dict) -> list[dict]:  # noqa: C901
                 }
             )
 
-    # ── Workload inventory findings ───────────────────────────────────────────
-    workload: dict = sub_topo.get("workload_inventory") or {}
-    vm_count = workload.get("vm_count", 0)
-    aca_count = workload.get("aca_count", 0)
-    aks_count = workload.get("aks_cluster_count", 0)
-    fn_count = workload.get("function_app_count", 0)
+    # ── NVA / NGFW findings ───────────────────────────────────────────────────
+    nvas: list[dict] = sub_topo.get("nvas") or []
 
-    if vm_count > 0:
+    if nvas:
         findings.append(
             {
-                "title": f"Workload Inventory: {vm_count} VM(s) in '{sub_name}'",
+                "title": (
+                    f"{len(nvas)} Network Virtual Appliance(s) detected "
+                    f"in '{sub_name}'"
+                ),
                 "severity": "INFORMATIONAL",
-                "category": "Workload Inventory",
+                "category": "Network Appliances",
                 "description": (
-                    f"Subscription '{sub_name}' contains {vm_count} virtual machine(s). "
-                    "VMs should be protected with NSGs, Azure Bastion for remote access, "
-                    "and Microsoft Defender for Servers. Ensure patching and monitoring "
-                    "are configured via Azure Update Manager and Log Analytics."
+                    f"Subscription '{sub_name}' contains {len(nvas)} NVA(s) "
+                    f"({', '.join(n.get('name', '?') for n in nvas[:5])}). "
+                    "NVAs acting as NGFWs are critical chokepoints for East-West "
+                    "and North-South traffic. Their placement, licensing, and HA "
+                    "configuration must be validated."
                 ),
                 "recommendation": (
-                    "Enable Microsoft Defender for Servers on all VMs. "
-                    "Remove public IPs from VMs where not required. "
-                    "Use Azure Bastion or JIT VM Access for secure RDP/SSH. "
-                    "Ensure all VMs are covered by a patch management policy."
+                    "Verify each NVA is deployed in an Active/Active or "
+                    "Active/Standby HA pair. "
+                    "Confirm UDRs route traffic through the NVA in both "
+                    "inbound and outbound directions. "
+                    "Check that management interfaces are on a dedicated subnet "
+                    "with no default route to the internet."
                 ),
             }
         )
 
-    if aks_count > 0:
-        findings.append(
-            {
-                "title": f"AKS Cluster(s) detected in '{sub_name}' — verify network policy",
-                "severity": "MEDIUM",
-                "category": "Workload Inventory",
-                "description": (
-                    f"Subscription '{sub_name}' has {aks_count} AKS cluster(s). "
-                    "AKS clusters require explicit network policy configuration (Azure CNI "
-                    "or Calico) to enforce pod-to-pod traffic controls. "
-                    "Without network policy, all pods can communicate freely."
-                ),
-                "recommendation": (
-                    "Enable Azure Network Policy or Calico on all AKS clusters. "
-                    "Use Azure CNI with overlay networking for IP address efficiency. "
-                    "Restrict API server access to private endpoints or authorized IP ranges. "
-                    "Enable Microsoft Defender for Containers."
-                ),
-            }
-        )
+    for nva in nvas:
+        nva_name = nva.get("name", "unknown")
+        nics: list[dict] = nva.get("nics", [])
+        method = nva.get("identification_method", "")
 
-    if aca_count > 0:
-        findings.append(
-            {
-                "title": f"Azure Container Apps detected in '{sub_name}' — verify VNet integration",
-                "severity": "INFORMATIONAL",
-                "category": "Workload Inventory",
-                "description": (
-                    f"Subscription '{sub_name}' has {aca_count} Azure Container App(s). "
-                    "Container Apps deployed without VNet integration use public egress "
-                    "and cannot reach private resources. Ensure ingress is restricted "
-                    "to internal traffic where appropriate."
-                ),
-                "recommendation": (
-                    "Deploy Container App Environments with VNet injection (custom VNet). "
-                    "Set ingress to 'internal' for apps that should not be publicly accessible. "
-                    "Use managed identities for Azure resource authentication."
-                ),
-            }
-        )
+        # Single-NIC NVA — likely cannot inspect East-West traffic properly
+        if len(nics) < 2:
+            findings.append(
+                {
+                    "title": (
+                        f"NVA '{nva_name}' has only {len(nics)} NIC — "
+                        "possible hairpin or misconfiguration"
+                    ),
+                    "severity": "HIGH",
+                    "category": "Network Appliances",
+                    "description": (
+                        f"NVA '{nva_name}' was identified as a network "
+                        "virtual appliance but has fewer than 2 NICs. "
+                        "Most NGFWs require at least a LAN and a WAN "
+                        "interface to separate inside and outside traffic. "
+                        "A single-NIC configuration often indicates a "
+                        "misconfiguration or a hairpin NAT design."
+                    ),
+                    "recommendation": (
+                        "Verify the intended traffic model. If this NVA "
+                        "should inspect bidirectional traffic, add a second "
+                        "NIC on a separate subnet. Review associated UDRs to "
+                        "ensure traffic is actually traversing the appliance."
+                    ),
+                }
+            )
+
+        # NVA NIC without an NSG — management plane exposed
+        mgmt_nics_without_nsg = [
+            n for n in nics if not n.get("nsg_id")
+        ]
+        if mgmt_nics_without_nsg:
+            findings.append(
+                {
+                    "title": (
+                        f"NVA '{nva_name}': "
+                        f"{len(mgmt_nics_without_nsg)} NIC(s) without NSG"
+                    ),
+                    "severity": "MEDIUM",
+                    "category": "Network Appliances",
+                    "description": (
+                        f"NVA '{nva_name}' has "
+                        f"{len(mgmt_nics_without_nsg)} network interface(s) "
+                        "with no Network Security Group attached. "
+                        "Without an NSG, management-plane access to the NVA "
+                        "is not filtered at the Azure layer, increasing "
+                        "the blast radius if the appliance is compromised."
+                    ),
+                    "recommendation": (
+                        "Attach an NSG to every NIC of the NVA. "
+                        "The management NIC NSG should restrict inbound "
+                        "access to known jump-host IPs and deny all other "
+                        "inbound traffic. Never expose the management "
+                        "interface directly to the internet."
+                    ),
+                }
+            )
+
+        # IP-forwarding NVA without a known publisher — may be unintentional
+        if method == "ip_forwarding":
+            findings.append(
+                {
+                    "title": (
+                        f"VM '{nva_name}' has IP forwarding enabled — "
+                        "verify intent"
+                    ),
+                    "severity": "MEDIUM",
+                    "category": "Network Appliances",
+                    "description": (
+                        f"VM '{nva_name}' has IP forwarding enabled on one "
+                        "or more NICs but does not match any known NGFW "
+                        "marketplace publisher. IP forwarding is required "
+                        "for NVAs and routers but is a security risk if "
+                        "enabled on general-purpose VMs, as it allows the "
+                        "VM to forward traffic it did not originate."
+                    ),
+                    "recommendation": (
+                        "Confirm this VM is intentionally acting as a "
+                        "router or NVA. If not, disable IP forwarding on "
+                        "its NICs in the Azure portal. If it is an NVA, "
+                        "document the vendor, version, and licensing and "
+                        "ensure it is under a formal change-management "
+                        "process."
+                    ),
+                }
+            )
 
     # ── BGP findings ──────────────────────────────────────────────────────────
     bgp_data: list[dict] = sub_topo.get("bgp_data") or []

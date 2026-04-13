@@ -42,7 +42,9 @@ from cna.core.topology_schema import (
     AzureLBRule,
     AzureLoadBalancer,
     AzureNatGateway,
+    AzureNIC,
     AzureNSG,
+    AzureNVA,
     AzurePrivateEndpoint,
     AzurePrivateEndpointConnection,
     AzurePublicIP,
@@ -67,7 +69,6 @@ from cna.core.topology_schema import (
     PrivateDnsZone,
     VNet,
     VNetPeering,
-    WorkloadSummary,
 )
 
 logger = logging.getLogger("cna.discovery.azure")
@@ -356,21 +357,28 @@ class AzureDiscovery:
         )
 
         # ── Phase 2: Extended assessment data ─────────────────────────────────
-        self._progress(f"[{sub_name}] Collecting workload inventory…")
+        self._progress(
+            f"[{sub_name}] Scanning for NVAs / NGFWs…"
+        )
         try:
-            topo.workload_inventory = self._collect_workload_inventory(
-                rmc, sub_id
-            )
-            inv = topo.workload_inventory
-            self._progress(
-                f"[{sub_name}] Workload: {inv.vm_count} VM(s), "
-                f"{inv.aks_cluster_count} AKS, {inv.aca_count} ACA, "
-                f"{inv.function_app_count} Function App(s)"
-            )
+            topo.nvas = self._collect_nvas(net, sub_id)
+            if topo.nvas:
+                names = ", ".join(n.name for n in topo.nvas[:5])
+                extra = (
+                    f" (+{len(topo.nvas) - 5} more)"
+                    if len(topo.nvas) > 5
+                    else ""
+                )
+                self._progress(
+                    f"[{sub_name}] NVAs found: "
+                    f"{len(topo.nvas)} — {names}{extra}"
+                )
+            else:
+                self._progress(
+                    f"[{sub_name}] No NVAs / NGFWs detected"
+                )
         except Exception as e:
-            self._progress(
-                f"[{sub_name}] Workload inventory skipped: {e}"
-            )
+            self._progress(f"[{sub_name}] NVA scan skipped: {e}")
 
         self._progress(f"[{sub_name}] Querying BGP peer status…")
         try:
@@ -434,7 +442,7 @@ class AzureDiscovery:
 
     def _collect_vnets(self, net, sub_id: str) -> list[VNet]:
         vnets = []
-        for vnet in _safe_list(net.virtual_networks.list_all()):
+        for vnet in net.virtual_networks.list_all():
             subnets = []
             for s in vnet.subnets or []:
                 # Extract names from IDs for human-readable display
@@ -552,7 +560,7 @@ class AzureDiscovery:
 
     def _collect_nsgs(self, net, sub_id: str) -> list[AzureNSG]:
         nsgs = []
-        for nsg in _safe_list(net.network_security_groups.list_all()):
+        for nsg in net.network_security_groups.list_all():
             rg = _rg_from_id(nsg.id)
 
             def _map_rule(r, is_default: bool = False) -> NSGSecurityRule:
@@ -611,7 +619,7 @@ class AzureDiscovery:
 
     def _collect_route_tables(self, net, sub_id: str) -> list[AzureRouteTable]:
         tables = []
-        for rt in _safe_list(net.route_tables.list_all()):
+        for rt in net.route_tables.list_all():
             rg = _rg_from_id(rt.id)
             routes = []
             for r in rt.routes or []:
@@ -643,7 +651,7 @@ class AzureDiscovery:
 
     def _collect_public_ips(self, net, sub_id: str) -> list[AzurePublicIP]:
         pips = []
-        for pip in _safe_list(net.public_ip_addresses.list_all()):
+        for pip in net.public_ip_addresses.list_all():
             rg = _rg_from_id(pip.id)
             sku_name = "Standard"
             if pip.sku:
@@ -704,7 +712,7 @@ class AzureDiscovery:
 
     def _collect_load_balancers(self, net, sub_id: str) -> list[AzureLoadBalancer]:
         lbs = []
-        for lb in _safe_list(net.load_balancers.list_all()):
+        for lb in net.load_balancers.list_all():
             rg = _rg_from_id(lb.id)
             sku_name = "Standard"
             if lb.sku:
@@ -900,7 +908,7 @@ class AzureDiscovery:
 
     def _collect_private_endpoints(self, net, sub_id: str) -> list[AzurePrivateEndpoint]:
         endpoints = []
-        for pe in _safe_list(net.private_endpoints.list_by_subscription()):
+        for pe in net.private_endpoints.list_by_subscription():
             rg = _rg_from_id(pe.id)
             subnet_id = ""
             if pe.subnet:
@@ -958,7 +966,7 @@ class AzureDiscovery:
 
     def _collect_nat_gateways(self, net, sub_id: str) -> list[AzureNatGateway]:
         nat_gws = []
-        for ng in _safe_list(net.nat_gateways.list_all()):
+        for ng in net.nat_gateways.list_all():
             rg = _rg_from_id(ng.id)
             sku_name = "Standard"
             if ng.sku:
@@ -1079,7 +1087,7 @@ class AzureDiscovery:
 
     def _collect_firewalls(self, net, sub_id: str) -> list[AzureFirewall]:
         firewalls = []
-        for fw in _safe_list(net.azure_firewalls.list_all()):
+        for fw in net.azure_firewalls.list_all():
             rg = _rg_from_id(fw.id)
             sku_tier = "Standard"
             if fw.sku:
@@ -1115,7 +1123,7 @@ class AzureDiscovery:
 
     def _collect_appgws(self, net, sub_id: str) -> list[ApplicationGateway]:
         appgws = []
-        for agw in _safe_list(net.application_gateways.list_all()):
+        for agw in net.application_gateways.list_all():
             rg = _rg_from_id(agw.id)
             sku_name = "Standard_v2"
             sku_capacity = None
@@ -1216,7 +1224,7 @@ class AzureDiscovery:
 
     def _collect_er_circuits(self, net, sub_id: str) -> list[ExpressRouteCircuit]:
         circuits = []
-        for erc in _safe_list(net.express_route_circuits.list_all()):
+        for erc in net.express_route_circuits.list_all():
             rg = _rg_from_id(erc.id)
             sku_tier = "Standard"
             sku_family = "MeteredData"
@@ -1253,69 +1261,180 @@ class AzureDiscovery:
             )
         return circuits
 
-    # ------------------------------------------------------------------ Workload inventory
+    # ------------------------------------------------------------------ NVA / NGFW discovery
 
-    # OData filter covering only the resource types we care about.
-    # This is orders of magnitude faster than listing all resources and avoids
-    # rate-limit cascades that can corrupt VNet collection in subsequent subscriptions.
-    _WORKLOAD_FILTER = (
-        "resourceType eq 'Microsoft.Compute/virtualMachines'"
-        " or resourceType eq 'Microsoft.App/containerApps'"
-        " or resourceType eq 'Microsoft.ContainerService/managedClusters'"
-        " or resourceType eq 'Microsoft.Web/sites'"
-        " or resourceType eq 'Microsoft.ContainerRegistry/registries'"
-    )
+    # Known marketplace publishers for NGFW and network virtual appliances.
+    # Matched against plan.publisher or image_reference.publisher (lower-cased).
+    _NGFW_PUBLISHERS: frozenset[str] = frozenset({
+        "paloaltonetworks",      # Palo Alto VM-Series
+        "fortinet",              # FortiGate
+        "checkpoint",            # Check Point CloudGuard
+        "cisco",                 # Cisco ASAv / FTDv / CSR1000v
+        "barracudanetworks",     # Barracuda CloudGen Firewall
+        "junipernetworks",       # Juniper vSRX / vMX
+        "sophos",                # Sophos XG / UTM
+        "f5-networks",           # F5 BIG-IP
+        "zscaler",               # Zscaler Private Access
+        "stormshield",           # Stormshield Network Security
+        "watchguard-technologies",
+        "hillstone-networks",
+        "viptela",               # Cisco SD-WAN (now Cisco)
+    })
 
-    def _collect_workload_inventory(
-        self, rmc, sub_id: str
-    ) -> WorkloadSummary:
-        """Count workloads by resource type using a type-filtered ARM query.
+    def _collect_nvas(
+        self, net, sub_id: str
+    ) -> list[AzureNVA]:
+        """Discover Network Virtual Appliances in a subscription.
 
-        Uses an OData filter so only the 5 relevant resource types are fetched,
-        avoiding the cost and rate-limit risk of listing every resource in the
-        subscription.
+        Identification strategy (in order):
+          1. marketplace plan.publisher matches a known NGFW vendor
+          2. image_reference.publisher matches (covers BYOL / custom images)
+          3. Any attached NIC has enable_ip_forwarding=True
+
+        Only VMs matching at least one criterion are returned.
+        Associated NICs (all, not just forwarding ones) are included
+        to show the full multi-homed topology.
         """
-        inv = WorkloadSummary()
-        vm_details: list[dict] = []
-        aks_details: list[dict] = []
+        try:
+            from azure.mgmt.compute import ComputeManagementClient
+        except ImportError:
+            logger.warning(
+                "azure-mgmt-compute not installed — NVA discovery skipped"
+            )
+            return []
 
-        for resource in _safe_list(rmc.resources.list(filter=self._WORKLOAD_FILTER)):
-            rtype = (resource.type or "").lower()
-            rg = _rg_from_id(resource.id or "")
-            loc = getattr(resource, "location", None) or ""
-            if rtype == "microsoft.compute/virtualmachines":
-                inv.vm_count += 1
-                sku_name = None
-                if getattr(resource, "sku", None):
-                    sku_name = resource.sku.name
-                vm_details.append(
-                    {"name": resource.name, "rg": rg,
-                     "location": loc, "size": sku_name}
-                )
-            elif rtype == "microsoft.app/containerapps":
-                inv.aca_count += 1
-            elif rtype == (
-                "microsoft.containerservice/managedclusters"
-            ):
-                inv.aks_cluster_count += 1
-                aks_details.append(
-                    {"name": resource.name, "rg": rg,
-                     "location": loc}
-                )
-            elif rtype == "microsoft.web/sites":
-                kind = (getattr(resource, "kind", None) or "").lower()
-                if "functionapp" in kind:
-                    inv.function_app_count += 1
-                else:
-                    inv.app_service_count += 1
-            elif rtype == (
-                "microsoft.containerregistry/registries"
-            ):
-                inv.container_registry_count += 1
+        cmc = ComputeManagementClient(self._credential, sub_id)
+        nvas: list[AzureNVA] = []
 
-        inv.vm_details = vm_details[:20]   # cap detail lists
-        inv.aks_details = aks_details[:10]
-        return inv
+        for vm in _safe_list(cmc.virtual_machines.list_all()):
+            publisher: str | None = None
+            offer: str | None = None
+            plan_name: str | None = None
+            identification_method: str | None = None
+
+            # ── Strategy 1: explicit marketplace plan ──────────────────
+            if vm.plan and vm.plan.publisher:
+                pub_lower = vm.plan.publisher.lower()
+                if pub_lower in self._NGFW_PUBLISHERS:
+                    publisher = vm.plan.publisher
+                    offer = vm.plan.product
+                    plan_name = vm.plan.name
+                    identification_method = "marketplace"
+
+            # ── Strategy 2: image reference publisher ──────────────────
+            if not identification_method:
+                img = (
+                    vm.storage_profile.image_reference
+                    if vm.storage_profile
+                    else None
+                )
+                if img and img.publisher:
+                    pub_lower = img.publisher.lower()
+                    if pub_lower in self._NGFW_PUBLISHERS:
+                        publisher = img.publisher
+                        offer = img.offer
+                        plan_name = img.sku
+                        identification_method = "image_reference"
+
+            # ── Collect NICs (needed for strategy 3 + topology) ────────
+            vm_nics: list[AzureNIC] = []
+            has_ip_forwarding = False
+            nic_refs = []
+            if vm.network_profile:
+                nic_refs = vm.network_profile.network_interfaces or []
+            for nic_ref in nic_refs:
+                if not nic_ref.id:
+                    continue
+                try:
+                    nic_rg = _rg_from_id(nic_ref.id)
+                    nic_name = nic_ref.id.split("/")[-1]
+                    nic = net.network_interfaces.get(
+                        nic_rg, nic_name
+                    )
+                    ip_fwd = bool(
+                        getattr(nic, "enable_ip_forwarding", False)
+                    )
+                    if ip_fwd:
+                        has_ip_forwarding = True
+
+                    subnet_ids: list[str] = []
+                    private_ips: list[str] = []
+                    public_ip_id: str | None = None
+                    for ipc in nic.ip_configurations or []:
+                        if ipc.subnet and ipc.subnet.id:
+                            subnet_ids.append(ipc.subnet.id)
+                        if ipc.private_ip_address:
+                            private_ips.append(
+                                ipc.private_ip_address
+                            )
+                        if (
+                            ipc.public_ip_address
+                            and ipc.public_ip_address.id
+                        ):
+                            public_ip_id = ipc.public_ip_address.id
+
+                    vm_nics.append(
+                        AzureNIC(
+                            id=nic.id,
+                            name=nic.name,
+                            location=nic.location,
+                            resource_group=nic_rg,
+                            vm_id=vm.id,
+                            ip_forwarding_enabled=ip_fwd,
+                            subnet_ids=subnet_ids,
+                            private_ips=private_ips,
+                            public_ip_id=public_ip_id,
+                            nsg_id=(
+                                nic.network_security_group.id
+                                if nic.network_security_group
+                                else None
+                            ),
+                            tags=dict(vm.tags or {}),
+                        )
+                    )
+                except Exception as nic_exc:
+                    logger.debug(
+                        "NIC fetch failed %s: %s", nic_ref.id, nic_exc
+                    )
+
+            # ── Strategy 3: IP forwarding on any NIC ──────────────────
+            if not identification_method and has_ip_forwarding:
+                identification_method = "ip_forwarding"
+
+            if not identification_method:
+                continue  # not an NVA
+
+            rg = _rg_from_id(vm.id or "")
+            os_type: str | None = None
+            if vm.storage_profile and vm.storage_profile.os_disk:
+                os_type = str(
+                    vm.storage_profile.os_disk.os_type or ""
+                ) or None
+
+            vm_size: str | None = None
+            if vm.hardware_profile:
+                vm_size = str(
+                    vm.hardware_profile.vm_size or ""
+                ) or None
+
+            nvas.append(
+                AzureNVA(
+                    id=vm.id,
+                    name=vm.name,
+                    location=vm.location,
+                    resource_group=rg,
+                    vm_size=vm_size,
+                    os_type=os_type,
+                    publisher=publisher,
+                    offer=offer,
+                    plan_name=plan_name,
+                    identification_method=identification_method,
+                    nics=vm_nics,
+                    tags=dict(vm.tags or {}),
+                )
+            )
+
+        return nvas
 
     # ------------------------------------------------------------------ BGP data
 

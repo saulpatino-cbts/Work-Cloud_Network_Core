@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-03a31ac",
   "commit": "03a31ac1fa65992ceeb1e40a146f286a194be74c",
-  "built_at": "2026-04-13T00:44:15Z",
-  "run_id": "24320430509",
+  "built_at": "2026-04-13T00:44:43Z",
+  "run_id": "24320428388",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-03a31ac",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-03a31ac",

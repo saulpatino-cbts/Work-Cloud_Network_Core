@@ -60,19 +60,47 @@ export default async function FindingsPage({ params }: PageProps) {
 
   const engagement = await prisma.engagement.findUnique({
     where: { id },
-    select: {
-      id: true,
-      members: true,
-      findings: { orderBy: [{ severity: "asc" }, { category: "asc" }] },
-    },
+    select: { id: true, members: true },
   });
   if (!engagement) notFound();
 
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
+  // ── Deduplicate discovery findings silently on every page load ────────────────
+  // Before the dedup fix, each sync run added NEW rows for already-existing findings
+  // instead of replacing them. This cleanup keeps the newest copy per
+  // (credentialId, title) group and deletes all older duplicates.
+  // It is safe to run repeatedly — idempotent, fast on already-clean data.
+  try {
+    const allDiscovery = await prisma.finding.findMany({
+      where: { engagementId: id, aiGenerated: false },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, credentialId: true },
+    });
+    const seen = new Set<string>();
+    const toDelete: string[] = [];
+    for (const f of allDiscovery) {
+      const key = `${f.credentialId ?? "__none__"}::${f.title.toLowerCase().trim()}`;
+      if (seen.has(key)) {
+        toDelete.push(f.id);
+      } else {
+        seen.add(key);
+      }
+    }
+    if (toDelete.length > 0) {
+      await prisma.finding.deleteMany({ where: { id: { in: toDelete } } });
+    }
+  } catch { /* non-fatal */ }
+
+  // ── Load findings (now deduplicated) ─────────────────────────────────────────
+  const rawFindings = await prisma.finding.findMany({
+    where: { engagementId: id },
+    orderBy: [{ severity: "asc" }, { category: "asc" }],
+  });
+
   // Attach MS Learn URLs server-side so the client doesn't need the lookup tables
-  const findings: FindingItem[] = engagement.findings.map((f) => ({
+  const findings: FindingItem[] = rawFindings.map((f) => ({
     id: f.id,
     title: f.title,
     category: f.category,

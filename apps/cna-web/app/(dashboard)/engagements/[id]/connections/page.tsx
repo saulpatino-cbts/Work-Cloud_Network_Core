@@ -32,7 +32,7 @@ export default async function ConnectionsPage({ params }: PageProps) {
       prisma.discoveryJob.findMany({
         where: { engagementId: id },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 200,
       }),
     ]);
   } catch {

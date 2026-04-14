@@ -24,28 +24,16 @@ export async function startAllDiscovery(
   const apiUrl = process.env.CNA_API_INTERNAL_URL;
   if (!apiUrl) return { error: "Discovery API is not configured." };
 
-  // Group credentials by service principal identity (tenant + client ID).
-  // CSV import creates one credential per subscription row — all sharing the
-  // same SP. We merge their subscription IDs into ONE job so the resulting
-  // topologyJson contains every subscription and the inventory shows them all.
-  const spGroups = new Map<string, typeof credentials>();
-  for (const cred of credentials) {
-    const key = `${cred.tenantId}::${cred.spClientId ?? ""}`;
-    if (!spGroups.has(key)) spGroups.set(key, []);
-    spGroups.get(key)!.push(cred);
-  }
-
+  // Fire one independent job per credential so each subscription gets its own
+  // progress bar, log, run count, and completion timestamp. The inventory merge
+  // on the Inventory page reads the latest topology per credentialId, so
+  // independent jobs compose correctly into the full multi-subscription view.
   let started = 0;
-  for (const group of spGroups.values()) {
-    const primary = group[0];
-    // Merge all subscription IDs across credentials sharing this SP.
-    // Deduplicate in case the same sub ID was entered more than once.
-    const allSubIds = [...new Set(group.flatMap((c) => c.subscriptionIds))];
-
+  for (const cred of credentials) {
     const job = await prisma.discoveryJob.create({
-      data: { engagementId, credentialId: primary.id, status: "QUEUED" },
+      data: { engagementId, credentialId: cred.id, status: "QUEUED" },
     });
-    const spSecret = primary.spSecretEnc ? decrypt(primary.spSecretEnc) : null;
+    const spSecret = cred.spSecretEnc ? decrypt(cred.spSecretEnc) : null;
     try {
       const res = await fetch(`${apiUrl}/discovery/start`, {
         method: "POST",
@@ -53,10 +41,10 @@ export async function startAllDiscovery(
         body: JSON.stringify({
           job_id: job.id,
           engagement_id: engagementId,
-          credential_id: primary.id,
-          tenant_id: primary.tenantId,
-          subscription_ids: allSubIds,
-          sp_client_id: primary.spClientId,
+          credential_id: cred.id,
+          tenant_id: cred.tenantId,
+          subscription_ids: cred.subscriptionIds,
+          sp_client_id: cred.spClientId,
           sp_client_secret: spSecret,
         }),
       });

@@ -1,7 +1,7 @@
 # Cloud Network Assessment (CNA) Platform
 
-[![CI](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/08-ci.yml/badge.svg)](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/08-ci.yml)
-[![Release](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/09-release.yml/badge.svg)](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/09-release.yml)
+[![CI](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml)
+[![Release](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/021-release-version.yml/badge.svg)](https://github.com/saulpatinojr/MVP-Cloud_Network_Assessment/actions/workflows/021-release-version.yml)
 
 A professional multi-user web platform for cloud network assessments across AWS and Azure.
 Analysts run discoveries, AI-powered analysis, and generate executive-ready reports.
@@ -9,7 +9,10 @@ Clients receive deliverables through a time-limited, authenticated delivery port
 The platform is deployed as three Azure Container Apps behind Azure Front Door, backed by
 PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Web platform architecture complete. Three-container deployment (cna-api + cna-worker + cna-web) with PostgreSQL, Entra ID auth, and full Terraform IaC. See `.github/workflows/README.md` for the first deployment checklist.**
+> **Alpha complete as of 2026-04-14. Entering Beta.**
+> All core features are live and deployed to the dev environment. See the
+> [Alpha feature list](#alpha-features-shipped) below for everything that shipped.
+> Next step: delete dev environment, redeploy clean, and run Beta validation.
 
 ---
 
@@ -26,34 +29,76 @@ PostgreSQL and authenticated via Microsoft Entra ID.
 | — | CI/CD + IaC Hardening | ✅ Complete | 2026-03-06 |
 | — | Azure Operational Hardening | ✅ Complete | 2026-03-06 |
 | — | Azure Infra Deployment Reference | ✅ Complete | 2026-03-07 |
-| — | **Web Platform Buildout** | ✅ Complete | 2026-03-07 |
-| — | Phase C: Discovery Stubs | 🔧 In Progress | — |
-| — | AWS Provider Expansion | ⏳ Next | — |
+| — | Web Platform Buildout | ✅ Complete | 2026-03-07 |
+| — | **Web Platform Alpha** | ✅ Complete | 2026-04-14 |
+| — | Phase C: Discovery Stubs (AWS) | 🔧 In Progress | — |
+| — | AWS Provider Expansion | ⏳ Beta roadmap | — |
+
+---
+
+## Alpha Features Shipped
+
+All features below were built, deployed, and validated in the Alpha stage (ending 2026-04-14).
+
+### Discovery
+
+- **Per-subscription sync groups** — Each Azure credential/subscription runs as its own independent `DiscoveryJob`. Progress bars, logs, run count, and completion timestamps are tracked individually. "Re-sync all" fires one job per credential rather than a merged batch job.
+- **Multi-subscription topology merge** — Inventory, presentation dashboard, and all deliverable generators merge topology from all credential sync groups (deduplicating by `subscription_id`). No data from any subscription is dropped.
+
+### Findings & Analysis
+
+- **Findings count display** — Header shows the count of unique issue groups (deduplicated by severity + category + title). The subtitle shows raw finding count, live-scanned vs. AI-generated breakdown, and filter state.
+- **AI-powered findings** — Azure OpenAI analysis generates per-resource findings enriched with Microsoft Learn documentation fetched at generation time.
+
+### Deliverables
+
+- **Five assessment types** — `COMPREHENSIVE_ASSESSMENT` (HTML), `EXECUTIVE_SUMMARY`, `TECHNICAL_FINDINGS`, `REMEDIATION_PLAN`, `SPECIALIZATION_REPORT` (all Markdown). Generate individually or all at once.
+- **Comprehensive Assessment output** — Fixed HTML vs. Markdown conflict; COMPREHENSIVE_ASSESSMENT always produces a complete self-contained HTML document.
+- **Generate All** — Fires all five types in parallel, stores successful ones; reports partial success count.
+- **MS Learn enrichment** — Live Microsoft Learn API fetch at generation time, injected into the AI prompt per finding category.
+- **Multi-credential context** — All generators receive the full merged topology, all credentials' subscription info, and the list of previously generated assessments as context.
+
+### Interactive Assessment
+
+- **AI generation on every create** — "Create Interactive Assessment" calls Azure OpenAI (COMPREHENSIVE_ASSESSMENT type) with merged topology + all findings + all documents + MS Learn context. Fresh HTML content is stored on every create/recreate.
+- **View Report + Dashboard split** — The deliverables portal shows a "View Report" button (AI-generated HTML) alongside "Dashboard" (live presentation site) once content exists.
+- **Generation feedback** — Button shows "Generating with AI…" with a 60-second hint; errors surface in the UI.
+
+### Presentation Dashboard
+
+- **Correct subscription counts** — All five presentation pages (overview, executive, technical, compliance, remediation) use the multi-credential topology merge — never a single `findFirst`. "1 subscription" on the executive summary is fixed.
+- **Live metrics** — Risk score, maturity radar, severity distribution, infrastructure topology stats, remediation phases, and framework mapping (NIST CSF, CIS v8, Azure CAF) all derive from live DB data.
 
 ---
 
 ## Current Delivery State
 
-The platform is now a fully deployable multi-user web application:
+The platform is a fully deployable multi-user web application:
 
 - **cna-api** — Python FastAPI container (internal, not internet-facing)
 - **cna-worker** — Python background worker container (no HTTP ingress)
 - **cna-web** — Next.js 15 container (public via Azure Front Door, port 3000)
-- **PostgreSQL Flexible Server** — VNet-delegated, private DNS zone, Prisma ORM
+- **PostgreSQL Flexible Server** — VNet-delegated, private DNS zone, Prisma ORM (7 migrations)
 - **Microsoft Entra ID** — analyst/reviewer/client/admin role model via NextAuth v5
 - **Azure Front Door Standard** — WAF + CDN, TLS termination, origin = cna-web FQDN
-- **Azure OpenAI** — optional AI enrichment with offline fallback (DD-003)
-- **Azure Key Vault** — all platform secrets; synced to GitHub via workflow 05
-
-The Azure delivery path additionally includes direct Azure Monitor and Application Insights
-verification queries, threshold-based pass/fail gating, Front Door progressive rollout
-control, and renewal-aware certificate governance.
-
-AWS platform parity is planned as the next implementation track.
+- **Azure OpenAI** — AI enrichment with MS Learn context injection; error messages surface in UI
+- **Azure Blob Storage** — engagement deliverables and uploaded documents
+- **Azure Key Vault** — all platform secrets; synced to GitHub via workflow 011
 
 ---
 
 ## Quick Start
+
+### Local Development (Web Platform)
+
+```bash
+cd apps/cna-web
+cp .env.example .env.local
+# Fill in DATABASE_URL, NEXTAUTH_SECRET, AZURE_AD_* values
+npm install
+npm run db:migrate   # Prisma migrate deploy against local PostgreSQL
+npm run dev          # http://localhost:3000
+```
 
 ### Local Development (CLI + Python)
 
@@ -65,135 +110,76 @@ pip install -e .[dev]
 pre-commit install
 pre-commit run --all-files
 
-# Copy and fill environment file
 cp .env.example .env
-# Edit .env — see documentation/deployment-guide.md for every variable explained
-```
-
-### Local Development (Web Platform)
-
-```bash
-cd apps/cna-web
-cp .env.example .env.local
-# Fill in DATABASE_URL, NEXTAUTH_SECRET, AZURE_AD_* values
-npm install
-npm run db:migrate   # Runs Prisma migrations against local PostgreSQL
-npm run dev          # http://localhost:3000
+# Edit .env — see documentation/deployment-guide.md for every variable
 ```
 
 ### Cloud Deployment
 
-**See [`.github/workflows/README.md`](.github/workflows/README.md) for the complete step-by-step first deployment checklist.**
+**See [`.github/workflows/README.md`](.github/workflows/README.md) for the complete
+step-by-step first-deployment checklist.**
 
-Summary of the numbered workflow sequence:
+Numbered workflow sequence:
 
 ```
-01 → Bootstrap Terraform backend (one-time)
-02 → Build & publish all three container images to GHCR
-03 → Deploy Azure infrastructure via Terraform (dev/prod)
-05 → Pull secrets from Key Vault → .env artifact (validation)
-06 → Fast image refresh — code-only deploys, no Terraform
-07 → CD publish — deliver reports to client portals
-08 → CI — lint, test, secret scan (runs on every push)
-09 → Release — git tag → GHCR semver tag + GitHub Release
-```
-
-### Single-Cloud CLI Test (Recommended for API Testing)
-
-```bash
-# --- Azure only ---
-cna init --client contoso --platform azure
-cna discover azure --engagement-id contoso-20260305-b1c3 --tenant-id <TENANT_ID>
-cna analyze --engagement-id contoso-20260305-b1c3 --azure
-cna report preview --engagement-id contoso-20260305-b1c3
-cna review complete --engagement-id contoso-20260305-b1c3
-cna report generate --engagement-id contoso-20260305-b1c3
-cna publish run --engagement-id contoso-20260305-b1c3 --cloud azure \
-  --storage-account <ACCOUNT> --container contoso-20260305-b1c3
-
-# --- AWS only ---
-cna init --client acme --platform aws
-cna discover aws --engagement-id acme-20260305-a3f2 \
-  --org-role arn:aws:iam::123456789012:role/CNA-ReadOnly
-cna analyze --engagement-id acme-20260305-a3f2 --aws
-cna report preview --engagement-id acme-20260305-a3f2
-cna review complete --engagement-id acme-20260305-a3f2
-cna report generate --engagement-id acme-20260305-a3f2
-cna publish run --engagement-id acme-20260305-a3f2 --cloud aws \
-  --bucket <BUCKET>
+000 → Bootstrap Terraform backend (one-time)
+010 → Validate all GitHub Secrets, Variables, and Azure OIDC access
+011 → Pull secrets from Key Vault → .env artifact (validation)
+012 → Fast image refresh — code-only deploys, no Terraform
+020 → CI — lint, test, secret scan (runs on every push)
+021 → Release — git tag → GHCR semver tag + GitHub Release
+022 → Publish — deliver reports to client portals
+030 → Build & publish all three container images to GHCR
+031 → Deploy Azure infrastructure + containers via Terraform
 ```
 
 ---
 
 ## CI/CD Workflows
 
-Full workflow documentation with execution order, duration, and first deployment checklist is in
-[`.github/workflows/README.md`](.github/workflows/README.md).
+Full workflow documentation is in [`.github/workflows/README.md`](.github/workflows/README.md).
 
-| # | File | Trigger | What It Does |
-|---|---|---|---|
-| 01 | `000-bootstrap-backend.yml` | Manual (one-time) | Creates Azure RG + Storage Account for Terraform remote backend |
-| 02 | `030-build-images.yml` | Push to `main` (apps/**), manual | Builds and pushes cna-api, cna-worker, cna-web to GHCR; smoke tests |
-| 03 | `031-deploy-azure.yml` | Manual | Terraform plan + apply for dev/prod; post-deploy health verification; nightly drift detection |
-| 05 | `05-sync-env-from-keyvault.yml` | Manual | Pulls all platform secrets from Key Vault → 1-day `.env` artifact |
-| 06 | `06-refresh-containers.yml` | Manual | Fast image update via `az containerapp update` — no Terraform |
-| 07 | `07-cd-publish.yml` | Push to `main` | Delivers reports and assets to client portals |
-| 08 | `08-ci.yml` | Push/PR to `main` | Secret scan → ruff → mypy → pytest → eslint → Next.js build |
-| 09 | `09-release.yml` | `git tag v*` | Tags GHCR images with semver + creates GitHub Release |
+| File | Trigger | What It Does |
+|---|---|---|
+| `000-bootstrap-backend.yml` | Manual (one-time) | Creates Azure RG + Storage Account for Terraform remote backend |
+| `010-validate-prereqs.yml` | Manual | Validates all GitHub secrets, variables, and Azure OIDC access |
+| `011-sync-keys.yml` | Manual | Pulls all platform secrets from Key Vault → 1-day `.env` artifact |
+| `012-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update` — no Terraform |
+| `020-test-codebase.yml` | Push/PR to `main` | Secret scan → lint → test → Docker build → coverage gate |
+| `021-release-version.yml` | `git tag v*.*.*` | Tags GHCR images with semver + creates GitHub Release |
+| `022-publish-portal.yml` | Manual | Delivers reports and assets to client portals (Azure or AWS) |
+| `030-build-images.yml` | Push to `main` (apps/**) or manual | Builds + pushes cna-api, cna-worker, cna-web to GHCR; writes build manifest |
+| `031-deploy-azure.yml` | Manual + nightly schedule | Terraform plan → policy gates → apply → health verification; rollback support |
 
 ### Required Repository Secrets
 
-Set these in **GitHub → Settings → Secrets and variables → Actions → Secrets**:
-
 | Secret | Used By | Description |
 |---|---|---|
-| `AZURE_CLIENT_ID` | 03, 05, 06 | OIDC app registration Client ID (federated credential) |
-| `AZURE_TENANT_ID` | 03, 05, 06 | Azure AD tenant GUID |
-| `AZURE_SUBSCRIPTION_ID` | 03, 05, 06 | Azure subscription ID |
-| `CNA_POSTGRES_ADMIN_PASSWORD` | 03 | PostgreSQL admin password (min 8 chars, mixed case + special) |
-| `CNA_ENTRA_CLIENT_SECRET` | 03 | Entra ID OAuth2 client secret for NextAuth |
-| `CNA_NEXTAUTH_SECRET` | 03 | NextAuth JWT signing secret (`openssl rand -base64 32`) |
-| `FRONTDOOR_CERTIFICATE_PFX_PASSWORD` | 03 | Password for custom TLS cert (optional) |
-| `CNA_AWS_ROLE_ARN` | 07 | ARN of `CNA-Publish` IAM role (OIDC) |
-| `CNA_PUBLISH_BUCKET` | 07 | S3 bucket name for AWS client delivery portal |
+| `AZURE_CLIENT_ID` | 031, 011, 012 | OIDC app registration Client ID (federated credential) |
+| `AZURE_TENANT_ID` | 031, 011, 012 | Azure AD tenant GUID |
+| `AZURE_SUBSCRIPTION_ID` | 031, 011, 012 | Azure subscription ID |
+| `CNA_POSTGRES_ADMIN_PASSWORD` | 031 | PostgreSQL admin password (min 8 chars, mixed case + special) |
+| `CNA_ENTRA_CLIENT_SECRET` | 031 | Entra ID OAuth2 client secret for NextAuth |
+| `CNA_NEXTAUTH_SECRET` | 031 | NextAuth JWT signing secret (`openssl rand -base64 32`) |
+| `FRONTDOOR_CERTIFICATE_PFX_PASSWORD` | 031 | Password for custom TLS cert (optional) |
+| `CNA_AWS_ROLE_ARN` | 022 | ARN of `CNA-Publish` IAM role (OIDC) |
+| `CNA_PUBLISH_BUCKET` | 022 | S3 bucket name for AWS client delivery portal |
 
 ### Required Repository Variables
 
-Set these in **GitHub → Settings → Secrets and variables → Actions → Variables**:
-
 | Variable | Used By | Description |
 |---|---|---|
-| `TFSTATE_RESOURCE_GROUP` | 03 | Terraform state resource group |
-| `TFSTATE_STORAGE_ACCOUNT` | 03 | Terraform state storage account |
-| `TFSTATE_CONTAINER` | 03 | Terraform state blob container |
-| `CNA_ENTRA_CLIENT_ID` | 03 | Entra ID application client ID |
-| `CNA_NEXTAUTH_URL` | 03 | Canonical URL of deployed web app (Front Door hostname) |
-| `CNA_AZURE_OPENAI_DEPLOYMENT` | 03 | OpenAI model deployment name (e.g. `gpt-4o`) |
-| `APPLICATION_INSIGHTS_NAME` | 03 | App Insights resource name (for health queries) |
-| `KEY_VAULT_NAME` | 03, 05 | Key Vault name (exported from Terraform) |
-| `FRONTDOOR_CERTIFICATE_NAME` | 03 | Key Vault certificate name for Front Door (optional) |
-| `FRONTDOOR_CERTIFICATE_PFX_PATH` | 03 | Repo-relative path to PFX bundle (optional) |
+| `TFSTATE_RESOURCE_GROUP` | 031 | Terraform state resource group |
+| `TFSTATE_STORAGE_ACCOUNT` | 031 | Terraform state storage account |
+| `TFSTATE_CONTAINER` | 031 | Terraform state blob container |
+| `CNA_ENTRA_CLIENT_ID` | 031 | Entra ID application client ID |
+| `CNA_NEXTAUTH_URL` | 031 | Canonical URL of deployed web app (Front Door hostname) |
+| `CNA_AZURE_OPENAI_DEPLOYMENT` | 031 | OpenAI model deployment name (e.g. `gpt-4o`) |
+| `APPLICATION_INSIGHTS_NAME` | 031 | App Insights resource name (for health queries, set to `none` until created) |
+| `KEY_VAULT_NAME` | 031, 011 | Key Vault name (set to `none` until created) |
+| `FRONTDOOR_CERTIFICATE_NAME` | 031 | Key Vault certificate name for Front Door (optional) |
 
 > `GITHUB_TOKEN` is automatic — no setup needed. All workflows use it for GHCR push and release creation.
-
-### No Secrets Needed for CI
-
-`08-ci.yml` requires only `GITHUB_TOKEN` (automatic). Secret scan, lint, test, and Docker build jobs run on every push with zero configuration.
-
----
-
-## Workflows: Ready to Run
-
-| Workflow | Ready? | Needs Before First Run |
-|---|---|---|
-| `08-ci.yml` | ✅ Ready now | Nothing — runs on next push |
-| `09-release.yml` | ✅ Ready | `git tag v0.1.0 && git push --tags` |
-| `000-bootstrap-backend.yml` | ⚠ Needs OIDC secrets | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
-| `030-build-images.yml` | ✅ Ready now | Nothing — runs on next push to `main` |
-| `031-deploy-azure.yml` | ⚠ Needs all secrets + variables | Run 01 and 02 first; see `.github/workflows/README.md` checklist |
-| `05-sync-env-from-keyvault.yml` | ⚠ After 03 completes | Run after first Terraform deploy to validate all KV secrets |
-| `06-refresh-containers.yml` | ⚠ After 03 completes | Use after 02 to do fast code-only deploys |
-| `07-cd-publish.yml` | ⚠ Needs AWS or Azure secrets | `CNA_AWS_ROLE_ARN` + `CNA_PUBLISH_BUCKET` (AWS) or Azure OIDC secrets |
 
 ---
 
@@ -212,14 +198,15 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Var
                     │  • Entra ID login via NextAuth v5            │
                     │  • Engagement dashboard (ANALYST/REVIEWER)   │
                     │  • Client deliverable portal (CLIENT)        │
+                    │  • Interactive assessment presentation site  │
                     │  • Role: ANALYST | REVIEWER | CLIENT | ADMIN │
                     └──────────┬─────────────────────┬────────────┘
-                               │ internal VNet        │ Prisma
+                               │ internal VNet        │ Prisma (7 migrations)
               ┌────────────────▼──────────┐  ┌───────▼──────────────┐
               │   cna-api  (FastAPI)       │  │  PostgreSQL Flexible  │
               │   internal only           │  │  Server (VNet-delg.)  │
-              │   discovery triggers      │  │  private DNS zone     │
-              │   report endpoints        │  └──────────────────────┘
+              │   /discovery/start        │  │  private DNS zone     │
+              │   /health                 │  └──────────────────────┘
               └────────────────┬──────────┘
                                │
               ┌────────────────▼──────────┐
@@ -234,82 +221,110 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Var
 
 ```
 apps/
-└── cna-web/                 # Next.js 15 web platform
-    ├── app/                 # App Router pages (dashboard, auth, health)
-    ├── lib/                 #   auth.ts (NextAuth v5) · prisma.ts
-    ├── prisma/schema.prisma # User · Engagement · Finding · Deliverable models
-    └── Dockerfile           # Multi-stage; prisma migrate deploy on start
+└── cna-web/                        # Next.js 15 web platform
+    ├── app/(dashboard)/
+    │   └── engagements/[id]/
+    │       ├── connections/         # Cloud credentials + per-subscription discovery
+    │       ├── discovery/           # Discovery job triggers (one job per credential)
+    │       ├── inventory/           # Multi-subscription merged network inventory
+    │       ├── findings/            # Grouped findings with unique-issue count
+    │       ├── deliverables/        # Generate/manage AI assessments (5 types)
+    │       ├── client-deliverables/ # Deliverable portal + interactive assessment
+    │       └── presentation/        # Live interactive assessment dashboard (5 pages)
+    ├── lib/
+    │   ├── auth.ts                  # NextAuth v5 + Entra ID
+    │   ├── openai.ts                # generateDeliverableContent + MS Learn enrichment
+    │   ├── blob.ts                  # Azure Blob Storage for deliverables
+    │   └── prisma.ts                # Prisma client singleton
+    ├── prisma/
+    │   ├── schema.prisma            # 15 models: User · Engagement · Finding · Deliverable
+    │   └── migrations/              # 7 migrations (init → interactive-assessment)
+    └── Dockerfile                   # 4-stage; migrator stage runs prisma migrate deploy
 cna/
-├── cli/
-│   ├── discover.py          # cna discover aws / azure
-│   ├── diagram.py           # cna diagram generate / preview
-│   ├── analyze.py           # cna analyze
-│   ├── report.py            # cna report generate / preview
-│   └── publish.py           # cna publish run / status
-├── core/
-│   ├── topology_schema.py   # v1.1.0 AWS + Azure Pydantic models
-│   ├── findings_schema.py   # observed_state + severity + framework mappings
-│   ├── persistence.py       # EngagementStore — atomic writes, audit log
-│   ├── auth.py              # STS AssumeRole + DefaultAzureCredential
-│   └── escalation_engine.py # DD-016: CRITICAL finding alerts
-├── diagram_engine/          # .drawio + Mermaid + PNG
-├── modules/                 # AWS + Azure discovery
-├── ai_engine/               # 11 AWS + 7 Azure rules, MCP enrichment, hedge detection
-├── report_engine/           # PDF + PPTX + HTML + regional EN/JA
-└── delivery_portal/         # S3 + Azure Blob, portal HTML, retention, access links
+├── cli/                             # cna discover / analyze / report / publish
+├── core/                            # topology_schema · findings_schema · persistence
+├── modules/                         # AWS + Azure discovery modules
+├── ai_engine/                       # 11 AWS + 7 Azure rules, MCP enrichment
+├── report_engine/                   # PDF + PPTX + HTML + regional EN/JA
+└── delivery_portal/                 # S3 + Azure Blob, portal HTML, retention
 infra/terraform/
-├── environments/azure/dev/  # Dev environment: main.tf · variables.tf · outputs.tf
+├── environments/azure/dev/          # Dev: main.tf · variables.tf · outputs.tf
+├── environments/azure/prod/         # Prod: same structure
 └── providers/azure/
-    ├── compute/             # 3 Container Apps (api internal, web external, worker)
-    ├── database/            # PostgreSQL Flexible Server + private DNS
-    ├── identity/            # Managed identity + Key Vault
-    ├── ai/                  # Azure OpenAI + Application Insights
-    ├── network/             # VNet + subnets (apps 10.40.1, pe 10.40.2, db 10.40.3)
-    ├── security/            # Front Door · WAF · private endpoints · postgres DNS zone
-    ├── storage/             # Blob storage for engagement deliverables
-    └── runtime/             # RBAC + Key Vault secrets (database-url, nextauth, entra)
-.github/workflows/           # 01–09 numbered workflow sequence
+    ├── compute/                     # 3 Container Apps (api internal, web external, worker)
+    ├── database/                    # PostgreSQL Flexible Server + private DNS
+    ├── identity/                    # Managed Identity + Key Vault
+    ├── ai/                          # Azure OpenAI + Application Insights
+    ├── network/                     # VNet + subnets (apps/pe/db)
+    ├── security/                    # Front Door · WAF · private endpoints
+    ├── storage/                     # Blob storage for engagement deliverables
+    └── runtime/                     # RBAC + Key Vault secrets
+.github/workflows/                   # 000–031 numbered workflow sequence
 documentation/
-├── deployment-guide.md      # ← START HERE for full deployment
-├── secrets-reference.md     # Every secret, variable, and value explained
-├── cicd-iac-report.md       # CI/CD audit and hardening report
-├── architecture/            # Phase docs + Azure hardening sequence (33–39)
-├── design/                  # DD-001 through DD-019
-├── policies/                # Data handling, LZ scope, JA translation
-├── client-packet/           # Welcome packet, env form, permission guide
-└── development/             # Module guide, diagram generation, branching
+├── deployment-guide.md              # ← START HERE for first deployment
+├── secrets-reference.md             # Every secret, variable, and value explained
+├── cicd-iac-report.md               # CI/CD audit and hardening report
+├── architecture/                    # Phase docs + Azure hardening sequence (40+ docs)
+├── design/                          # DD-001 through DD-019
+├── policies/                        # Data handling, LZ scope, JA translation
+├── client-packet/                   # Welcome packet, env form, permission guide
+└── development/                     # Module guide, diagram generation, branching
+```
+
+---
+
+## Beta: First Deployment (Clean Environment)
+
+The dev environment is being torn down and redeployed clean as part of the Alpha→Beta transition.
+Follow this sequence exactly.
+
+### Prerequisites (one-time)
+
+```bash
+# 1. Entra ID App Registration (Azure Portal)
+#    → Redirect URI: https://<frontdoor-hostname>/api/auth/callback/microsoft-entra-id
+#    → Grant: openid, profile, email, User.Read
+#    → Create OIDC federated credential:
+#       Issuer: https://token.actions.githubusercontent.com
+#       Subject: repo:saulpatinojr/MVP-Cloud_Network_Assessment:ref:refs/heads/main
+
+# 2. Set GitHub Secrets and Variables (see tables above)
+
+# 3. Run workflow 000 — bootstrap Terraform backend (one-time)
+```
+
+### Deployment Sequence
+
+```bash
+# 4. Push to main — workflow 030 auto-builds all three container images
+
+# 5. Run workflow 010 — validate all secrets/variables/OIDC before deploying
+
+# 6. Run workflow 031 (environment: dev) — first Terraform deploy (~20 min)
+#    → After apply, copy the Front Door hostname from outputs
+#    → Update CNA_NEXTAUTH_URL GitHub Variable to the Front Door hostname
+#    → Update Entra redirect URI to match
+#    → Re-run workflow 031 to apply the updated NextAuth URL
+
+# 7. Run workflow 011 — validate all Key Vault secrets are populated
+
+# 8. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
 ```
 
 ---
 
 ## Azure Hardening Sequence
 
-The Azure operational hardening trail is documented through:
-- `documentation/architecture/33-frontdoor-outputs-and-live-signal-wiring.md`
-- `documentation/architecture/34-direct-query-verification-and-traffic-control-intent.md`
-- `documentation/architecture/35-direct-azure-queries-and-live-evidence-collection.md`
-- `documentation/architecture/36-threshold-enforced-verification-and-promotion-control.md`
-- `documentation/architecture/37-progressive-rollout-and-renewal-verification.md`
+Documented through architecture docs 33–37:
 
-These documents capture the move from simulated evidence to direct Azure verification, threshold-enforced release gating, progressive rollout control, and renewal-aware certificate governance.
+- `33-frontdoor-outputs-and-live-signal-wiring.md`
+- `34-direct-query-verification-and-traffic-control-intent.md`
+- `35-direct-azure-queries-and-live-evidence-collection.md`
+- `36-threshold-enforced-verification-and-promotion-control.md`
+- `37-progressive-rollout-and-renewal-verification.md`
 
-## Azure Infra Deployment Reference
-
-**For first deployment: start with [`.github/workflows/README.md`](.github/workflows/README.md).**
-It contains the complete numbered checklist (Entra app registration → secrets → bootstrap → build → deploy → validate).
-
-`documentation/architecture/38-azure-infra-deployment-reference.md` is the architecture
-reference covering:
-- Complete resource inventory and Terraform module mapping
-- Workflow sequence (bootstrap → image build → Terraform deploy → Key Vault post-config)
-- OIDC setup steps (exact CLI commands, no long-lived keys)
-- Secrets and Variables checklist before first deploy
-- Stale state and cycle prevention mitigations (learned from MVP-Azure_Spec_Builder)
-
-`documentation/architecture/39-platform-architecture-revised.md` documents the web platform
-scope correction — why the platform moved from a single-user CLI tool to a multi-user web
-application, the three-container architecture decision, PostgreSQL + Entra ID rationale, and
-the Terraform module additions made in this revision.
+These capture the move from simulated evidence to direct Azure verification, threshold-enforced
+release gating, progressive rollout control, and renewal-aware certificate governance.
 
 ---
 
@@ -329,29 +344,6 @@ the Terraform module additions made in this revision.
 
 ---
 
-## Required IAM / RBAC
-
-### AWS Discovery — `CNA-ReadOnly` role in every member account
-See [`cna/modules/network/module.yaml`](cna/modules/network/module.yaml)
-
-### AWS Publish — `CNA-Publish` role
-`s3:PutObject`, `s3:PutBucketCors`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`
-See [`documentation/deployment-guide.md`](documentation/deployment-guide.md)
-
-### Azure Discovery
-**Reader** at root Management Group · **Management Group Reader** at tenant root
-
-### Azure Publish
-**Storage Blob Data Contributor** on storage account
-
-### Azure Runtime Delivery Hardening
-- OIDC-enabled application with subscription-scoped access for Terraform and monitoring queries
-- Permissions to query Azure Monitor metrics and Application Insights
-- Permissions to read and manage Front Door route and origin configuration
-- Permissions to read Key Vault certificate state and perform approved rotation workflows
-
----
-
 ## Security
 
 - All GitHub Actions pinned to SHA digest (supply chain hardening)
@@ -363,39 +355,9 @@ See [`documentation/deployment-guide.md`](documentation/deployment-guide.md)
 - Pre-signed URLs and SAS tokens never stored — metadata only
 - 7-day hard cap on all client access link TTLs
 - 90-day engagement data retention enforced in code (DD-019)
-- Azure release approval is now backed by direct telemetry, rollout, and certificate evidence checks
-
----
-
-## First Deployment
-
-**See [`.github/workflows/README.md`](.github/workflows/README.md) for the complete step-by-step checklist.**
-
-High-level sequence:
-
-```bash
-# 1. Create Entra ID App Registration
-#    Redirect URI: https://<your-frontdoor-domain>/api/auth/callback/microsoft-entra-id
-#    Grant: openid, profile, email, User.Read
-
-# 2. Set all GitHub Secrets and Variables (see workflow 03 table above)
-
-# 3. Run workflow 01 to bootstrap Terraform backend (one-time)
-
-# 4. Push to main — workflow 02 auto-builds all three container images
-
-# 5. Run workflow 03 (environment: dev) — first Terraform deploy (~20 min)
-#    → After apply, copy the Front Door hostname from outputs
-#    → Update CNA_NEXTAUTH_URL GitHub Variable to the Front Door hostname
-#    → Re-run workflow 03 to apply the updated NextAuth URL
-
-# 6. Run workflow 05 to validate all Key Vault secrets are populated
-
-# 7. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
-```
-
-See [`documentation/deployment-guide.md`](documentation/deployment-guide.md) for the full pre-go-live checklist including AWS setup, discovery RBAC, and client portal configuration.
+- Azure release gated by direct Azure Monitor + App Insights telemetry evidence
 
 ---
 
 *Maintained by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert*
+*Alpha complete 2026-04-14 · Entering Beta*

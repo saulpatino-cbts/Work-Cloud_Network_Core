@@ -1,174 +1,174 @@
 # CNA Platform — Active TODO
 
-> **Status as of 2026-03-08**
-> All six delivery phases (A–F) are signed off and closed.
-> See `documentation/phase-reviews/phase-critiques-and-sign-offs.md` for the permanent record.
-> This file tracks the remaining path to first live deployment.
+> **Status as of 2026-04-14**
+> Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
+> The dev environment is being torn down and redeployed clean as the Alpha→Beta transition.
+> This file tracks the Beta deployment checklist and post-Beta roadmap.
 
 ---
 
-## Where We Are
+## Alpha Completed (2026-04-14)
 
-| Layer | Status |
-|---|---|
-| Platform architecture | ✅ Complete |
-| Terraform modules (networking, compute, AI, delivery, security) | ✅ Complete |
-| Python backend (discovery, AI, report, delivery engines) | ✅ Complete |
-| cna-web (Next.js 15, auth, dashboard) | ✅ Complete |
-| GitHub Actions workflows (01–09) | ✅ Complete |
-| Naming conventions (Azure CAF + region) | ✅ Complete — `{abbrev}-cna-{env}-scus` |
-| Entra app registration + OIDC federation | ⏳ User action required (see Step 1) |
-| First Terraform deployment (dev) | ⏳ Blocked on Step 1 |
-| First container image build and push | ⏳ Blocked on Step 1 |
+Everything below shipped and is live on the dev environment at SHA `ace931c`.
 
----
-
-## Next Steps — First Deployment
-
-### Step 1 — Azure + GitHub Prerequisites ⏳ IN PROGRESS
-
-These are one-time manual steps. All automation depends on them.
-
-**1a. Entra App Registration**
-- [ ] App registration created in Azure portal
-- [ ] Client secret created and stored as GitHub secret `AZURE_CLIENT_SECRET`
-- [ ] App registration `client_id` stored as GitHub secret `AZURE_CLIENT_ID`
-- [ ] Tenant ID stored as GitHub secret `AZURE_TENANT_ID`
-- [ ] Subscription ID stored as GitHub secret `AZURE_SUBSCRIPTION_ID`
-
-**1b. OIDC Federated Credential (replaces client secret long-term)**
-- [ ] Federated credential added to the app registration
-  - Issuer: `https://token.actions.githubusercontent.com`
-  - Subject: `repo:saulpatinojr/MVP-Cloud_Network_Assessment:ref:refs/heads/main`
-- [ ] After OIDC is wired: remove `AZURE_CLIENT_SECRET` from GitHub secrets
-
-**1c. GHCR PAT**
-- [ ] Classic PAT created with `read:packages` scope
-- [ ] Stored as GitHub secret `GHCR_PAT`
-
-**1d. GitHub Repository Variables**
-Go to repo → Settings → Secrets and variables → Actions → Variables tab → New repository variable.
-
-| Variable | Value |
-|---|---|
-| `AZURE_RESOURCE_GROUP` | `rg-cna-dev-scus` _(will be created by Terraform)_ |
-| `CONTAINER_REGISTRY` | `ghcr.io/saulpatinojr` |
-| `KEY_VAULT_NAME` | `none` _(update after Terraform creates it)_ |
-| `APPLICATION_INSIGHTS_NAME` | `none` _(update after Terraform creates it)_ |
-| `CNA_AZURE_OPENAI_DEPLOYMENT` | `gpt-4` _(or your deployment name)_ |
+| Feature | Status |
+| --- | --- |
+| Platform architecture (3-container, PostgreSQL, Entra ID) | ✅ Done |
+| Terraform modules (all Azure resources) | ✅ Done |
+| GitHub Actions workflows (000–031) | ✅ Done |
+| Entra ID auth + OIDC federation | ✅ Done |
+| First Terraform deployment (dev) | ✅ Done |
+| Per-subscription sync groups (one `DiscoveryJob` per credential) | ✅ Done |
+| Multi-subscription topology merge (inventory + presentations + deliverables) | ✅ Done |
+| Findings count — unique issue groups vs. raw count | ✅ Done |
+| Five assessment types (COMPREHENSIVE HTML + 4 Markdown) | ✅ Done |
+| Comprehensive Assessment HTML output (fixed system prompt conflict) | ✅ Done |
+| MS Learn enrichment (live fetch at generation time) | ✅ Done |
+| Interactive Assessment: AI generation on every create/recreate | ✅ Done |
+| Interactive Assessment: "View Report" + "Dashboard" split in portal | ✅ Done |
+| Presentation dashboard: all pages use merged topology (fixes "1 subscription") | ✅ Done |
+| Error surfacing in create-assessment-button | ✅ Done |
 
 ---
 
-### Step 2 — Bootstrap Terraform Backend
+## Beta — Step 1: Fresh Environment Deployment
 
-Run workflow `000-bootstrap-backend.yml` **once**. This creates:
-- Resource group `rg-cna-tfstate` (dedicated to Terraform state — never touched by Terraform itself)
-- Storage account `stcnatfstate`
-- Blob container `tfstate`
+The dev environment resources are being deleted. Redeploy from scratch using the
+sequence below. All code handles a blank Azure environment — migrations run in the
+Docker migrator stage, no seed data is required.
 
-All defaults are pre-filled correctly — just hit **Run workflow** with `location = southcentralus`.
+### 1a. Verify GitHub Secrets & Variables Are Still Set
 
-After it completes, set these GitHub **Repository Variables**:
+Before deploying, confirm all required values are in GitHub Settings:
 
-| Variable | Value |
-|---|---|
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` |
-| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
-| `TFSTATE_CONTAINER` | `tfstate` |
+**Secrets:**
 
-> Workload resources (`rg-cna-dev-scus`) are created separately by Terraform in Step 4.
-> Keeping tfstate in its own RG means a `terraform destroy` of dev cannot affect state.
+| Secret | Status |
+| --- | --- |
+| `AZURE_CLIENT_ID` | ⚠️ Verify still valid after resource deletion |
+| `AZURE_TENANT_ID` | Should be unchanged |
+| `AZURE_SUBSCRIPTION_ID` | Should be unchanged |
+| `CNA_POSTGRES_ADMIN_PASSWORD` | Should be unchanged |
+| `CNA_ENTRA_CLIENT_SECRET` | ⚠️ Verify — Entra secret may have rotated |
+| `CNA_NEXTAUTH_SECRET` | Should be unchanged |
 
----
+**Variables:**
 
-### Step 3 — Build and Push Container Images
+| Variable | Notes |
+| --- | --- |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` — tfstate RG survives env deletion |
+| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` — survives env deletion |
+| `TFSTATE_CONTAINER` | `tfstate` — survives env deletion |
+| `CNA_ENTRA_CLIENT_ID` | Should be unchanged |
+| `CNA_NEXTAUTH_URL` | Reset to `none` until new Front Door hostname is known |
+| `CNA_AZURE_OPENAI_DEPLOYMENT` | Should be unchanged (e.g. `gpt-4o`) |
+| `APPLICATION_INSIGHTS_NAME` | Reset to `none` — will be recreated by Terraform |
+| `KEY_VAULT_NAME` | Reset to `none` — will be recreated by Terraform |
 
-Run workflow `02-build-and-publish.yml` (or it may have auto-triggered on the last push).
+> The Terraform state RG (`rg-cna-tfstate`) is isolated from the workload RG
+> (`rg-cna-dev-scus`) and is NOT deleted when tearing down the dev environment.
+> Terraform state is preserved — the next `terraform apply` will create fresh resources
+> in the workload RG rather than re-importing.
 
-This builds and pushes three images to GHCR:
-- `ghcr.io/saulpatinojr/cna-api:{sha}`
-- `ghcr.io/saulpatinojr/cna-worker:{sha}`
-- `ghcr.io/saulpatinojr/cna-web:{sha}`
+### 1b. Run Workflow 010 — Validate Prerequisites
 
-**Verify in GitHub:**
-- Actions tab → `02 Build and Publish` → confirm all three image jobs are green
-- Packages tab → confirm three packages appear under your profile
+- [ ] Run `010-validate-prereqs.yml` → confirm all secrets/variables/OIDC pass
 
-> The image SHA tags are what Terraform references in Step 4.
+### 1c. Build Container Images
 
----
+- [ ] Push to main OR manually run `030-build-images.yml`
+- [ ] Confirm three images appear in GitHub Packages (cna-api, cna-worker, cna-web)
+- [ ] Note the SHA tag from the build manifest (`.deployment-catalog/latest-build.json`)
 
-### Step 4 — First Terraform Deploy (dev)
+### 1d. Deploy Azure Infrastructure
 
-Run workflow `031-deploy-azure.yml`.
+- [ ] Run `031-deploy-azure.yml` (environment: `dev`)
+- [ ] Watch Terraform plan output — confirm only `create` actions (no orphaned state)
+- [ ] Wait for green (~20 min)
+- [ ] Copy `frontdoor_endpoint_host_name` from Terraform outputs
+- [ ] Update `CNA_NEXTAUTH_URL` GitHub Variable → new Front Door hostname
+- [ ] Update Entra ID redirect URI → `https://<new-hostname>/api/auth/callback/microsoft-entra-id`
+- [ ] Re-run `031-deploy-azure.yml` to apply the updated NextAuth URL
+- [ ] Update `KEY_VAULT_NAME` and `APPLICATION_INSIGHTS_NAME` variables from outputs
 
-This is the main infra deploy (~20 min). It provisions:
-- VNet + subnets + NSG (`vnet-cna-dev-scus-platform`)
-- Container Apps Environment (`cae-cna-dev-scus-platform`)
-- Container Apps — api, worker, web (`ca-cna-dev-scus-api`, etc.)
-- Key Vault (`kv-cna-dev-scus`)
-- Storage account (`stcnadevscus`)
-- PostgreSQL Flexible Server (`psqlf-cna-dev-scus-platform`)
-- Application Insights (`appi-cna-dev-scus-platform`)
-- Azure OpenAI (`aoaicnadevscus`)
-- Front Door + WAF (`afd-cna-dev-scus-platform`, `afdwafcnadevscus`)
-- Managed Identity (`id-cna-dev-scus-platform`)
+### 1e. Validate the Live Platform
 
-**How to run:**
-1. GitHub repo → Actions tab
-2. `03 Deploy Azure Dev` → `Run workflow` → branch: `main`, environment: `dev`
-3. Watch the Terraform plan step — review the plan output before it applies
-4. Wait for green check (~20 min)
-
-**After it completes:**
-- Retrieve Key Vault name and App Insights name from Terraform outputs
-- Update GitHub repository variables `KEY_VAULT_NAME` and `APPLICATION_INSIGHTS_NAME`
-- Re-run workflow 03 to pick up the new values (the skip guards will now lift)
-
----
-
-### Step 5 — Validate the Live Platform
-
-After workflow 03 completes:
-
-- [ ] Open Azure Portal → Resource Group `rg-cna-dev-scus` — all resources present
-- [ ] Navigate to Front Door URL (from Terraform output `frontdoor_hostname`) — web app loads
-- [ ] Sign in with Microsoft Entra — auth flow completes, dashboard loads
-- [ ] Run `cna init` against the live API endpoint — engagement store created
-- [ ] Check Application Insights → Live Metrics — traffic shows up
+- [ ] Run `011-sync-keys.yml` → confirm all Key Vault secrets are populated
+- [ ] Navigate to Front Door URL → web app loads
+- [ ] Sign in with Microsoft Entra → auth flow completes, dashboard loads
+- [ ] Create a test engagement → confirm DB write succeeds
+- [ ] Add a cloud credential → confirm encryption/decryption works
+- [ ] Run discovery → confirm per-subscription job fires, progress updates
+- [ ] Check Application Insights Live Metrics → traffic shows up
+- [ ] Generate at least one assessment → confirm AI content is returned and stored
+- [ ] Create interactive assessment → confirm AI generation completes (~30–60 sec)
+- [ ] Open presentation dashboard → confirm subscription count matches actual subscriptions synced
 
 ---
 
-### Step 6 — First Real Engagement (smoke test)
+## Beta — Step 2: Beta Validation Checklist
 
-- [ ] Create a test engagement via `cna init --client test-client`
-- [ ] Run discovery phase: `cna discover --engagement {id} --platform aws --mock`
-- [ ] Run analysis: `cna analyze --engagement {id}`
-- [ ] Run report: `cna report --engagement {id} --preview`
-- [ ] Verify HTML preview renders without errors
+Once the environment is up and smoke-tested, run through these scenarios:
+
+### Discovery
+
+- [ ] Add two or more Azure credentials to a single engagement
+- [ ] Run "Re-sync all" → confirm two independent jobs appear (one per credential)
+- [ ] Confirm each subscription card has its own progress bar and log
+- [ ] Check inventory page → confirm both subscriptions appear merged
+
+### Findings
+
+- [ ] Run AI analysis after discovery → confirm findings are stored
+- [ ] Check findings page header: unique-issue count should differ from raw total
+- [ ] Apply severity filter → confirm "Showing X of Y issues (Z of N findings)" label updates
+
+### Deliverables
+
+- [ ] Generate each of the 5 assessment types individually
+- [ ] Generate all assessments at once → confirm 5 deliverables created
+- [ ] Open COMPREHENSIVE_ASSESSMENT → confirm it renders as HTML (not Markdown)
+- [ ] Delete all deliverables → regenerate → confirm fresh AI content each time
+
+### Interactive Assessment / Presentation
+
+- [ ] Create interactive assessment → button shows "Generating with AI…"
+- [ ] After completion, confirm "View Report" (AI HTML) AND "Dashboard" buttons appear
+- [ ] Open Dashboard (presentation) → Executive page shows correct subscription count
+- [ ] All 5 presentation pages load without errors (overview, executive, technical, compliance, remediation)
+
+### Auth & Roles
+
+- [ ] Sign in as ANALYST → can create/run engagements
+- [ ] Confirm REVIEWER role can view but not trigger discovery
+- [ ] Confirm CLIENT role reaches deliverables portal only
 
 ---
 
-## Future Work (post-deployment)
+## Post-Beta Roadmap
 
-| Item | Notes |
-|---|---|
-| Production deployment | Run workflow `03` targeting `prod` environment after dev is stable |
-| JA (Japanese) language toggle | `ja_review_complete` flag — requires translated glossary review |
-| MCP server wiring | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
-| PPTX executive deck review | Template structure signed off; validate with real findings data |
-| Client portal hardening | Retention engine (90 days), SAS token TTL |
-| Pre-commit hook enforcement | `detect-secrets` + `gitleaks` gates active; monitor for false positives |
+| Item | Priority | Notes |
+| --- | --- | --- |
+| Production deployment | High | Run `031` targeting `prod` after dev Beta validation |
+| AWS Provider Expansion (Phase G) | High | Azure parity; needs Phase C discovery stubs for AWS |
+| Phase C: Azure network/security discovery stubs | Medium | `azure_network/security` module stubs — remaining Phase C work |
+| JA (Japanese) language toggle | Low | `ja_review_complete` flag — requires translated glossary review |
+| MCP server wiring | Low | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
+| Client portal hardening | Medium | Retention engine (90 days), SAS token TTL enforcement |
+| Pre-commit hook enforcement monitoring | Ongoing | `detect-secrets` + `gitleaks` — monitor for false positives |
+| Node.js Dockerfile base image SHA pin | Low | Pin `node:20-alpine@sha256:<hash>` for full supply chain compliance |
+| gitleaks-action SHA pin in `020-test-codebase.yml` | Low | Currently uses `v2` tag — TODO comment exists in workflow |
 
 ---
 
 ## Useful Reference
 
 | Document | Path |
-|---|---|
+| --- | --- |
 | Phase sign-offs | `documentation/phase-reviews/phase-critiques-and-sign-offs.md` |
 | Naming conventions | `documentation/architecture/40-naming-conventions.md` |
 | Azure infra reference | `documentation/architecture/38-azure-infra-deployment-reference.md` |
 | Platform architecture | `documentation/architecture/39-platform-architecture-revised.md` |
-| OIDC setup blog post | `Personal-Site_HCW/content/blog/2026-03-08-github-actions-azure-oidc-no-secrets.md` |
-| Secrets vs Variables | `Personal-Site_HCW/content/blog/2026-03-08-github-actions-secrets-vs-variables.md` |
+| Deployment guide | `documentation/deployment-guide.md` |
+| Secrets reference | `documentation/secrets-reference.md` |
+| Workflows guide | `documentation/workflows-guide.md` |

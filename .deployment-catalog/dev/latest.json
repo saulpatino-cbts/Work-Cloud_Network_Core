@@ -1,11 +1,11 @@
 {
   "environment": "dev",
   "deploy_mode": "release",
-  "api_image": "ghcr.io/saulpatinojr/cna-api:sha-ed7706e",
-  "worker_image": "ghcr.io/saulpatinojr/cna-worker:sha-ed7706e",
-  "web_image": "ghcr.io/saulpatinojr/cna-web:sha-ed7706e",
-  "commit_sha": "0baeaf2f4c81b2ef704d4e400966de69d69c2438",
-  "workflow_run_id": "24383731894",
+  "api_image": "ghcr.io/saulpatinojr/cna-api:sha-587dd7f",
+  "worker_image": "ghcr.io/saulpatinojr/cna-worker:sha-587dd7f",
+  "web_image": "ghcr.io/saulpatinojr/cna-web:sha-587dd7f",
+  "commit_sha": "e4d8b2956e9f7491a4052f5af3482cb859fe7031",
+  "workflow_run_id": "24386162335",
   "approval_status": "approved",
   "health_status": "healthy",
   "validation_checks": {

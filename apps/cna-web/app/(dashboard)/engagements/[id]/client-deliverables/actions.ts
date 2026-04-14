@@ -3,8 +3,54 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { generateDeliverableContent } from "@/lib/openai";
 
-// Create a single INTERACTIVE_ASSESSMENT deliverable record (replaces existing if present)
+// ─── Multi-subscription topology merge (same pattern as deliverables/actions.ts) ─
+async function getMergedTopologyJson(engagementId: string): Promise<string | null> {
+  const completedJobs = await prisma.discoveryJob.findMany({
+    where: { engagementId, status: "COMPLETED" },
+    orderBy: { completedAt: "desc" },
+    select: { topologyJson: true, credentialId: true },
+    take: 100,
+  }).catch(() => []);
+
+  if (!completedJobs.length) return null;
+
+  const latestByCredential = new Map<string, string>();
+  for (const job of completedJobs) {
+    const key = job.credentialId ?? "__none__";
+    if (!latestByCredential.has(key) && job.topologyJson) {
+      latestByCredential.set(key, job.topologyJson);
+    }
+  }
+
+  if (latestByCredential.size === 0) return null;
+  if (latestByCredential.size === 1) return [...latestByCredential.values()][0];
+
+  let tenantId = "";
+  const seenSubIds = new Set<string>();
+  const mergedSubs: unknown[] = [];
+
+  for (const json of latestByCredential.values()) {
+    try {
+      const topo = JSON.parse(json) as { tenant_id?: string; subscriptions?: Array<{ subscription_id?: string }> };
+      if (!tenantId && topo.tenant_id) tenantId = topo.tenant_id;
+      for (const sub of topo.subscriptions ?? []) {
+        if (sub.subscription_id && !seenSubIds.has(sub.subscription_id)) {
+          seenSubIds.add(sub.subscription_id);
+          mergedSubs.push(sub);
+        }
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  return JSON.stringify({ tenant_id: tenantId, subscriptions: mergedSubs });
+}
+
+// ─── Create Interactive Assessment with AI-generated content ──────────────────
+
+// Create a single INTERACTIVE_ASSESSMENT deliverable record (replaces existing).
+// Calls OpenAI to generate a fresh comprehensive HTML assessment every time.
 export async function createInteractiveAssessment(
   engagementId: string,
 ): Promise<{ error?: string; success?: boolean }> {
@@ -16,23 +62,77 @@ export async function createInteractiveAssessment(
   });
   if (!member) return { error: "Access denied." };
 
-  // Delete any existing interactive assessment for this engagement (one at a time)
+  const [engagement, findings, documents, existingDeliverables, credentials] = await Promise.all([
+    prisma.engagement.findUnique({ where: { id: engagementId } }),
+    prisma.finding.findMany({
+      where: { engagementId },
+      orderBy: [{ severity: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.ingestedDocument.findMany({
+      where: { engagementId, parsedText: { not: null } },
+      select: { fileName: true, parsedText: true },
+    }),
+    prisma.deliverable.findMany({
+      where: { engagementId, type: { not: "INTERACTIVE_ASSESSMENT" } },
+      orderBy: { createdAt: "desc" },
+      select: { type: true, title: true },
+    }),
+    prisma.cloudCredential.findMany({
+      where: { engagementId },
+      select: { label: true, platform: true, tenantId: true, subscriptionIds: true },
+    }),
+  ]);
+
+  if (!engagement) return { error: "Engagement not found." };
+  if (findings.length === 0) {
+    return { error: "No findings yet. Run discovery and/or AI analysis before generating the interactive assessment." };
+  }
+
+  const mergedTopologyJson = await getMergedTopologyJson(engagementId);
+  const date = new Date().toISOString().split("T")[0];
+  const title = `${engagement.clientOrg} — Interactive Assessment — ${date}`;
+
+  let content: string;
+  try {
+    content = await generateDeliverableContent({
+      type: "COMPREHENSIVE_ASSESSMENT",
+      title,
+      clientOrg: engagement.clientOrg,
+      engagementName: engagement.name,
+      findings,
+      topologyJson: mergedTopologyJson,
+      documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+      customerLogoUrl: null,
+      credentialsInfo: credentials.map((c) => ({
+        label: c.label,
+        platform: c.platform,
+        tenantId: c.tenantId,
+        subscriptionIds: c.subscriptionIds,
+      })),
+      previousAssessments: existingDeliverables.map((d) => ({
+        type: d.type,
+        title: d.title,
+      })),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
+      return { error: "AI generation failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
+    }
+    return { error: `AI generation failed: ${msg.slice(0, 200)}` };
+  }
+
+  // Delete any previous interactive assessment and replace with the fresh AI-generated one
   await prisma.deliverable.deleteMany({
     where: { engagementId, type: "INTERACTIVE_ASSESSMENT" },
   });
 
-  const engagement = await prisma.engagement.findUnique({
-    where: { id: engagementId },
-    select: { clientOrg: true, name: true },
-  });
-  if (!engagement) return { error: "Engagement not found." };
-
-  const date = new Date().toISOString().split("T")[0];
   await prisma.deliverable.create({
     data: {
       engagementId,
       type: "INTERACTIVE_ASSESSMENT",
-      title: `${engagement.clientOrg} — Interactive Assessment — ${date}`,
+      title,
+      content,
       publishedAt: new Date(),
       publishedBy: session.user.id,
     },

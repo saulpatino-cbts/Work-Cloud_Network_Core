@@ -175,6 +175,13 @@ export function FindingsClient({ findings }: Props) {
   const liveCount = useMemo(() => findings.filter((f) => !f.aiGenerated).length, [findings]);
   const aiCount = useMemo(() => findings.filter((f) => f.aiGenerated).length, [findings]);
 
+  // Unique issue group count across ALL findings (unfiltered) — shown in the header
+  const totalGroups = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of findings) keys.add(`${f.severity}::${f.category}::${normalizeTitle(f.title)}`);
+    return keys.size;
+  }, [findings]);
+
   const sevCounts = useMemo(() => {
     const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFORMATIONAL: 0 } as Record<Sev, number>;
     for (const f of findings) c[f.severity as Sev]++;
@@ -241,10 +248,12 @@ export function FindingsClient({ findings }: Props) {
           <div>
             <h2 className="text-lg font-semibold text-navy-100">
               Findings
-              <span className="ml-2 text-base font-normal text-navy-400">({total})</span>
+              <span className="ml-2 text-base font-normal text-navy-400">
+                {totalGroups} unique issues
+              </span>
             </h2>
             <p className="mt-0.5 text-xs text-navy-500">
-              {liveCount} live discovery · {aiCount} AI analysis
+              {total} total findings · {liveCount} live discovery · {aiCount} AI analysis
             </p>
           </div>
 
@@ -276,9 +285,10 @@ export function FindingsClient({ findings }: Props) {
       {/* ── Risk matrix ── */}
       {categories.length > 0 && (
         <div className="glass p-5">
-          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-navy-500">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-navy-500">
             Risk Matrix — Severity × Category
           </h3>
+          <p className="mb-4 text-[10px] text-navy-600">Raw finding counts across all subscriptions and resources</p>
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
@@ -330,6 +340,7 @@ export function FindingsClient({ findings }: Props) {
           {/* Severity toggles */}
           <div className="flex flex-wrap gap-1.5">
             <button
+              type="button"
               onClick={() => setSevFilter("ALL")}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 sevFilter === "ALL"
@@ -342,6 +353,7 @@ export function FindingsClient({ findings }: Props) {
             {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
               <button
                 key={sev}
+                type="button"
                 onClick={() => setSevFilter(sevFilter === sev ? "ALL" : sev)}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                   sevFilter === sev
@@ -359,6 +371,7 @@ export function FindingsClient({ findings }: Props) {
           {/* Category + source selects */}
           <div className="ml-auto flex gap-2">
             <select
+              aria-label="Filter by category"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -369,6 +382,7 @@ export function FindingsClient({ findings }: Props) {
               ))}
             </select>
             <select
+              aria-label="Filter by source"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value as "ALL" | "LIVE" | "AI")}
               className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -382,7 +396,7 @@ export function FindingsClient({ findings }: Props) {
 
         {filtered.length !== findings.length && (
           <p className="mt-2 text-xs text-navy-600">
-            Showing {filtered.length} of {total} findings
+            Showing {grouped.length} of {totalGroups} issues ({filtered.length} of {total} findings)
           </p>
         )}
       </div>

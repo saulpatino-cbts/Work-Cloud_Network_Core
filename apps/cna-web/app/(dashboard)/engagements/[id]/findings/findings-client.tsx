@@ -2,9 +2,81 @@
 
 import { useState, useMemo } from "react";
 
-// ─── InstanceRow helper ───────────────────────────────────────────────────────
+// ─── Resource label helpers ────────────────────────────────────────────────────
 
-function InstanceRow({ f, idx, total }: { f: FindingItem; idx: number; total: number }) {
+/**
+ * Strip quoted resource names from a finding title to produce a grouping pattern.
+ * "No Azure Firewall deployed in 'sub-conn-tst'" → "no azure firewall deployed in '…'"
+ * "VNet 'my-vnet' has no DDoS Protection Plan"  → "vnet '…' has no ddos protection plan"
+ */
+function normalizeTitle(title: string): string {
+  return title.replace(/'[^']+'/g, "'…'").toLowerCase().trim();
+}
+
+/**
+ * Extract a human-readable resource identifier from a finding's title + description.
+ * Priority: RG/ResourceName > ResourceName > first quoted string.
+ *
+ * Examples:
+ *   title: "VNet 'my-vnet' has no DDoS Protection Plan"
+ *   desc:  "VNet 'my-vnet' (eastus, RG: my-rg) has no..."
+ *   → "my-rg / my-vnet"
+ *
+ *   title: "No Azure Firewall deployed in 'sub-conn-tst'"
+ *   → "sub-conn-tst"
+ *
+ *   title: "Subnet 'snet-app' in 'vnet-hub' has no NSG"
+ *   → "snet-app · vnet-hub"
+ */
+function extractResourceLabel(title: string, description: string): string {
+  const quoted = [...title.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  // Look for "RG: my-rg" or "(RG: my-rg," inside the description
+  const rgMatch = description.match(/[,()\s]RG:\s*([^\s,.()']+)/i);
+  const rg = rgMatch?.[1] ?? null;
+
+  if (quoted.length === 0) return title.slice(0, 72);
+  if (quoted.length === 1) {
+    return rg && rg !== quoted[0] ? `${rg} / ${quoted[0]}` : quoted[0];
+  }
+  // Multiple resource names in the title (e.g. subnet + vnet)
+  if (rg && rg !== quoted[0]) return `${rg} / ${quoted[0]}`;
+  return quoted.slice(0, 2).join(" · ");
+}
+
+/**
+ * Within a group, deduplicate findings that share the same resource label
+ * (true duplicates from repeated sync runs). Returns deduplicated entries with count.
+ */
+function deduplicateInstances(
+  items: FindingItem[],
+): { label: string; finding: FindingItem; count: number }[] {
+  const seen = new Map<string, { finding: FindingItem; count: number }>();
+  for (const f of items) {
+    const label = extractResourceLabel(f.title, f.description);
+    if (seen.has(label)) {
+      seen.get(label)!.count++;
+    } else {
+      seen.set(label, { finding: f, count: 1 });
+    }
+  }
+  return Array.from(seen.entries()).map(([label, { finding, count }]) => ({
+    label,
+    finding,
+    count,
+  }));
+}
+
+// ─── InstanceRow ─────────────────────────────────────────────────────────────
+
+function InstanceRow({
+  label,
+  finding,
+  count,
+}: {
+  label: string;
+  finding: FindingItem;
+  count: number;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="px-5">
@@ -13,23 +85,36 @@ function InstanceRow({ f, idx, total }: { f: FindingItem; idx: number; total: nu
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100"
       >
-        <svg className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${open ? "rotate-90" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg
+          className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${open ? "rotate-90" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
-        <span className="text-xs font-semibold text-navy-400">Instance {idx + 1} of {total}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold text-navy-300">
+          {label}
+        </span>
+        {count > 1 && (
+          <span className="shrink-0 rounded border border-navy-600/40 bg-navy-700/40 px-1.5 py-0.5 text-[10px] font-semibold text-navy-400">
+            ×{count} syncs
+          </span>
+        )}
       </button>
       {open && (
         <div className="pb-4 pl-5">
-          <p className="mb-2.5 text-sm leading-relaxed text-navy-300">{f.description}</p>
-          {f.recommendation && (
+          <p className="mb-2.5 text-sm leading-relaxed text-navy-300">{finding.description}</p>
+          {finding.recommendation && (
             <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
               <p className="text-xs leading-relaxed text-teal-300">
                 <span className="font-semibold text-teal-200">Recommendation: </span>
-                {f.recommendation}
+                {finding.recommendation}
               </p>
-              <a href={f.msLearnUrl} target="_blank" rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline">
+              <a
+                href={finding.msLearnUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
+              >
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
@@ -114,16 +199,17 @@ export function FindingsClient({ findings }: Props) {
     return true;
   }), [findings, sevFilter, categoryFilter, sourceFilter]);
 
-  // Group findings by normalized title — identical issues on different resources collapse into one row
+  // Group by normalized title — strips quoted resource names so the same finding type
+  // on different resources/subscriptions collapses into one group.
+  // e.g. "No Firewall in 'sub-A'" + "No Firewall in 'sub-B'" → one group, two instances.
   const grouped = useMemo(() => {
     const map = new Map<string, FindingItem[]>();
     for (const f of filtered) {
-      const key = `${f.severity}::${f.category}::${f.title.toLowerCase().trim()}`;
+      const key = `${f.severity}::${f.category}::${normalizeTitle(f.title)}`;
       const arr = map.get(key) ?? [];
       arr.push(f);
       map.set(key, arr);
     }
-    // Preserve severity sort order
     return Array.from(map.entries()).sort(([ka], [kb]) => {
       const sa = ka.split("::")[0] as Sev;
       const sb = kb.split("::")[0] as Sev;
@@ -312,8 +398,15 @@ export function FindingsClient({ findings }: Props) {
             const rep = items[0];
             const sev = rep.severity as Sev;
             const meta = SEV_META[sev];
-            const isGroup = items.length > 1;
+            // Deduplicate within the group: same resource label = same finding from multiple syncs
+            const dedupedInstances = deduplicateInstances(items);
+            const isGroup = dedupedInstances.length > 1;
             const isExpanded = expandedGroupKey === groupKey;
+            // Display title uses the normalized pattern (e.g. "No Azure Firewall deployed in '…'")
+            const displayTitle = normalizeTitle(rep.title)
+              // Capitalise first letter for display
+              .replace(/^'/, "'")
+              .replace(/^\w/, (c) => c.toUpperCase());
 
             return (
               <div key={groupKey} className={`border-l-4 ${meta.border}`}>
@@ -324,7 +417,7 @@ export function FindingsClient({ findings }: Props) {
                   className={`w-full px-5 py-3.5 text-left transition-colors ${
                     isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
                   }`}
-                  aria-expanded={isExpanded ? "true" : "false"}
+                  aria-expanded={isExpanded}
                 >
                   <div className="flex items-start gap-3">
                     <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}>
@@ -332,7 +425,7 @@ export function FindingsClient({ findings }: Props) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold leading-snug text-navy-100">
-                        {rep.title}
+                        {displayTitle}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
@@ -347,7 +440,7 @@ export function FindingsClient({ findings }: Props) {
                         </span>
                         {isGroup && (
                           <span className="inline-flex items-center rounded-full border border-navy-600/40 bg-navy-700/40 px-2 py-0.5 text-xs font-semibold text-navy-300">
-                            {items.length} instances
+                            {dedupedInstances.length} affected resources
                           </span>
                         )}
                       </div>
@@ -365,13 +458,22 @@ export function FindingsClient({ findings }: Props) {
                 {isExpanded && (
                   <div className="divide-y divide-navy-700/20 bg-navy-800/10">
                     {isGroup ? (
-                      /* Multiple instances — show each one */
-                      items.map((f, idx) => (
-                        <InstanceRow key={f.id} f={f} idx={idx} total={items.length} />
+                      /* Multiple affected resources — one row per resource */
+                      dedupedInstances.map(({ label, finding, count }) => (
+                        <InstanceRow key={finding.id} label={label} finding={finding} count={count} />
                       ))
                     ) : (
-                      /* Single finding — show detail inline */
+                      /* Single resource — show detail inline */
                       <div className="px-5 pb-5 pt-2">
+                        {/* Resource identifier */}
+                        <p className="mb-2 font-mono text-xs font-semibold text-navy-400">
+                          {dedupedInstances[0].label}
+                          {dedupedInstances[0].count > 1 && (
+                            <span className="ml-2 rounded border border-navy-600/40 bg-navy-700/40 px-1.5 py-0.5 text-[10px] font-semibold text-navy-400">
+                              ×{dedupedInstances[0].count} syncs
+                            </span>
+                          )}
+                        </p>
                         <p className="mb-3 text-sm leading-relaxed text-navy-300">{rep.description}</p>
                         {rep.recommendation && (
                           <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">

@@ -52,6 +52,7 @@ from cna.core.topology_schema import (
     AzureRouteTable,
     AzureSubnet,
     AzureSubscriptionTopology,
+    SubnetType,
     AzureTopology,
     AzureVHub,
     AzureVirtualNetworkGateway,
@@ -113,6 +114,48 @@ def _safe_list(iterable):
     except Exception as exc:
         logger.debug("Safe-list failed: %s", exc)
         return []
+
+
+# Well-known subnet names that are always infrastructure-owned (never workload PUBLIC)
+_INFRA_SUBNET_NAMES = {
+    "gatewaysubnet",
+    "azurefirewallsubnet",
+    "azurefirewallmanagementsubnet",
+    "azurebastionsubnet",
+    "routeservicesubnet",
+}
+
+
+def _classify_subnet(
+    name: str,
+    nsg_id: str | None,
+    route_table_id: str | None,
+    delegation: str | None,
+    default_outbound_access: bool,
+) -> SubnetType:
+    """Classify a subnet based on its control-plane configuration.
+
+    Rules (in priority order):
+    - Well-known infra subnet names → PRIVATE (special-purpose, never workload-PUBLIC)
+    - Delegated to a PaaS service → PRIVATE
+    - Has NSG AND route table → ISOLATED (both segmentation layers present)
+    - Has NSG OR route table → PRIVATE
+    - No NSG, no route table, default outbound enabled → PUBLIC (uncontrolled)
+    - Anything else → UNKNOWN
+    """
+    if name.lower() in _INFRA_SUBNET_NAMES:
+        return SubnetType.PRIVATE
+    if delegation:
+        return SubnetType.PRIVATE
+    has_nsg = bool(nsg_id)
+    has_udr = bool(route_table_id)
+    if has_nsg and has_udr:
+        return SubnetType.ISOLATED
+    if has_nsg or has_udr:
+        return SubnetType.PRIVATE
+    if default_outbound_access:
+        return SubnetType.PUBLIC
+    return SubnetType.UNKNOWN
 
 
 class AzureDiscovery:
@@ -379,7 +422,11 @@ class AzureDiscovery:
 
         self._progress(f"[{sub_name}] Collecting observability data…")
         try:
-            topo.observability = self._collect_observability(net, sub_id, len(topo.nsgs))
+            topo.observability = self._collect_observability(
+                net, sub_id, len(topo.nsgs),
+                firewalls=topo.firewalls,
+                bastion_hosts=topo.bastion_hosts,
+            )
             obs = topo.observability
             self._progress(
                 f"[{sub_name}] Observability: "
@@ -460,15 +507,18 @@ class AzureDiscovery:
                 if hasattr(s, "private_link_service_network_policies"):
                     pl_svc_policy = str(s.private_link_service_network_policies or "Enabled")
 
+                _nsg_id = s.network_security_group.id if s.network_security_group else None
+                _rt_id = s.route_table.id if s.route_table else None
+                _delegation = s.delegations[0].service_name if s.delegations else None
                 subnets.append(
                     AzureSubnet(
                         id=s.id,
                         name=s.name,
                         address_prefix=s.address_prefix
                         or (extra_prefixes[0] if extra_prefixes else ""),
-                        nsg_id=s.network_security_group.id if s.network_security_group else None,
+                        nsg_id=_nsg_id,
                         nsg_name=nsg_name,
-                        route_table_id=s.route_table.id if s.route_table else None,
+                        route_table_id=_rt_id,
                         route_table_name=rt_name,
                         nat_gateway_id=nat_gw_id,
                         service_endpoints=[se.service for se in (s.service_endpoints or [])],
@@ -477,8 +527,15 @@ class AzureDiscovery:
                         ),
                         private_link_service_network_policies=pl_svc_policy,
                         default_outbound_access=default_outbound,
-                        delegation=(s.delegations[0].service_name if s.delegations else None),
+                        delegation=_delegation,
                         address_prefixes=extra_prefixes,
+                        subnet_type=_classify_subnet(
+                            s.name or "",
+                            _nsg_id,
+                            _rt_id,
+                            _delegation,
+                            default_outbound,
+                        ),
                     )
                 )
 
@@ -1494,8 +1551,16 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ Observability
 
-    def _collect_observability(self, net, sub_id: str, nsg_count: int) -> ObservabilityData:
-        """Collect Network Watcher, Log Analytics, flow log, Traffic Analytics, and Bastion data."""
+    def _collect_observability(
+        self,
+        net,
+        sub_id: str,
+        nsg_count: int,
+        firewalls: list | None = None,
+        bastion_hosts: list | None = None,
+    ) -> ObservabilityData:
+        """Collect Network Watcher, Log Analytics, flow log, Traffic Analytics,
+        Bastion, and Firewall diagnostic settings data."""
         obs = ObservabilityData(nsg_flow_logs_total=nsg_count)
 
         # Network Watcher presence per region
@@ -1559,6 +1624,34 @@ class AzureDiscovery:
             )
         except Exception as e:
             logger.warning("[%s] Log Analytics listing failed: %s", sub_id, e)
+
+        # Firewall and Bastion diagnostic settings — check each resource for a
+        # Log Analytics sink via the Azure Monitor diagnostic settings API.
+        def _has_la_diagnostic(resource_id: str) -> bool:
+            try:
+                from azure.mgmt.monitor import MonitorManagementClient
+
+                mon = MonitorManagementClient(self._credential, sub_id)
+                for ds in _safe_list(mon.diagnostic_settings.list(resource_id)):
+                    if getattr(ds, "workspace_id", None):
+                        return True
+            except Exception as _e:
+                logger.debug(
+                    "Diagnostic settings query failed for %s: %s",
+                    resource_id,
+                    _e,
+                )
+            return False
+
+        for fw in firewalls or []:
+            obs.firewalls_total += 1
+            if _has_la_diagnostic(fw.id):
+                obs.firewalls_with_diagnostics += 1
+
+        for bh in bastion_hosts or []:
+            obs.bastion_total += 1
+            if _has_la_diagnostic(bh.id):
+                obs.bastion_with_diagnostics += 1
 
         return obs
 

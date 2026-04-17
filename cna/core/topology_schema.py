@@ -738,6 +738,9 @@ class ObservabilityData(BaseModel):
     # Bastion: how many bastion hosts have a Log Analytics diagnostic sink
     bastion_with_diagnostics: int = 0
     bastion_total: int = 0
+    # Firewalls: how many Azure Firewalls have a Log Analytics diagnostic sink
+    firewalls_with_diagnostics: int = 0
+    firewalls_total: int = 0
 
 
 class GatewayMetric(BaseModel):

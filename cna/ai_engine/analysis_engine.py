@@ -73,7 +73,10 @@ R_AZ_GW_SATURATION = "AZ-NET-008"
 R_AZ_FW_NO_HITS = "AZ-NET-009"
 R_AZ_LB_SNAT_EXHAUSTION = "AZ-NET-010"
 R_AZ_VNET_IP_EXHAUSTION = "AZ-NET-011"
+R_AZ_PEERING_FW_BYPASS = "AZ-NET-012"
+R_AZ_FW_NO_DIAGNOSTICS = "AZ-NET-013"
 R_AZ_TRAFFIC_ANALYTICS_MISSING = "AZ-NET-014"
+R_AZ_BASTION_NO_DIAGNOSTICS = "AZ-NET-015"
 
 # Severity thresholds
 _CRITICAL_IDS = {
@@ -95,6 +98,9 @@ _HIGH_IDS = {
 
 _MEDIUM_IDS = {
     R_AZ_TRAFFIC_ANALYTICS_MISSING,
+    R_AZ_FW_NO_DIAGNOSTICS,
+    R_AZ_BASTION_NO_DIAGNOSTICS,
+    R_AZ_PEERING_FW_BYPASS,
 }
 
 
@@ -433,6 +439,15 @@ class AnalysisEngine:
 
     # ---------------------------------------------------------------- Azure rules
 
+    # Well-known infrastructure subnet names excluded from workload checks
+    _INFRA_SUBNETS = frozenset({
+        "gatewaysubnet",
+        "azurefirewallsubnet",
+        "azurefirewallmanagementsubnet",
+        "azurebastionsubnet",
+        "routeservicesubnet",
+    })
+
     def _analyze_azure_subscription(self, sub_topo: AzureSubscriptionTopology) -> None:
         if sub_topo.discovery_blocked:
             return
@@ -461,7 +476,12 @@ class AnalysisEngine:
                                 framework="Azure Well-Architected Framework",
                                 pillar="Security",
                                 control="NS-1 — Establish network segmentation boundaries",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="ISO 27001:2022",
+                                pillar="Network Security",
+                                control="A.8.20 — Networks security",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -499,6 +519,17 @@ class AnalysisEngine:
                                     pillar="Networking",
                                     control="6.2",
                                 ),
+                                FrameworkMapping(
+                                    framework="PCI-DSS 4.0",
+                                    pillar="Network Security Controls",
+                                    control="Req 1.2 — Network security controls configured "
+                                    "and maintained",
+                                ),
+                                FrameworkMapping(
+                                    framework="ISO 27001:2022",
+                                    pillar="Network Security",
+                                    control="A.8.22 — Segregation of networks",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -532,6 +563,16 @@ class AnalysisEngine:
                                 pillar="Protect",
                                 control="PR.PT-4",
                             ),
+                            FrameworkMapping(
+                                framework="PCI-DSS 4.0",
+                                pillar="Network Security Controls",
+                                control="Req 1.3 — Restrict inbound and outbound traffic",
+                            ),
+                            FrameworkMapping(
+                                framework="ISO 27001:2022",
+                                pillar="Network Security",
+                                control="A.8.20 — Networks security",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -559,7 +600,12 @@ class AnalysisEngine:
                             framework="Azure Well-Architected Framework",
                             pillar="Reliability",
                             control="RE-3 — Use redundant connectivity",
-                        )
+                        ),
+                        FrameworkMapping(
+                            framework="ISO 27001:2022",
+                            pillar="Network Security",
+                            control="A.8.21 — Security of network services",
+                        ),
                     ],
                     status=FindingStatus.OPEN,
                 )
@@ -587,7 +633,17 @@ class AnalysisEngine:
                                 framework="Azure Well-Architected Framework",
                                 pillar="Security",
                                 control="NS-4 — Protect applications from external network attacks",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="PCI-DSS 4.0",
+                                pillar="Network Security Controls",
+                                control="Req 1.3 — Restrict inbound and outbound traffic",
+                            ),
+                            FrameworkMapping(
+                                framework="ISO 27001:2022",
+                                pillar="Network Security",
+                                control="A.8.23 — Web filtering",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -705,7 +761,8 @@ class AnalysisEngine:
 
         # AZ-NET-014: Traffic Analytics missing
         if sub_topo.observability:
-            if sub_topo.observability.nsg_flow_logs_enabled > 0 and sub_topo.observability.traffic_analytics_enabled == 0:
+            obs = sub_topo.observability
+            if obs.nsg_flow_logs_enabled > 0 and obs.traffic_analytics_enabled == 0:
                 self._emit(
                     Finding(
                         rule_id=R_AZ_TRAFFIC_ANALYTICS_MISSING,
@@ -716,8 +773,9 @@ class AnalysisEngine:
                         region="Global",
                         title="NSG Flow Logs are enabled but Traffic Analytics is disabled",
                         observed_state=ObservedState(
-                            fact=f"Subscription has {sub_topo.observability.nsg_flow_logs_enabled} active flow logs, "
-                            f"but {sub_topo.observability.traffic_analytics_enabled} have Traffic Analytics enabled.",
+                            fact=f"Subscription has {obs.nsg_flow_logs_enabled} active flow "
+                            f"logs, but {obs.traffic_analytics_enabled} have Traffic "
+                            f"Analytics enabled.",
                             evidence_ref=f"discovery:azure_{sub_id}.observability",
                         ),
                         framework_mappings=[
@@ -730,6 +788,172 @@ class AnalysisEngine:
                         status=FindingStatus.OPEN,
                     )
                 )
+
+            # AZ-NET-013: Firewall without Log Analytics diagnostic sink
+            if obs.firewalls_total > 0 and obs.firewalls_with_diagnostics < obs.firewalls_total:
+                missing = obs.firewalls_total - obs.firewalls_with_diagnostics
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_FW_NO_DIAGNOSTICS,
+                        severity=_severity(R_AZ_FW_NO_DIAGNOSTICS),
+                        resource_id=sub_id,
+                        resource_type="Microsoft.Network/azureFirewalls",
+                        account_id=sub_id,
+                        region="Global",
+                        title="Azure Firewall lacks Log Analytics diagnostic settings",
+                        observed_state=ObservedState(
+                            fact=f"{missing} of {obs.firewalls_total} Azure Firewall(s) "
+                            f"in subscription {sub_id} have no Log Analytics diagnostic "
+                            f"sink. Firewall rule logs and threat intel logs are lost.",
+                            evidence_ref=f"discovery:azure_{sub_id}.observability"
+                            f".firewalls_with_diagnostics",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="NS-3 — Deploy firewall at the edge of enterprise network",
+                            ),
+                            FrameworkMapping(
+                                framework="NIST CSF",
+                                pillar="Detect",
+                                control="DE.CM-1 — The network is monitored to detect potential "
+                                "cybersecurity events",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+            # AZ-NET-015: Bastion without Log Analytics diagnostic sink
+            if obs.bastion_total > 0 and obs.bastion_with_diagnostics < obs.bastion_total:
+                missing = obs.bastion_total - obs.bastion_with_diagnostics
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_BASTION_NO_DIAGNOSTICS,
+                        severity=_severity(R_AZ_BASTION_NO_DIAGNOSTICS),
+                        resource_id=sub_id,
+                        resource_type="Microsoft.Network/bastionHosts",
+                        account_id=sub_id,
+                        region="Global",
+                        title="Azure Bastion lacks session audit logging",
+                        observed_state=ObservedState(
+                            fact=f"{missing} of {obs.bastion_total} Bastion host(s) "
+                            f"in subscription {sub_id} have no Log Analytics diagnostic "
+                            f"sink. SSH/RDP session audit trails are unavailable.",
+                            evidence_ref=f"discovery:azure_{sub_id}.observability"
+                            f".bastion_with_diagnostics",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="PA-2 — Avoid standing access for user accounts and "
+                                "permissions",
+                            ),
+                            FrameworkMapping(
+                                framework="NIST CSF",
+                                pillar="Detect",
+                                control="DE.CM-3 — Personnel activity is monitored",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+        # AZ-NET-012: Peering firewall bypass
+        # Detect spoke VNets in a hub-spoke topology where a subnet lacks a
+        # UDR forcing 0.0.0.0/0 through the hub NVA/firewall.
+        rt_by_name = {rt.name: rt for rt in sub_topo.route_tables}
+        for vnet in sub_topo.vnets:
+            # A spoke VNet has at least one peering where the remote side
+            # uses gateway transit (use_remote_gateways=True on this side)
+            # or allows forwarded traffic (allow_forwarded_traffic=True).
+            is_spoke = any(
+                p.allow_forwarded_traffic or p.use_remote_gateways
+                for p in vnet.peerings
+            )
+            if not is_spoke:
+                continue
+
+            for subnet in vnet.subnets:
+                if subnet.name.lower() in self._INFRA_SUBNETS:
+                    continue
+                rt = rt_by_name.get(subnet.route_table_name or "")
+                if rt is None:
+                    # No UDR at all → spoke subnet with no forced routing
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_PEERING_FW_BYPASS,
+                            severity=_severity(R_AZ_PEERING_FW_BYPASS),
+                            resource_id=subnet.id,
+                            resource_type="Microsoft.Network/virtualNetworks/subnets",
+                            account_id=sub_id,
+                            region=vnet.location,
+                            title="Spoke subnet has no UDR — hub firewall may be bypassed",
+                            observed_state=ObservedState(
+                                fact=f"Subnet {subnet.name} in spoke VNet {vnet.name} "
+                                f"has no route table. Internet-bound traffic may egress "
+                                f"directly rather than through the hub NVA/firewall.",
+                                evidence_ref=f"discovery:azure_{sub_id}"
+                                f".vnets[id={vnet.id}].subnets[id={subnet.id}]"
+                                f".route_table_name",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Security",
+                                    control="NS-1 — Establish network segmentation boundaries",
+                                ),
+                                FrameworkMapping(
+                                    framework="Azure Security Benchmark",
+                                    pillar="Network Security",
+                                    control="NS-4",
+                                ),
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+                    continue
+
+                has_forced_route = any(
+                    r.address_prefix == "0.0.0.0/0"
+                    and r.next_hop_type == "VirtualAppliance"
+                    for r in rt.routes
+                )
+                if not has_forced_route:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_PEERING_FW_BYPASS,
+                            severity=_severity(R_AZ_PEERING_FW_BYPASS),
+                            resource_id=subnet.id,
+                            resource_type="Microsoft.Network/virtualNetworks/subnets",
+                            account_id=sub_id,
+                            region=vnet.location,
+                            title="Spoke subnet UDR lacks 0.0.0.0/0 → NVA route",
+                            observed_state=ObservedState(
+                                fact=f"Subnet {subnet.name} in spoke VNet {vnet.name} "
+                                f"has route table {rt.name} but no default route "
+                                f"(0.0.0.0/0) pointing to a VirtualAppliance. "
+                                f"Internet traffic may bypass the hub firewall.",
+                                evidence_ref=f"discovery:azure_{sub_id}"
+                                f".route_tables[name={rt.name}].routes",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Security",
+                                    control="NS-1 — Establish network segmentation boundaries",
+                                ),
+                                FrameworkMapping(
+                                    framework="Azure Security Benchmark",
+                                    pillar="Network Security",
+                                    control="NS-4",
+                                ),
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
 
     # ---------------------------------------------------------------- run
 

@@ -404,6 +404,21 @@ jobs:
           done
           az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
 
+      - name: Update GitHub Variables from Terraform outputs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
+          AI_NAME=$(terraform output -raw application_insights_name 2>/dev/null || echo "")
+          if [ -n "$KV_NAME" ]; then
+            gh variable set KEY_VAULT_NAME --body "$KV_NAME"
+            echo "KEY_VAULT_NAME updated: $KV_NAME"
+          fi
+          if [ -n "$AI_NAME" ]; then
+            gh variable set APPLICATION_INSIGHTS_NAME --body "$AI_NAME"
+            echo "APPLICATION_INSIGHTS_NAME updated: $AI_NAME"
+          fi
+
       - name: Export platform outputs
         id: export
         run: |

@@ -19,7 +19,7 @@ used by the CNA platform. It covers three surfaces:
 | AWS-only engagement (local) | `AWS_DEFAULT_REGION` + IAM credentials or `aws sso login` |
 | CD Publish to Azure (GitHub Actions) | `CNA_AZURE_CLIENT_ID`, `CNA_AZURE_TENANT_ID`, `CNA_AZURE_SUBSCRIPTION_ID` |
 | CD Publish to AWS (GitHub Actions) | `CNA_AWS_ROLE_ARN`, `CNA_PUBLISH_BUCKET` |
-| AI enrichment (MCP) | Optional — `AZURE_OPENAI_*` or `AWS_MCP_SERVER_URL` |
+| AI enrichment (MCP) | Optional — `CNA_MCP_SERVER_URL` (default) or `AZURE_OPENAI_*` / `AWS_MCP_SERVER_URL` (cloud-specific) |
 | JA regional reports | No secret — flag in CLI: `--regional-ja --ja-review-complete` |
 
 ---
@@ -63,7 +63,8 @@ For local development, just run `az login` and leave `AZURE_CLIENT_SECRET` blank
 | `AZURE_OPENAI_API_KEY` | Optional | Leave blank to use DefaultAzureCredential |
 | `AZURE_OPENAI_DEPLOYMENT_GPT4O` | Optional | Deployment name, default `gpt-4o` |
 | `AZURE_OPENAI_API_VERSION` | Optional | API version, default `2024-12-01-preview` |
-| `AZURE_MCP_SERVER_URL` | Optional | Azure MCP server if self-hosted |
+| `CNA_MCP_SERVER_URL` | Optional | Default MCP server URL (fallback when cloud-specific URLs not set). Set to `none` to disable. |
+| `AZURE_MCP_SERVER_URL` | Optional | Azure MCP server if self-hosted (overrides `CNA_MCP_SERVER_URL` for Azure modules) |
 
 If none of these are set, `cna analyze` falls back to offline recommendations (DD-003). Analysis and findings are unaffected — only recommendation enrichment degrades.
 

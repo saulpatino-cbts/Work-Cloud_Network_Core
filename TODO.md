@@ -152,40 +152,36 @@ that will produce incorrect or empty data in a live assessment.
 
 ### Code Bugs
 
-- [ ] **Fix `_collect_private_endpoints()` — PE IPs always empty**  
-  `azure_discovery.py` line 896–900: `pass` where NIC GET should resolve private IPs.  
-  Fix: call `net.network_interfaces.get(nic_rg, nic_name)` and populate `private_ip_addresses`.
+- [x] **Fix `_collect_private_endpoints()` — PE IPs always empty**  
+  Already implemented — NIC GET calls present at lines 905–918.
 
-- [ ] **Fix `vpn_client_pools` list-of-lists bug**  
-  `azure_discovery.py` line ~809: `.append(pool.address_prefixes or [])` → `.extend(pool.address_prefixes or [])`.  
-  Effect: gateway address pool serializes as `[["10.0.0.0/24"]]` instead of `["10.0.0.0/24"]`.
+- [x] **Fix `vpn_client_pools` list-of-lists bug**  
+  Already implemented — line 819 uses `.extend()`.
 
-- [ ] **Wire `azure_network.py` and `azure_security.py` stubs**  
-  Both files are `< 250 bytes`. They will import cleanly but return no data.  
-  Fix: either proxy to `azure_discovery.py` entrypoint, or raise `NotImplementedError` with a visible message.
+- [x] **Wire `azure_network.py` and `azure_security.py` stubs**  
+  Both now raise `NotImplementedError` with a clear user-facing message.
 
 ### Schema & Analysis Gaps
 
-- [ ] **Implement `_classify_subnet()` helper in `azure_discovery.py`**  
-  Populate `SubnetType` enum on each subnet based on: NSG presence + route table + delegation + `default_outbound_access`.  
-  Categories: `public` | `private` | `isolated` | `delegated`.
+- [x] **Implement `_classify_subnet()` helper in `azure_discovery.py`**  
+  Added module-level `_classify_subnet()`. `SubnetType` now populated on every subnet.  
+  Categories: `public` | `private` | `isolated` | `unknown`.
 
-- [ ] **Implement peering firewall-bypass check (`AZ-NET-012`) in `analysis_engine.py`**  
-  Cross-reference spoke VNet peerings (`allow_forwarded_traffic=True`) against spoke route tables.  
-  Fire when a spoke subnet lacks a UDR forcing `0.0.0.0/0` through the hub NVA/firewall.
+- [x] **Implement peering firewall-bypass check (`AZ-NET-012`) in `analysis_engine.py`**  
+  Fires on spoke subnets with no route table, or a route table missing `0.0.0.0/0 → VirtualAppliance`.
 
-- [ ] **Add firewall diagnostic settings check (`AZ-NET-013`) in `analysis_engine.py`**  
-  Fire when a `Microsoft.Network/azureFirewalls` resource exists but its Log Analytics
-  diagnostic setting is not detected in `observability.log_analytics_workspaces`.
+- [x] **Add firewall diagnostic settings check (`AZ-NET-013`) in `analysis_engine.py`**  
+  `_collect_observability()` now queries ARM diagnostic settings per firewall.  
+  `ObservabilityData.firewalls_with_diagnostics` / `firewalls_total` populated.  
+  AZ-NET-013 fires when `firewalls_total > firewalls_with_diagnostics`.
 
 ### CI/CD & Supply Chain
 
-- [ ] **Auto-write Terraform outputs to GitHub Variables in `031-deploy-azure.yml`**  
-  Add a step using `gh variable set KEY_VAULT_NAME` and `gh variable set APPLICATION_INSIGHTS_NAME`  
-  after `terraform apply` — eliminates the current manual copy-paste step.
+- [x] **Auto-write Terraform outputs to GitHub Variables in `031-deploy-azure.yml`**  
+  Step "Update GitHub Variables from Terraform outputs" added after `terraform apply`.
 
-- [ ] **Add `CNA_MCP_SERVER_URL` to `secrets-reference.md` and `.env.example`**  
-  Currently undocumented. Set to `none` at launch; prevents runtime 500s if code path is hit.
+- [x] **Add `CNA_MCP_SERVER_URL` to `secrets-reference.md` and `.env.example`**  
+  Added as `CNA_MCP_SERVER_URL=none` (default fallback). Both docs updated.
 
 ---
 
@@ -220,9 +216,10 @@ These items add real traffic telemetry.
   and `traffic_analytics_configuration.workspace_id` per flow log resource.  
   New rule `AZ-NET-014`: flow log enabled but Traffic Analytics disabled.
 
-- [ ] **Add Bastion diagnostic settings check**  
-  When a Bastion host is found, query its diagnostic settings for a Log Analytics sink.  
-  New rule `AZ-NET-013` (Bastion variant): Bastion without session logs.
+- [x] **Add Bastion diagnostic settings check**  
+  `_collect_observability()` queries ARM diagnostic settings per Bastion host.  
+  `ObservabilityData.bastion_with_diagnostics` / `bastion_total` populated.  
+  New rule `AZ-NET-015`: Bastion without session logs.
 
 - [ ] **Add Cost Management API call** (billing-derived throughput proxy)  
   Use `azure-mgmt-costmanagement` to query `Microsoft.Network` meter category MTD.  
@@ -231,12 +228,11 @@ These items add real traffic telemetry.
 
 ### Compliance Mappings
 
-- [ ] **Add PCI-DSS 4.0 `framework_mappings`** to existing rules `AZ-NET-001` through `AZ-NET-007`  
-  Req 1.2 → segmentation, Req 1.3 → inbound/outbound restriction, Req 10.6 → flow logs.  
-  No new rules required — additive change to existing `FrameworkMapping` lists.
+- [x] **Add PCI-DSS 4.0 `framework_mappings`** to existing rules `AZ-NET-001` through `AZ-NET-007`  
+  Req 1.2 → segmentation (AZ-NET-002), Req 1.3 → inbound/outbound (AZ-NET-003, 007).
 
-- [ ] **Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings  
-  Annex A controls for network security, segmentation, web filtering, and monitoring.
+- [x] **Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings  
+  A.8.20 (AZ-NET-001, 003), A.8.21 (AZ-NET-004), A.8.22 (AZ-NET-002), A.8.23 (AZ-NET-007).
 
 ---
 
@@ -246,8 +242,8 @@ These items add real traffic telemetry.
   Run `docker pull node:20-alpine --platform linux/amd64` to get current digest.  
   Update: `FROM node:20-alpine@sha256:<hash>`.
 
-- [ ] **Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`  
-  Currently uses mutable `v2` tag. TODO comment already exists in workflow file.
+- [x] **Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`  
+  Pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7` (v2 current commit SHA as of 2026-04-17).
 
 - [ ] **Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**  
   Run `diff infra/terraform/environments/azure/dev/ infra/terraform/environments/azure/prod/` before prod promote.

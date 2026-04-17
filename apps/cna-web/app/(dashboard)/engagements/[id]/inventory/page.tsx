@@ -308,15 +308,51 @@ export default async function InventoryPage({ params }: PageProps) {
   let topology: Topology | null = null;
   let jobDate: Date | null = null;
   try {
-    const job = await prisma.discoveryJob.findFirst({
+    // Fetch all completed jobs, ordered newest-first.
+    // We take the latest completed job PER credential (subscription sync group),
+    // then merge their topologies — so re-syncing one subscription never wipes
+    // another subscription's inventory data.
+    const completedJobs = await prisma.discoveryJob.findMany({
       where: { engagementId: id, status: "COMPLETED" },
       orderBy: { completedAt: "desc" },
-      select: { topologyJson: true, completedAt: true },
+      select: { topologyJson: true, completedAt: true, credentialId: true },
+      take: 100,
     });
-    if (job?.topologyJson) {
-      try { topology = JSON.parse(job.topologyJson) as Topology; } catch { /* ignore */ }
+
+    // Latest job per credentialId (jobs with no credentialId share one slot)
+    const latestByCredential = new Map<string, typeof completedJobs[0]>();
+    for (const job of completedJobs) {
+      const key = job.credentialId ?? "__none__";
+      if (!latestByCredential.has(key)) {
+        latestByCredential.set(key, job);
+      }
     }
-    jobDate = job?.completedAt ?? null;
+
+    // Merge topologies — deduplicate subscriptions by subscription_id (newest wins)
+    const seenSubIds = new Set<string>();
+    const mergedSubs: Topology["subscriptions"] = [];
+    let tenantId = "";
+
+    for (const job of latestByCredential.values()) {
+      if (!job.topologyJson) continue;
+      try {
+        const t = JSON.parse(job.topologyJson) as Topology;
+        if (!tenantId && t.tenant_id) tenantId = t.tenant_id;
+        if (!jobDate || (job.completedAt && job.completedAt > jobDate)) {
+          jobDate = job.completedAt;
+        }
+        for (const sub of t.subscriptions ?? []) {
+          if (sub.subscription_id && !seenSubIds.has(sub.subscription_id)) {
+            seenSubIds.add(sub.subscription_id);
+            mergedSubs.push(sub);
+          }
+        }
+      } catch { /* malformed topologyJson */ }
+    }
+
+    if (mergedSubs.length > 0) {
+      topology = { tenant_id: tenantId, subscriptions: mergedSubs };
+    }
   } catch { /* migration pending */ }
 
   if (!topology) {

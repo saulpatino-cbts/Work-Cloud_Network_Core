@@ -5,10 +5,10 @@ import {
   computeMaturityDimensions,
   getTopologyStats,
   SEV_COLORS,
-  type Topology,
   type Finding,
   type MaturityDimension,
 } from "../_lib/metrics";
+import { getMergedTopology } from "../_lib/get-merged-topology";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -167,17 +167,7 @@ export default async function CompliancePage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  let topology: Topology | null = null;
-  try {
-    const job = await prisma.discoveryJob.findFirst({
-      where: { engagementId: id, status: "COMPLETED" },
-      orderBy: { completedAt: "desc" },
-      select: { topologyJson: true },
-    });
-    if (job?.topologyJson) {
-      try { topology = JSON.parse(job.topologyJson); } catch { /* ignore */ }
-    }
-  } catch { /* migration pending */ }
+  const { topology } = await getMergedTopology(id);
 
   const findings = engagement.findings as Finding[];
   const dims  = computeMaturityDimensions(topology, findings);

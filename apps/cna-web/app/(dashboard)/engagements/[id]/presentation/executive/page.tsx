@@ -8,9 +8,9 @@ import {
   getTopologyStats,
   SEV_ORDER,
   SEV_COLORS,
-  type Topology,
   type Finding,
 } from "../_lib/metrics";
+import { getMergedTopology } from "../_lib/get-merged-topology";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,19 +31,7 @@ export default async function ExecutivePage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  let topology: Topology | null = null;
-  let jobDate: Date | null = null;
-  try {
-    const job = await prisma.discoveryJob.findFirst({
-      where: { engagementId: id, status: "COMPLETED" },
-      orderBy: { completedAt: "desc" },
-      select: { topologyJson: true, completedAt: true },
-    });
-    if (job?.topologyJson) {
-      try { topology = JSON.parse(job.topologyJson); } catch { /* ignore */ }
-    }
-    jobDate = job?.completedAt ?? null;
-  } catch { /* migration pending */ }
+  const { topology, jobDate } = await getMergedTopology(id);
 
   const findings = engagement.findings as Finding[];
   const riskScore = computeRiskScore(findings);

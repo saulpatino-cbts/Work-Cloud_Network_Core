@@ -219,6 +219,40 @@ class AWSAccount(BaseModel):
     is_management_account: bool = False
 
 
+class AWSNetworkFirewall(BaseModel):
+    """AWS Network Firewall resource — richer than the legacy NetworkFirewallPolicy stub."""
+
+    firewall_arn: str
+    firewall_name: str
+    vpc_id: str
+    firewall_policy_arn: str | None = None
+    subnet_mappings: list[str] = Field(default_factory=list)  # subnet IDs
+    delete_protection: bool = False
+    subnet_change_protection: bool = False
+    firewall_policy_change_protection: bool = False
+    firewall_status: str = "READY"  # READY | CREATING | DELETING | ...
+    logging_s3_enabled: bool = False
+    logging_cloudwatch_enabled: bool = False
+    logging_kinesis_enabled: bool = False
+    tags: dict = Field(default_factory=dict)
+
+
+class AWSWAFWebACL(BaseModel):
+    """AWS WAF v2 Web ACL (regional or CloudFront)."""
+
+    web_acl_id: str
+    web_acl_arn: str
+    name: str
+    scope: str = "REGIONAL"  # "REGIONAL" | "CLOUDFRONT"
+    default_action: str = "Allow"  # "Allow" | "Block"
+    managed_rule_groups_count: int = 0
+    custom_rules_count: int = 0
+    associated_resource_arns: list[str] = Field(default_factory=list)
+    sampled_requests_enabled: bool = False
+    cloudwatch_metrics_enabled: bool = False
+    tags: dict = Field(default_factory=dict)
+
+
 class AWSRegionTopology(BaseModel):
     account_id: str
     region: str
@@ -227,6 +261,8 @@ class AWSRegionTopology(BaseModel):
     direct_connect_connections: list[DirectConnectConnection] = Field(default_factory=list)
     vpn_gateways: list[VpnGateway] = Field(default_factory=list)
     network_firewalls: list[NetworkFirewallPolicy] = Field(default_factory=list)
+    aws_network_firewalls: list[AWSNetworkFirewall] = Field(default_factory=list)
+    waf_web_acls: list[AWSWAFWebACL] = Field(default_factory=list)
     discovery_blocked: bool = False
     block_reason: str | None = None
 
@@ -529,6 +565,8 @@ class AzurePrivateEndpoint(BaseModel):
     service_connections: list[AzurePrivateEndpointConnection] = Field(default_factory=list)
     dns_zone_group_names: list[str] = Field(default_factory=list)
     custom_dns_configs: list[str] = Field(default_factory=list)  # FQDNs with overrides
+    # Set by Network Watcher connectivity check — True if FQDN resolves to RFC 1918
+    dns_resolves_to_private_ip: bool | None = None
     tags: dict = Field(default_factory=dict)
 
 
@@ -731,21 +769,125 @@ class ObservabilityData(BaseModel):
     log_analytics_workspaces: list[LogAnalyticsWorkspace] = Field(default_factory=list)
     nsg_flow_logs_enabled: int = 0
     nsg_flow_logs_total: int = 0
+    # Traffic Analytics: how many enabled flow logs are feeding Traffic Analytics
+    traffic_analytics_enabled: int = 0
     gateways_with_diagnostics: int = 0
     gateways_total: int = 0
+    # Bastion: how many bastion hosts have a Log Analytics diagnostic sink
+    bastion_with_diagnostics: int = 0
+    bastion_total: int = 0
+    # Firewalls: how many Azure Firewalls have a Log Analytics diagnostic sink
+    firewalls_with_diagnostics: int = 0
+    firewalls_total: int = 0
 
 
 class GatewayMetric(BaseModel):
+    """Azure Monitor bandwidth metrics for a single VPN or ExpressRoute gateway (24-hour window)."""
+
     gateway_name: str
     gateway_type: str  # Vpn | ExpressRoute
     ingress_bytes_24h: float | None = None
     egress_bytes_24h: float | None = None
     bandwidth_mbps_provisioned: float | None = None
+    # populated by AverageBandwidth metric vs provisioned SKU ceiling
     utilization_pct: float | None = None
+
+
+class FirewallMetric(BaseModel):
+    """Azure Monitor metrics for a single Azure Firewall resource (24-hour window)."""
+
+    firewall_name: str
+    data_processed_gb_24h: float | None = None
+    app_rule_hits_24h: int | None = None
+    network_rule_hits_24h: int | None = None
+    nat_rule_hits_24h: int | None = None
+    collection_error: str | None = None
+
+
+class LoadBalancerMetric(BaseModel):
+    """Azure Monitor SNAT metrics for a single Load Balancer (24-hour window)."""
+
+    lb_name: str
+    snat_connections_24h: float | None = None  # SnatConnectionCount (total)
+    used_snat_ports: float | None = None       # UsedSnatPorts (avg)
+    allocated_snat_ports: float | None = None  # AllocatedSnatPorts (avg)
+    snat_port_utilization_pct: float | None = None  # used / allocated * 100
+    collection_error: str | None = None
+
+
+class ERCircuitMetric(BaseModel):
+    """Azure Monitor throughput metrics for a single ExpressRoute circuit (24-hour window)."""
+
+    circuit_name: str
+    bandwidth_mbps_provisioned: float | None = None
+    primary_bits_in_per_second: float | None = None   # avg bps
+    secondary_bits_in_per_second: float | None = None  # avg bps
+    primary_utilization_pct: float | None = None
+    secondary_utilization_pct: float | None = None
+    collection_error: str | None = None
+
+
+class FrontDoorWAFPolicy(BaseModel):
+    """Azure Front Door Web Application Firewall policy on the customer tenant."""
+
+    id: str
+    name: str
+    resource_group: str
+    location: str
+    policy_mode: str = "Detection"        # "Detection" | "Prevention"
+    policy_enabled_state: str = "Enabled"  # "Enabled" | "Disabled"
+    custom_rules_count: int = 0
+    managed_rules_count: int = 0
+    tags: dict = Field(default_factory=dict)
+
+
+class AppGatewayMetric(BaseModel):
+    """Azure Monitor capacity and latency metrics for a single Application Gateway (24h window)."""
+
+    appgw_name: str
+    capacity_units_avg: float | None = None       # CapacityUnits (avg) — consumed CUs
+    capacity_units_max: float | None = None       # CapacityUnits (max) — peak pressure
+    backend_latency_ms_avg: float | None = None   # BackendLastByteResponseTime (ms avg)
+    failed_requests_24h: int | None = None        # FailedRequests (total)
+    total_requests_24h: int | None = None         # TotalRequests (total)
+    waf_rule_hits_24h: int | None = None          # ApplicationGatewayWAFRuleMatches (total)
+    collection_error: str | None = None
+
+
+class DefenderAssessment(BaseModel):
+    """A single Defender for Cloud security assessment on a resource."""
+
+    assessment_id: str          # e.g. "/subscriptions/.../assessments/<uuid>"
+    display_name: str
+    description: str | None = None
+    remediation_description: str | None = None
+    status: str = "Unhealthy"   # "Healthy" | "Unhealthy" | "NotApplicable" | "NotFound"
+    severity: str = "Medium"    # "Low" | "Medium" | "High"
+    resource_id: str | None = None
+    resource_type: str | None = None
+    category: str | None = None  # e.g. "Networking" | "IdentityAndAccess"
+    implementation_effort: str | None = None  # "Low" | "Moderate" | "High"
+    threats: list[str] = Field(default_factory=list)
+    user_impact: str | None = None
 
 
 class NetworkMetrics(BaseModel):
     gateway_metrics: list[GatewayMetric] = Field(default_factory=list)
+    firewall_metrics: list[FirewallMetric] = Field(default_factory=list)
+    lb_metrics: list[LoadBalancerMetric] = Field(default_factory=list)
+    er_circuit_metrics: list[ERCircuitMetric] = Field(default_factory=list)
+    appgw_metrics: list[AppGatewayMetric] = Field(default_factory=list)
+    # vnet_id -> utilization % (sum of subnet CIDRs / VNet CIDR * 100)
+    vnet_utilization: dict[str, float] = Field(default_factory=dict)
+    # Billing-derived: total Microsoft.Network egress spend MTD (USD)
+    egress_cost_usd_mtd: float | None = None
+    # NTA (Network Traffic Analytics) east-west and north-south byte totals (24h)
+    nta_east_west_bytes_24h: float | None = None
+    nta_north_south_bytes_24h: float | None = None
+    nta_query_workspace_id: str | None = None
+    # DDoS attack events detected on Public IPs in the subscription (24h)
+    ddos_attack_events_24h: int = 0
+    public_ips_under_ddos_attack: list[str] = Field(default_factory=list)
     collection_error: str | None = None
 
 
@@ -770,6 +912,8 @@ class AzureSubscriptionTopology(BaseModel):
     # v1.3.0 — extended assessment data
     nvas: list[AzureNVA] = Field(default_factory=list)
     bgp_data: list[GatewayBgpData] = Field(default_factory=list)
+    front_door_waf_policies: list[FrontDoorWAFPolicy] = Field(default_factory=list)
+    defender_assessments: list[DefenderAssessment] = Field(default_factory=list)
     observability: ObservabilityData | None = None
     network_metrics: NetworkMetrics | None = None
     # kept for backward compat — no longer actively collected

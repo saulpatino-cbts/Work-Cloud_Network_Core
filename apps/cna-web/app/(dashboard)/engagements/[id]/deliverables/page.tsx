@@ -45,7 +45,16 @@ export default async function AssessmentsPage({ params }: PageProps) {
     select: {
       id: true,
       members: true,
-      deliverables: { orderBy: { createdAt: "desc" } },
+      deliverables: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          createdAt: true,
+          publishedAt: true,
+        },
+      },
       findings: { select: { id: true } },
     },
   });
@@ -55,8 +64,59 @@ export default async function AssessmentsPage({ params }: PageProps) {
 
   const { deliverables, findings } = engagement;
 
+  let needsResync = false;
+  try {
+    const [credentials, completedJobs] = await Promise.all([
+      prisma.cloudCredential.findMany({
+        where: { engagementId: id },
+        select: { id: true, updatedAt: true },
+      }),
+      prisma.discoveryJob.findMany({
+        where: { engagementId: id, status: "COMPLETED" },
+        select: { credentialId: true, completedAt: true },
+        orderBy: { completedAt: "desc" },
+      }),
+    ]);
+    if (credentials.length > 0) {
+      const latestJobByCredential = new Map<string, Date>();
+      for (const job of completedJobs) {
+        if (job.credentialId && !latestJobByCredential.has(job.credentialId)) {
+          latestJobByCredential.set(job.credentialId, job.completedAt!);
+        }
+      }
+      needsResync = credentials.some((cred) => {
+        const lastSync = latestJobByCredential.get(cred.id);
+        return !lastSync || cred.updatedAt > lastSync;
+      });
+    }
+  } catch { /* migration pending */ }
+
   return (
     <div className="space-y-5">
+      {/* ── Generate Assessment ── */}
+      <div className="glass p-6">
+        <p className="label-caps mb-1 text-navy-500">Generate Assessment</p>
+        <p className="mb-5 text-xs text-navy-500">
+          AI-powered generation using live topology, uploaded documents, and all findings.
+          {findings.length === 0 && (
+            <span className="ml-2 font-medium text-amber-400">
+              No findings yet — run discovery or AI analysis first.
+            </span>
+          )}
+        </p>
+        {needsResync && (
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3">
+            <svg className="h-4 w-4 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm0 6a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm text-amber-300">
+              <span className="font-semibold">Subscriptions changed</span> — re-sync on the Connections tab before generating to include the latest inventory.
+            </p>
+          </div>
+        )}
+        <GenerateDeliverableForm engagementId={id} />
+      </div>
+
       {/* ── Generated Assessments ── */}
       <div className="glass p-6">
         <div className="mb-5 flex items-center justify-between">
@@ -79,7 +139,7 @@ export default async function AssessmentsPage({ params }: PageProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
             </svg>
             <p className="text-sm font-medium text-navy-400">No assessments yet.</p>
-            <p className="mt-1 text-xs text-navy-600">Generate one from the form below.</p>
+            <p className="mt-1 text-xs text-navy-600">Generate one from the form above.</p>
           </div>
         ) : (
           <div className="divide-y divide-navy-700/30">
@@ -152,20 +212,6 @@ export default async function AssessmentsPage({ params }: PageProps) {
             })}
           </div>
         )}
-      </div>
-
-      {/* ── Generate Assessment ── */}
-      <div className="glass p-6">
-        <p className="label-caps mb-1 text-navy-500">Generate Assessment</p>
-        <p className="mb-5 text-xs text-navy-500">
-          AI-powered generation using live topology, uploaded documents, and all findings.
-          {findings.length === 0 && (
-            <span className="ml-2 font-medium text-amber-400">
-              No findings yet — run discovery or AI analysis first.
-            </span>
-          )}
-        </p>
-        <GenerateDeliverableForm engagementId={id} />
       </div>
     </div>
   );

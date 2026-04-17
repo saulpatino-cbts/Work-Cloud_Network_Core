@@ -26,7 +26,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -104,7 +104,7 @@ jobs:
           echo "Generated .env.${{ inputs.environment }}"
 
       - name: Upload .env artifact (1-day retention)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: env-${{ inputs.environment }}-${{ github.run_id }}
           path: .env.${{ inputs.environment }}

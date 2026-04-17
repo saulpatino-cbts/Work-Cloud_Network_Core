@@ -77,12 +77,12 @@ jobs:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -90,7 +90,7 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -112,7 +112,7 @@ jobs:
         run: echo '{"status":"passed"}' > $GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json
 
       - name: Upload policy gate report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: policy-gates-${{ inputs.environment }}
           path: policy-gates-${{ inputs.environment }}.json
@@ -127,17 +127,17 @@ jobs:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -148,7 +148,7 @@ jobs:
           az provider register --namespace Microsoft.App --wait
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -306,13 +306,13 @@ jobs:
           MANIFEST
 
       - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan-${{ inputs.environment }}
           path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
 
       - name: Upload deployment manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
@@ -329,17 +329,17 @@ jobs:
       frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -359,7 +359,7 @@ jobs:
             -backend-config="use_oidc=true"
 
       - name: Download plan artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: tfplan-${{ inputs.environment }}
           path: infra/terraform/environments/azure/${{ inputs.environment }}
@@ -404,6 +404,24 @@ jobs:
           done
           az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
 
+      - name: Update GitHub Variables from Terraform outputs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_VARIABLES_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
+          AI_NAME=$(terraform output -raw application_insights_name 2>/dev/null || echo "")
+          if [ -n "$KV_NAME" ]; then
+            gh variable set KEY_VAULT_NAME --body "$KV_NAME" \
+              && echo "KEY_VAULT_NAME updated: $KV_NAME" \
+              || echo "WARNING: could not set KEY_VAULT_NAME — set it manually in GitHub Settings → Variables"
+          fi
+          if [ -n "$AI_NAME" ]; then
+            gh variable set APPLICATION_INSIGHTS_NAME --body "$AI_NAME" \
+              && echo "APPLICATION_INSIGHTS_NAME updated: $AI_NAME" \
+              || echo "WARNING: could not set APPLICATION_INSIGHTS_NAME — set it manually in GitHub Settings → Variables"
+          fi
+
       - name: Export platform outputs
         id: export
         run: |
@@ -416,13 +434,13 @@ jobs:
           echo "frontdoor_secret_id=$(terraform output -raw frontdoor_secret_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
 
       - name: Download deployment manifest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -439,7 +457,7 @@ jobs:
         run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 
       - name: Upload staged manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: staged-deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
@@ -451,25 +469,25 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Download staged manifest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: staged-deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}
 
       - name: Download policy gate report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: policy-gates-${{ inputs.environment }}
           path: .verification/${{ inputs.environment }}
@@ -527,11 +545,14 @@ jobs:
 
       - name: Query Application Insights telemetry directly
         if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''
+        continue-on-error: true
         run: |
           az monitor app-insights query \
             --app "${{ vars.APPLICATION_INSIGHTS_NAME }}" \
+            --resource-group "rg-cna-${{ inputs.environment }}-scus" \
             --analytics-query "requests | summarize successRate = todouble(sum(itemCount * iif(success == true, 1, 0))) / todouble(sum(itemCount))" \
-            > .verification/${{ inputs.environment }}/canary-telemetry.json
+            > .verification/${{ inputs.environment }}/canary-telemetry.json \
+            || echo "App Insights query skipped — no telemetry data yet (fresh deploy)"
 
       - name: Execute progressive Front Door promotion actions
         run: |
@@ -558,7 +579,7 @@ jobs:
             > .verification/${{ inputs.environment }}/certificate-rotation.json || true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -591,7 +612,7 @@ jobs:
           git push
 
       - name: Upload deployment provenance artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-provenance-${{ inputs.environment }}-${{ github.run_id }}
           path: .deployment-catalog/${{ inputs.environment }}/${{ github.run_id }}.json
@@ -607,15 +628,15 @@ jobs:
         working-directory: infra/terraform/environments/azure/${{ matrix.environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
       - name: Azure login with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}

@@ -1,7 +1,4 @@
-"""Azure network topology discovery.
+"""Azure network module — re-exports AzureDiscovery for Phase C compatibility."""
+from cna.modules.network.discovery.azure_discovery import AzureDiscovery
 
-Phase C implementation.
-DD-006: Enumerates ALL active regions dynamically.
-DD-002: Stores observed state only.
-"""
-# TODO: Phase C
+__all__ = ["AzureDiscovery"]

@@ -32,7 +32,7 @@ export default async function ConnectionsPage({ params }: PageProps) {
       prisma.discoveryJob.findMany({
         where: { engagementId: id },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 200,
       }),
     ]);
   } catch {
@@ -52,14 +52,28 @@ export default async function ConnectionsPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
+      {/* ── Add cloud connection ── */}
+      <section className="glass p-6">
+        <h2 className="mb-1 text-lg font-semibold text-navy-100">
+          Add Cloud Connection
+        </h2>
+        <p className="mb-4 text-sm text-navy-400">
+          Provide Azure service principal credentials. Once connected, select which
+          subscriptions to add — each becomes its own sync group. Auth credentials are
+          encrypted at rest.
+        </p>
+        <CredentialForm engagementId={id} />
+      </section>
+
       {/* ── Cloud connections ── */}
       <section className="glass p-6">
         <h2 className="mb-1 text-lg font-semibold text-navy-100">
           Cloud Connections
         </h2>
         <p className="mb-5 text-sm text-navy-400">
-          Connect to an Azure tenant via service principal. Each subscription
-          becomes a separate credential entry for targeted discovery.
+          Each subscription is a separate sync group. Sync pulls a full inventory snapshot;
+          re-sync updates only that subscription's data. Removing a subscription also removes
+          all its findings from the assessment.
         </p>
 
         <ConnectionsPanel
@@ -73,18 +87,6 @@ export default async function ConnectionsPage({ params }: PageProps) {
           }))}
           jobs={jobsForPanel}
         />
-      </section>
-
-      {/* ── Add cloud connection ── */}
-      <section className="glass p-6">
-        <h2 className="mb-1 text-lg font-semibold text-navy-100">
-          Add Cloud Connection
-        </h2>
-        <p className="mb-4 text-sm text-navy-400">
-          Provide Azure service principal credentials and upload or enter
-          subscription IDs. Auth credentials are encrypted at rest.
-        </p>
-        <CredentialForm engagementId={id} />
       </section>
     </div>
   );

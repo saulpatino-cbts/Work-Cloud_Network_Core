@@ -386,6 +386,83 @@ export interface DeliverableContext {
   topologyJson?: string | null;
   documents?: { fileName: string; text: string }[];
   customerLogoUrl?: string | null;
+  /** Which credentials (subscriptions/tenants) were scanned — included for context */
+  credentialsInfo?: Array<{
+    label: string;
+    platform: string;
+    tenantId: string | null;
+    subscriptionIds: string[];
+  }>;
+  /** Previously generated assessments for this engagement (titles only — no content) */
+  previousAssessments?: Array<{ type: string; title: string }>;
+}
+
+// ── Microsoft Learn live enrichment ──────────────────────────────────────────
+
+const CATEGORY_QUERIES: Record<string, string> = {
+  "Network Security":       "azure network security firewall best practices",
+  "Network Segmentation":   "azure network segmentation NSG virtual network subnets",
+  "Access Control":         "azure RBAC access control network identity privileged",
+  "Network Protection":     "azure DDoS protection network threats",
+  "Application Security":   "azure application gateway WAF OWASP security",
+  "Routing & Transit":      "azure route tables UDR hub spoke routing",
+  "Encryption":             "azure network encryption TLS in-transit",
+  "Compliance":             "azure compliance NIST CIS security benchmark policy",
+  "Configuration":          "azure security configuration policy governance",
+  "Remote Access":          "azure bastion JIT VM access secure RDP SSH",
+  "Observability":          "azure network watcher flow logs monitoring",
+  "Resilience":             "azure availability zones redundancy network HA",
+  "BGP & Routing":          "azure VPN gateway BGP routing ExpressRoute",
+  "Gateway":                "azure VPN gateway ExpressRoute SKU zone redundancy",
+  "Performance":            "azure network performance bandwidth monitoring metrics",
+  "DNS & Name Resolution":  "azure private DNS resolver name resolution private zones",
+  "Network Appliances":     "azure NVA network virtual appliance firewall third-party",
+  "Connectivity":           "azure private endpoints site-to-site VPN connectivity",
+  "Cost & Hygiene":         "azure cost optimization orphaned resources public IP cleanup",
+};
+
+/**
+ * Fetch live Microsoft Learn documentation for the given finding categories.
+ * Silent on error — enrichment is best-effort and never blocks generation.
+ */
+async function fetchMsLearnContext(categories: string[]): Promise<string> {
+  const unique = [...new Set(categories)].slice(0, 6);
+  const lines: string[] = [];
+
+  for (const cat of unique) {
+    const query = CATEGORY_QUERIES[cat] ?? `azure ${cat.toLowerCase()} security`;
+    try {
+      const res = await fetch(
+        `https://learn.microsoft.com/api/search?search=${encodeURIComponent(query)}&locale=en-us&%24top=3`,
+        {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (!res.ok) continue;
+      // The Learn API returns either { results: [...] } or { value: [...] }
+      const data = await res.json() as {
+        results?: Array<{ title?: string; url?: string; description?: string }>;
+        value?:   Array<{ title?: string; url?: string; description?: string }>;
+      };
+      const items = (data.results ?? data.value ?? []).slice(0, 3);
+      if (items.length) {
+        lines.push(`\n[${cat} — Microsoft Learn]`);
+        for (const item of items) {
+          if (!item.url) continue;
+          lines.push(`  • ${item.title ?? "Untitled"}`);
+          lines.push(`    ${item.url}`);
+          if (item.description) lines.push(`    ${item.description.slice(0, 200)}`);
+        }
+      }
+    } catch {
+      // timeout or network error — skip this category silently
+    }
+  }
+
+  return lines.length
+    ? `\n=== MICROSOFT LEARN DOCUMENTATION (fetched live at generation time) ===${lines.join("\n")}`
+    : "";
 }
 
 const DELIVERABLE_PROMPTS: Record<DeliverableType, string> = {
@@ -522,50 +599,91 @@ Output ONLY a complete, self-contained HTML document.
 
 /**
  * Generate professional AI-powered deliverable content.
- * Uses all available engagement data for maximum context.
+ * Uses all available engagement data — merged multi-subscription topology,
+ * all findings, credentials context, and live-fetched MS Learn docs.
+ * Always generates fresh content; never cached.
  */
 export async function generateDeliverableContent(
   ctx: DeliverableContext,
 ): Promise<string> {
   const client = getClient();
-
+  const isHtml = ctx.type === "COMPREHENSIVE_ASSESSMENT";
   const typePrompt = DELIVERABLE_PROMPTS[ctx.type];
   const date = new Date().toISOString().split("T")[0];
+
+  // Fix: output instruction must match what the type prompt requires.
+  // COMPREHENSIVE_ASSESSMENT demands a full <!DOCTYPE html> document.
+  // All other types produce professional Markdown.
+  const outputInstruction = isHtml
+    ? `OUTPUT: Return ONLY a complete, valid, self-contained HTML document.
+- Start with exactly <!DOCTYPE html> — nothing before it.
+- All CSS in an inline <style> block (dark navy/slate theme, teal accents).
+- All JS inline in <script> blocks.
+- No external CDN, no Bootstrap, no external fonts — use system fonts only.
+- Works when opened directly from disk.
+- Do NOT wrap in Markdown fences. Do NOT include any text before <!DOCTYPE html>.`
+    : `OUTPUT: Return only the Markdown document content. No JSON wrapper. Start directly with the report heading.
+Include a professional header: Client, Engagement, Date, Report Type, Prepared By: CBTS Cloud Security Practice.`;
 
   const systemPrompt = `You are a senior CBTS cloud network security consultant generating a professional client deliverable.
 ${typePrompt}
 
-OUTPUT: Return only the Markdown document content. No JSON wrapper. Start directly with the document heading.
-Include a professional document header with: Client, Engagement, Date, Report Type, Prepared By: CBTS Cloud Security Practice.`;
+${outputInstruction}`;
 
-  const parts: string[] = [
-    `# ${ctx.title}`,
-    `**Client:** ${ctx.clientOrg}  `,
-    `**Engagement:** ${ctx.engagementName}  `,
-    `**Date:** ${date}  `,
-    "",
-    `=== FINDINGS DATA (${ctx.findings.length} total) ===`,
-  ];
+  // ── Build context parts ───────────────────────────────────────────────────
 
-  // Add findings grouped by severity
+  const parts: string[] = [];
+
+  // 1. Engagement header
+  parts.push(`=== ENGAGEMENT CONTEXT ===`);
+  parts.push(`Client Organization: ${ctx.clientOrg}`);
+  parts.push(`Engagement Name: ${ctx.engagementName}`);
+  parts.push(`Report Title: ${ctx.title}`);
+  parts.push(`Generated: ${date}`);
+
+  // 2. Credential / subscription scope
+  if (ctx.credentialsInfo && ctx.credentialsInfo.length > 0) {
+    parts.push(`\n=== ASSESSED CLOUD SCOPE ===`);
+    parts.push(`${ctx.credentialsInfo.length} cloud credential(s) scanned:`);
+    for (const cred of ctx.credentialsInfo) {
+      const subs = cred.subscriptionIds.length > 0
+        ? cred.subscriptionIds.join(", ")
+        : "all accessible subscriptions";
+      parts.push(`  • [${cred.platform}] ${cred.label}`);
+      parts.push(`    Tenant: ${cred.tenantId ?? "N/A"} | Subscriptions: ${subs}`);
+    }
+  }
+
+  // 3. All findings grouped by severity — every single one, no truncation
   const SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"];
+  const sevCounts = SEV_ORDER.map((s) => ({
+    sev: s,
+    count: ctx.findings.filter((f) => f.severity === s).length,
+  })).filter((x) => x.count > 0);
+
+  parts.push(`\n=== ALL FINDINGS (${ctx.findings.length} total — use EVERY finding) ===`);
+  parts.push(`Severity breakdown: ${sevCounts.map((x) => `${x.count} ${x.sev}`).join(", ")}`);
+  parts.push(`Live Discovery: ${ctx.findings.filter((f) => !f.aiGenerated).length} | AI Analysis: ${ctx.findings.filter((f) => f.aiGenerated).length}`);
+
   for (const sev of SEV_ORDER) {
     const group = ctx.findings.filter((f) => f.severity === sev);
     if (!group.length) continue;
-    parts.push(`\n[${sev} - ${group.length} findings]`);
+    parts.push(`\n--- ${sev} (${group.length}) ---`);
     for (const f of group) {
       parts.push(`Finding: ${f.title}`);
       parts.push(`  Category: ${f.category}`);
       parts.push(`  Description: ${f.description}`);
-      parts.push(`  Recommendation: ${f.recommendation ?? ""}`);
+      if (f.recommendation) parts.push(`  Recommendation: ${f.recommendation}`);
       parts.push(`  Source: ${f.aiGenerated ? "AI Analysis" : "Live Discovery"}`);
     }
   }
 
+  // 4. Merged multi-subscription topology
   if (ctx.topologyJson) {
     parts.push("\n" + summarizeTopology(ctx.topologyJson));
   }
 
+  // 5. Uploaded documents
   if (ctx.documents && ctx.documents.length > 0) {
     parts.push("\n=== UPLOADED DOCUMENTS ===");
     for (const doc of ctx.documents) {
@@ -573,10 +691,26 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
     }
   }
 
-  const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} deliverable using this engagement data:\n\n${parts.join("\n")}`;
+  // 6. Previous assessments list (context only — not full content)
+  if (ctx.previousAssessments && ctx.previousAssessments.length > 0) {
+    parts.push(`\n=== PREVIOUSLY GENERATED ASSESSMENTS (for context) ===`);
+    for (const prev of ctx.previousAssessments) {
+      parts.push(`  • [${prev.type}] ${prev.title}`);
+    }
+    parts.push(`(These are listed for reference. Generate fresh, independent content based on current data.)`);
+  }
+
+  // 7. Live MS Learn enrichment — fetch best-effort, silent on failure
+  const categories = [...new Set(ctx.findings.map((f) => f.category))];
+  const msLearnContext = await fetchMsLearnContext(categories);
+  if (msLearnContext) {
+    parts.push(msLearnContext);
+  }
+
+  const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} for this assessment.\n\nIMPORTANT: This report covers ${ctx.credentialsInfo?.length ?? 1} subscription(s). The data below is current as of ${date}. Include ALL ${ctx.findings.length} findings without omission.\n\n${parts.join("\n")}`;
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2";
-  // gpt-5.2 supports up to 32k completion tokens. COMPREHENSIVE_ASSESSMENT uses the full budget.
+  // COMPREHENSIVE_ASSESSMENT uses full token budget for the complete HTML document
   const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
 
   const response = await client.chat.completions.create({
@@ -588,5 +722,9 @@ Include a professional document header with: Client, Engagement, Date, Report Ty
     max_completion_tokens: maxTokens,
   });
 
-  return response.choices[0]?.message?.content ?? "# Error generating content\n\nPlease try again.";
+  return response.choices[0]?.message?.content ?? (
+    isHtml
+      ? "<!DOCTYPE html><html><body><h1>Error generating content</h1><p>Please try again.</p></body></html>"
+      : "# Error generating content\n\nPlease try again."
+  );
 }

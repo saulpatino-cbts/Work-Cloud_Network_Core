@@ -460,6 +460,32 @@ function CredentialCard({
               : " · All subscriptions"}
           </p>
 
+          {/* Active job progress bar */}
+          {isActive && (() => {
+            const activeJob = liveJobs.find((j) => ACTIVE_STATUSES.has(j.status));
+            const steps: string[] = (() => {
+              if (!activeJob?.progressLog) return [];
+              try { return JSON.parse(activeJob.progressLog) as string[]; } catch { return [activeJob.progressLog]; }
+            })();
+            const ESTIMATED_STEPS = 28;
+            const pct = steps.length === 0 ? 8 : Math.min(94, Math.round((steps.length / ESTIMATED_STEPS) * 100));
+            const lastStep = steps[steps.length - 1] ?? (activeJob?.status === "QUEUED" ? "Queued — waiting to start…" : "Starting…");
+            return (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-xs text-navy-400">{lastStep}</p>
+                  <span className="shrink-0 text-xs font-semibold text-navy-400">{pct}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-navy-700/50">
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all duration-700"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Last run + collapsible toggle */}
           {liveJobs.length > 0 && (
             <details className="mt-1 group/runs">
@@ -475,11 +501,21 @@ function CredentialCard({
                 </svg>
                 {liveJobs.length} run{liveJobs.length !== 1 ? "s" : ""} ·{" "}
                 Last:{" "}
-                {latestJob.status === "COMPLETED"
-                  ? `Completed ${new Date(latestJob.completedAt!).toLocaleDateString()}`
-                  : latestJob.status === "FAILED"
-                  ? "Failed"
-                  : latestJob.status}
+                {latestJob.status === "COMPLETED" ? (
+                  <>
+                    Completed {new Date(latestJob.completedAt!).toLocaleDateString()}
+                    {latestJob.completedAt &&
+                      Date.now() - new Date(latestJob.completedAt).getTime() < 60_000 && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full bg-teal-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-teal-400">
+                          ✓ Just completed
+                        </span>
+                      )}
+                  </>
+                ) : latestJob.status === "FAILED" ? (
+                  "Failed"
+                ) : (
+                  latestJob.status
+                )}
               </summary>
               <div className="mt-2 space-y-2">
                 {liveJobs.map((job) => (

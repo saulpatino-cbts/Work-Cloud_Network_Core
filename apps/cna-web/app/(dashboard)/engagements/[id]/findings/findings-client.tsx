@@ -2,6 +2,132 @@
 
 import { useState, useMemo } from "react";
 
+// ─── Resource label helpers ────────────────────────────────────────────────────
+
+/**
+ * Strip quoted resource names from a finding title to produce a grouping pattern.
+ * "No Azure Firewall deployed in 'sub-conn-tst'" → "no azure firewall deployed in '…'"
+ * "VNet 'my-vnet' has no DDoS Protection Plan"  → "vnet '…' has no ddos protection plan"
+ */
+function normalizeTitle(title: string): string {
+  return title.replace(/'[^']+'/g, "'…'").toLowerCase().trim();
+}
+
+/**
+ * Extract a human-readable resource identifier from a finding's title + description.
+ * Priority: RG/ResourceName > ResourceName > first quoted string.
+ *
+ * Examples:
+ *   title: "VNet 'my-vnet' has no DDoS Protection Plan"
+ *   desc:  "VNet 'my-vnet' (eastus, RG: my-rg) has no..."
+ *   → "my-rg / my-vnet"
+ *
+ *   title: "No Azure Firewall deployed in 'sub-conn-tst'"
+ *   → "sub-conn-tst"
+ *
+ *   title: "Subnet 'snet-app' in 'vnet-hub' has no NSG"
+ *   → "snet-app · vnet-hub"
+ */
+function extractResourceLabel(title: string, description: string): string {
+  const quoted = [...title.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  // Look for "RG: my-rg" or "(RG: my-rg," inside the description
+  const rgMatch = description.match(/[,()\s]RG:\s*([^\s,.()']+)/i);
+  const rg = rgMatch?.[1] ?? null;
+
+  if (quoted.length === 0) return title.slice(0, 72);
+  if (quoted.length === 1) {
+    return rg && rg !== quoted[0] ? `${rg} / ${quoted[0]}` : quoted[0];
+  }
+  // Multiple resource names in the title (e.g. subnet + vnet)
+  if (rg && rg !== quoted[0]) return `${rg} / ${quoted[0]}`;
+  return quoted.slice(0, 2).join(" · ");
+}
+
+/**
+ * Within a group, deduplicate findings that share the same resource label
+ * (true duplicates from repeated sync runs). Returns deduplicated entries with count.
+ */
+function deduplicateInstances(
+  items: FindingItem[],
+): { label: string; finding: FindingItem; count: number }[] {
+  const seen = new Map<string, { finding: FindingItem; count: number }>();
+  for (const f of items) {
+    const label = extractResourceLabel(f.title, f.description);
+    if (seen.has(label)) {
+      seen.get(label)!.count++;
+    } else {
+      seen.set(label, { finding: f, count: 1 });
+    }
+  }
+  return Array.from(seen.entries()).map(([label, { finding, count }]) => ({
+    label,
+    finding,
+    count,
+  }));
+}
+
+// ─── InstanceRow ─────────────────────────────────────────────────────────────
+
+function InstanceRow({
+  label,
+  finding,
+  count,
+}: {
+  label: string;
+  finding: FindingItem;
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100"
+      >
+        <svg
+          className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${open ? "rotate-90" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold text-navy-300">
+          {label}
+        </span>
+        {count > 1 && (
+          <span className="shrink-0 rounded border border-navy-600/40 bg-navy-700/40 px-1.5 py-0.5 text-[10px] font-semibold text-navy-400">
+            ×{count} syncs
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="pb-4 pl-5">
+          <p className="mb-2.5 text-sm leading-relaxed text-navy-300">{finding.description}</p>
+          {finding.recommendation && (
+            <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
+              <p className="text-xs leading-relaxed text-teal-300">
+                <span className="font-semibold text-teal-200">Recommendation: </span>
+                {finding.recommendation}
+              </p>
+              <a
+                href={finding.msLearnUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                MS Learn docs
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type Sev = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFORMATIONAL";
 
 export interface FindingItem {
@@ -44,10 +170,17 @@ export function FindingsClient({ findings }: Props) {
   const [sevFilter, setSevFilter] = useState<Sev | "ALL">("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "LIVE" | "AI">("ALL");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
 
   const liveCount = useMemo(() => findings.filter((f) => !f.aiGenerated).length, [findings]);
   const aiCount = useMemo(() => findings.filter((f) => f.aiGenerated).length, [findings]);
+
+  // Unique issue group count across ALL findings (unfiltered) — shown in the header
+  const totalGroups = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of findings) keys.add(`${f.severity}::${f.category}::${normalizeTitle(f.title)}`);
+    return keys.size;
+  }, [findings]);
 
   const sevCounts = useMemo(() => {
     const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFORMATIONAL: 0 } as Record<Sev, number>;
@@ -73,6 +206,24 @@ export function FindingsClient({ findings }: Props) {
     return true;
   }), [findings, sevFilter, categoryFilter, sourceFilter]);
 
+  // Group by normalized title — strips quoted resource names so the same finding type
+  // on different resources/subscriptions collapses into one group.
+  // e.g. "No Firewall in 'sub-A'" + "No Firewall in 'sub-B'" → one group, two instances.
+  const grouped = useMemo(() => {
+    const map = new Map<string, FindingItem[]>();
+    for (const f of filtered) {
+      const key = `${f.severity}::${f.category}::${normalizeTitle(f.title)}`;
+      const arr = map.get(key) ?? [];
+      arr.push(f);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries()).sort(([ka], [kb]) => {
+      const sa = ka.split("::")[0] as Sev;
+      const sb = kb.split("::")[0] as Sev;
+      return SEV_ORDER.indexOf(sa) - SEV_ORDER.indexOf(sb);
+    });
+  }, [filtered]);
+
   if (findings.length === 0) {
     return (
       <div className="glass rounded-xl border border-dashed border-navy-600 p-10 text-center">
@@ -97,10 +248,12 @@ export function FindingsClient({ findings }: Props) {
           <div>
             <h2 className="text-lg font-semibold text-navy-100">
               Findings
-              <span className="ml-2 text-base font-normal text-navy-400">({total})</span>
+              <span className="ml-2 text-base font-normal text-navy-400">
+                {totalGroups} unique issues
+              </span>
             </h2>
             <p className="mt-0.5 text-xs text-navy-500">
-              {liveCount} live discovery · {aiCount} AI analysis
+              {total} total findings · {liveCount} live discovery · {aiCount} AI analysis
             </p>
           </div>
 
@@ -132,9 +285,10 @@ export function FindingsClient({ findings }: Props) {
       {/* ── Risk matrix ── */}
       {categories.length > 0 && (
         <div className="glass p-5">
-          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-navy-500">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-navy-500">
             Risk Matrix — Severity × Category
           </h3>
+          <p className="mb-4 text-[10px] text-navy-600">Raw finding counts across all subscriptions and resources</p>
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
@@ -186,6 +340,7 @@ export function FindingsClient({ findings }: Props) {
           {/* Severity toggles */}
           <div className="flex flex-wrap gap-1.5">
             <button
+              type="button"
               onClick={() => setSevFilter("ALL")}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 sevFilter === "ALL"
@@ -198,6 +353,7 @@ export function FindingsClient({ findings }: Props) {
             {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
               <button
                 key={sev}
+                type="button"
                 onClick={() => setSevFilter(sevFilter === sev ? "ALL" : sev)}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                   sevFilter === sev
@@ -215,6 +371,7 @@ export function FindingsClient({ findings }: Props) {
           {/* Category + source selects */}
           <div className="ml-auto flex gap-2">
             <select
+              aria-label="Filter by category"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -225,6 +382,7 @@ export function FindingsClient({ findings }: Props) {
               ))}
             </select>
             <select
+              aria-label="Filter by source"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value as "ALL" | "LIVE" | "AI")}
               className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -238,100 +396,107 @@ export function FindingsClient({ findings }: Props) {
 
         {filtered.length !== findings.length && (
           <p className="mt-2 text-xs text-navy-600">
-            Showing {filtered.length} of {total} findings
+            Showing {grouped.length} of {totalGroups} issues ({filtered.length} of {total} findings)
           </p>
         )}
       </div>
 
-      {/* ── Finding list ── */}
-      {filtered.length === 0 ? (
+      {/* ── Finding list (grouped) ── */}
+      {grouped.length === 0 ? (
         <div className="glass rounded-xl border border-dashed border-navy-700 p-6 text-center">
           <p className="text-sm text-navy-400">No findings match the current filters.</p>
         </div>
       ) : (
         <div className="glass overflow-hidden divide-y divide-navy-700/30">
-          {SEV_ORDER.flatMap((sev) =>
-            filtered
-              .filter((f) => f.severity === sev)
-              .map((f) => {
-                const meta = SEV_META[sev];
-                const isExpanded = expandedId === f.id;
+          {grouped.map(([groupKey, items]) => {
+            const rep = items[0];
+            const sev = rep.severity as Sev;
+            const meta = SEV_META[sev];
+            // Deduplicate within the group: same resource label = same finding from multiple syncs
+            const dedupedInstances = deduplicateInstances(items);
+            const isGroup = dedupedInstances.length > 1;
+            const isExpanded = expandedGroupKey === groupKey;
+            // Display title uses the normalized pattern (e.g. "No Azure Firewall deployed in '…'")
+            const displayTitle = normalizeTitle(rep.title)
+              // Capitalise first letter for display
+              .replace(/^'/, "'")
+              .replace(/^\w/, (c) => c.toUpperCase());
 
-                return (
-                  <div
-                    key={f.id}
-                    className={`border-l-4 ${meta.border} transition-colors ${
-                      isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
-                    }`}
-                  >
-                    {/* Collapsed row — clickable */}
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : f.id)}
-                      className="w-full px-5 py-3.5 text-left"
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Severity badge */}
-                        <span
-                          className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}
-                        >
-                          {meta.label}
+            return (
+              <div key={groupKey} className={`border-l-4 ${meta.border}`}>
+                {/* Group / single header row */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroupKey(isExpanded ? null : groupKey)}
+                  className={`w-full px-5 py-3.5 text-left transition-colors ${
+                    isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
+                  }`}
+                  aria-expanded={isExpanded}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}>
+                      {meta.label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-navy-100">
+                        {displayTitle}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
+                          {rep.category}
                         </span>
-
-                        {/* Title + meta tags */}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold leading-snug text-navy-100">
-                            {f.title}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded border border-navy-700/40 bg-navy-800/40 px-2 py-0.5 text-xs text-navy-400">
-                              {f.category}
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
-                                f.aiGenerated
-                                  ? "border-teal-800/40 bg-teal-900/20 text-teal-400"
-                                  : "border-violet-800/40 bg-violet-900/20 text-violet-400"
-                              }`}
-                            >
-                              {f.aiGenerated ? "AI Analysis" : "Live Discovery"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Chevron */}
-                        <svg
-                          className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${
-                            isExpanded ? "rotate-180" : ""
-                          }`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
+                          rep.aiGenerated
+                            ? "border-teal-800/40 bg-teal-900/20 text-teal-400"
+                            : "border-violet-800/40 bg-violet-900/20 text-violet-400"
+                        }`}>
+                          {rep.aiGenerated ? "AI Analysis" : "Live Discovery"}
+                        </span>
+                        {isGroup && (
+                          <span className="inline-flex items-center rounded-full border border-navy-600/40 bg-navy-700/40 px-2 py-0.5 text-xs font-semibold text-navy-300">
+                            {dedupedInstances.length} affected resources
+                          </span>
+                        )}
                       </div>
-                    </button>
+                    </div>
+                    <svg
+                      className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
 
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div className="px-5 pb-5">
-                        <p className="mb-3 text-sm leading-relaxed text-navy-300">
-                          {f.description}
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div className="divide-y divide-navy-700/20 bg-navy-800/10">
+                    {isGroup ? (
+                      /* Multiple affected resources — one row per resource */
+                      dedupedInstances.map(({ label, finding, count }) => (
+                        <InstanceRow key={finding.id} label={label} finding={finding} count={count} />
+                      ))
+                    ) : (
+                      /* Single resource — show detail inline */
+                      <div className="px-5 pb-5 pt-2">
+                        {/* Resource identifier */}
+                        <p className="mb-2 font-mono text-xs font-semibold text-navy-400">
+                          {dedupedInstances[0].label}
+                          {dedupedInstances[0].count > 1 && (
+                            <span className="ml-2 rounded border border-navy-600/40 bg-navy-700/40 px-1.5 py-0.5 text-[10px] font-semibold text-navy-400">
+                              ×{dedupedInstances[0].count} syncs
+                            </span>
+                          )}
                         </p>
-                        {f.recommendation && (
+                        <p className="mb-3 text-sm leading-relaxed text-navy-300">{rep.description}</p>
+                        {rep.recommendation && (
                           <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
                             <p className="text-xs leading-relaxed text-teal-300">
                               <span className="font-semibold text-teal-200">Recommendation: </span>
-                              {f.recommendation}
+                              {rep.recommendation}
                             </p>
-                            <a
-                              href={f.msLearnUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
-                            >
+                            <a href={rep.msLearnUrl} target="_blank" rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline">
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
@@ -342,9 +507,10 @@ export function FindingsClient({ findings }: Props) {
                       </div>
                     )}
                   </div>
-                );
-              }),
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

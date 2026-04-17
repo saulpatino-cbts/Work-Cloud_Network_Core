@@ -2,10 +2,60 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadDeliverable } from "@/lib/blob";
+import { deleteBlob, uploadDeliverable } from "@/lib/blob";
 import { generateDeliverableContent } from "@/lib/openai";
+import type { DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 import type { DeliverableType } from "@prisma/client";
+
+// ─── Multi-subscription topology merge ────────────────────────────────────────
+// Each CloudCredential is one subscription sync group. We take the latest
+// completed job per credential and merge all their topologies into one JSON
+// so the assessment covers every scanned subscription, not just the most
+// recently synced one.
+
+async function getMergedTopologyJson(engagementId: string): Promise<string | null> {
+  const completedJobs = await prisma.discoveryJob.findMany({
+    where: { engagementId, status: "COMPLETED" },
+    orderBy: { completedAt: "desc" },
+    select: { topologyJson: true, credentialId: true },
+    take: 100,
+  }).catch(() => []);
+
+  if (!completedJobs.length) return null;
+
+  // Latest job per credential
+  const latestByCredential = new Map<string, string>();
+  for (const job of completedJobs) {
+    const key = job.credentialId ?? "__none__";
+    if (!latestByCredential.has(key) && job.topologyJson) {
+      latestByCredential.set(key, job.topologyJson);
+    }
+  }
+
+  if (latestByCredential.size === 0) return null;
+  if (latestByCredential.size === 1) return [...latestByCredential.values()][0];
+
+  // Merge: deduplicate subscriptions by subscription_id
+  let tenantId = "";
+  const seenSubIds = new Set<string>();
+  const mergedSubs: unknown[] = [];
+
+  for (const json of latestByCredential.values()) {
+    try {
+      const topo = JSON.parse(json) as { tenant_id?: string; subscriptions?: Array<{ subscription_id?: string }> };
+      if (!tenantId && topo.tenant_id) tenantId = topo.tenant_id;
+      for (const sub of topo.subscriptions ?? []) {
+        if (sub.subscription_id && !seenSubIds.has(sub.subscription_id)) {
+          seenSubIds.add(sub.subscription_id);
+          mergedSubs.push(sub);
+        }
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  return JSON.stringify({ tenant_id: tenantId, subscriptions: mergedSubs });
+}
 
 const TYPE_LABELS: Record<string, string> = {
   COMPREHENSIVE_ASSESSMENT: "Comprehensive Assessment",
@@ -15,7 +65,7 @@ const TYPE_LABELS: Record<string, string> = {
   SPECIALIZATION_REPORT: "Specialization Report",
 };
 
-const ALL_TYPES: DeliverableType[] = [
+const ALL_TYPES: OpenAIDeliverableType[] = [
   "COMPREHENSIVE_ASSESSMENT",
   "EXECUTIVE_SUMMARY",
   "TECHNICAL_FINDINGS",
@@ -49,7 +99,7 @@ export async function generateDeliverable(
   });
   if (!member) return { error: "Access denied." };
 
-  const [engagement, findings, documents, latestJob, existingCount] = await Promise.all([
+  const [engagement, findings, documents, existingDeliverables, credentials] = await Promise.all([
     prisma.engagement.findUnique({ where: { id: engagementId } }),
     prisma.finding.findMany({
       where: { engagementId },
@@ -59,14 +109,15 @@ export async function generateDeliverable(
       where: { engagementId, parsedText: { not: null } },
       select: { fileName: true, parsedText: true },
     }),
-    prisma.discoveryJob
-      .findFirst({
-        where: { engagementId, status: "COMPLETED" },
-        orderBy: { completedAt: "desc" },
-        select: { topologyJson: true },
-      })
-      .catch(() => null),
-    prisma.deliverable.count({ where: { engagementId } }),
+    prisma.deliverable.findMany({
+      where: { engagementId },
+      orderBy: { createdAt: "desc" },
+      select: { type: true, title: true },
+    }),
+    prisma.cloudCredential.findMany({
+      where: { engagementId },
+      select: { label: true, platform: true, tenantId: true, subscriptionIds: true },
+    }),
   ]);
 
   if (!engagement) return { error: "Engagement not found." };
@@ -74,19 +125,32 @@ export async function generateDeliverable(
     return { error: "No findings yet. Run discovery and/or AI analysis before generating assessments." };
   }
 
-  const title = buildTitle(type, engagement.clientOrg, existingCount + 1);
+  // Merged topology from ALL subscription sync groups
+  const mergedTopologyJson = await getMergedTopologyJson(engagementId);
+
+  const title = buildTitle(type, engagement.clientOrg, existingDeliverables.length + 1);
 
   let content: string;
   try {
     content = await generateDeliverableContent({
-      type: type as DeliverableType,
+      type: type as OpenAIDeliverableType,
       title,
       clientOrg: engagement.clientOrg,
       engagementName: engagement.name,
       findings,
-      topologyJson: latestJob?.topologyJson ?? null,
+      topologyJson: mergedTopologyJson,
       documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
       customerLogoUrl,
+      credentialsInfo: credentials.map((c) => ({
+        label: c.label,
+        platform: c.platform,
+        tenantId: c.tenantId,
+        subscriptionIds: c.subscriptionIds,
+      })),
+      previousAssessments: existingDeliverables.map((d) => ({
+        type: d.type,
+        title: d.title,
+      })),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -131,7 +195,7 @@ export async function generateAllAssessments(
   });
   if (!member) return { error: "Access denied." };
 
-  const [engagement, findings, documents, latestJob, existingCount] = await Promise.all([
+  const [engagement, findings, documents, existingDeliverables, credentials] = await Promise.all([
     prisma.engagement.findUnique({ where: { id: engagementId } }),
     prisma.finding.findMany({
       where: { engagementId },
@@ -141,14 +205,15 @@ export async function generateAllAssessments(
       where: { engagementId, parsedText: { not: null } },
       select: { fileName: true, parsedText: true },
     }),
-    prisma.discoveryJob
-      .findFirst({
-        where: { engagementId, status: "COMPLETED" },
-        orderBy: { completedAt: "desc" },
-        select: { topologyJson: true },
-      })
-      .catch(() => null),
-    prisma.deliverable.count({ where: { engagementId } }),
+    prisma.deliverable.findMany({
+      where: { engagementId },
+      orderBy: { createdAt: "desc" },
+      select: { type: true, title: true },
+    }),
+    prisma.cloudCredential.findMany({
+      where: { engagementId },
+      select: { label: true, platform: true, tenantId: true, subscriptionIds: true },
+    }),
   ]);
 
   if (!engagement) return { error: "Engagement not found." };
@@ -157,19 +222,28 @@ export async function generateAllAssessments(
   }
 
   const docInput = documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! }));
-  const topologyJson = latestJob?.topologyJson ?? null;
+  const mergedTopologyJson = await getMergedTopologyJson(engagementId);
+  const credentialsInfo = credentials.map((c) => ({
+    label: c.label,
+    platform: c.platform,
+    tenantId: c.tenantId,
+    subscriptionIds: c.subscriptionIds,
+  }));
+  const previousAssessments = existingDeliverables.map((d) => ({ type: d.type, title: d.title }));
 
   const settled = await Promise.allSettled(
     ALL_TYPES.map((type, i) =>
       generateDeliverableContent({
         type,
-        title: buildTitle(type, engagement.clientOrg, existingCount + i + 1),
+        title: buildTitle(type, engagement.clientOrg, existingDeliverables.length + i + 1),
         clientOrg: engagement.clientOrg,
         engagementName: engagement.name,
         findings,
-        topologyJson,
+        topologyJson: mergedTopologyJson,
         documents: docInput,
         customerLogoUrl,
+        credentialsInfo,
+        previousAssessments,
       }).then((content) => ({ type, content })),
     ),
   );
@@ -182,7 +256,7 @@ export async function generateAllAssessments(
     const fileName = `${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
     try {
       const blobPath = await uploadDeliverable(engagementId, fileName, content);
-      const title = buildTitle(type, engagement.clientOrg, existingCount + saved + 1);
+      const title = buildTitle(type, engagement.clientOrg, existingDeliverables.length + saved + 1);
       await prisma.deliverable.create({
         data: { engagementId, title, type, blobPath, content },
       });
@@ -219,8 +293,32 @@ export async function deleteDeliverable(formData: FormData) {
   });
   if (!member) return;
 
+  const record = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { blobPath: true },
+  });
+  if (record?.blobPath) {
+    await deleteBlob(record.blobPath);
+  }
+
   await prisma.deliverable.delete({ where: { id: deliverableId } });
   revalidatePath(`/engagements/${engagementId}`);
+}
+
+export async function cleanupExpiredDeliverables(engagementId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+  const expired = await prisma.deliverable.findMany({
+    where: { engagementId, createdAt: { lt: cutoff } },
+  });
+  let deleted = 0;
+  for (const d of expired) {
+    if (d.blobPath) {
+      await deleteBlob(d.blobPath);
+    }
+    await prisma.deliverable.delete({ where: { id: d.id } });
+    deleted++;
+  }
+  return deleted;
 }
 
 // ─── Publish assessment ────────────────────────────────────────────────────────

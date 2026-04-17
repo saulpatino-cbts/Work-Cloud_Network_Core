@@ -2,32 +2,32 @@
 
 > **Status as of 2026-04-17 · Session 3 complete**
 > Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
-> Sprint 1 (Beta Hard Blockers), Sprint 2 (East-West Visibility), and Sprint 3 (Production Hardening) are now closed.
+> Sprint 1 (Beta Hard Blockers), Sprint 2 (East-West Visibility), Sprint 3 (Production Hardening), and Sprint 4 (Assessment Completeness) are now closed.
 > **18 of 18 Azure rules are active.** Beta deployment sequence is ready to run.
 
 ---
 
-## Alpha Completed (2026-04-14)
+## ~~Alpha Completed (2026-04-14)~~
 
-Everything below shipped and is live on the dev environment at SHA `ace931c`.
+~~Everything below shipped and is live on the dev environment at SHA `ace931c`.~~
 
 | Feature | Status |
 | --- | --- |
-| Platform architecture (3-container, PostgreSQL, Entra ID) | ✅ Done |
-| Terraform modules (all Azure resources) | ✅ Done |
-| GitHub Actions workflows (000–031) | ✅ Done |
-| Entra ID auth + OIDC federation | ✅ Done |
-| First Terraform deployment (dev) | ✅ Done |
-| Per-subscription sync groups (one `DiscoveryJob` per credential) | ✅ Done |
-| Multi-subscription topology merge (inventory + presentations + deliverables) | ✅ Done |
-| Findings count — unique issue groups vs. raw count | ✅ Done |
-| Five assessment types (COMPREHENSIVE HTML + 4 Markdown) | ✅ Done |
-| Comprehensive Assessment HTML output (fixed system prompt conflict) | ✅ Done |
-| MS Learn enrichment (live fetch at generation time) | ✅ Done |
-| Interactive Assessment: AI generation on every create/recreate | ✅ Done |
-| Interactive Assessment: "View Report" + "Dashboard" split in portal | ✅ Done |
-| Presentation dashboard: all pages use merged topology (fixes "1 subscription") | ✅ Done |
-| Error surfacing in create-assessment-button | ✅ Done |
+| ~~Platform architecture (3-container, PostgreSQL, Entra ID)~~ | ✅ Done |
+| ~~Terraform modules (all Azure resources)~~ | ✅ Done |
+| ~~GitHub Actions workflows (000–031)~~ | ✅ Done |
+| ~~Entra ID auth + OIDC federation~~ | ✅ Done |
+| ~~First Terraform deployment (dev)~~ | ✅ Done |
+| ~~Per-subscription sync groups (one `DiscoveryJob` per credential)~~ | ✅ Done |
+| ~~Multi-subscription topology merge (inventory + presentations + deliverables)~~ | ✅ Done |
+| ~~Findings count — unique issue groups vs. raw count~~ | ✅ Done |
+| ~~Five assessment types (COMPREHENSIVE HTML + 4 Markdown)~~ | ✅ Done |
+| ~~Comprehensive Assessment HTML output (fixed system prompt conflict)~~ | ✅ Done |
+| ~~MS Learn enrichment (live fetch at generation time)~~ | ✅ Done |
+| ~~Interactive Assessment: AI generation on every create/recreate~~ | ✅ Done |
+| ~~Interactive Assessment: "View Report" + "Dashboard" split in portal~~ | ✅ Done |
+| ~~Presentation dashboard: all pages use merged topology (fixes "1 subscription")~~ | ✅ Done |
+| ~~Error surfacing in create-assessment-button~~ | ✅ Done |
 
 ---
 
@@ -145,130 +145,114 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ---
 
-## Sprint 1 — Beta Hard Blockers ✅ CLOSED
+## ~~Sprint 1 — Beta Hard Blockers~~ ✅ CLOSED
 
-All items shipped in commit `1907596`.
+~~All items shipped in commit `1907596`.~~
 
-### Code Bugs
+### ~~Code Bugs~~
 
-- [x] **Fix `_collect_private_endpoints()` — PE IPs always empty**
-  Already implemented — NIC GET calls present at lines 905–918.
+- [x] ~~**Fix `_collect_private_endpoints()` — PE IPs always empty**~~
+  ~~Already implemented — NIC GET calls present at lines 905–918.~~
 
-- [x] **Fix `vpn_client_pools` list-of-lists bug**
-  Already implemented — line 819 uses `.extend()`.
+- [x] ~~**Fix `vpn_client_pools` list-of-lists bug**~~
+  ~~Already implemented — line 819 uses `.extend()`.~~
 
-- [x] **Wire `azure_network.py` and `azure_security.py` stubs**
-  Both now raise `NotImplementedError` with a clear user-facing message.
+- [x] ~~**Wire `azure_network.py` and `azure_security.py` stubs**~~
+  ~~Both now raise `NotImplementedError` with a clear user-facing message.~~
 
-### Schema & Analysis Gaps
+### ~~Schema & Analysis Gaps~~
 
-- [x] **Implement `_classify_subnet()` helper in `azure_discovery.py`**
-  Module-level helper added. `SubnetType` (`public` | `private` | `isolated` | `unknown`) now
-  populated on every `AzureSubnet` at discovery time.
+- [x] ~~**Implement `_classify_subnet()` helper in `azure_discovery.py`**~~
+  ~~Module-level helper added. `SubnetType` (`public` | `private` | `isolated` | `unknown`) now populated on every `AzureSubnet` at discovery time.~~
 
-- [x] **Implement peering firewall-bypass check (`AZ-NET-012`) in `analysis_engine.py`**
-  Fires on spoke subnets with no UDR, or a UDR missing `0.0.0.0/0 → VirtualAppliance`.
+- [x] ~~**Implement peering firewall-bypass check (`AZ-NET-012`) in `analysis_engine.py`**~~
+  ~~Fires on spoke subnets with no UDR, or a UDR missing `0.0.0.0/0 → VirtualAppliance`.~~
 
-- [x] **Add firewall diagnostic settings check (`AZ-NET-013`) in `analysis_engine.py`**
-  `_collect_observability()` queries ARM diagnostic settings per firewall.
-  `ObservabilityData.firewalls_with_diagnostics / firewalls_total` populated.
-  AZ-NET-013 fires when any firewall lacks a Log Analytics sink.
+- [x] ~~**Add firewall diagnostic settings check (`AZ-NET-013`) in `analysis_engine.py`**~~
+  ~~`_collect_observability()` queries ARM diagnostic settings per firewall. AZ-NET-013 fires when any firewall lacks a Log Analytics sink.~~
 
-### CI/CD & Supply Chain
+### ~~CI/CD & Supply Chain~~
 
-- [x] **Auto-write Terraform outputs to GitHub Variables in `031-deploy-azure.yml`**
-  Step "Update GitHub Variables from Terraform outputs" runs after `terraform apply`.
+- [x] ~~**Auto-write Terraform outputs to GitHub Variables in `031-deploy-azure.yml`**~~
+  ~~Step "Update GitHub Variables from Terraform outputs" runs after `terraform apply`.~~
 
-- [x] **Add `CNA_MCP_SERVER_URL` to `secrets-reference.md` and `.env.example`**
-  `CNA_MCP_SERVER_URL=none` documented as default fallback in both files.
+- [x] ~~**Add `CNA_MCP_SERVER_URL` to `secrets-reference.md` and `.env.example`**~~
+  ~~`CNA_MCP_SERVER_URL=none` documented as default fallback in both files.~~
 
 ---
 
-## Sprint 2 — East-West Visibility ✅ CLOSED
+## ~~Sprint 2 — East-West Visibility~~ ✅ CLOSED
 
-All metrics collectors and new analysis rules shipped.
+### ~~New Metrics Collectors~~
 
-### New Metrics Collectors ✅
+- [x] ~~**Collect Azure Firewall metrics** — `DataProcessed`, `ApplicationRuleHit`, `NetworkRuleHit`, `NatRuleHit`~~
+  ~~Rule `AZ-NET-009`: firewall present with 0 rule hits = misconfigured or bypassed.~~
 
-- [x] **Collect Azure Firewall metrics** — `DataProcessed`, `ApplicationRuleHit`, `NetworkRuleHit`, `NatRuleHit`
-  Rule `AZ-NET-009`: firewall present with 0 rule hits = misconfigured or bypassed.
+- [x] ~~**Collect Load Balancer SNAT metrics** — `SnatConnectionCount`, `UsedSnatPorts`, `AllocatedSnatPorts`~~
+  ~~Rule `AZ-NET-010`: `UsedSnatPorts / AllocatedSnatPorts > 80%` = SNAT exhaustion risk.~~
 
-- [x] **Collect Load Balancer SNAT metrics** — `SnatConnectionCount`, `UsedSnatPorts`, `AllocatedSnatPorts`
-  Rule `AZ-NET-010`: `UsedSnatPorts / AllocatedSnatPorts > 80%` = SNAT exhaustion risk.
+- [x] ~~**Collect gateway `AverageBandwidth` metric** → populates `GatewayMetric.utilization_pct`~~
+  ~~Rule `AZ-NET-008`: `utilization_pct > 80%` = gateway saturation.~~
 
-- [x] **Collect gateway `AverageBandwidth` metric** → populates `GatewayMetric.utilization_pct`
-  Rule `AZ-NET-008`: `utilization_pct > 80%` = gateway saturation.
+- [x] ~~**Compute VNet IP space utilization %** from existing subnet CIDR data~~
+  ~~Rule `AZ-NET-011`: `vnet_utilization > 85%` = IP exhaustion risk.~~
 
-- [x] **Compute VNet IP space utilization %** from existing subnet CIDR data
-  Rule `AZ-NET-011`: `vnet_utilization > 85%` = IP exhaustion risk.
+- [x] ~~**Collect ER circuit utilization** — `BitsInPerSecond`, `BitsOutPerSecond` on ER circuit resources~~
+  ~~Rule `AZ-NET-016`: `primary_utilization_pct > 80%` = circuit saturation risk.~~
 
-- [x] **Collect ER circuit utilization** — `BitsInPerSecond`, `BitsOutPerSecond` on ER circuit resources
-  Rule `AZ-NET-016`: `primary_utilization_pct > 80%` = circuit saturation risk.
+- [x] ~~**Collect DDoS attack telemetry** — `IfUnderDDoSAttack`, `DdosPacketsDropped` on Public IPs~~
+  ~~Rule `AZ-NET-017` (CRITICAL): active attack detected in last 24h.~~
 
-- [x] **Collect DDoS attack telemetry** — `IfUnderDDoSAttack`, `DdosPacketsDropped` on Public IPs
-  Rule `AZ-NET-017` (CRITICAL): active attack detected in last 24h.
+- [x] ~~**Add Cost Management API call** (billing-derived throughput proxy)~~
+  ~~`azure-mgmt-costmanagement` queries `Microsoft.Network` + `Bandwidth` meter categories MTD. `NetworkMetrics.egress_cost_usd_mtd` populated. Requires Billing Reader.~~
 
-- [x] **Add Cost Management API call** (billing-derived throughput proxy)
-  `azure-mgmt-costmanagement` queries `Microsoft.Network` + `Bandwidth` meter categories MTD.
-  `NetworkMetrics.egress_cost_usd_mtd` populated. Requires Billing Reader.
+- [x] ~~**Add NTA east-west / north-south bytes** via Log Analytics `AzureNetworkAnalytics_CL`~~
+  ~~`NetworkMetrics.nta_east_west_bytes_24h` / `nta_north_south_bytes_24h` populated. Requires Traffic Analytics enabled on NSG flow logs.~~
 
-- [x] **Add NTA east-west / north-south bytes** via Log Analytics `AzureNetworkAnalytics_CL`
-  `NetworkMetrics.nta_east_west_bytes_24h` / `nta_north_south_bytes_24h` populated.
-  Requires Traffic Analytics enabled on NSG flow logs.
+### ~~Observability Gaps~~
 
-### Observability Gaps ✅
+- [x] ~~**Add Traffic Analytics state** to `ObservabilityData`~~
+  ~~Rule `AZ-NET-014`: flow log enabled but Traffic Analytics disabled.~~
 
-- [x] **Add Traffic Analytics state** to `ObservabilityData`
-  Rule `AZ-NET-014`: flow log enabled but Traffic Analytics disabled.
+- [x] ~~**Add Bastion diagnostic settings check**~~
+  ~~`_collect_observability()` queries ARM diagnostic settings per Bastion host. Rule `AZ-NET-015`: Bastion without session audit logs.~~
 
-- [x] **Add Bastion diagnostic settings check**
-  `_collect_observability()` queries ARM diagnostic settings per Bastion host.
-  `ObservabilityData.bastion_with_diagnostics / bastion_total` populated.
-  Rule `AZ-NET-015`: Bastion without session audit logs.
+### ~~Compliance Mappings~~
 
-### Compliance Mappings ✅
+- [x] ~~**Add PCI-DSS 4.0 `framework_mappings`** to AZ-NET-001/002/003/004/007~~
 
-- [x] **Add PCI-DSS 4.0 `framework_mappings`** to AZ-NET-001/002/003/004/007
-  Req 1.2 → segmentation (AZ-NET-002), Req 1.3 → inbound/outbound (AZ-NET-003, 007).
+- [x] ~~**Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings~~
 
-- [x] **Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings
-  A.8.20 (AZ-NET-001, 003), A.8.21 (AZ-NET-004), A.8.22 (AZ-NET-002), A.8.23 (AZ-NET-007).
+- [x] ~~**Add HIPAA § 164.312 framework mappings** to AZ-NET-001/002/003/004/006/007/017~~
 
-- [x] **Add HIPAA § 164.312 framework mappings** to AZ-NET-001/002/003/004/006/007/017
-  Technical safeguards: access control, transmission security, audit controls, contingency ops.
-
-- [x] **Add FedRAMP Moderate framework mappings** to AZ-NET-001/002/003/004/005/006/007/016/017/018
-  SC-5 (DoS), SC-7 (Boundary), CP-8 (Telecom), AU-2 (Audit Events).
+- [x] ~~**Add FedRAMP Moderate framework mappings** to AZ-NET-001/002/003/004/005/006/007/016/017/018~~
 
 ---
 
-## Sprint 3 — Production Hardening ✅ CLOSED
+## ~~Sprint 3 — Production Hardening~~ ✅ CLOSED
 
-- [x] **Pin `node:20-alpine` to SHA digest** in `cna-web/Dockerfile`
-  All 4 `FROM` stages pinned to `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293`.
+- [x] ~~**Pin `node:20-alpine` to SHA digest** in `cna-web/Dockerfile`~~
+  ~~All 4 `FROM` stages pinned to `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293`.~~
 
-- [x] **Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`
-  Pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7` (v2 SHA as of 2026-04-17).
+- [x] ~~**Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`~~
+  ~~Pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7` (v2 SHA as of 2026-04-17).~~
 
-- [x] **Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**
-  Diff obtained — prod intentionally differs (ZRS, 90d retention, no scale-to-zero).
-  Finding: prod missing `AZURE_STORAGE_ACCOUNT_NAME` / `AZURE_STORAGE_CONTAINER_ENGAGEMENTS` — document before first prod run.
+- [x] ~~**Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**~~
+  ~~Diff obtained — prod intentionally differs (ZRS, 90d retention, no scale-to-zero). Prod missing `AZURE_STORAGE_ACCOUNT_NAME` / `AZURE_STORAGE_CONTAINER_ENGAGEMENTS` — must document before first prod run.~~
 
-- [x] **Add Front Door WAF policy discovery** to `azure_discovery.py`
-  `_collect_front_door_waf_policies()` implemented. Rule `AZ-NET-018`: WAF in Detection mode.
+- [x] ~~**Add Front Door WAF policy discovery** to `azure_discovery.py`~~
+  ~~`_collect_front_door_waf_policies()` implemented. Rule `AZ-NET-018`: WAF in Detection mode.~~
 
 ---
 
-## Sprint 4 — Assessment Completeness ✅ CLOSED (Session 3)
+## ~~Sprint 4 — Assessment Completeness~~ ✅ CLOSED
 
-- [x] **Implement AZ-NET-005 emission logic** — peering `allow_gateway_transit` without local gateway
-  Fires when peering has `allow_gateway_transit=True` but VNet has no `virtual_network_gateways`.
+- [x] ~~**Implement AZ-NET-005 emission logic** — peering `allow_gateway_transit` without local gateway~~
 
-- [x] **Implement AZ-NET-006 emission logic** — VNet with no NSG flow logs enabled
-  Fires when `vnet.flow_logs_enabled == False`. FedRAMP AU-2 + HIPAA §164.312(b) mapped.
+- [x] ~~**Implement AZ-NET-006 emission logic** — VNet with no NSG flow logs enabled~~
 
-- [x] **Add PE DNS resolution validation** — `_collect_private_endpoints()` now validates FQDNs
-  Uses Python `socket.gethostbyname()` + RFC 1918 range check. Populates `dns_resolves_to_private_ip`.
+- [x] ~~**Add PE DNS resolution validation** — `_collect_private_endpoints()` now validates FQDNs~~
+  ~~Uses Python `socket.gethostbyname()` + RFC 1918 range check. Populates `dns_resolves_to_private_ip`.~~
 
 ---
 
@@ -276,7 +260,7 @@ All metrics collectors and new analysis rules shipped.
 
 | Item | Priority | Notes |
 | --- | --- | --- |
-| Production deployment | High | Run `031` targeting `prod` after dev Beta validation. Document prod env var gap first. |
+| Production deployment | **High** | Run `031` targeting `prod` after dev Beta validation. Document prod env var gap first (`AZURE_STORAGE_ACCOUNT_NAME`, `AZURE_STORAGE_CONTAINER_ENGAGEMENTS`). |
 | AWS Provider Expansion (Phase G) | High | Azure parity; needs Phase C discovery stubs for AWS |
 | Phase C: Azure network/security discovery stubs | Medium | `azure_network/security` Phase C — currently raise NotImplementedError |
 | Client portal hardening | Medium | Retention engine (90 days), SAS token TTL enforcement |

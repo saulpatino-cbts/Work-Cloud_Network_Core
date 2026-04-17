@@ -127,6 +127,8 @@ module "compute" {
     AZURE_AD_CLIENT_ID                    = var.entra_client_id
     CNA_API_INTERNAL_URL                  = "http://ca-${local.name_prefix}-api"
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
+    AZURE_STORAGE_ACCOUNT_NAME            = module.storage.storage_account_name
+    AZURE_STORAGE_CONTAINER_ENGAGEMENTS   = "raw-artifacts"
     AZURE_OPENAI_ENDPOINT                 = module.ai.azure_openai_endpoint
     AZURE_OPENAI_DEPLOYMENT               = module.ai.openai_deployment_name
     AZURE_OPENAI_API_VERSION              = module.ai.openai_api_version

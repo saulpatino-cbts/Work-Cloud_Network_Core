@@ -529,6 +529,8 @@ class AzurePrivateEndpoint(BaseModel):
     service_connections: list[AzurePrivateEndpointConnection] = Field(default_factory=list)
     dns_zone_group_names: list[str] = Field(default_factory=list)
     custom_dns_configs: list[str] = Field(default_factory=list)  # FQDNs with overrides
+    # Set by Network Watcher connectivity check — True if FQDN resolves to RFC 1918
+    dns_resolves_to_private_ip: bool | None = None
     tags: dict = Field(default_factory=dict)
 
 
@@ -777,14 +779,48 @@ class LoadBalancerMetric(BaseModel):
     collection_error: str | None = None
 
 
+class ERCircuitMetric(BaseModel):
+    """Azure Monitor throughput metrics for a single ExpressRoute circuit (24-hour window)."""
+
+    circuit_name: str
+    bandwidth_mbps_provisioned: float | None = None
+    primary_bits_in_per_second: float | None = None   # avg bps
+    secondary_bits_in_per_second: float | None = None  # avg bps
+    primary_utilization_pct: float | None = None
+    secondary_utilization_pct: float | None = None
+    collection_error: str | None = None
+
+
+class FrontDoorWAFPolicy(BaseModel):
+    """Azure Front Door Web Application Firewall policy on the customer tenant."""
+
+    id: str
+    name: str
+    resource_group: str
+    location: str
+    policy_mode: str = "Detection"        # "Detection" | "Prevention"
+    policy_enabled_state: str = "Enabled"  # "Enabled" | "Disabled"
+    custom_rules_count: int = 0
+    managed_rules_count: int = 0
+    tags: dict = Field(default_factory=dict)
+
+
 class NetworkMetrics(BaseModel):
     gateway_metrics: list[GatewayMetric] = Field(default_factory=list)
     firewall_metrics: list[FirewallMetric] = Field(default_factory=list)
     lb_metrics: list[LoadBalancerMetric] = Field(default_factory=list)
+    er_circuit_metrics: list[ERCircuitMetric] = Field(default_factory=list)
     # vnet_id -> utilization % (sum of subnet CIDRs / VNet CIDR * 100)
     vnet_utilization: dict[str, float] = Field(default_factory=dict)
     # Billing-derived: total Microsoft.Network egress spend MTD (USD)
     egress_cost_usd_mtd: float | None = None
+    # NTA (Network Traffic Analytics) east-west and north-south byte totals (24h)
+    nta_east_west_bytes_24h: float | None = None
+    nta_north_south_bytes_24h: float | None = None
+    nta_query_workspace_id: str | None = None
+    # DDoS attack events detected on Public IPs in the subscription (24h)
+    ddos_attack_events_24h: int = 0
+    public_ips_under_ddos_attack: list[str] = Field(default_factory=list)
     collection_error: str | None = None
 
 
@@ -809,6 +845,7 @@ class AzureSubscriptionTopology(BaseModel):
     # v1.3.0 — extended assessment data
     nvas: list[AzureNVA] = Field(default_factory=list)
     bgp_data: list[GatewayBgpData] = Field(default_factory=list)
+    front_door_waf_policies: list[FrontDoorWAFPolicy] = Field(default_factory=list)
     observability: ObservabilityData | None = None
     network_metrics: NetworkMetrics | None = None
     # kept for backward compat — no longer actively collected

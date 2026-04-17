@@ -1,9 +1,9 @@
 # CNA Platform — Active TODO
 
-> **Status as of 2026-04-17 · commit `1907596`**
+> **Status as of 2026-04-17 · Session 3 complete**
 > Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
-> Sprint 1 (Beta Hard Blockers) and most of Sprint 2 (East-West Visibility) are now closed.
-> Beta deployment sequence is ready to run. Sprint 3 and Post-Beta items remain.
+> Sprint 1 (Beta Hard Blockers), Sprint 2 (East-West Visibility), and Sprint 3 (Production Hardening) are now closed.
+> **18 of 18 Azure rules are active.** Beta deployment sequence is ready to run.
 
 ---
 
@@ -184,9 +184,9 @@ All items shipped in commit `1907596`.
 
 ---
 
-## Sprint 2 — East-West Visibility ✅ MOSTLY CLOSED
+## Sprint 2 — East-West Visibility ✅ CLOSED
 
-All metrics collectors and new analysis rules shipped. One item remains.
+All metrics collectors and new analysis rules shipped.
 
 ### New Metrics Collectors ✅
 
@@ -202,6 +202,20 @@ All metrics collectors and new analysis rules shipped. One item remains.
 - [x] **Compute VNet IP space utilization %** from existing subnet CIDR data
   Rule `AZ-NET-011`: `vnet_utilization > 85%` = IP exhaustion risk.
 
+- [x] **Collect ER circuit utilization** — `BitsInPerSecond`, `BitsOutPerSecond` on ER circuit resources
+  Rule `AZ-NET-016`: `primary_utilization_pct > 80%` = circuit saturation risk.
+
+- [x] **Collect DDoS attack telemetry** — `IfUnderDDoSAttack`, `DdosPacketsDropped` on Public IPs
+  Rule `AZ-NET-017` (CRITICAL): active attack detected in last 24h.
+
+- [x] **Add Cost Management API call** (billing-derived throughput proxy)
+  `azure-mgmt-costmanagement` queries `Microsoft.Network` + `Bandwidth` meter categories MTD.
+  `NetworkMetrics.egress_cost_usd_mtd` populated. Requires Billing Reader.
+
+- [x] **Add NTA east-west / north-south bytes** via Log Analytics `AzureNetworkAnalytics_CL`
+  `NetworkMetrics.nta_east_west_bytes_24h` / `nta_north_south_bytes_24h` populated.
+  Requires Traffic Analytics enabled on NSG flow logs.
+
 ### Observability Gaps ✅
 
 - [x] **Add Traffic Analytics state** to `ObservabilityData`
@@ -212,12 +226,6 @@ All metrics collectors and new analysis rules shipped. One item remains.
   `ObservabilityData.bastion_with_diagnostics / bastion_total` populated.
   Rule `AZ-NET-015`: Bastion without session audit logs.
 
-- [ ] **Add Cost Management API call** (billing-derived throughput proxy)
-  Use `azure-mgmt-costmanagement` to query `Microsoft.Network` meter category MTD.
-  Correlate `Inter-VNet Data Transfer` spend to approximate east-west byte volume.
-  No Azure Monitor permissions required — works with Billing Reader.
-  `NetworkMetrics.egress_cost_usd_mtd` field already exists in schema.
-
 ### Compliance Mappings ✅
 
 - [x] **Add PCI-DSS 4.0 `framework_mappings`** to AZ-NET-001/002/003/004/007
@@ -226,24 +234,41 @@ All metrics collectors and new analysis rules shipped. One item remains.
 - [x] **Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings
   A.8.20 (AZ-NET-001, 003), A.8.21 (AZ-NET-004), A.8.22 (AZ-NET-002), A.8.23 (AZ-NET-007).
 
+- [x] **Add HIPAA § 164.312 framework mappings** to AZ-NET-001/002/003/004/006/007/017
+  Technical safeguards: access control, transmission security, audit controls, contingency ops.
+
+- [x] **Add FedRAMP Moderate framework mappings** to AZ-NET-001/002/003/004/005/006/007/016/017/018
+  SC-5 (DoS), SC-7 (Boundary), CP-8 (Telecom), AU-2 (Audit Events).
+
 ---
 
-## Sprint 3 — Production Hardening
+## Sprint 3 — Production Hardening ✅ CLOSED
 
-- [ ] **Pin `node:20-alpine` to SHA digest** in `cna-web/Dockerfile`
-  Run `docker pull node:20-alpine --platform linux/amd64` to capture current digest.
-  Update: `FROM node:20-alpine@sha256:<hash>`.
+- [x] **Pin `node:20-alpine` to SHA digest** in `cna-web/Dockerfile`
+  All 4 `FROM` stages pinned to `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293`.
 
 - [x] **Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`
   Pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7` (v2 SHA as of 2026-04-17).
 
-- [ ] **Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**
-  Run `diff infra/terraform/environments/azure/dev/ infra/terraform/environments/azure/prod/`
-  before promoting to prod. Failure to do this risks silent config drift.
+- [x] **Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**
+  Diff obtained — prod intentionally differs (ZRS, 90d retention, no scale-to-zero).
+  Finding: prod missing `AZURE_STORAGE_ACCOUNT_NAME` / `AZURE_STORAGE_CONTAINER_ENGAGEMENTS` — document before first prod run.
 
-- [ ] **Add Front Door WAF policy discovery** to `azure_discovery.py`
-  Permission: `Microsoft.Network/frontDoorWebApplicationFirewallPolicies/read`.
-  Covers customer-tenant Front Door WAF — currently only App GW WAF is assessed.
+- [x] **Add Front Door WAF policy discovery** to `azure_discovery.py`
+  `_collect_front_door_waf_policies()` implemented. Rule `AZ-NET-018`: WAF in Detection mode.
+
+---
+
+## Sprint 4 — Assessment Completeness ✅ CLOSED (Session 3)
+
+- [x] **Implement AZ-NET-005 emission logic** — peering `allow_gateway_transit` without local gateway
+  Fires when peering has `allow_gateway_transit=True` but VNet has no `virtual_network_gateways`.
+
+- [x] **Implement AZ-NET-006 emission logic** — VNet with no NSG flow logs enabled
+  Fires when `vnet.flow_logs_enabled == False`. FedRAMP AU-2 + HIPAA §164.312(b) mapped.
+
+- [x] **Add PE DNS resolution validation** — `_collect_private_endpoints()` now validates FQDNs
+  Uses Python `socket.gethostbyname()` + RFC 1918 range check. Populates `dns_resolves_to_private_ip`.
 
 ---
 
@@ -251,15 +276,13 @@ All metrics collectors and new analysis rules shipped. One item remains.
 
 | Item | Priority | Notes |
 | --- | --- | --- |
-| Production deployment | High | Run `031` targeting `prod` after dev Beta validation |
+| Production deployment | High | Run `031` targeting `prod` after dev Beta validation. Document prod env var gap first. |
 | AWS Provider Expansion (Phase G) | High | Azure parity; needs Phase C discovery stubs for AWS |
-| NSG flow log analytics query (east-west byte counts) | High | `AzureNetworkAnalytics_CL` Log Analytics query — only remaining east-west telemetry gap |
-| ER circuit utilization (`PrimaryBitsInPerSecond`) | Medium | Last gap for Page 6 (Hybrid/WAN) — confirms ER isn't saturated |
-| DDoS attack telemetry | Medium | `IfUnderDDoSAttack`, `DdosPacketsDropped` on Public IP resources |
-| HIPAA § 164.312 framework mappings | Medium | Healthcare clients — additive to existing rules |
-| FedRAMP Moderate mappings (AC-17, SC-7, SI-4) | Medium | Federal/DoD clients — additive to existing rules |
 | Phase C: Azure network/security discovery stubs | Medium | `azure_network/security` Phase C — currently raise NotImplementedError |
 | Client portal hardening | Medium | Retention engine (90 days), SAS token TTL enforcement |
+| App Gateway capacity metrics | Low | `CapacityUnits`, `BackendLastByteResponseTime` — WAF efficacy enrichment |
+| Defender for Cloud network recommendations | Low | `Microsoft.Security/assessments/read` — enrichment for Page 7 |
+| CISA ZTMM v2 framework mappings | Low | Zero Trust maturity model — per-finding mapping |
 | JA (Japanese) language toggle | Low | `ja_review_complete` flag — requires translated glossary review |
 | MCP server wiring | Low | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
 | Pre-commit hook enforcement monitoring | Ongoing | `detect-secrets` + `gitleaks` — monitor for false positives |
@@ -274,8 +297,8 @@ All metrics collectors and new analysis rules shipped. One item remains.
 | AZ-NET-002 | Subnet no NSG | HIGH | ✅ Live |
 | AZ-NET-003 | Firewall threat intel not Deny | CRITICAL | ✅ Live |
 | AZ-NET-004 | ExpressRoute no redundancy | LOW | ✅ Live |
-| AZ-NET-005 | Peering allow gateway transit | LOW | ⚠️ ID declared, no emission logic |
-| AZ-NET-006 | VNet no flow logs | HIGH | ⚠️ ID declared, no emission logic |
+| AZ-NET-005 | Peering allow gateway transit (no local GW) | LOW | ✅ Live |
+| AZ-NET-006 | VNet no flow logs | HIGH | ✅ Live |
 | AZ-NET-007 | App Gateway WAF disabled | HIGH | ✅ Live |
 | AZ-NET-008 | Gateway saturation >80% | HIGH | ✅ Live |
 | AZ-NET-009 | Firewall 0 rule hits | HIGH | ✅ Live |
@@ -285,8 +308,11 @@ All metrics collectors and new analysis rules shipped. One item remains.
 | AZ-NET-013 | Firewall no diagnostics | MEDIUM | ✅ Live |
 | AZ-NET-014 | Traffic Analytics disabled | MEDIUM | ✅ Live |
 | AZ-NET-015 | Bastion no session logs | MEDIUM | ✅ Live |
+| AZ-NET-016 | ER circuit saturation >80% | HIGH | ✅ Live |
+| AZ-NET-017 | DDoS attack detected | CRITICAL | ✅ Live |
+| AZ-NET-018 | Front Door WAF in Detection mode | MEDIUM | ✅ Live |
 
-**13 of 15 rules active.** AZ-NET-005 and AZ-NET-006 need emission logic (Phase C backlog).
+**18 of 18 rules active.**
 
 ---
 

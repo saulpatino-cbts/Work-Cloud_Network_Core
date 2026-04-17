@@ -52,6 +52,8 @@ from cna.core.topology_schema import (
     AzureRouteTable,
     AzureSubnet,
     AzureSubscriptionTopology,
+    ERCircuitMetric,
+    FrontDoorWAFPolicy,
     SubnetType,
     AzureTopology,
     AzureVHub,
@@ -446,6 +448,13 @@ class AzureDiscovery:
                 topo.firewalls,
                 topo.load_balancers,
                 topo.vnets,
+                er_circuits=topo.express_route_circuits,
+                public_ips=topo.public_ips,
+                la_workspaces=(
+                    topo.observability.log_analytics_workspaces
+                    if topo.observability
+                    else None
+                ),
             )
             if topo.network_metrics.collection_error:
                 self._progress(f"[{sub_name}] Metrics: {topo.network_metrics.collection_error}")
@@ -461,6 +470,16 @@ class AzureDiscovery:
                 )
         except Exception as e:
             self._progress(f"[{sub_name}] Metrics skipped: {e}")
+
+        self._progress(f"[{sub_name}] Scanning Front Door WAF policies…")
+        try:
+            topo.front_door_waf_policies = self._collect_front_door_waf_policies(sub_id)
+            if topo.front_door_waf_policies:
+                self._progress(
+                    f"[{sub_name}] Front Door WAF: {len(topo.front_door_waf_policies)} policy(s)"
+                )
+        except Exception as e:
+            self._progress(f"[{sub_name}] Front Door WAF scan skipped: {e}")
 
         if errors:
             topo.block_reason = "; ".join(errors)
@@ -999,6 +1018,33 @@ class AzureDiscovery:
                 if dng.name:
                     dns_group_names.append(dng.name)
 
+            # PE DNS validation — confirm at least one FQDN resolves to a
+            # private IP (RFC 1918).  Misconfigured DNS zones that resolve to
+            # public addresses indicate a data-exfil risk.
+            dns_resolves_private: bool | None = None
+            if custom_dns and private_ips:
+                import socket as _socket
+                import ipaddress as _ipaddr
+                _rfc1918 = (
+                    _ipaddr.ip_network("10.0.0.0/8"),
+                    _ipaddr.ip_network("172.16.0.0/12"),
+                    _ipaddr.ip_network("192.168.0.0/16"),
+                )
+                for fqdn in custom_dns[:3]:
+                    try:
+                        resolved_ip = _socket.gethostbyname(fqdn)
+                        addr = _ipaddr.ip_address(resolved_ip)
+                        if any(addr in net_range for net_range in _rfc1918):
+                            dns_resolves_private = True
+                            break
+                        else:
+                            dns_resolves_private = False
+                    except Exception:
+                        pass  # DNS not reachable from worker — leave as None
+            elif private_ips and not custom_dns:
+                # No FQDNs configured — treat as private-only (no public exposure)
+                dns_resolves_private = True
+
             endpoints.append(
                 AzurePrivateEndpoint(
                     id=pe.id,
@@ -1010,6 +1056,7 @@ class AzureDiscovery:
                     service_connections=service_conns,
                     dns_zone_group_names=dns_group_names,
                     custom_dns_configs=custom_dns,
+                    dns_resolves_to_private_ip=dns_resolves_private,
                     tags=dict(pe.tags or {}),
                 )
             )
@@ -1675,6 +1722,9 @@ class AzureDiscovery:
         firewalls: list[AzureFirewall] | None = None,
         load_balancers: list[AzureLoadBalancer] | None = None,
         vnets: list[VNet] | None = None,
+        er_circuits: list | None = None,
+        public_ips: list | None = None,
+        la_workspaces: list | None = None,
     ) -> NetworkMetrics:
         """Collect 24-hour Azure Monitor metrics and compute VNet IP utilization.
 
@@ -1682,7 +1732,11 @@ class AzureDiscovery:
           1. VPN/ER gateway: TunnelIngress/EgressBytes + AverageBandwidth → utilization_pct
           2. Azure Firewall: DataProcessed + rule hit counts (app/network/NAT)
           3. Load Balancer: SNAT port utilization (used / allocated)
-          4. VNet IP space: computed from existing CIDR data (no API call)
+          4. ER circuit: PrimaryBitsInPerSecond / SecondaryBitsInPerSecond → utilization_pct
+          5. DDoS: IfUnderDDoSAttack + DdosPacketsDropped on public IPs
+          6. VNet IP space: computed from existing CIDR data (no API call)
+          7. NTA east-west / north-south bytes: Log Analytics AzureNetworkAnalytics_CL query
+          8. Cost Management: Microsoft.Network MTD egress spend (Billing Reader)
         """
         import datetime as _dt
         import ipaddress
@@ -1835,10 +1889,88 @@ class AzureDiscovery:
                     logger.debug("[%s] LB SNAT metrics for %s failed: %s", sub_id, lb.name, e)
                 metrics.lb_metrics.append(lm)
 
+            # ── 4. ER circuit utilization ─────────────────────────────────────
+            # ER circuit bandwidth is in Mbps; Monitor returns bps.
+            for erc in (er_circuits or [])[:5]:
+                em = ERCircuitMetric(
+                    circuit_name=erc.name,
+                    bandwidth_mbps_provisioned=float(erc.bandwidth_mbps or 0) or None,
+                )
+                try:
+                    result = monitor.metrics.list(
+                        resource_uri=erc.id,
+                        timespan=timespan,
+                        interval="PT1H",
+                        metricnames=(
+                            "BitsInPerSecond,BitsOutPerSecond"
+                        ),
+                        aggregation="Average",
+                    )
+                    for metric in result.value or []:
+                        mn = metric.name.value if metric.name else ""
+                        vals = [
+                            dp.average
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.average is not None
+                        ]
+                        if not vals:
+                            continue
+                        avg_bps = sum(vals) / len(vals)
+                        if mn == "BitsInPerSecond":
+                            em.primary_bits_in_per_second = round(avg_bps, 1)
+                            if em.bandwidth_mbps_provisioned:
+                                em.primary_utilization_pct = round(
+                                    (avg_bps / 1_000_000 / em.bandwidth_mbps_provisioned) * 100,
+                                    1,
+                                )
+                        elif mn == "BitsOutPerSecond":
+                            em.secondary_bits_in_per_second = round(avg_bps, 1)
+                            if em.bandwidth_mbps_provisioned:
+                                em.secondary_utilization_pct = round(
+                                    (avg_bps / 1_000_000 / em.bandwidth_mbps_provisioned) * 100,
+                                    1,
+                                )
+                except Exception as e:
+                    em.collection_error = str(e)
+                    logger.debug("[%s] ER metrics for %s failed: %s", sub_id, erc.name, e)
+                metrics.er_circuit_metrics.append(em)
+
+            # ── 5. DDoS attack telemetry ──────────────────────────────────────
+            for pip in (public_ips or [])[:20]:  # cap to avoid rate limits
+                try:
+                    result = monitor.metrics.list(
+                        resource_uri=pip.id,
+                        timespan=timespan,
+                        interval="PT1H",
+                        metricnames="IfUnderDDoSAttack,DdosPacketsDropped",
+                        aggregation="Maximum,Total",
+                    )
+                    under_attack = False
+                    for metric in result.value or []:
+                        mn = metric.name.value if metric.name else ""
+                        if mn == "IfUnderDDoSAttack":
+                            max_val = max(
+                                (dp.maximum or 0
+                                 for ts in metric.timeseries
+                                 for dp in ts.data
+                                 if dp.maximum is not None),
+                                default=0,
+                            )
+                            if max_val > 0:
+                                under_attack = True
+                                metrics.ddos_attack_events_24h += 1
+                        elif mn == "DdosPacketsDropped" and under_attack:
+                            pass  # logged via IfUnderDDoSAttack
+                    if under_attack and pip.ip_address:
+                        metrics.public_ips_under_ddos_attack.append(pip.ip_address)
+                except Exception as e:
+                    logger.debug("[%s] DDoS metrics for %s failed: %s", sub_id, pip.id, e)
+
         except Exception as e:
             metrics.collection_error = str(e)
 
-        # ── 4. VNet IP space utilization (no Monitor call — computed from topology) ──
+        # ── 6. VNet IP space utilization (no Monitor call — computed from topology) ──
         for vnet in (vnets or []):
             try:
                 prefixes = vnet.address_space or []
@@ -1858,7 +1990,151 @@ class AzureDiscovery:
             except Exception as e:
                 logger.debug("VNet utilization calc failed for %s: %s", vnet.id, e)
 
+        # ── 7. NTA east-west / north-south bytes via Log Analytics ───────────
+        # Requires azure-monitor-query and at least one LA workspace with
+        # Traffic Analytics enabled (AzureNetworkAnalytics_CL populated).
+        if la_workspaces:
+            try:
+                from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+                import azure.core.exceptions as _az_exc
+
+                logs_client = LogsQueryClient(self._credential)
+                nta_query = (
+                    "AzureNetworkAnalytics_CL"
+                    "| where TimeGenerated > ago(24h)"
+                    "| where SubType_s == 'FlowLog'"
+                    "| summarize Bytes=sum(FlowsByteCount_d) by FlowDirection_s"
+                )
+                east_west: float = 0.0
+                north_south: float = 0.0
+                queried_ws: str | None = None
+                for ws in (la_workspaces or [])[:3]:
+                    ws_id = ws.get("workspace_id") or ws.get("id", "")
+                    if not ws_id:
+                        continue
+                    try:
+                        import datetime as _dt2
+                        from datetime import timedelta as _td
+                        resp = logs_client.query_workspace(
+                            workspace_id=ws_id,
+                            query=nta_query,
+                            timespan=(_dt2.datetime.now(_dt2.UTC) - _td(hours=24),
+                                      _dt2.datetime.now(_dt2.UTC)),
+                        )
+                        if resp.status == LogsQueryStatus.SUCCESS and resp.tables:
+                            for row in resp.tables[0].rows:
+                                direction = str(row[0]).strip()
+                                byte_val = float(row[1] or 0)
+                                if direction in ("E", "IntraVNet"):
+                                    east_west += byte_val
+                                elif direction in ("I", "O", "Inbound", "Outbound"):
+                                    north_south += byte_val
+                            queried_ws = ws_id
+                            break  # first workspace with data wins
+                    except Exception as e:
+                        logger.debug("[%s] NTA query on %s failed: %s", sub_id, ws_id, e)
+                if queried_ws:
+                    metrics.nta_east_west_bytes_24h = east_west
+                    metrics.nta_north_south_bytes_24h = north_south
+                    metrics.nta_query_workspace_id = queried_ws
+            except ImportError:
+                logger.debug("[%s] azure-monitor-query not installed; NTA query skipped", sub_id)
+            except Exception as e:
+                logger.debug("[%s] NTA query failed: %s", sub_id, e)
+
+        # ── 8. Cost Management — Microsoft.Network MTD egress spend ──────────
+        # Requires Billing Reader (or Cost Management Reader) on the subscription.
+        # Uses azure-mgmt-costmanagement (lazy import — optional dependency).
+        try:
+            from azure.mgmt.costmanagement import CostManagementClient
+            from azure.mgmt.costmanagement.models import (
+                QueryDefinition,
+                QueryDataset,
+                QueryAggregation,
+                QueryFilter,
+                QueryComparisonExpression,
+                TimeframeType,
+            )
+            import datetime as _dt3
+
+            cost_client = CostManagementClient(self._credential)
+            scope = f"/subscriptions/{sub_id}"
+            today = _dt3.date.today()
+            mtd_start = today.replace(day=1)
+
+            query = QueryDefinition(
+                type="ActualCost",
+                timeframe=TimeframeType.CUSTOM,
+                time_period={
+                    "from": f"{mtd_start.isoformat()}T00:00:00Z",
+                    "to": f"{today.isoformat()}T23:59:59Z",
+                },
+                dataset=QueryDataset(
+                    granularity="None",
+                    aggregation={"TotalCost": QueryAggregation(name="Cost", function="Sum")},
+                    filter=QueryFilter(
+                        dimensions=QueryComparisonExpression(
+                            name="MeterCategory",
+                            operator="In",
+                            values=["Virtual Network", "Bandwidth"],
+                        )
+                    ),
+                ),
+            )
+            result = cost_client.query.usage(scope=scope, parameters=query)
+            if result and result.rows:
+                total_cost = sum(float(row[0] or 0) for row in result.rows)
+                metrics.egress_cost_usd_mtd = round(total_cost, 4)
+        except ImportError:
+            logger.debug("[%s] azure-mgmt-costmanagement not installed; cost query skipped", sub_id)
+        except Exception as e:
+            logger.debug("[%s] Cost Management query failed: %s", sub_id, e)
+
         return metrics
+
+    # ----------------------------------------------- Front Door WAF policies
+
+    def _collect_front_door_waf_policies(
+        self, sub_id: str
+    ) -> list[FrontDoorWAFPolicy]:
+        """Enumerate Front Door (classic + Standard/Premium) WAF policies."""
+        from azure.mgmt.network import NetworkManagementClient
+
+        net = NetworkManagementClient(self._credential, sub_id)
+        policies: list[FrontDoorWAFPolicy] = []
+        try:
+            for p in net.web_application_firewall_policies.list_all():
+                # Only return Front Door policies (not App Gateway WAF policies).
+                # Front Door WAF policies have kind == "FrontDoor" or no SKU sku name
+                # containing "AppGateway".  Filter by resource type tag.
+                sku_name = (p.sku.name if p.sku else "") or ""
+                if "ApplicationGateway" in sku_name:
+                    continue
+                rg = (p.id or "").split("/")[4] if p.id else ""
+                managed_count = sum(
+                    len(rs.rule_sets or [])
+                    for rs in (p.managed_rules.managed_rule_sets if p.managed_rules else [])
+                )
+                policies.append(
+                    FrontDoorWAFPolicy(
+                        id=p.id or "",
+                        name=p.name or "",
+                        resource_group=rg,
+                        location=p.location or "global",
+                        policy_mode=(p.policy_settings.mode if p.policy_settings else "Detection"),
+                        policy_enabled_state=(
+                            p.policy_settings.enabled_state
+                            if p.policy_settings
+                            else "Enabled"
+                        ),
+                        custom_rules_count=len(p.custom_rules.rules if p.custom_rules else []),
+                        managed_rules_count=managed_count,
+                        tags=dict(p.tags or {}),
+                    )
+                )
+        except Exception as e:
+            logger.debug("[%s] Front Door WAF policy enumeration failed: %s", sub_id, e)
+        return policies
 
     # ----------------------------------------------------------------- run
 

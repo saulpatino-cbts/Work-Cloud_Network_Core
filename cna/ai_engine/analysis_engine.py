@@ -77,6 +77,9 @@ R_AZ_PEERING_FW_BYPASS = "AZ-NET-012"
 R_AZ_FW_NO_DIAGNOSTICS = "AZ-NET-013"
 R_AZ_TRAFFIC_ANALYTICS_MISSING = "AZ-NET-014"
 R_AZ_BASTION_NO_DIAGNOSTICS = "AZ-NET-015"
+R_AZ_ER_SATURATION = "AZ-NET-016"
+R_AZ_DDOS_ATTACK_DETECTED = "AZ-NET-017"
+R_AZ_FRONTDOOR_WAF_DETECTION_MODE = "AZ-NET-018"
 
 # Severity thresholds
 _CRITICAL_IDS = {
@@ -84,6 +87,7 @@ _CRITICAL_IDS = {
     R_AWS_SG_UNRESTRICTED_RDP,
     R_AWS_SG_UNRESTRICTED_ALL,
     R_AZ_FW_THREAT_INTEL_NOT_DENY,
+    R_AZ_DDOS_ATTACK_DETECTED,
 }
 _HIGH_IDS = {
     R_AWS_VPC_FLOW_LOGS_DISABLED,
@@ -94,6 +98,7 @@ _HIGH_IDS = {
     R_AZ_FW_NO_HITS,
     R_AZ_LB_SNAT_EXHAUSTION,
     R_AZ_VNET_IP_EXHAUSTION,
+    R_AZ_ER_SATURATION,
 }
 
 _MEDIUM_IDS = {
@@ -101,6 +106,7 @@ _MEDIUM_IDS = {
     R_AZ_FW_NO_DIAGNOSTICS,
     R_AZ_BASTION_NO_DIAGNOSTICS,
     R_AZ_PEERING_FW_BYPASS,
+    R_AZ_FRONTDOOR_WAF_DETECTION_MODE,
 }
 
 
@@ -482,6 +488,17 @@ class AnalysisEngine:
                                 pillar="Network Security",
                                 control="A.8.20 — Networks security",
                             ),
+                            FrameworkMapping(
+                                framework="HIPAA §164.312",
+                                pillar="Technical Safeguards",
+                                control="(e)(2)(ii) — Encryption and decryption (addressable); "
+                                "integrity controls for ePHI in transit",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="System and Communications Protection",
+                                control="SC-5 — Denial of Service Protection",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -530,6 +547,17 @@ class AnalysisEngine:
                                     pillar="Network Security",
                                     control="A.8.22 — Segregation of networks",
                                 ),
+                                FrameworkMapping(
+                                    framework="HIPAA §164.312",
+                                    pillar="Technical Safeguards",
+                                    control="(a)(1) — Access control: unique user identification "
+                                    "and network access controls for ePHI systems",
+                                ),
+                                FrameworkMapping(
+                                    framework="FedRAMP Moderate",
+                                    pillar="System and Communications Protection",
+                                    control="SC-7 — Boundary Protection",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -573,6 +601,17 @@ class AnalysisEngine:
                                 pillar="Network Security",
                                 control="A.8.20 — Networks security",
                             ),
+                            FrameworkMapping(
+                                framework="HIPAA §164.312",
+                                pillar="Technical Safeguards",
+                                control="(e)(1) — Transmission security: guard against "
+                                "unauthorized access to ePHI in transit",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="System and Communications Protection",
+                                control="SC-7 — Boundary Protection",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -605,6 +644,17 @@ class AnalysisEngine:
                             framework="ISO 27001:2022",
                             pillar="Network Security",
                             control="A.8.21 — Security of network services",
+                        ),
+                        FrameworkMapping(
+                            framework="HIPAA §164.312",
+                            pillar="Technical Safeguards",
+                            control="(a)(2)(ii) — Automatic logoff / contingency operations; "
+                            "availability of ePHI systems",
+                        ),
+                        FrameworkMapping(
+                            framework="FedRAMP Moderate",
+                            pillar="Contingency Planning",
+                            control="CP-8 — Telecommunications Services (redundancy)",
                         ),
                     ],
                     status=FindingStatus.OPEN,
@@ -643,6 +693,17 @@ class AnalysisEngine:
                                 framework="ISO 27001:2022",
                                 pillar="Network Security",
                                 control="A.8.23 — Web filtering",
+                            ),
+                            FrameworkMapping(
+                                framework="HIPAA §164.312",
+                                pillar="Technical Safeguards",
+                                control="(e)(1) — Transmission security: protect ePHI APIs "
+                                "from injection and web-layer attacks",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="System and Communications Protection",
+                                control="SC-7 — Boundary Protection",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -759,6 +820,126 @@ class AnalysisEngine:
                         )
                     )
 
+            # AZ-NET-016: ER circuit saturation > 80%
+            for em in sub_topo.network_metrics.er_circuit_metrics:
+                max_util = max(
+                    filter(None, [em.primary_utilization_pct, em.secondary_utilization_pct]),
+                    default=None,
+                )
+                if max_util and max_util > 80.0:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_ER_SATURATION,
+                            severity=_severity(R_AZ_ER_SATURATION),
+                            resource_id=sub_id,
+                            resource_type="Microsoft.Network/expressRouteCircuits",
+                            account_id=sub_id,
+                            region="Global",
+                            title="ExpressRoute circuit bandwidth utilization exceeds 80%",
+                            observed_state=ObservedState(
+                                fact=f"ER circuit {em.circuit_name} primary utilization is "
+                                f"{em.primary_utilization_pct}% "
+                                f"(provisioned {em.bandwidth_mbps_provisioned} Mbps). "
+                                f"At this rate the circuit will saturate under load.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics.er_circuit_metrics",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Performance Efficiency",
+                                    control="PE-3 — Monitor and optimize network performance",
+                                ),
+                                FrameworkMapping(
+                                    framework="FedRAMP Moderate",
+                                    pillar="Contingency Planning",
+                                    control="CP-8 — Telecommunications Services",
+                                ),
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+            # AZ-NET-017: DDoS attack detected on a public IP in the last 24 h
+            if sub_topo.network_metrics.ddos_attack_events_24h > 0:
+                ips = ", ".join(sub_topo.network_metrics.public_ips_under_ddos_attack[:5])
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_DDOS_ATTACK_DETECTED,
+                        severity=_severity(R_AZ_DDOS_ATTACK_DETECTED),
+                        resource_id=sub_id,
+                        resource_type="Microsoft.Network/publicIPAddresses",
+                        account_id=sub_id,
+                        region="Global",
+                        title="Active or recent DDoS attack detected on public IP resources",
+                        observed_state=ObservedState(
+                            fact=f"Azure Monitor reported IfUnderDDoSAttack > 0 on "
+                            f"{sub_topo.network_metrics.ddos_attack_events_24h} public IP(s) "
+                            f"in the last 24 hours. Affected IPs: {ips or 'unknown'}.",
+                            evidence_ref=f"discovery:azure_{sub_id}.network_metrics.ddos_attack_events_24h",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="NS-4 — Protect applications from external network attacks",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="System and Communications Protection",
+                                control="SC-5 — Denial of Service Protection",
+                            ),
+                            FrameworkMapping(
+                                framework="HIPAA §164.312",
+                                pillar="Technical Safeguards",
+                                control="(a)(2)(ii) — Contingency operations: protect ePHI "
+                                "availability during attack",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+        # AZ-NET-018: Front Door WAF policy in Detection mode
+        for policy in sub_topo.front_door_waf_policies:
+            if str(policy.policy_mode).lower() == "detection":
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_FRONTDOOR_WAF_DETECTION_MODE,
+                        severity=_severity(R_AZ_FRONTDOOR_WAF_DETECTION_MODE),
+                        resource_id=policy.id,
+                        resource_type="Microsoft.Network/frontDoorWebApplicationFirewallPolicies",
+                        account_id=sub_id,
+                        region=policy.location,
+                        title="Front Door WAF policy is in Detection mode, not Prevention",
+                        observed_state=ObservedState(
+                            fact=f"Front Door WAF policy {policy.name} is in Detection mode. "
+                            f"Malicious requests are logged but not blocked. "
+                            f"Custom rules: {policy.custom_rules_count}, "
+                            f"Managed rule sets: {policy.managed_rules_count}.",
+                            evidence_ref=f"discovery:azure_{sub_id}"
+                            f".front_door_waf_policies[id={policy.id}].policy_mode",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="NS-4 — Protect applications from external network attacks",
+                            ),
+                            FrameworkMapping(
+                                framework="PCI-DSS 4.0",
+                                pillar="Network Security Controls",
+                                control="Req 1.3 — Restrict inbound and outbound traffic",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="System and Communications Protection",
+                                control="SC-7 — Boundary Protection",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
         # AZ-NET-014: Traffic Analytics missing
         if sub_topo.observability:
             obs = sub_topo.observability
@@ -855,6 +1036,93 @@ class AnalysisEngine:
                                 framework="NIST CSF",
                                 pillar="Detect",
                                 control="DE.CM-3 — Personnel activity is monitored",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+        # AZ-NET-005: VNet peering allows gateway transit without a local gateway
+        for vnet in sub_topo.vnets:
+            has_local_gw = any(
+                gw.vnet_id == vnet.id for gw in sub_topo.virtual_network_gateways
+            ) if sub_topo.virtual_network_gateways else False
+            for peering in vnet.peerings:
+                if peering.allow_gateway_transit and not has_local_gw:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_PEERING_ALLOW_GW_TRANSIT,
+                            severity=_severity(R_AZ_PEERING_ALLOW_GW_TRANSIT),
+                            resource_id=vnet.id,
+                            resource_type="Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+                            account_id=sub_id,
+                            region=vnet.location,
+                            title="VNet peering allows gateway transit but VNet has no gateway",
+                            observed_state=ObservedState(
+                                fact=f"Peering {peering.name} on VNet {vnet.name} has "
+                                f"allow_gateway_transit=True but no virtual network gateway "
+                                f"exists in this VNet. Spoke VNets attempting to use this "
+                                f"transit path will have no effective route.",
+                                evidence_ref=f"discovery:azure_{sub_id}.vnets[id={vnet.id}]"
+                                f".peerings[name={peering.name}].allow_gateway_transit",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Security",
+                                    control="NS-1 — Establish network segmentation boundaries",
+                                ),
+                                FrameworkMapping(
+                                    framework="FedRAMP Moderate",
+                                    pillar="System and Communications Protection",
+                                    control="SC-7 — Boundary Protection",
+                                ),
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+        # AZ-NET-006: VNet has no NSG flow logs
+        for vnet in sub_topo.vnets:
+            if not vnet.flow_logs_enabled:
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_VNET_NO_FLOW_LOGS,
+                        severity=_severity(R_AZ_VNET_NO_FLOW_LOGS),
+                        resource_id=vnet.id,
+                        resource_type="Microsoft.Network/virtualNetworks",
+                        account_id=sub_id,
+                        region=vnet.location,
+                        title="VNet has no NSG flow logs enabled",
+                        observed_state=ObservedState(
+                            fact=f"VNet {vnet.name} ({vnet.id}) in {vnet.location} has "
+                            f"flow_logs_enabled=False. Network traffic to/from this VNet "
+                            f"produces no telemetry for incident investigation.",
+                            evidence_ref=f"discovery:azure_{sub_id}.vnets[id={vnet.id}]"
+                            f".flow_logs_enabled",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="NS-2 — Monitor network security",
+                            ),
+                            FrameworkMapping(
+                                framework="NIST CSF",
+                                pillar="Detect",
+                                control="DE.CM-1 — The network is monitored to detect "
+                                "potential cybersecurity events",
+                            ),
+                            FrameworkMapping(
+                                framework="HIPAA §164.312",
+                                pillar="Technical Safeguards",
+                                control="(b) — Audit controls: hardware/software activity "
+                                "records for ePHI systems",
+                            ),
+                            FrameworkMapping(
+                                framework="FedRAMP Moderate",
+                                pillar="Audit and Accountability",
+                                control="AU-2 — Audit Events",
                             ),
                         ],
                         status=FindingStatus.OPEN,

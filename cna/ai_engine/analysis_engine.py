@@ -69,6 +69,11 @@ R_AZ_ER_NO_REDUNDANCY = "AZ-NET-004"
 R_AZ_PEERING_ALLOW_GW_TRANSIT = "AZ-NET-005"
 R_AZ_VNET_NO_FLOW_LOGS = "AZ-NET-006"
 R_AZ_APPGW_WAF_DISABLED = "AZ-NET-007"
+R_AZ_GW_SATURATION = "AZ-NET-008"
+R_AZ_FW_NO_HITS = "AZ-NET-009"
+R_AZ_LB_SNAT_EXHAUSTION = "AZ-NET-010"
+R_AZ_VNET_IP_EXHAUSTION = "AZ-NET-011"
+R_AZ_TRAFFIC_ANALYTICS_MISSING = "AZ-NET-014"
 
 # Severity thresholds
 _CRITICAL_IDS = {
@@ -82,6 +87,14 @@ _HIGH_IDS = {
     R_AZ_SUBNET_NO_NSG,
     R_AZ_VNET_NO_FLOW_LOGS,
     R_AZ_APPGW_WAF_DISABLED,
+    R_AZ_GW_SATURATION,
+    R_AZ_FW_NO_HITS,
+    R_AZ_LB_SNAT_EXHAUSTION,
+    R_AZ_VNET_IP_EXHAUSTION,
+}
+
+_MEDIUM_IDS = {
+    R_AZ_TRAFFIC_ANALYTICS_MISSING,
 }
 
 
@@ -90,7 +103,9 @@ def _severity(rule_id: str) -> FindingSeverity:
         return FindingSeverity.CRITICAL
     if rule_id in _HIGH_IDS:
         return FindingSeverity.HIGH
-    return FindingSeverity.MEDIUM
+    if rule_id in _MEDIUM_IDS:
+        return FindingSeverity.MEDIUM
+    return FindingSeverity.LOW
 
 
 @dataclass
@@ -572,6 +587,144 @@ class AnalysisEngine:
                                 framework="Azure Well-Architected Framework",
                                 pillar="Security",
                                 control="NS-4 — Protect applications from external network attacks",
+                            )
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+        # AZ-NET-008: Gateway saturation
+        if sub_topo.network_metrics:
+            for gm in sub_topo.network_metrics.gateway_metrics:
+                if gm.utilization_pct and gm.utilization_pct > 80.0:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_GW_SATURATION,
+                            severity=_severity(R_AZ_GW_SATURATION),
+                            resource_id=sub_id,
+                            resource_type="Microsoft.Network/virtualNetworkGateways",
+                            account_id=sub_id,
+                            region="Global",
+                            title="Virtual Network Gateway utilization exceeds 80%",
+                            observed_state=ObservedState(
+                                fact=f"Gateway {gm.gateway_name} has {gm.utilization_pct}% utilization.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Performance Efficiency",
+                                    control="PE-3 — Monitor and optimize network performance",
+                                )
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+            # AZ-NET-009: Firewall with 0 hits
+            for fm in sub_topo.network_metrics.firewall_metrics:
+                if (fm.network_rule_hits_24h == 0 and fm.app_rule_hits_24h == 0 and fm.nat_rule_hits_24h == 0) or (fm.data_processed_gb_24h == 0.0):
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_FW_NO_HITS,
+                            severity=_severity(R_AZ_FW_NO_HITS),
+                            resource_id=sub_id,
+                            resource_type="Microsoft.Network/azureFirewalls",
+                            account_id=sub_id,
+                            region="Global",
+                            title="Azure Firewall present but processes 0 traffic",
+                            observed_state=ObservedState(
+                                fact=f"Firewall {fm.firewall_name} recorded 0 rule hits or 0 data processed in 24 hours. "
+                                "It may be misconfigured or bypassed by routing.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Security",
+                                    control="NS-4 — Protect applications from external network attacks",
+                                )
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+            # AZ-NET-010: SNAT exhaustion
+            for lm in sub_topo.network_metrics.lb_metrics:
+                if lm.snat_port_utilization_pct and lm.snat_port_utilization_pct > 80.0:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_LB_SNAT_EXHAUSTION,
+                            severity=_severity(R_AZ_LB_SNAT_EXHAUSTION),
+                            resource_id=sub_id,
+                            resource_type="Microsoft.Network/loadBalancers",
+                            account_id=sub_id,
+                            region="Global",
+                            title="Load Balancer SNAT port utilization exceeds 80%",
+                            observed_state=ObservedState(
+                                fact=f"Load Balancer {lm.lb_name} used {lm.snat_port_utilization_pct}% of allocated SNAT ports.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Reliability",
+                                    control="RE-4 — Design for scale out",
+                                )
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+            # AZ-NET-011: VNet IP Exhaustion
+            for vnet_id, util in sub_topo.network_metrics.vnet_utilization.items():
+                if util > 85.0:
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_VNET_IP_EXHAUSTION,
+                            severity=_severity(R_AZ_VNET_IP_EXHAUSTION),
+                            resource_id=vnet_id,
+                            resource_type="Microsoft.Network/virtualNetworks",
+                            account_id=sub_id,
+                            region="Global",
+                            title="VNet IP space utilization exceeds 85%",
+                            observed_state=ObservedState(
+                                fact=f"VNet {vnet_id} has {util}% of its address space allocated to subnets.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Reliability",
+                                    control="RE-2 — Design for capacity",
+                                )
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+        # AZ-NET-014: Traffic Analytics missing
+        if sub_topo.observability:
+            if sub_topo.observability.nsg_flow_logs_enabled > 0 and sub_topo.observability.traffic_analytics_enabled == 0:
+                self._emit(
+                    Finding(
+                        rule_id=R_AZ_TRAFFIC_ANALYTICS_MISSING,
+                        severity=_severity(R_AZ_TRAFFIC_ANALYTICS_MISSING),
+                        resource_id=sub_id,
+                        resource_type="Microsoft.Network/networkSecurityGroups",
+                        account_id=sub_id,
+                        region="Global",
+                        title="NSG Flow Logs are enabled but Traffic Analytics is disabled",
+                        observed_state=ObservedState(
+                            fact=f"Subscription has {sub_topo.observability.nsg_flow_logs_enabled} active flow logs, "
+                            f"but {sub_topo.observability.traffic_analytics_enabled} have Traffic Analytics enabled.",
+                            evidence_ref=f"discovery:azure_{sub_id}.observability",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="Azure Well-Architected Framework",
+                                pillar="Security",
+                                control="NS-2 — Monitor network security",
                             )
                         ],
                         status=FindingStatus.OPEN,

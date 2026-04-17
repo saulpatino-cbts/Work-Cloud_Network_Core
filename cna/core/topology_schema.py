@@ -731,21 +731,57 @@ class ObservabilityData(BaseModel):
     log_analytics_workspaces: list[LogAnalyticsWorkspace] = Field(default_factory=list)
     nsg_flow_logs_enabled: int = 0
     nsg_flow_logs_total: int = 0
+    # Traffic Analytics: how many enabled flow logs are feeding Traffic Analytics
+    traffic_analytics_enabled: int = 0
     gateways_with_diagnostics: int = 0
     gateways_total: int = 0
+    # Bastion: how many bastion hosts have a Log Analytics diagnostic sink
+    bastion_with_diagnostics: int = 0
+    bastion_total: int = 0
 
 
 class GatewayMetric(BaseModel):
+    """Azure Monitor bandwidth metrics for a single VPN or ExpressRoute gateway (24-hour window)."""
+
     gateway_name: str
     gateway_type: str  # Vpn | ExpressRoute
     ingress_bytes_24h: float | None = None
     egress_bytes_24h: float | None = None
     bandwidth_mbps_provisioned: float | None = None
+    # populated by AverageBandwidth metric vs provisioned SKU ceiling
     utilization_pct: float | None = None
+
+
+class FirewallMetric(BaseModel):
+    """Azure Monitor metrics for a single Azure Firewall resource (24-hour window)."""
+
+    firewall_name: str
+    data_processed_gb_24h: float | None = None
+    app_rule_hits_24h: int | None = None
+    network_rule_hits_24h: int | None = None
+    nat_rule_hits_24h: int | None = None
+    collection_error: str | None = None
+
+
+class LoadBalancerMetric(BaseModel):
+    """Azure Monitor SNAT metrics for a single Load Balancer (24-hour window)."""
+
+    lb_name: str
+    snat_connections_24h: float | None = None  # SnatConnectionCount (total)
+    used_snat_ports: float | None = None       # UsedSnatPorts (avg)
+    allocated_snat_ports: float | None = None  # AllocatedSnatPorts (avg)
+    snat_port_utilization_pct: float | None = None  # used / allocated * 100
+    collection_error: str | None = None
 
 
 class NetworkMetrics(BaseModel):
     gateway_metrics: list[GatewayMetric] = Field(default_factory=list)
+    firewall_metrics: list[FirewallMetric] = Field(default_factory=list)
+    lb_metrics: list[LoadBalancerMetric] = Field(default_factory=list)
+    # vnet_id -> utilization % (sum of subnet CIDRs / VNet CIDR * 100)
+    vnet_utilization: dict[str, float] = Field(default_factory=dict)
+    # Billing-derived: total Microsoft.Network egress spend MTD (USD)
+    egress_cost_usd_mtd: float | None = None
     collection_error: str | None = None
 
 

@@ -1,6 +1,6 @@
 # CNA Platform — Active TODO
 
-> **Status as of 2026-04-14**
+> **Status as of 2026-04-17**
 > Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
 > The dev environment is being torn down and redeployed clean as the Alpha→Beta transition.
 > This file tracks the Beta deployment checklist and post-Beta roadmap.
@@ -145,6 +145,119 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ---
 
+## Sprint 1 — Beta Hard Blockers (Do Before First Paid Run)
+
+Derived from senior architect review (2026-04-17). These are bugs or silent failures
+that will produce incorrect or empty data in a live assessment.
+
+### Code Bugs
+
+- [ ] **Fix `_collect_private_endpoints()` — PE IPs always empty**  
+  `azure_discovery.py` line 896–900: `pass` where NIC GET should resolve private IPs.  
+  Fix: call `net.network_interfaces.get(nic_rg, nic_name)` and populate `private_ip_addresses`.
+
+- [ ] **Fix `vpn_client_pools` list-of-lists bug**  
+  `azure_discovery.py` line ~809: `.append(pool.address_prefixes or [])` → `.extend(pool.address_prefixes or [])`.  
+  Effect: gateway address pool serializes as `[["10.0.0.0/24"]]` instead of `["10.0.0.0/24"]`.
+
+- [ ] **Wire `azure_network.py` and `azure_security.py` stubs**  
+  Both files are `< 250 bytes`. They will import cleanly but return no data.  
+  Fix: either proxy to `azure_discovery.py` entrypoint, or raise `NotImplementedError` with a visible message.
+
+### Schema & Analysis Gaps
+
+- [ ] **Implement `_classify_subnet()` helper in `azure_discovery.py`**  
+  Populate `SubnetType` enum on each subnet based on: NSG presence + route table + delegation + `default_outbound_access`.  
+  Categories: `public` | `private` | `isolated` | `delegated`.
+
+- [ ] **Implement peering firewall-bypass check (`AZ-NET-012`) in `analysis_engine.py`**  
+  Cross-reference spoke VNet peerings (`allow_forwarded_traffic=True`) against spoke route tables.  
+  Fire when a spoke subnet lacks a UDR forcing `0.0.0.0/0` through the hub NVA/firewall.
+
+- [ ] **Add firewall diagnostic settings check (`AZ-NET-013`) in `analysis_engine.py`**  
+  Fire when a `Microsoft.Network/azureFirewalls` resource exists but its Log Analytics
+  diagnostic setting is not detected in `observability.log_analytics_workspaces`.
+
+### CI/CD & Supply Chain
+
+- [ ] **Auto-write Terraform outputs to GitHub Variables in `031-deploy-azure.yml`**  
+  Add a step using `gh variable set KEY_VAULT_NAME` and `gh variable set APPLICATION_INSIGHTS_NAME`  
+  after `terraform apply` — eliminates the current manual copy-paste step.
+
+- [ ] **Add `CNA_MCP_SERVER_URL` to `secrets-reference.md` and `.env.example`**  
+  Currently undocumented. Set to `none` at launch; prevents runtime 500s if code path is hit.
+
+---
+
+## Sprint 2 — East-West Visibility (Before First Paid Client)
+
+Derived from assessment gap analysis. See `beta_readiness_and_assessment_gap_analysis.md`.
+The East-West section of a 10-page assessment is currently config-only (45% complete).
+These items add real traffic telemetry.
+
+### New Metrics Collectors (in `azure_discovery.py`)
+
+- [x] **Collect Azure Firewall metrics** — `DataProcessed`, `ApplicationRuleHit`, `NetworkRuleHit`, `NatRuleHit`  
+  Add `_collect_firewall_metrics()` method. New `FirewallMetric` model in `topology_schema.py`.
+  New rule `AZ-NET-009`: firewall present with 0 rule hits = misconfigured or bypassed.
+
+- [x] **Collect Load Balancer SNAT metrics** — `SnatConnectionCount`, `UsedSnatPorts`, `AllocatedSnatPorts`  
+  Add `_collect_lb_metrics()` method. New `LoadBalancerMetric` model in `topology_schema.py`.
+  New rule `AZ-NET-010`: `UsedSnatPorts / AllocatedSnatPorts > 80%` = SNAT exhaustion risk.
+
+- [x] **Collect gateway `AverageBandwidth` metric** to populate `GatewayMetric.utilization_pct`  
+  Field already exists in schema — collector never queries it.  
+  New rule `AZ-NET-008`: `utilization_pct > 80%` = gateway saturation.
+
+- [x] **Compute VNet IP space utilization %** from existing subnet CIDR data  
+  No new API call needed — calculate `sum(subnet CIDRs) / VNet CIDR * 100`.  
+  New rule `AZ-NET-011`: `vnet_utilization > 85%` = IP exhaustion risk.
+
+### Observability Gaps (in `azure_discovery.py`)
+
+- [x] **Add Traffic Analytics state** to `ObservabilityData`  
+  Extend NSG flow log enumeration to read `traffic_analytics_configuration.enabled`
+  and `traffic_analytics_configuration.workspace_id` per flow log resource.  
+  New rule `AZ-NET-014`: flow log enabled but Traffic Analytics disabled.
+
+- [ ] **Add Bastion diagnostic settings check**  
+  When a Bastion host is found, query its diagnostic settings for a Log Analytics sink.  
+  New rule `AZ-NET-013` (Bastion variant): Bastion without session logs.
+
+- [ ] **Add Cost Management API call** (billing-derived throughput proxy)  
+  Use `azure-mgmt-costmanagement` to query `Microsoft.Network` meter category MTD.  
+  Correlate `Inter-VNet Data Transfer` spend to approximate east-west byte volume.  
+  No Monitor permissions required — works with Billing Reader.
+
+### Compliance Mappings
+
+- [ ] **Add PCI-DSS 4.0 `framework_mappings`** to existing rules `AZ-NET-001` through `AZ-NET-007`  
+  Req 1.2 → segmentation, Req 1.3 → inbound/outbound restriction, Req 10.6 → flow logs.  
+  No new rules required — additive change to existing `FrameworkMapping` lists.
+
+- [ ] **Add ISO 27001:2022 A.8.20–A.8.23 mappings** to network findings  
+  Annex A controls for network security, segmentation, web filtering, and monitoring.
+
+---
+
+## Sprint 3 — Production Hardening
+
+- [ ] **Pin `node:20-alpine` to SHA digest** in `cna-web/Dockerfile`  
+  Run `docker pull node:20-alpine --platform linux/amd64` to get current digest.  
+  Update: `FROM node:20-alpine@sha256:<hash>`.
+
+- [ ] **Pin `gitleaks-action` to SHA** in `020-test-codebase.yml`  
+  Currently uses mutable `v2` tag. TODO comment already exists in workflow file.
+
+- [ ] **Verify `infra/terraform/environments/azure/prod/` mirrors `dev/`**  
+  Run `diff infra/terraform/environments/azure/dev/ infra/terraform/environments/azure/prod/` before prod promote.
+
+- [ ] **Add `Front Door WAF policy` discovery** to `azure_discovery.py`  
+  Permission: `Microsoft.Network/frontDoorWebApplicationFirewallPolicies/read`.  
+  Required to cover customer-tenant Front Door WAF — currently CNA only assesses App GW WAF.
+
+---
+
 ## Post-Beta Roadmap
 
 | Item | Priority | Notes |
@@ -156,8 +269,8 @@ Once the environment is up and smoke-tested, run through these scenarios:
 | MCP server wiring | Low | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
 | Client portal hardening | Medium | Retention engine (90 days), SAS token TTL enforcement |
 | Pre-commit hook enforcement monitoring | Ongoing | `detect-secrets` + `gitleaks` — monitor for false positives |
-| Node.js Dockerfile base image SHA pin | Low | Pin `node:20-alpine@sha256:<hash>` for full supply chain compliance |
-| gitleaks-action SHA pin in `020-test-codebase.yml` | Low | Currently uses `v2` tag — TODO comment exists in workflow |
+| Node.js Dockerfile base image SHA pin | Low | Moved to Sprint 3 above |
+| gitleaks-action SHA pin in `020-test-codebase.yml` | Low | Moved to Sprint 3 above |
 
 ---
 

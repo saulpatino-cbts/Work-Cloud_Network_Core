@@ -58,8 +58,10 @@ from cna.core.topology_schema import (
     AzureVWan,
     BgpPeerStatus,
     ExpressRouteCircuit,
+    FirewallMetric,
     GatewayBgpData,
     GatewayMetric,
+    LoadBalancerMetric,
     LogAnalyticsWorkspace,
     ManagementGroup,
     NetworkMetrics,
@@ -392,15 +394,23 @@ class AzureDiscovery:
         self._progress(f"[{sub_name}] Collecting network metrics (last 24 h)…")
         try:
             topo.network_metrics = self._collect_network_metrics(
-                sub_id, topo.virtual_network_gateways
+                sub_id,
+                topo.virtual_network_gateways,
+                topo.firewalls,
+                topo.load_balancers,
+                topo.vnets,
             )
             if topo.network_metrics.collection_error:
                 self._progress(f"[{sub_name}] Metrics: {topo.network_metrics.collection_error}")
             else:
+                gw_ct = len(topo.network_metrics.gateway_metrics)
+                fw_ct = len(topo.network_metrics.firewall_metrics)
+                lb_ct = len(topo.network_metrics.lb_metrics)
+                vnet_ct = len(topo.network_metrics.vnet_utilization)
                 self._progress(
-                    f"[{sub_name}] Metrics collected for "
-                    f"{len(topo.network_metrics.gateway_metrics)} "
-                    "gateway(s)"
+                    f"[{sub_name}] Metrics collected: "
+                    f"{gw_ct} gateway(s), {fw_ct} firewall(s), "
+                    f"{lb_ct} LB(s), {vnet_ct} VNet(s) utilized"
                 )
         except Exception as e:
             self._progress(f"[{sub_name}] Metrics skipped: {e}")
@@ -806,7 +816,7 @@ class AzureDiscovery:
 
                 if gw.vpn_client_configuration:
                     for pool in gw.vpn_client_configuration.vpn_client_address_pool or []:
-                        vpn_client_pools.append(pool.address_prefixes or [])
+                        vpn_client_pools.extend(pool.address_prefixes or [])
 
                 connections = self._collect_gateway_connections(net, rg, gw.name)
 
@@ -892,12 +902,20 @@ class AzureDiscovery:
             if pe.subnet:
                 subnet_id = pe.subnet.id or ""
 
-            # Collect private IP addresses from NICs
+            # Collect private IP addresses from NICs via ARM NIC GET
             private_ips: list[str] = []
-            for nic in pe.network_interfaces or []:
-                if nic.id:
-                    # We'll note the NIC reference; full IP requires a NIC GET
-                    pass  # IPs populated by NIC lookup — skip for now
+            for nic_ref in pe.network_interfaces or []:
+                if not nic_ref.id:
+                    continue
+                try:
+                    nic_rg = _rg_from_id(nic_ref.id)
+                    nic_name = nic_ref.id.split("/")[-1]
+                    nic_obj = net.network_interfaces.get(nic_rg, nic_name)
+                    for ipc in nic_obj.ip_configurations or []:
+                        if ipc.private_ip_address:
+                            private_ips.append(ipc.private_ip_address)
+                except Exception as _e:
+                    logger.debug("PE NIC GET failed for %s: %s", nic_ref.id, _e)
             # Use manual_private_link_service_connections or auto ones
             service_conns: list[AzurePrivateEndpointConnection] = []
             for sc in list(pe.private_link_service_connections or []) + list(
@@ -1082,9 +1100,9 @@ class AzureDiscovery:
             ]
             firewalls.append(
                 AzureFirewall(
-                    id=fw.id,
-                    name=fw.name,
-                    location=fw.location,
+                    id=fw.id or "",
+                    name=fw.name or (fw.id.split("/")[-1] if fw.id else "Unknown"),
+                    location=fw.location or "",
                     resource_group=rg,
                     sku_tier=sku_tier,
                     subnet_id=subnet_id,
@@ -1477,7 +1495,7 @@ class AzureDiscovery:
     # ------------------------------------------------------------------ Observability
 
     def _collect_observability(self, net, sub_id: str, nsg_count: int) -> ObservabilityData:
-        """Collect Network Watcher, Log Analytics, and flow log data."""
+        """Collect Network Watcher, Log Analytics, flow log, Traffic Analytics, and Bastion data."""
         obs = ObservabilityData(nsg_flow_logs_total=nsg_count)
 
         # Network Watcher presence per region
@@ -1497,17 +1515,25 @@ class AzureDiscovery:
                 e,
             )
 
-        # NSG flow log count (via flow_logs API per Network Watcher)
+        # NSG flow log count + Traffic Analytics state (via flow_logs API per Network Watcher)
         flow_enabled = 0
+        ta_enabled = 0
         for nw_info in obs.network_watchers:
             try:
                 nw_rg = "NetworkWatcherRG"
                 for fl in _safe_list(net.flow_logs.list(nw_rg, nw_info.name)):
                     if getattr(fl, "enabled", False):
                         flow_enabled += 1
+                        # Traffic Analytics is nested inside flow log resource
+                        ta_cfg = getattr(fl, "flow_analytics_configuration", None)
+                        if ta_cfg:
+                            ta_ws = getattr(ta_cfg, "network_watcher_flow_analytics_configuration", None)
+                            if ta_ws and getattr(ta_ws, "enabled", False):
+                                ta_enabled += 1
             except Exception as exc:  # noqa: BLE001
                 logger.debug("flow log enumeration unavailable: %s", exc)
         obs.nsg_flow_logs_enabled = flow_enabled
+        obs.traffic_analytics_enabled = ta_enabled
 
         # Log Analytics workspaces
         try:
@@ -1538,12 +1564,35 @@ class AzureDiscovery:
 
     # ------------------------------------------------------------------ Network metrics
 
+    # VPN Gateway SKU → provisioned bandwidth ceiling (Mbps)
+    # Source: https://learn.microsoft.com/azure/vpn-gateway/vpn-gateway-about-vpngateways
+    _GW_SKU_BANDWIDTH: dict[str, float] = {
+        "VpnGw1": 650, "VpnGw2": 1000, "VpnGw3": 1250,
+        "VpnGw4": 5000, "VpnGw5": 10000,
+        "VpnGw1AZ": 650, "VpnGw2AZ": 1000, "VpnGw3AZ": 1250,
+        "VpnGw4AZ": 5000, "VpnGw5AZ": 10000,
+        "ErGw1AZ": 1000, "ErGw2AZ": 2000, "ErGw3AZ": 10000,
+        "UltraPerformance": 10000, "HighPerformance": 2000,
+    }
+
     def _collect_network_metrics(
         self,
         sub_id: str,
         gateways: list[AzureVirtualNetworkGateway],
+        firewalls: list[AzureFirewall] | None = None,
+        load_balancers: list[AzureLoadBalancer] | None = None,
+        vnets: list[VNet] | None = None,
     ) -> NetworkMetrics:
-        """Collect 24-hour bandwidth metrics for VPN gateways."""
+        """Collect 24-hour Azure Monitor metrics and compute VNet IP utilization.
+
+        Collectors (each runs independently — failure in one does not abort others):
+          1. VPN/ER gateway: TunnelIngress/EgressBytes + AverageBandwidth → utilization_pct
+          2. Azure Firewall: DataProcessed + rule hit counts (app/network/NAT)
+          3. Load Balancer: SNAT port utilization (used / allocated)
+          4. VNet IP space: computed from existing CIDR data (no API call)
+        """
+        import datetime as _dt
+        import ipaddress
         from datetime import timedelta
 
         metrics = NetworkMetrics()
@@ -1555,8 +1604,6 @@ class AzureDiscovery:
             return metrics
 
         try:
-            import datetime as _dt
-
             monitor = MonitorManagementClient(self._credential, sub_id)
             end = _dt.datetime.now(_dt.UTC)
             start = end - timedelta(hours=24)
@@ -1564,42 +1611,159 @@ class AzureDiscovery:
                 f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
             )
 
-            for gw in gateways[:5]:  # cap to avoid rate limits
+            # ── 1. Gateway metrics (ingress/egress + utilization) ─────────────
+            for gw in (gateways or [])[:5]:  # cap to avoid rate limits
                 gm = GatewayMetric(
                     gateway_name=gw.name,
                     gateway_type=gw.gateway_type,
+                    bandwidth_mbps_provisioned=self._GW_SKU_BANDWIDTH.get(gw.sku_name),
                 )
                 try:
                     result = monitor.metrics.list(
                         resource_uri=gw.id,
                         timespan=timespan,
                         interval="PT1H",
-                        metricnames=("TunnelIngressBytes,TunnelEgressBytes"),
+                        metricnames="TunnelIngressBytes,TunnelEgressBytes,AverageBandwidth",
+                        aggregation="Total,Average",
+                    )
+                    for metric in result.value or []:
+                        mn = metric.name.value if metric.name else ""
+                        if mn == "TunnelIngressBytes":
+                            gm.ingress_bytes_24h = sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        elif mn == "TunnelEgressBytes":
+                            gm.egress_bytes_24h = sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        elif mn == "AverageBandwidth":
+                            # AverageBandwidth is in bps — convert to Mbps
+                            raw_bps_values = [
+                                dp.average
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.average is not None
+                            ]
+                            if raw_bps_values and gm.bandwidth_mbps_provisioned:
+                                avg_mbps = (sum(raw_bps_values) / len(raw_bps_values)) / 1_000_000
+                                gm.utilization_pct = round(
+                                    (avg_mbps / gm.bandwidth_mbps_provisioned) * 100, 1
+                                )
+                except Exception as e:
+                    logger.debug("[%s] Gateway metrics for %s failed: %s", sub_id, gw.name, e)
+                metrics.gateway_metrics.append(gm)
+
+            # ── 2. Azure Firewall metrics ─────────────────────────────────────
+            for fw in (firewalls or [])[:5]:
+                fm = FirewallMetric(firewall_name=fw.name)
+                try:
+                    result = monitor.metrics.list(
+                        resource_uri=fw.id,
+                        timespan=timespan,
+                        interval="PT1H",
+                        metricnames=(
+                            "DataProcessed,ApplicationRuleHit,NetworkRuleHit,NatRuleHit"
+                        ),
                         aggregation="Total",
                     )
                     for metric in result.value or []:
+                        mn = metric.name.value if metric.name else ""
                         total = sum(
                             dp.total or 0
                             for ts in metric.timeseries
                             for dp in ts.data
                             if dp.total is not None
                         )
-                        mn = metric.name.value if metric.name else ""
-                        if mn == "TunnelIngressBytes":
-                            gm.ingress_bytes_24h = total
-                        elif mn == "TunnelEgressBytes":
-                            gm.egress_bytes_24h = total
+                        if mn == "DataProcessed":
+                            # DataProcessed is in bytes — convert to GB
+                            fm.data_processed_gb_24h = round(total / 1_073_741_824, 3)
+                        elif mn == "ApplicationRuleHit":
+                            fm.app_rule_hits_24h = int(total)
+                        elif mn == "NetworkRuleHit":
+                            fm.network_rule_hits_24h = int(total)
+                        elif mn == "NatRuleHit":
+                            fm.nat_rule_hits_24h = int(total)
                 except Exception as e:
-                    logger.debug(
-                        "[%s] Metrics for %s failed: %s",
-                        sub_id,
-                        gw.name,
-                        e,
+                    fm.collection_error = str(e)
+                    logger.debug("[%s] Firewall metrics for %s failed: %s", sub_id, fw.name, e)
+                metrics.firewall_metrics.append(fm)
+
+            # ── 3. Load Balancer SNAT metrics ─────────────────────────────────
+            # Only Standard SKU LBs expose SNAT metrics; Basic skips gracefully.
+            for lb in (load_balancers or [])[:10]:
+                lm = LoadBalancerMetric(lb_name=lb.name)
+                try:
+                    result = monitor.metrics.list(
+                        resource_uri=lb.id,
+                        timespan=timespan,
+                        interval="PT1H",
+                        metricnames="SnatConnectionCount,UsedSnatPorts,AllocatedSnatPorts",
+                        aggregation="Total,Average",
                     )
-                metrics.gateway_metrics.append(gm)
+                    for metric in result.value or []:
+                        mn = metric.name.value if metric.name else ""
+                        if mn == "SnatConnectionCount":
+                            lm.snat_connections_24h = sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        elif mn == "UsedSnatPorts":
+                            vals = [
+                                dp.average
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.average is not None
+                            ]
+                            if vals:
+                                lm.used_snat_ports = round(sum(vals) / len(vals), 1)
+                        elif mn == "AllocatedSnatPorts":
+                            vals = [
+                                dp.average
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.average is not None
+                            ]
+                            if vals:
+                                lm.allocated_snat_ports = round(sum(vals) / len(vals), 1)
+                    if lm.used_snat_ports and lm.allocated_snat_ports and lm.allocated_snat_ports > 0:
+                        lm.snat_port_utilization_pct = round(
+                            (lm.used_snat_ports / lm.allocated_snat_ports) * 100, 1
+                        )
+                except Exception as e:
+                    lm.collection_error = str(e)
+                    logger.debug("[%s] LB SNAT metrics for %s failed: %s", sub_id, lb.name, e)
+                metrics.lb_metrics.append(lm)
 
         except Exception as e:
             metrics.collection_error = str(e)
+
+        # ── 4. VNet IP space utilization (no Monitor call — computed from topology) ──
+        for vnet in (vnets or []):
+            try:
+                prefixes = vnet.address_space or []
+                if not prefixes:
+                    continue
+                # Use the first (primary) address space for utilization calc
+                vnet_net = ipaddress.ip_network(prefixes[0], strict=False)
+                vnet_size = vnet_net.num_addresses
+                if vnet_size <= 0:
+                    continue
+                allocated = sum(
+                    ipaddress.ip_network(s.address_prefix, strict=False).num_addresses
+                    for s in (vnet.subnets or [])
+                    if s.address_prefix
+                )
+                metrics.vnet_utilization[vnet.id] = round((allocated / vnet_size) * 100, 1)
+            except Exception as e:
+                logger.debug("VNet utilization calc failed for %s: %s", vnet.id, e)
 
         return metrics
 

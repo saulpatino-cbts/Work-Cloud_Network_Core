@@ -53,17 +53,16 @@ from cna.core.topology_schema import (
     AzureRouteTable,
     AzureSubnet,
     AzureSubscriptionTopology,
-    DefenderAssessment,
-    ERCircuitMetric,
-    FrontDoorWAFPolicy,
-    SubnetType,
     AzureTopology,
     AzureVHub,
     AzureVirtualNetworkGateway,
     AzureVWan,
     BgpPeerStatus,
+    DefenderAssessment,
+    ERCircuitMetric,
     ExpressRouteCircuit,
     FirewallMetric,
+    FrontDoorWAFPolicy,
     GatewayBgpData,
     GatewayMetric,
     LoadBalancerMetric,
@@ -74,6 +73,7 @@ from cna.core.topology_schema import (
     NSGSecurityRule,
     ObservabilityData,
     PrivateDnsZone,
+    SubnetType,
     VNet,
     VNetPeering,
 )
@@ -1037,8 +1037,8 @@ class AzureDiscovery:
             # public addresses indicate a data-exfil risk.
             dns_resolves_private: bool | None = None
             if custom_dns and private_ips:
-                import socket as _socket
                 import ipaddress as _ipaddr
+                import socket as _socket
                 _rfc1918 = (
                     _ipaddr.ip_network("10.0.0.0/8"),
                     _ipaddr.ip_network("172.16.0.0/12"),
@@ -1053,8 +1053,8 @@ class AzureDiscovery:
                             break
                         else:
                             dns_resolves_private = False
-                    except Exception:
-                        pass  # DNS not reachable from worker — leave as None
+                    except Exception as _e:
+                        logger.debug("DNS resolution skipped for %s: %s", fqdn, _e)
             elif private_ips and not custom_dns:
                 # No FQDNs configured — treat as private-only (no public exposure)
                 dns_resolves_private = True
@@ -2012,7 +2012,6 @@ class AzureDiscovery:
         if la_workspaces:
             try:
                 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
-                import azure.core.exceptions as _az_exc
 
                 logs_client = LogsQueryClient(self._credential)
                 nta_query = (
@@ -2062,16 +2061,17 @@ class AzureDiscovery:
         # Requires Billing Reader (or Cost Management Reader) on the subscription.
         # Uses azure-mgmt-costmanagement (lazy import — optional dependency).
         try:
+            import datetime as _dt3
+
             from azure.mgmt.costmanagement import CostManagementClient
             from azure.mgmt.costmanagement.models import (
-                QueryDefinition,
-                QueryDataset,
                 QueryAggregation,
-                QueryFilter,
                 QueryComparisonExpression,
+                QueryDataset,
+                QueryDefinition,
+                QueryFilter,
                 TimeframeType,
             )
-            import datetime as _dt3
 
             cost_client = CostManagementClient(self._credential)
             scope = f"/subscriptions/{sub_id}"
@@ -2249,8 +2249,8 @@ class AzureDiscovery:
                 severity = "Medium"
                 try:
                     status_code = (item.status.code if item.status else "Unknown") or "Unknown"
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("Could not read assessment status: %s", _e)
                 if status_code not in ("Unhealthy", "NotApplicable"):
                     continue
                 try:
@@ -2265,7 +2265,8 @@ class AzureDiscovery:
                     threats = list(meta.threats or []) if meta else []
                     user_impact = (meta.user_impact if meta else None)
                     display_name = (meta.display_name if meta else item.name) or item.name or ""
-                except Exception:
+                except Exception as _e:
+                    logger.debug("Could not read assessment metadata: %s", _e)
                     category = "Networking"
                     description = None
                     remediation = None
@@ -2280,8 +2281,8 @@ class AzureDiscovery:
                     if item.resource_details:
                         resource_id = getattr(item.resource_details, "id", None)
                         resource_type = getattr(item.resource_details, "resource_type", None)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("Could not read assessment resource details: %s", _e)
 
                 assessments.append(
                     DefenderAssessment(

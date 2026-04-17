@@ -577,8 +577,8 @@ class AWSDiscovery:
                                     log_cw = True
                                 elif dest == "KinesisDataFirehose":
                                     log_kinesis = True
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("[%s/%s] Firewall logging config unavailable: %s", account_id, region, _e)
                         firewalls.append(
                             AWSNetworkFirewall(
                                 firewall_arn=fw.get("FirewallArn", ""),

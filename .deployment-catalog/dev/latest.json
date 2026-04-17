@@ -4,8 +4,8 @@
   "api_image": "ghcr.io/saulpatinojr/cna-api:sha-2378f99",
   "worker_image": "ghcr.io/saulpatinojr/cna-worker:sha-2378f99",
   "web_image": "ghcr.io/saulpatinojr/cna-web:sha-2378f99",
-  "commit_sha": "467d694a306edc7c290c082f2f0668215be0bc50",
-  "workflow_run_id": "24582661065",
+  "commit_sha": "e056551b300075af304fb5547940998b7c0aa128",
+  "workflow_run_id": "24584148078",
   "approval_status": "approved",
   "health_status": "healthy",
   "validation_checks": {
@@ -30,7 +30,7 @@
   },
   "evidence_summary": {
     "origin_health_percentage": 100.0,
-    "canary_success_rate": 1.0,
+    "canary_success_rate": NaN,
     "certificate_days_to_expiry": 31,
     "certificate_renewal_verified": false,
     "certificate_rotation_verified": false,

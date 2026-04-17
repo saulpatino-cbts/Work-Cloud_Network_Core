@@ -33,6 +33,7 @@ from cna.core.exceptions import CNAAuthError
 from cna.core.persistence import EngagementStore
 from cna.core.throttle import with_retry
 from cna.core.topology_schema import (
+    AppGatewayMetric,
     ApplicationGateway,
     AzureBastionHost,
     AzureFirewall,
@@ -52,6 +53,7 @@ from cna.core.topology_schema import (
     AzureRouteTable,
     AzureSubnet,
     AzureSubscriptionTopology,
+    DefenderAssessment,
     ERCircuitMetric,
     FrontDoorWAFPolicy,
     SubnetType,
@@ -455,6 +457,7 @@ class AzureDiscovery:
                     if topo.observability
                     else None
                 ),
+                appgws=topo.application_gateways,
             )
             if topo.network_metrics.collection_error:
                 self._progress(f"[{sub_name}] Metrics: {topo.network_metrics.collection_error}")
@@ -480,6 +483,17 @@ class AzureDiscovery:
                 )
         except Exception as e:
             self._progress(f"[{sub_name}] Front Door WAF scan skipped: {e}")
+
+        self._progress(f"[{sub_name}] Querying Defender for Cloud network assessments…")
+        try:
+            topo.defender_assessments = self._collect_defender_assessments(sub_id)
+            if topo.defender_assessments:
+                self._progress(
+                    f"[{sub_name}] Defender: {len(topo.defender_assessments)} "
+                    f"network finding(s)"
+                )
+        except Exception as e:
+            self._progress(f"[{sub_name}] Defender for Cloud skipped: {e}")
 
         if errors:
             topo.block_reason = "; ".join(errors)
@@ -1725,6 +1739,7 @@ class AzureDiscovery:
         er_circuits: list | None = None,
         public_ips: list | None = None,
         la_workspaces: list | None = None,
+        appgws: list[ApplicationGateway] | None = None,
     ) -> NetworkMetrics:
         """Collect 24-hour Azure Monitor metrics and compute VNet IP utilization.
 
@@ -1737,6 +1752,7 @@ class AzureDiscovery:
           6. VNet IP space: computed from existing CIDR data (no API call)
           7. NTA east-west / north-south bytes: Log Analytics AzureNetworkAnalytics_CL query
           8. Cost Management: Microsoft.Network MTD egress spend (Billing Reader)
+          9. App Gateway: CapacityUnits + BackendLastByteResponseTime + request counts
         """
         import datetime as _dt
         import ipaddress
@@ -2090,6 +2106,78 @@ class AzureDiscovery:
         except Exception as e:
             logger.debug("[%s] Cost Management query failed: %s", sub_id, e)
 
+        # ── 9. Application Gateway — capacity units + latency + request counts ──
+        for ag in (appgws or [])[:10]:
+            agm = AppGatewayMetric(appgw_name=ag.name)
+            try:
+                result = monitor.metrics.list(
+                    resource_uri=ag.id,
+                    timespan=timespan,
+                    interval="PT1H",
+                    metricnames=(
+                        "CapacityUnits,BackendLastByteResponseTime,"
+                        "FailedRequests,TotalRequests,ApplicationGatewayWAFRuleMatches"
+                    ),
+                    aggregation="Average,Total,Maximum",
+                )
+                for metric in result.value or []:
+                    mn = metric.name.value if metric.name else ""
+                    if mn == "CapacityUnits":
+                        avg_vals = [
+                            dp.average
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.average is not None
+                        ]
+                        max_vals = [
+                            dp.maximum
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.maximum is not None
+                        ]
+                        if avg_vals:
+                            agm.capacity_units_avg = round(
+                                sum(avg_vals) / len(avg_vals), 2
+                            )
+                        if max_vals:
+                            agm.capacity_units_max = round(max(max_vals), 2)
+                    elif mn == "BackendLastByteResponseTime":
+                        avg_vals = [
+                            dp.average
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.average is not None
+                        ]
+                        if avg_vals:
+                            agm.backend_latency_ms_avg = round(
+                                sum(avg_vals) / len(avg_vals), 1
+                            )
+                    elif mn == "FailedRequests":
+                        agm.failed_requests_24h = int(sum(
+                            dp.total or 0
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.total is not None
+                        ))
+                    elif mn == "TotalRequests":
+                        agm.total_requests_24h = int(sum(
+                            dp.total or 0
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.total is not None
+                        ))
+                    elif mn == "ApplicationGatewayWAFRuleMatches":
+                        agm.waf_rule_hits_24h = int(sum(
+                            dp.total or 0
+                            for ts in metric.timeseries
+                            for dp in ts.data
+                            if dp.total is not None
+                        ))
+            except Exception as e:
+                agm.collection_error = str(e)
+                logger.debug("[%s] App GW metrics for %s failed: %s", sub_id, ag.name, e)
+            metrics.appgw_metrics.append(agm)
+
         return metrics
 
     # ----------------------------------------------- Front Door WAF policies
@@ -2135,6 +2223,85 @@ class AzureDiscovery:
         except Exception as e:
             logger.debug("[%s] Front Door WAF policy enumeration failed: %s", sub_id, e)
         return policies
+
+    # ------------------------------------------------- Defender for Cloud
+
+    def _collect_defender_assessments(self, sub_id: str) -> list[DefenderAssessment]:
+        """Collect Defender for Cloud security assessments filtered to Networking category.
+
+        Requires SecurityReader or Security Admin on the subscription.
+        Uses azure-mgmt-security (lazy import — optional dependency).
+        Only Unhealthy assessments with a Networking category are returned; healthy
+        pass-through assessments are skipped to keep the list actionable.
+        """
+        try:
+            from azure.mgmt.security import SecurityCenter
+        except ImportError:
+            logger.debug("[%s] azure-mgmt-security not installed; Defender skipped", sub_id)
+            return []
+
+        assessments: list[DefenderAssessment] = []
+        try:
+            sc = SecurityCenter(self._credential, sub_id)
+            scope = f"/subscriptions/{sub_id}"
+            for item in sc.assessments.list(scope):
+                status_code = "Unknown"
+                severity = "Medium"
+                try:
+                    status_code = (item.status.code if item.status else "Unknown") or "Unknown"
+                except Exception:
+                    pass
+                if status_code not in ("Unhealthy", "NotApplicable"):
+                    continue
+                try:
+                    meta = item.metadata
+                    category = (meta.categories[0] if meta and meta.categories else None) or ""
+                    if "network" not in (category or "").lower():
+                        continue
+                    severity = (meta.severity if meta else "Medium") or "Medium"
+                    description = (meta.description if meta else None)
+                    remediation = (meta.remediation_description if meta else None)
+                    effort = (meta.implementation_effort if meta else None)
+                    threats = list(meta.threats or []) if meta else []
+                    user_impact = (meta.user_impact if meta else None)
+                    display_name = (meta.display_name if meta else item.name) or item.name or ""
+                except Exception:
+                    category = "Networking"
+                    description = None
+                    remediation = None
+                    effort = None
+                    threats = []
+                    user_impact = None
+                    display_name = item.name or ""
+
+                resource_id = None
+                resource_type = None
+                try:
+                    if item.resource_details:
+                        resource_id = getattr(item.resource_details, "id", None)
+                        resource_type = getattr(item.resource_details, "resource_type", None)
+                except Exception:
+                    pass
+
+                assessments.append(
+                    DefenderAssessment(
+                        assessment_id=item.id or "",
+                        display_name=display_name,
+                        description=description,
+                        remediation_description=remediation,
+                        status=status_code,
+                        severity=str(severity),
+                        resource_id=resource_id,
+                        resource_type=resource_type,
+                        category=category,
+                        implementation_effort=str(effort) if effort else None,
+                        threats=[str(t) for t in threats],
+                        user_impact=str(user_impact) if user_impact else None,
+                    )
+                )
+        except Exception as e:
+            logger.debug("[%s] Defender for Cloud assessments failed: %s", sub_id, e)
+        return assessments
 
     # ----------------------------------------------------------------- run
 

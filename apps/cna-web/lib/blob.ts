@@ -1,4 +1,8 @@
-import { BlobServiceClient } from "@azure/storage-blob";
+import {
+  BlobSASPermissions,
+  BlobServiceClient,
+  generateBlobSASQueryParameters,
+} from "@azure/storage-blob";
 import { DefaultAzureCredential } from "@azure/identity";
 
 function getBlobServiceClient(): BlobServiceClient {
@@ -53,4 +57,63 @@ export async function uploadDeliverable(
     blobHTTPHeaders: { blobContentType: "text/markdown; charset=utf-8" },
   });
   return `deliverables/${blobName}`;
+}
+
+/**
+ * Delete a blob by its full path (container/blobName).
+ * 404 is treated as success — blob is already gone.
+ */
+export async function deleteBlob(blobPath: string): Promise<void> {
+  const client = getBlobServiceClient();
+  const slashIndex = blobPath.indexOf("/");
+  if (slashIndex === -1) return;
+  const containerName = blobPath.slice(0, slashIndex);
+  const blobName = blobPath.slice(slashIndex + 1);
+  const containerClient = client.getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+  try {
+    await blockBlobClient.delete();
+  } catch (err: unknown) {
+    const code = (err as { statusCode?: number })?.statusCode;
+    if (code === 404) return;
+    throw err;
+  }
+}
+
+/**
+ * Generate a user-delegation SAS URL for a blob.
+ * Returns a time-limited read-only URL valid for ttlHours (default 1 hour).
+ */
+export async function generateSasUrl(
+  blobPath: string,
+  ttlHours: number = 1,
+): Promise<string> {
+  const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
+  if (!accountName) {
+    throw new Error("AZURE_STORAGE_ACCOUNT_NAME is not set");
+  }
+  const client = getBlobServiceClient();
+  const slashIndex = blobPath.indexOf("/");
+  if (slashIndex === -1) throw new Error(`Invalid blobPath: ${blobPath}`);
+  const containerName = blobPath.slice(0, slashIndex);
+  const blobName = blobPath.slice(slashIndex + 1);
+
+  const startsOn = new Date();
+  const expiresOn = new Date(Date.now() + ttlHours * 3600 * 1000);
+
+  const userDelegationKey = await client.getUserDelegationKey(startsOn, expiresOn);
+
+  const sasParams = generateBlobSASQueryParameters(
+    {
+      containerName,
+      blobName,
+      permissions: BlobSASPermissions.parse("r"),
+      startsOn,
+      expiresOn,
+    },
+    userDelegationKey,
+    accountName,
+  );
+
+  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobName}?${sasParams.toString()}`;
 }

@@ -260,13 +260,13 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 | Item | Priority | Notes |
 | --- | --- | --- |
-| Production deployment | **High** | Run `031` targeting `prod` after dev Beta validation. Document prod env var gap first (`AZURE_STORAGE_ACCOUNT_NAME`, `AZURE_STORAGE_CONTAINER_ENGAGEMENTS`). |
-| AWS Provider Expansion (Phase G) | High | Azure parity; needs Phase C discovery stubs for AWS |
-| Phase C: Azure network/security discovery stubs | Medium | `azure_network/security` Phase C — currently raise NotImplementedError |
-| Client portal hardening | Medium | Retention engine (90 days), SAS token TTL enforcement |
-| App Gateway capacity metrics | Low | `CapacityUnits`, `BackendLastByteResponseTime` — WAF efficacy enrichment |
-| Defender for Cloud network recommendations | Low | `Microsoft.Security/assessments/read` — enrichment for Page 7 |
-| CISA ZTMM v2 framework mappings | Low | Zero Trust maturity model — per-finding mapping |
+| Production deployment | **High** | Run `031` targeting `prod` after dev Beta validation. Prod env var gap fixed in `2e243ea`. |
+| ~~AWS Provider Expansion (Phase G)~~ | ~~High~~ | ✅ Done — AWS Network Firewall + WAF v2 collectors added; AWS-NET-012/013 rules live |
+| ~~Phase C: Azure network/security discovery stubs~~ | ~~Medium~~ | ✅ Done — `azure_network.py` and `azure_security.py` now re-export from `azure_discovery.py` |
+| ~~Client portal hardening~~ | ~~Medium~~ | ✅ Done — `deleteBlob()`, `generateSasUrl()`, `cleanupExpiredDeliverables()` implemented |
+| ~~App Gateway capacity metrics~~ | ~~Low~~ | ✅ Done — collector #9 in `_collect_network_metrics`; AZ-NET-019 rule live |
+| ~~Defender for Cloud network recommendations~~ | ~~Low~~ | ✅ Done — `_collect_defender_assessments()` + `defender_assessments` on topology |
+| ~~CISA ZTMM v2 framework mappings~~ | ~~Low~~ | ✅ Done — all 30 rule emissions include CISA ZTMM v2 pillar/control mappings |
 | JA (Japanese) language toggle | Low | `ja_review_complete` flag — requires translated glossary review |
 | MCP server wiring | Low | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
 | Pre-commit hook enforcement monitoring | Ongoing | `detect-secrets` + `gitleaks` — monitor for false positives |
@@ -295,8 +295,23 @@ Once the environment is up and smoke-tested, run through these scenarios:
 | AZ-NET-016 | ER circuit saturation >80% | HIGH | ✅ Live |
 | AZ-NET-017 | DDoS attack detected | CRITICAL | ✅ Live |
 | AZ-NET-018 | Front Door WAF in Detection mode | MEDIUM | ✅ Live |
+| AZ-NET-019 | App Gateway high latency / failure rate | HIGH | ✅ Live |
 
-**18 of 18 rules active.**
+**19 of 19 Azure rules active.**
+
+## Current AWS Rule Coverage
+
+| Rule ID | Name | Severity | Status |
+| --- | --- | --- | --- |
+| AWS-NET-001 | SG unrestricted SSH | CRITICAL | ✅ Live |
+| AWS-NET-002 | SG unrestricted RDP | CRITICAL | ✅ Live |
+| AWS-NET-003 | SG unrestricted all traffic | CRITICAL | ✅ Live |
+| AWS-NET-004 | VPC flow logs disabled | HIGH | ✅ Live |
+| AWS-NET-005–011 | (existing rules) | various | ✅ Live |
+| AWS-NET-012 | No Network Firewall in VPC with IGW | LOW | ✅ Live |
+| AWS-NET-013 | WAF Web ACL not associated with any resource | MEDIUM | ✅ Live |
+
+**All AWS rules active.**
 
 ---
 

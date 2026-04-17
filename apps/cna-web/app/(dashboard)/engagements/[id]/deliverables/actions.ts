@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadDeliverable } from "@/lib/blob";
+import { deleteBlob, uploadDeliverable } from "@/lib/blob";
 import { generateDeliverableContent } from "@/lib/openai";
 import type { DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
@@ -293,8 +293,32 @@ export async function deleteDeliverable(formData: FormData) {
   });
   if (!member) return;
 
+  const record = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { blobPath: true },
+  });
+  if (record?.blobPath) {
+    await deleteBlob(record.blobPath);
+  }
+
   await prisma.deliverable.delete({ where: { id: deliverableId } });
   revalidatePath(`/engagements/${engagementId}`);
+}
+
+export async function cleanupExpiredDeliverables(engagementId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+  const expired = await prisma.deliverable.findMany({
+    where: { engagementId, createdAt: { lt: cutoff } },
+  });
+  let deleted = 0;
+  for (const d of expired) {
+    if (d.blobPath) {
+      await deleteBlob(d.blobPath);
+    }
+    await prisma.deliverable.delete({ where: { id: d.id } });
+    deleted++;
+  }
+  return deleted;
 }
 
 // ─── Publish assessment ────────────────────────────────────────────────────────

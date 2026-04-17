@@ -80,6 +80,9 @@ R_AZ_BASTION_NO_DIAGNOSTICS = "AZ-NET-015"
 R_AZ_ER_SATURATION = "AZ-NET-016"
 R_AZ_DDOS_ATTACK_DETECTED = "AZ-NET-017"
 R_AZ_FRONTDOOR_WAF_DETECTION_MODE = "AZ-NET-018"
+R_AZ_APPGW_HIGH_LATENCY = "AZ-NET-019"
+R_AWS_NO_NETWORK_FIREWALL = "AWS-NET-012"
+R_AWS_WAF_NO_ASSOCIATION = "AWS-NET-013"
 
 # Severity thresholds
 _CRITICAL_IDS = {
@@ -99,6 +102,7 @@ _HIGH_IDS = {
     R_AZ_LB_SNAT_EXHAUSTION,
     R_AZ_VNET_IP_EXHAUSTION,
     R_AZ_ER_SATURATION,
+    R_AZ_APPGW_HIGH_LATENCY,
 }
 
 _MEDIUM_IDS = {
@@ -107,6 +111,7 @@ _MEDIUM_IDS = {
     R_AZ_BASTION_NO_DIAGNOSTICS,
     R_AZ_PEERING_FW_BYPASS,
     R_AZ_FRONTDOOR_WAF_DETECTION_MODE,
+    R_AWS_WAF_NO_ASSOCIATION,
 }
 
 
@@ -208,7 +213,15 @@ class AnalysisEngine:
                                 framework="AWS Well-Architected Framework",
                                 pillar="Security",
                                 control="SEC 5 — Network Protection",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.1",
+                                control_name="Network Segmentation",
+                                alignment="Default VPCs create unintended network paths that undermine segmentation policy",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -239,6 +252,14 @@ class AnalysisEngine:
                                 framework="NIST CSF",
                                 pillar="Detect",
                                 control="DE.CM-1",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Flow logs enable traffic visibility required for zero trust enforcement",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -285,6 +306,14 @@ class AnalysisEngine:
                                             pillar="Networking",
                                             control="4.1",
                                         ),
+                                        FrameworkMapping(
+                                            framework="CISA ZTMM v2",
+                                            version="v2",
+                                            pillar="Networks",
+                                            control_id="3.1",
+                                            control_name="Network Segmentation",
+                                            alignment="NSGs enforce micro-segmentation between subnets",
+                                        ),
                                     ],
                                     status=FindingStatus.OPEN,
                                 )
@@ -319,6 +348,14 @@ class AnalysisEngine:
                                             pillar="Networking",
                                             control="4.1",
                                         ),
+                                        FrameworkMapping(
+                                            framework="CISA ZTMM v2",
+                                            version="v2",
+                                            pillar="Networks",
+                                            control_id="3.1",
+                                            control_name="Network Segmentation",
+                                            alignment="NSGs enforce micro-segmentation between subnets",
+                                        ),
                                     ],
                                     status=FindingStatus.OPEN,
                                 )
@@ -352,6 +389,14 @@ class AnalysisEngine:
                                             pillar="Networking",
                                             control="4.2",
                                         ),
+                                        FrameworkMapping(
+                                            framework="CISA ZTMM v2",
+                                            version="v2",
+                                            pillar="Networks",
+                                            control_id="3.1",
+                                            control_name="Network Segmentation",
+                                            alignment="NSGs enforce micro-segmentation between subnets",
+                                        ),
                                     ],
                                     status=FindingStatus.OPEN,
                                 )
@@ -381,7 +426,15 @@ class AnalysisEngine:
                                 framework="AWS Well-Architected Framework",
                                 pillar="Security",
                                 control="SEC 5 — Network Protection",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.4",
+                                control_name="Network Resilience",
+                                alignment="Redundant circuits prevent single points of failure in hybrid connectivity",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -408,7 +461,15 @@ class AnalysisEngine:
                                 framework="AWS Well-Architected Framework",
                                 pillar="Security",
                                 control="SEC 5 — Network Protection",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.4",
+                                control_name="Network Resilience",
+                                alignment="Redundant circuits prevent single points of failure in hybrid connectivity",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -437,11 +498,94 @@ class AnalysisEngine:
                             framework="AWS Well-Architected Framework",
                             pillar="Reliability",
                             control="REL 6 — Design to Withstand Component Failure",
-                        )
+                        ),
+                        FrameworkMapping(
+                            framework="CISA ZTMM v2",
+                            version="v2",
+                            pillar="Networks",
+                            control_id="3.4",
+                            control_name="Network Resilience",
+                            alignment="Redundant circuits prevent single points of failure in hybrid connectivity",
+                        ),
                     ],
                     status=FindingStatus.OPEN,
                 )
             )
+
+        # AWS-NET-012: No Network Firewall in VPC with internet gateway
+        vpcs_with_igw = [vpc for vpc in region_topo.vpcs if vpc.internet_gateways]
+        if vpcs_with_igw and not region_topo.aws_network_firewalls and not region_topo.network_firewalls:
+            for vpc in vpcs_with_igw:
+                self._emit(
+                    Finding(
+                        rule_id=R_AWS_NO_NETWORK_FIREWALL,
+                        severity=_severity(R_AWS_NO_NETWORK_FIREWALL),
+                        resource_id=vpc.id,
+                        resource_type="AWS::EC2::VPC",
+                        account_id=account_id,
+                        region=region,
+                        title="VPC with internet gateway has no AWS Network Firewall deployed",
+                        observed_state=ObservedState(
+                            fact=f"VPC {vpc.id} ({vpc.name or 'unnamed'}) in {account_id}/{region} "
+                            f"has an internet gateway but no AWS Network Firewall resource was found in the region.",
+                            evidence_ref=f"discovery:aws_{account_id}_{region}.vpcs[id={vpc.id}].internet_gateways",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="AWS Well-Architected Framework",
+                                pillar="Security",
+                                control="SEC 5 — Network Protection",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Network Firewall enforces stateful traffic inspection at VPC ingress/egress",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
+
+        # AWS-NET-013: WAF Web ACL not associated with any load balancer
+        for acl in region_topo.waf_web_acls:
+            if not acl.associated_resource_arns:
+                self._emit(
+                    Finding(
+                        rule_id=R_AWS_WAF_NO_ASSOCIATION,
+                        severity=_severity(R_AWS_WAF_NO_ASSOCIATION),
+                        resource_id=acl.web_acl_arn,
+                        resource_type="AWS::WAFv2::WebACL",
+                        account_id=account_id,
+                        region=region,
+                        title="WAF Web ACL is not associated with any load balancer",
+                        observed_state=ObservedState(
+                            fact=f"WAF Web ACL {acl.name} ({acl.web_acl_id}) in {account_id}/{region} "
+                            f"has no associated Application Load Balancer resources. "
+                            f"Managed rule groups: {acl.managed_rule_groups_count}, "
+                            f"custom rules: {acl.custom_rules_count}.",
+                            evidence_ref=f"discovery:aws_{account_id}_{region}.waf_web_acls[id={acl.web_acl_id}].associated_resource_arns",
+                        ),
+                        framework_mappings=[
+                            FrameworkMapping(
+                                framework="AWS Well-Architected Framework",
+                                pillar="Security",
+                                control="SEC 5 — Network Protection",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="WAF provides application-layer traffic filtering at the perimeter",
+                            ),
+                        ],
+                        status=FindingStatus.OPEN,
+                    )
+                )
 
     # ---------------------------------------------------------------- Azure rules
 
@@ -498,6 +642,14 @@ class AnalysisEngine:
                                 framework="FedRAMP Moderate",
                                 pillar="System and Communications Protection",
                                 control="SC-5 — Denial of Service Protection",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.4",
+                                control_name="Network Resilience",
+                                alignment="DDoS protection is a network resilience control",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -558,6 +710,14 @@ class AnalysisEngine:
                                     pillar="System and Communications Protection",
                                     control="SC-7 — Boundary Protection",
                                 ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.1",
+                                    control_name="Network Segmentation",
+                                    alignment="NSGs enforce micro-segmentation between subnets",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -612,6 +772,14 @@ class AnalysisEngine:
                                 pillar="System and Communications Protection",
                                 control="SC-7 — Boundary Protection",
                             ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Threat intel-based blocking controls traffic flows to known malicious destinations",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -655,6 +823,14 @@ class AnalysisEngine:
                             framework="FedRAMP Moderate",
                             pillar="Contingency Planning",
                             control="CP-8 — Telecommunications Services (redundancy)",
+                        ),
+                        FrameworkMapping(
+                            framework="CISA ZTMM v2",
+                            version="v2",
+                            pillar="Networks",
+                            control_id="3.4",
+                            control_name="Network Resilience",
+                            alignment="Redundant circuits prevent single points of failure in hybrid connectivity",
                         ),
                     ],
                     status=FindingStatus.OPEN,
@@ -705,6 +881,14 @@ class AnalysisEngine:
                                 pillar="System and Communications Protection",
                                 control="SC-7 — Boundary Protection",
                             ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="WAF provides application-layer traffic filtering at the perimeter",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -732,7 +916,15 @@ class AnalysisEngine:
                                     framework="Azure Well-Architected Framework",
                                     pillar="Performance Efficiency",
                                     control="PE-3 — Monitor and optimize network performance",
-                                )
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.4",
+                                    control_name="Network Resilience",
+                                    alignment="Gateway saturation degrades hybrid connectivity resilience",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -760,7 +952,15 @@ class AnalysisEngine:
                                     framework="Azure Well-Architected Framework",
                                     pillar="Security",
                                     control="NS-4 — Protect applications from external network attacks",
-                                )
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.2",
+                                    control_name="Traffic Management",
+                                    alignment="Zero rule hits suggests traffic bypasses the firewall",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -787,7 +987,15 @@ class AnalysisEngine:
                                     framework="Azure Well-Architected Framework",
                                     pillar="Reliability",
                                     control="RE-4 — Design for scale out",
-                                )
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.4",
+                                    control_name="Network Resilience",
+                                    alignment="SNAT exhaustion causes connection failures affecting resilience",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -814,7 +1022,15 @@ class AnalysisEngine:
                                     framework="Azure Well-Architected Framework",
                                     pillar="Reliability",
                                     control="RE-2 — Design for capacity",
-                                )
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.4",
+                                    control_name="Network Resilience",
+                                    alignment="IP space exhaustion prevents new workload deployments",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -853,6 +1069,14 @@ class AnalysisEngine:
                                     framework="FedRAMP Moderate",
                                     pillar="Contingency Planning",
                                     control="CP-8 — Telecommunications Services",
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.4",
+                                    control_name="Network Resilience",
+                                    alignment="Circuit saturation degrades hybrid connectivity reliability",
                                 ),
                             ],
                             status=FindingStatus.OPEN,
@@ -893,6 +1117,14 @@ class AnalysisEngine:
                                 pillar="Technical Safeguards",
                                 control="(a)(2)(ii) — Contingency operations: protect ePHI "
                                 "availability during attack",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.4",
+                                control_name="Network Resilience",
+                                alignment="Active DDoS attack directly threatens network resilience",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -935,6 +1167,14 @@ class AnalysisEngine:
                                 pillar="System and Communications Protection",
                                 control="SC-7 — Boundary Protection",
                             ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="WAF in Detection mode does not block malicious traffic",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -964,7 +1204,15 @@ class AnalysisEngine:
                                 framework="Azure Well-Architected Framework",
                                 pillar="Security",
                                 control="NS-2 — Monitor network security",
-                            )
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Traffic Analytics provides flow-level visibility for zero trust verification",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -1001,6 +1249,14 @@ class AnalysisEngine:
                                 control="DE.CM-1 — The network is monitored to detect potential "
                                 "cybersecurity events",
                             ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Firewall logs are required to audit and verify traffic management policies",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -1036,6 +1292,14 @@ class AnalysisEngine:
                                 framework="NIST CSF",
                                 pillar="Detect",
                                 control="DE.CM-3 — Personnel activity is monitored",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Session logging provides audit trail for privileged access paths",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -1076,6 +1340,14 @@ class AnalysisEngine:
                                     framework="FedRAMP Moderate",
                                     pillar="System and Communications Protection",
                                     control="SC-7 — Boundary Protection",
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.1",
+                                    control_name="Network Segmentation",
+                                    alignment="Misconfigured peering can create unintended network paths",
                                 ),
                             ],
                             status=FindingStatus.OPEN,
@@ -1123,6 +1395,14 @@ class AnalysisEngine:
                                 framework="FedRAMP Moderate",
                                 pillar="Audit and Accountability",
                                 control="AU-2 — Audit Events",
+                            ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Networks",
+                                control_id="3.2",
+                                control_name="Traffic Management",
+                                alignment="Flow logs enable traffic visibility required for zero trust enforcement",
                             ),
                         ],
                         status=FindingStatus.OPEN,
@@ -1178,6 +1458,14 @@ class AnalysisEngine:
                                     pillar="Network Security",
                                     control="NS-4",
                                 ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.1",
+                                    control_name="Network Segmentation",
+                                    alignment="Traffic bypassing the hub firewall violates segmentation policy",
+                                ),
                             ],
                             status=FindingStatus.OPEN,
                         )
@@ -1217,6 +1505,67 @@ class AnalysisEngine:
                                     framework="Azure Security Benchmark",
                                     pillar="Network Security",
                                     control="NS-4",
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.1",
+                                    control_name="Network Segmentation",
+                                    alignment="Traffic bypassing the hub firewall violates segmentation policy",
+                                ),
+                            ],
+                            status=FindingStatus.OPEN,
+                        )
+                    )
+
+        # AZ-NET-019: App Gateway backend latency > 2000ms or high failure rate
+        if sub_topo.network_metrics:
+            for agm in sub_topo.network_metrics.appgw_metrics:
+                if agm.collection_error:
+                    continue
+                latency_breach = agm.backend_latency_ms_avg is not None and agm.backend_latency_ms_avg > 2000
+                failure_rate_high = (
+                    agm.total_requests_24h
+                    and agm.failed_requests_24h
+                    and agm.total_requests_24h > 0
+                    and (agm.failed_requests_24h / agm.total_requests_24h) > 0.05
+                )
+                if latency_breach or failure_rate_high:
+                    latency_str = f"{agm.backend_latency_ms_avg:.0f}ms" if agm.backend_latency_ms_avg else "N/A"
+                    fail_pct = (
+                        f"{(agm.failed_requests_24h / agm.total_requests_24h * 100):.1f}%"
+                        if agm.total_requests_24h and agm.failed_requests_24h
+                        else "N/A"
+                    )
+                    self._emit(
+                        Finding(
+                            rule_id=R_AZ_APPGW_HIGH_LATENCY,
+                            severity=_severity(R_AZ_APPGW_HIGH_LATENCY),
+                            resource_id=agm.appgw_name,
+                            resource_type="Microsoft.Network/applicationGateways",
+                            account_id=sub_id,
+                            region="Global",
+                            title="Application Gateway reports high backend latency or elevated failure rate",
+                            observed_state=ObservedState(
+                                fact=f"App Gateway {agm.appgw_name}: avg backend latency "
+                                f"{latency_str} (threshold 2000ms), failure rate {fail_pct} "
+                                f"(threshold 5%). WAF rule hits (24h): {agm.waf_rule_hits_24h}.",
+                                evidence_ref=f"discovery:azure_{sub_id}.network_metrics.appgw_metrics[name={agm.appgw_name}]",
+                            ),
+                            framework_mappings=[
+                                FrameworkMapping(
+                                    framework="Azure Well-Architected Framework",
+                                    pillar="Reliability",
+                                    control="RE-4 — Design for capacity",
+                                ),
+                                FrameworkMapping(
+                                    framework="CISA ZTMM v2",
+                                    version="v2",
+                                    pillar="Networks",
+                                    control_id="3.4",
+                                    control_name="Network Resilience",
+                                    alignment="App Gateway capacity degradation indicates resilience gap",
                                 ),
                             ],
                             status=FindingStatus.OPEN,

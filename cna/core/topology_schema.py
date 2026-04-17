@@ -219,6 +219,40 @@ class AWSAccount(BaseModel):
     is_management_account: bool = False
 
 
+class AWSNetworkFirewall(BaseModel):
+    """AWS Network Firewall resource — richer than the legacy NetworkFirewallPolicy stub."""
+
+    firewall_arn: str
+    firewall_name: str
+    vpc_id: str
+    firewall_policy_arn: str | None = None
+    subnet_mappings: list[str] = Field(default_factory=list)  # subnet IDs
+    delete_protection: bool = False
+    subnet_change_protection: bool = False
+    firewall_policy_change_protection: bool = False
+    firewall_status: str = "READY"  # READY | CREATING | DELETING | ...
+    logging_s3_enabled: bool = False
+    logging_cloudwatch_enabled: bool = False
+    logging_kinesis_enabled: bool = False
+    tags: dict = Field(default_factory=dict)
+
+
+class AWSWAFWebACL(BaseModel):
+    """AWS WAF v2 Web ACL (regional or CloudFront)."""
+
+    web_acl_id: str
+    web_acl_arn: str
+    name: str
+    scope: str = "REGIONAL"  # "REGIONAL" | "CLOUDFRONT"
+    default_action: str = "Allow"  # "Allow" | "Block"
+    managed_rule_groups_count: int = 0
+    custom_rules_count: int = 0
+    associated_resource_arns: list[str] = Field(default_factory=list)
+    sampled_requests_enabled: bool = False
+    cloudwatch_metrics_enabled: bool = False
+    tags: dict = Field(default_factory=dict)
+
+
 class AWSRegionTopology(BaseModel):
     account_id: str
     region: str
@@ -227,6 +261,8 @@ class AWSRegionTopology(BaseModel):
     direct_connect_connections: list[DirectConnectConnection] = Field(default_factory=list)
     vpn_gateways: list[VpnGateway] = Field(default_factory=list)
     network_firewalls: list[NetworkFirewallPolicy] = Field(default_factory=list)
+    aws_network_firewalls: list[AWSNetworkFirewall] = Field(default_factory=list)
+    waf_web_acls: list[AWSWAFWebACL] = Field(default_factory=list)
     discovery_blocked: bool = False
     block_reason: str | None = None
 
@@ -805,11 +841,42 @@ class FrontDoorWAFPolicy(BaseModel):
     tags: dict = Field(default_factory=dict)
 
 
+class AppGatewayMetric(BaseModel):
+    """Azure Monitor capacity and latency metrics for a single Application Gateway (24h window)."""
+
+    appgw_name: str
+    capacity_units_avg: float | None = None       # CapacityUnits (avg) — consumed CUs
+    capacity_units_max: float | None = None       # CapacityUnits (max) — peak pressure
+    backend_latency_ms_avg: float | None = None   # BackendLastByteResponseTime (ms avg)
+    failed_requests_24h: int | None = None        # FailedRequests (total)
+    total_requests_24h: int | None = None         # TotalRequests (total)
+    waf_rule_hits_24h: int | None = None          # ApplicationGatewayWAFRuleMatches (total)
+    collection_error: str | None = None
+
+
+class DefenderAssessment(BaseModel):
+    """A single Defender for Cloud security assessment on a resource."""
+
+    assessment_id: str          # e.g. "/subscriptions/.../assessments/<uuid>"
+    display_name: str
+    description: str | None = None
+    remediation_description: str | None = None
+    status: str = "Unhealthy"   # "Healthy" | "Unhealthy" | "NotApplicable" | "NotFound"
+    severity: str = "Medium"    # "Low" | "Medium" | "High"
+    resource_id: str | None = None
+    resource_type: str | None = None
+    category: str | None = None  # e.g. "Networking" | "IdentityAndAccess"
+    implementation_effort: str | None = None  # "Low" | "Moderate" | "High"
+    threats: list[str] = Field(default_factory=list)
+    user_impact: str | None = None
+
+
 class NetworkMetrics(BaseModel):
     gateway_metrics: list[GatewayMetric] = Field(default_factory=list)
     firewall_metrics: list[FirewallMetric] = Field(default_factory=list)
     lb_metrics: list[LoadBalancerMetric] = Field(default_factory=list)
     er_circuit_metrics: list[ERCircuitMetric] = Field(default_factory=list)
+    appgw_metrics: list[AppGatewayMetric] = Field(default_factory=list)
     # vnet_id -> utilization % (sum of subnet CIDRs / VNet CIDR * 100)
     vnet_utilization: dict[str, float] = Field(default_factory=dict)
     # Billing-derived: total Microsoft.Network egress spend MTD (USD)
@@ -846,6 +913,7 @@ class AzureSubscriptionTopology(BaseModel):
     nvas: list[AzureNVA] = Field(default_factory=list)
     bgp_data: list[GatewayBgpData] = Field(default_factory=list)
     front_door_waf_policies: list[FrontDoorWAFPolicy] = Field(default_factory=list)
+    defender_assessments: list[DefenderAssessment] = Field(default_factory=list)
     observability: ObservabilityData | None = None
     network_metrics: NetworkMetrics | None = None
     # kept for backward compat — no longer actively collected

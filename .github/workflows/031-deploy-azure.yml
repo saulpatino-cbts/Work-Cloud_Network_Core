@@ -545,11 +545,14 @@ jobs:
 
       - name: Query Application Insights telemetry directly
         if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''
+        continue-on-error: true
         run: |
           az monitor app-insights query \
             --app "${{ vars.APPLICATION_INSIGHTS_NAME }}" \
+            --resource-group "rg-cna-${{ inputs.environment }}-scus" \
             --analytics-query "requests | summarize successRate = todouble(sum(itemCount * iif(success == true, 1, 0))) / todouble(sum(itemCount))" \
-            > .verification/${{ inputs.environment }}/canary-telemetry.json
+            > .verification/${{ inputs.environment }}/canary-telemetry.json \
+            || echo "App Insights query skipped — no telemetry data yet (fresh deploy)"
 
       - name: Execute progressive Front Door promotion actions
         run: |

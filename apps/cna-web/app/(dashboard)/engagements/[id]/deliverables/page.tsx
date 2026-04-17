@@ -45,7 +45,16 @@ export default async function AssessmentsPage({ params }: PageProps) {
     select: {
       id: true,
       members: true,
-      deliverables: { orderBy: { createdAt: "desc" } },
+      deliverables: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          createdAt: true,
+          publishedAt: true,
+        },
+      },
       findings: { select: { id: true } },
     },
   });

@@ -1,8 +1,8 @@
 {
   "sha_tag": "sha-0857c52",
   "commit": "0857c527655bed127ea42632df28f8ad6044dc69",
-  "built_at": "2026-04-17T20:27:17Z",
-  "run_id": "24585088130",
+  "built_at": "2026-04-17T20:27:56Z",
+  "run_id": "24585086410",
   "images": {
     "api":    "ghcr.io/saulpatinojr/cna-api:sha-0857c52",
     "worker": "ghcr.io/saulpatinojr/cna-worker:sha-0857c52",

@@ -809,7 +809,7 @@ class LoadBalancerMetric(BaseModel):
 
     lb_name: str
     snat_connections_24h: float | None = None  # SnatConnectionCount (total)
-    used_snat_ports: float | None = None       # UsedSnatPorts (avg)
+    used_snat_ports: float | None = None  # UsedSnatPorts (avg)
     allocated_snat_ports: float | None = None  # AllocatedSnatPorts (avg)
     snat_port_utilization_pct: float | None = None  # used / allocated * 100
     collection_error: str | None = None
@@ -820,7 +820,7 @@ class ERCircuitMetric(BaseModel):
 
     circuit_name: str
     bandwidth_mbps_provisioned: float | None = None
-    primary_bits_in_per_second: float | None = None   # avg bps
+    primary_bits_in_per_second: float | None = None  # avg bps
     secondary_bits_in_per_second: float | None = None  # avg bps
     primary_utilization_pct: float | None = None
     secondary_utilization_pct: float | None = None
@@ -834,7 +834,7 @@ class FrontDoorWAFPolicy(BaseModel):
     name: str
     resource_group: str
     location: str
-    policy_mode: str = "Detection"        # "Detection" | "Prevention"
+    policy_mode: str = "Detection"  # "Detection" | "Prevention"
     policy_enabled_state: str = "Enabled"  # "Enabled" | "Disabled"
     custom_rules_count: int = 0
     managed_rules_count: int = 0
@@ -845,24 +845,24 @@ class AppGatewayMetric(BaseModel):
     """Azure Monitor capacity and latency metrics for a single Application Gateway (24h window)."""
 
     appgw_name: str
-    capacity_units_avg: float | None = None       # CapacityUnits (avg) — consumed CUs
-    capacity_units_max: float | None = None       # CapacityUnits (max) — peak pressure
-    backend_latency_ms_avg: float | None = None   # BackendLastByteResponseTime (ms avg)
-    failed_requests_24h: int | None = None        # FailedRequests (total)
-    total_requests_24h: int | None = None         # TotalRequests (total)
-    waf_rule_hits_24h: int | None = None          # ApplicationGatewayWAFRuleMatches (total)
+    capacity_units_avg: float | None = None  # CapacityUnits (avg) — consumed CUs
+    capacity_units_max: float | None = None  # CapacityUnits (max) — peak pressure
+    backend_latency_ms_avg: float | None = None  # BackendLastByteResponseTime (ms avg)
+    failed_requests_24h: int | None = None  # FailedRequests (total)
+    total_requests_24h: int | None = None  # TotalRequests (total)
+    waf_rule_hits_24h: int | None = None  # ApplicationGatewayWAFRuleMatches (total)
     collection_error: str | None = None
 
 
 class DefenderAssessment(BaseModel):
     """A single Defender for Cloud security assessment on a resource."""
 
-    assessment_id: str          # e.g. "/subscriptions/.../assessments/<uuid>"
+    assessment_id: str  # e.g. "/subscriptions/.../assessments/<uuid>"
     display_name: str
     description: str | None = None
     remediation_description: str | None = None
-    status: str = "Unhealthy"   # "Healthy" | "Unhealthy" | "NotApplicable" | "NotFound"
-    severity: str = "Medium"    # "Low" | "Medium" | "High"
+    status: str = "Unhealthy"  # "Healthy" | "Unhealthy" | "NotApplicable" | "NotFound"
+    severity: str = "Medium"  # "Low" | "Medium" | "High"
     resource_id: str | None = None
     resource_type: str | None = None
     category: str | None = None  # e.g. "Networking" | "IdentityAndAccess"

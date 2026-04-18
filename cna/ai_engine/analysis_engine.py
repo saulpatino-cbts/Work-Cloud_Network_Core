@@ -514,7 +514,11 @@ class AnalysisEngine:
 
         # AWS-NET-012: No Network Firewall in VPC with internet gateway
         vpcs_with_igw = [vpc for vpc in region_topo.vpcs if vpc.internet_gateways]
-        if vpcs_with_igw and not region_topo.aws_network_firewalls and not region_topo.network_firewalls:
+        if (
+            vpcs_with_igw
+            and not region_topo.aws_network_firewalls
+            and not region_topo.network_firewalls
+        ):
             for vpc in vpcs_with_igw:
                 self._emit(
                     Finding(
@@ -590,13 +594,15 @@ class AnalysisEngine:
     # ---------------------------------------------------------------- Azure rules
 
     # Well-known infrastructure subnet names excluded from workload checks
-    _INFRA_SUBNETS = frozenset({
-        "gatewaysubnet",
-        "azurefirewallsubnet",
-        "azurefirewallmanagementsubnet",
-        "azurebastionsubnet",
-        "routeservicesubnet",
-    })
+    _INFRA_SUBNETS = frozenset(
+        {
+            "gatewaysubnet",
+            "azurefirewallsubnet",
+            "azurefirewallmanagementsubnet",
+            "azurebastionsubnet",
+            "routeservicesubnet",
+        }
+    )
 
     def _analyze_azure_subscription(self, sub_topo: AzureSubscriptionTopology) -> None:
         if sub_topo.discovery_blocked:
@@ -932,7 +938,11 @@ class AnalysisEngine:
 
             # AZ-NET-009: Firewall with 0 hits
             for fm in sub_topo.network_metrics.firewall_metrics:
-                if (fm.network_rule_hits_24h == 0 and fm.app_rule_hits_24h == 0 and fm.nat_rule_hits_24h == 0) or (fm.data_processed_gb_24h == 0.0):
+                if (
+                    fm.network_rule_hits_24h == 0
+                    and fm.app_rule_hits_24h == 0
+                    and fm.nat_rule_hits_24h == 0
+                ) or (fm.data_processed_gb_24h == 0.0):
                     self._emit(
                         Finding(
                             rule_id=R_AZ_FW_NO_HITS,
@@ -1308,9 +1318,11 @@ class AnalysisEngine:
 
         # AZ-NET-005: VNet peering allows gateway transit without a local gateway
         for vnet in sub_topo.vnets:
-            has_local_gw = any(
-                gw.vnet_id == vnet.id for gw in sub_topo.virtual_network_gateways
-            ) if sub_topo.virtual_network_gateways else False
+            has_local_gw = (
+                any(gw.vnet_id == vnet.id for gw in sub_topo.virtual_network_gateways)
+                if sub_topo.virtual_network_gateways
+                else False
+            )
             for peering in vnet.peerings:
                 if peering.allow_gateway_transit and not has_local_gw:
                     self._emit(
@@ -1418,8 +1430,7 @@ class AnalysisEngine:
             # uses gateway transit (use_remote_gateways=True on this side)
             # or allows forwarded traffic (allow_forwarded_traffic=True).
             is_spoke = any(
-                p.allow_forwarded_traffic or p.use_remote_gateways
-                for p in vnet.peerings
+                p.allow_forwarded_traffic or p.use_remote_gateways for p in vnet.peerings
             )
             if not is_spoke:
                 continue
@@ -1473,8 +1484,7 @@ class AnalysisEngine:
                     continue
 
                 has_forced_route = any(
-                    r.address_prefix == "0.0.0.0/0"
-                    and r.next_hop_type == "VirtualAppliance"
+                    r.address_prefix == "0.0.0.0/0" and r.next_hop_type == "VirtualAppliance"
                     for r in rt.routes
                 )
                 if not has_forced_route:
@@ -1524,7 +1534,9 @@ class AnalysisEngine:
             for agm in sub_topo.network_metrics.appgw_metrics:
                 if agm.collection_error:
                     continue
-                latency_breach = agm.backend_latency_ms_avg is not None and agm.backend_latency_ms_avg > 2000
+                latency_breach = (
+                    agm.backend_latency_ms_avg is not None and agm.backend_latency_ms_avg > 2000
+                )
                 failure_rate_high = (
                     agm.total_requests_24h
                     and agm.failed_requests_24h
@@ -1532,7 +1544,11 @@ class AnalysisEngine:
                     and (agm.failed_requests_24h / agm.total_requests_24h) > 0.05
                 )
                 if latency_breach or failure_rate_high:
-                    latency_str = f"{agm.backend_latency_ms_avg:.0f}ms" if agm.backend_latency_ms_avg else "N/A"
+                    latency_str = (
+                        f"{agm.backend_latency_ms_avg:.0f}ms"
+                        if agm.backend_latency_ms_avg
+                        else "N/A"
+                    )
                     fail_pct = (
                         f"{(agm.failed_requests_24h / agm.total_requests_24h * 100):.1f}%"
                         if agm.total_requests_24h and agm.failed_requests_24h

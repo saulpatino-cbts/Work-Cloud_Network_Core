@@ -1,4 +1,5 @@
 """Azure security module — wraps Defender for Cloud assessment collection."""
+
 from cna.modules.network.discovery.azure_discovery import AzureDiscovery
 
 

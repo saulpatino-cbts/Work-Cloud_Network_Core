@@ -183,7 +183,9 @@ class AWSDiscovery:
             topo.transit_gateways = self._collect_tgws(ec2, account_id, region)
             topo.direct_connect_connections = self._collect_dx(dc, account_id, region)
             topo.vpn_gateways = self._collect_vpn_gateways(ec2, account_id, region)
-            topo.aws_network_firewalls = self._collect_network_firewalls(session, account_id, region)
+            topo.aws_network_firewalls = self._collect_network_firewalls(
+                session, account_id, region
+            )
             topo.waf_web_acls = self._collect_waf_web_acls(session, account_id, region)
         except botocore.exceptions.ClientError as e:
             code = e.response["Error"]["Code"]
@@ -568,8 +570,12 @@ class AWSDiscovery:
                         log_cw = False
                         log_kinesis = False
                         try:
-                            log_resp = client.describe_logging_configuration(FirewallArn=fw_ref["FirewallArn"])
-                            for lc in log_resp.get("LoggingConfiguration", {}).get("LogDestinationConfigs", []):
+                            log_resp = client.describe_logging_configuration(
+                                FirewallArn=fw_ref["FirewallArn"]
+                            )
+                            for lc in log_resp.get("LoggingConfiguration", {}).get(
+                                "LogDestinationConfigs", []
+                            ):
                                 dest = lc.get("LogDestinationType", "")
                                 if dest == "S3":
                                     log_s3 = True
@@ -578,17 +584,26 @@ class AWSDiscovery:
                                 elif dest == "KinesisDataFirehose":
                                     log_kinesis = True
                         except Exception as _e:
-                            logger.debug("[%s/%s] Firewall logging config unavailable: %s", account_id, region, _e)
+                            logger.debug(
+                                "[%s/%s] Firewall logging config unavailable: %s",
+                                account_id,
+                                region,
+                                _e,
+                            )
                         firewalls.append(
                             AWSNetworkFirewall(
                                 firewall_arn=fw.get("FirewallArn", ""),
                                 firewall_name=fw.get("FirewallName", ""),
                                 vpc_id=fw.get("VpcId", ""),
                                 firewall_policy_arn=fw.get("FirewallPolicyArn"),
-                                subnet_mappings=[s.get("SubnetId", "") for s in fw.get("SubnetMappings", [])],
+                                subnet_mappings=[
+                                    s.get("SubnetId", "") for s in fw.get("SubnetMappings", [])
+                                ],
                                 delete_protection=fw.get("DeleteProtection", False),
                                 subnet_change_protection=fw.get("SubnetChangeProtection", False),
-                                firewall_policy_change_protection=fw.get("FirewallPolicyChangeProtection", False),
+                                firewall_policy_change_protection=fw.get(
+                                    "FirewallPolicyChangeProtection", False
+                                ),
                                 firewall_status=status.get("Status", "READY"),
                                 logging_s3_enabled=log_s3,
                                 logging_cloudwatch_enabled=log_cw,
@@ -619,10 +634,14 @@ class AWSDiscovery:
                             Id=acl_summary["Id"],
                         )
                         acl = detail.get("WebACL", {})
-                        default_action = "Allow" if "Allow" in acl.get("DefaultAction", {}) else "Block"
+                        default_action = (
+                            "Allow" if "Allow" in acl.get("DefaultAction", {}) else "Block"
+                        )
                         rules = acl.get("Rules", [])
                         managed_count = sum(
-                            1 for r in rules if "ManagedRuleGroupStatement" in r.get("Statement", {})
+                            1
+                            for r in rules
+                            if "ManagedRuleGroupStatement" in r.get("Statement", {})
                         )
                         custom_count = len(rules) - managed_count
                         assoc_resp = client.list_resources_for_web_acl(
@@ -641,7 +660,9 @@ class AWSDiscovery:
                                 custom_rules_count=custom_count,
                                 associated_resource_arns=associated,
                                 sampled_requests_enabled=vis.get("SampledRequestsEnabled", False),
-                                cloudwatch_metrics_enabled=vis.get("CloudWatchMetricsEnabled", False),
+                                cloudwatch_metrics_enabled=vis.get(
+                                    "CloudWatchMetricsEnabled", False
+                                ),
                             )
                         )
                     except Exception as e:

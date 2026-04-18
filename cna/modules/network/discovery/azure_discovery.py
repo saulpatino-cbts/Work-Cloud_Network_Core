@@ -427,7 +427,9 @@ class AzureDiscovery:
         self._progress(f"[{sub_name}] Collecting observability data…")
         try:
             topo.observability = self._collect_observability(
-                net, sub_id, len(topo.nsgs),
+                net,
+                sub_id,
+                len(topo.nsgs),
                 firewalls=topo.firewalls,
                 bastion_hosts=topo.bastion_hosts,
             )
@@ -453,9 +455,7 @@ class AzureDiscovery:
                 er_circuits=topo.express_route_circuits,
                 public_ips=topo.public_ips,
                 la_workspaces=(
-                    topo.observability.log_analytics_workspaces
-                    if topo.observability
-                    else None
+                    topo.observability.log_analytics_workspaces if topo.observability else None
                 ),
                 appgws=topo.application_gateways,
             )
@@ -489,8 +489,7 @@ class AzureDiscovery:
             topo.defender_assessments = self._collect_defender_assessments(sub_id)
             if topo.defender_assessments:
                 self._progress(
-                    f"[{sub_name}] Defender: {len(topo.defender_assessments)} "
-                    f"network finding(s)"
+                    f"[{sub_name}] Defender: {len(topo.defender_assessments)} network finding(s)"
                 )
         except Exception as e:
             self._progress(f"[{sub_name}] Defender for Cloud skipped: {e}")
@@ -1039,6 +1038,7 @@ class AzureDiscovery:
             if custom_dns and private_ips:
                 import ipaddress as _ipaddr
                 import socket as _socket
+
                 _rfc1918 = (
                     _ipaddr.ip_network("10.0.0.0/8"),
                     _ipaddr.ip_network("172.16.0.0/12"),
@@ -1653,7 +1653,9 @@ class AzureDiscovery:
                         # Traffic Analytics is nested inside flow log resource
                         ta_cfg = getattr(fl, "flow_analytics_configuration", None)
                         if ta_cfg:
-                            ta_ws = getattr(ta_cfg, "network_watcher_flow_analytics_configuration", None)
+                            ta_ws = getattr(
+                                ta_cfg, "network_watcher_flow_analytics_configuration", None
+                            )
                             if ta_ws and getattr(ta_ws, "enabled", False):
                                 ta_enabled += 1
             except Exception as exc:  # noqa: BLE001
@@ -1721,12 +1723,21 @@ class AzureDiscovery:
     # VPN Gateway SKU → provisioned bandwidth ceiling (Mbps)
     # Source: https://learn.microsoft.com/azure/vpn-gateway/vpn-gateway-about-vpngateways
     _GW_SKU_BANDWIDTH: dict[str, float] = {
-        "VpnGw1": 650, "VpnGw2": 1000, "VpnGw3": 1250,
-        "VpnGw4": 5000, "VpnGw5": 10000,
-        "VpnGw1AZ": 650, "VpnGw2AZ": 1000, "VpnGw3AZ": 1250,
-        "VpnGw4AZ": 5000, "VpnGw5AZ": 10000,
-        "ErGw1AZ": 1000, "ErGw2AZ": 2000, "ErGw3AZ": 10000,
-        "UltraPerformance": 10000, "HighPerformance": 2000,
+        "VpnGw1": 650,
+        "VpnGw2": 1000,
+        "VpnGw3": 1250,
+        "VpnGw4": 5000,
+        "VpnGw5": 10000,
+        "VpnGw1AZ": 650,
+        "VpnGw2AZ": 1000,
+        "VpnGw3AZ": 1250,
+        "VpnGw4AZ": 5000,
+        "VpnGw5AZ": 10000,
+        "ErGw1AZ": 1000,
+        "ErGw2AZ": 2000,
+        "ErGw3AZ": 10000,
+        "UltraPerformance": 10000,
+        "HighPerformance": 2000,
     }
 
     def _collect_network_metrics(
@@ -1830,9 +1841,7 @@ class AzureDiscovery:
                         resource_uri=fw.id,
                         timespan=timespan,
                         interval="PT1H",
-                        metricnames=(
-                            "DataProcessed,ApplicationRuleHit,NetworkRuleHit,NatRuleHit"
-                        ),
+                        metricnames=("DataProcessed,ApplicationRuleHit,NetworkRuleHit,NatRuleHit"),
                         aggregation="Total",
                     )
                     for metric in result.value or []:
@@ -1896,7 +1905,11 @@ class AzureDiscovery:
                             ]
                             if vals:
                                 lm.allocated_snat_ports = round(sum(vals) / len(vals), 1)
-                    if lm.used_snat_ports and lm.allocated_snat_ports and lm.allocated_snat_ports > 0:
+                    if (
+                        lm.used_snat_ports
+                        and lm.allocated_snat_ports
+                        and lm.allocated_snat_ports > 0
+                    ):
                         lm.snat_port_utilization_pct = round(
                             (lm.used_snat_ports / lm.allocated_snat_ports) * 100, 1
                         )
@@ -1917,9 +1930,7 @@ class AzureDiscovery:
                         resource_uri=erc.id,
                         timespan=timespan,
                         interval="PT1H",
-                        metricnames=(
-                            "BitsInPerSecond,BitsOutPerSecond"
-                        ),
+                        metricnames=("BitsInPerSecond,BitsOutPerSecond"),
                         aggregation="Average",
                     )
                     for metric in result.value or []:
@@ -1967,10 +1978,12 @@ class AzureDiscovery:
                         mn = metric.name.value if metric.name else ""
                         if mn == "IfUnderDDoSAttack":
                             max_val = max(
-                                (dp.maximum or 0
-                                 for ts in metric.timeseries
-                                 for dp in ts.data
-                                 if dp.maximum is not None),
+                                (
+                                    dp.maximum or 0
+                                    for ts in metric.timeseries
+                                    for dp in ts.data
+                                    if dp.maximum is not None
+                                ),
                                 default=0,
                             )
                             if max_val > 0:
@@ -1987,7 +2000,7 @@ class AzureDiscovery:
             metrics.collection_error = str(e)
 
         # ── 6. VNet IP space utilization (no Monitor call — computed from topology) ──
-        for vnet in (vnets or []):
+        for vnet in vnets or []:
             try:
                 prefixes = vnet.address_space or []
                 if not prefixes:
@@ -2030,11 +2043,14 @@ class AzureDiscovery:
                     try:
                         import datetime as _dt2
                         from datetime import timedelta as _td
+
                         resp = logs_client.query_workspace(
                             workspace_id=ws_id,
                             query=nta_query,
-                            timespan=(_dt2.datetime.now(_dt2.UTC) - _td(hours=24),
-                                      _dt2.datetime.now(_dt2.UTC)),
+                            timespan=(
+                                _dt2.datetime.now(_dt2.UTC) - _td(hours=24),
+                                _dt2.datetime.now(_dt2.UTC),
+                            ),
                         )
                         if resp.status == LogsQueryStatus.SUCCESS and resp.tables:
                             for row in resp.tables[0].rows:
@@ -2136,9 +2152,7 @@ class AzureDiscovery:
                             if dp.maximum is not None
                         ]
                         if avg_vals:
-                            agm.capacity_units_avg = round(
-                                sum(avg_vals) / len(avg_vals), 2
-                            )
+                            agm.capacity_units_avg = round(sum(avg_vals) / len(avg_vals), 2)
                         if max_vals:
                             agm.capacity_units_max = round(max(max_vals), 2)
                     elif mn == "BackendLastByteResponseTime":
@@ -2149,30 +2163,34 @@ class AzureDiscovery:
                             if dp.average is not None
                         ]
                         if avg_vals:
-                            agm.backend_latency_ms_avg = round(
-                                sum(avg_vals) / len(avg_vals), 1
-                            )
+                            agm.backend_latency_ms_avg = round(sum(avg_vals) / len(avg_vals), 1)
                     elif mn == "FailedRequests":
-                        agm.failed_requests_24h = int(sum(
-                            dp.total or 0
-                            for ts in metric.timeseries
-                            for dp in ts.data
-                            if dp.total is not None
-                        ))
+                        agm.failed_requests_24h = int(
+                            sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        )
                     elif mn == "TotalRequests":
-                        agm.total_requests_24h = int(sum(
-                            dp.total or 0
-                            for ts in metric.timeseries
-                            for dp in ts.data
-                            if dp.total is not None
-                        ))
+                        agm.total_requests_24h = int(
+                            sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        )
                     elif mn == "ApplicationGatewayWAFRuleMatches":
-                        agm.waf_rule_hits_24h = int(sum(
-                            dp.total or 0
-                            for ts in metric.timeseries
-                            for dp in ts.data
-                            if dp.total is not None
-                        ))
+                        agm.waf_rule_hits_24h = int(
+                            sum(
+                                dp.total or 0
+                                for ts in metric.timeseries
+                                for dp in ts.data
+                                if dp.total is not None
+                            )
+                        )
             except Exception as e:
                 agm.collection_error = str(e)
                 logger.debug("[%s] App GW metrics for %s failed: %s", sub_id, ag.name, e)
@@ -2182,9 +2200,7 @@ class AzureDiscovery:
 
     # ----------------------------------------------- Front Door WAF policies
 
-    def _collect_front_door_waf_policies(
-        self, sub_id: str
-    ) -> list[FrontDoorWAFPolicy]:
+    def _collect_front_door_waf_policies(self, sub_id: str) -> list[FrontDoorWAFPolicy]:
         """Enumerate Front Door (classic + Standard/Premium) WAF policies."""
         from azure.mgmt.network import NetworkManagementClient
 
@@ -2211,9 +2227,7 @@ class AzureDiscovery:
                         location=p.location or "global",
                         policy_mode=(p.policy_settings.mode if p.policy_settings else "Detection"),
                         policy_enabled_state=(
-                            p.policy_settings.enabled_state
-                            if p.policy_settings
-                            else "Enabled"
+                            p.policy_settings.enabled_state if p.policy_settings else "Enabled"
                         ),
                         custom_rules_count=len(p.custom_rules.rules if p.custom_rules else []),
                         managed_rules_count=managed_count,
@@ -2259,11 +2273,11 @@ class AzureDiscovery:
                     if "network" not in (category or "").lower():
                         continue
                     severity = (meta.severity if meta else "Medium") or "Medium"
-                    description = (meta.description if meta else None)
-                    remediation = (meta.remediation_description if meta else None)
-                    effort = (meta.implementation_effort if meta else None)
+                    description = meta.description if meta else None
+                    remediation = meta.remediation_description if meta else None
+                    effort = meta.implementation_effort if meta else None
                     threats = list(meta.threats or []) if meta else []
-                    user_impact = (meta.user_impact if meta else None)
+                    user_impact = meta.user_impact if meta else None
                     display_name = (meta.display_name if meta else item.name) or item.name or ""
                 except Exception as _e:
                     logger.debug("Could not read assessment metadata: %s", _e)

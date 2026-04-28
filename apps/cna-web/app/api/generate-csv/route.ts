@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Sanitize a CSV cell value to prevent CSV injection.
+ * Formulas starting with =, +, -, @, TAB, or CR are prefixed with a single-quote
+ * so spreadsheet applications treat them as literal text rather than formulas.
+ * The value is also double-quote escaped per RFC 4180.
+ */
+function csvCell(value: unknown): string {
+  const s = String(value ?? "");
+  // Prepend ' to neutralize formula injection (OWASP CSV Injection)
+  const sanitized = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  // Wrap in quotes and escape embedded double-quotes (RFC 4180)
+  return `"${sanitized.replace(/"/g, '""')}"`;
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -46,10 +60,13 @@ export async function GET(req: NextRequest) {
   if (template.includes("Subscription Inventory")) {
     const rows = ["subscription_id,subscription_name,tenant_id,management_group,state"];
     for (const sub of subs as Record<string, unknown>[]) {
-      const id = String(sub.subscription_id ?? "");
-      const name = String(sub.subscription_name ?? "");
-      const tenantId = String(topology.tenant_id ?? "");
-      rows.push(`${id},"${name}",${tenantId},,Enabled`);
+      rows.push([
+        csvCell(sub.subscription_id),
+        csvCell(sub.subscription_name),
+        csvCell(topology.tenant_id),
+        csvCell(""),
+        csvCell("Enabled"),
+      ].join(","));
     }
     csv = rows.join("\n");
     filename = "Azure Subscription Inventory.csv";
@@ -58,15 +75,24 @@ export async function GET(req: NextRequest) {
     const rows = ["nsg_name,resource_group,subnet,priority,direction,protocol,source,destination,destination_port,action"];
     for (const sub of subs as Record<string, unknown>[]) {
       for (const nsg of ((sub.nsgs ?? []) as Record<string, unknown>[])) {
-        const nsgName = String(nsg.name ?? "");
-        const rg = String(nsg.resource_group ?? "");
         const associatedSubnets = (nsg.associated_subnet_ids as string[] | undefined) ?? [];
         const subnetNames = associatedSubnets.map((s) => s.split("/").pop() ?? "").join("|");
         for (const rule of ((nsg.security_rules ?? []) as Record<string, unknown>[])) {
-          const src = String((rule.source_address_prefix ?? rule.source_address_prefixes) ?? "*");
-          const dst = String((rule.destination_address_prefix ?? rule.destination_address_prefixes) ?? "*");
-          const port = String((rule.destination_port_range ?? rule.destination_port_ranges) ?? "*");
-          rows.push(`"${nsgName}","${rg}","${subnetNames}",${rule.priority},${rule.direction},${rule.protocol},"${src}","${dst}","${port}",${rule.access}`);
+          const src = (rule.source_address_prefix ?? rule.source_address_prefixes) ?? "*";
+          const dst = (rule.destination_address_prefix ?? rule.destination_address_prefixes) ?? "*";
+          const port = (rule.destination_port_range ?? rule.destination_port_ranges) ?? "*";
+          rows.push([
+            csvCell(nsg.name),
+            csvCell(nsg.resource_group),
+            csvCell(subnetNames),
+            csvCell(rule.priority),
+            csvCell(rule.direction),
+            csvCell(rule.protocol),
+            csvCell(src),
+            csvCell(dst),
+            csvCell(port),
+            csvCell(rule.access),
+          ].join(","));
         }
       }
     }
@@ -77,7 +103,16 @@ export async function GET(req: NextRequest) {
     const rows = ["rule_collection,priority,rule_name,source,destination,protocol,ports,action"];
     for (const sub of subs as Record<string, unknown>[]) {
       for (const fw of ((sub.firewalls ?? []) as Record<string, unknown>[])) {
-        rows.push(`"${fw.name}",100,"Firewall discovered","*","*","Any","*",Allow`);
+        rows.push([
+          csvCell(fw.name),
+          csvCell(100),
+          csvCell("Firewall discovered"),
+          csvCell("*"),
+          csvCell("*"),
+          csvCell("Any"),
+          csvCell("*"),
+          csvCell("Allow"),
+        ].join(","));
       }
     }
     if (rows.length === 1) rows.push("# No Azure Firewall instances found in this engagement");
@@ -89,7 +124,14 @@ export async function GET(req: NextRequest) {
     for (const sub of subs as Record<string, unknown>[]) {
       for (const rt of ((sub.route_tables ?? []) as Record<string, unknown>[])) {
         for (const route of ((rt.routes ?? []) as Record<string, unknown>[])) {
-          rows.push(`"${rt.name}","${rt.resource_group}","${route.name}","${route.address_prefix}","${route.next_hop_type}","${route.next_hop_ip ?? ""}"`);
+          rows.push([
+            csvCell(rt.name),
+            csvCell(rt.resource_group),
+            csvCell(route.name),
+            csvCell(route.address_prefix),
+            csvCell(route.next_hop_type),
+            csvCell(route.next_hop_ip ?? ""),
+          ].join(","));
         }
       }
     }
@@ -104,7 +146,7 @@ export async function GET(req: NextRequest) {
     status: 200,
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, '')}"`,
     },
   });
 }

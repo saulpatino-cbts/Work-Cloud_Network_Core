@@ -1,9 +1,0 @@
-{
-    "name": "cna-github-env-prod",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:saulpatinojr/MVP-Cloud_Network_Assessment:environment:prod",
-    "description": "GitHub Actions Prod Environment OIDC",
-    "audiences": [
-        "api://AzureADTokenExchange"
-    ]
-}

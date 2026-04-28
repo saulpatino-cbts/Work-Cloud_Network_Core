@@ -22,13 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -36,7 +36,7 @@ jobs:
 
       - name: Extract metadata for API
         id: meta_api
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/cna-api
           tags: |
@@ -44,25 +44,27 @@ jobs:
             type=sha
 
       - name: Build and push API image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: .
           file: apps/cna-api/Dockerfile
           push: true
           tags: ${{ steps.meta_api.outputs.tags }}
           labels: ${{ steps.meta_api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-worker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -70,7 +72,7 @@ jobs:
 
       - name: Extract metadata for Worker
         id: meta_worker
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/cna-worker
           tags: |
@@ -78,25 +80,27 @@ jobs:
             type=sha
 
       - name: Build and push Worker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: .
           file: apps/cna-worker/Dockerfile
           push: true
           tags: ${{ steps.meta_worker.outputs.tags }}
           labels: ${{ steps.meta_worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-web:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -104,7 +108,7 @@ jobs:
 
       - name: Extract metadata for Web
         id: meta_web
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/cna-web
           tags: |
@@ -113,7 +117,7 @@ jobs:
 
       - name: Extract metadata for Migrator
         id: meta_migrator
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/cna-migrator
           tags: |
@@ -121,7 +125,7 @@ jobs:
             type=sha
 
       - name: Build and push Web image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: apps/cna-web
           file: apps/cna-web/Dockerfile
@@ -133,7 +137,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Migrator image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: apps/cna-web
           file: apps/cna-web/Dockerfile
@@ -176,7 +180,7 @@ jobs:
     needs: [build-api, build-worker, build-web]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           # Need write access to push the manifest commit back to main
           token: ${{ secrets.GITHUB_TOKEN }}

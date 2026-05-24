@@ -124,7 +124,7 @@ export async function GET(
     findingsBySeverity = groups.map((g) => ({ severity: g.severity, count: g._count.id }));
   }
 
-  return NextResponse.json({
+  const payload = {
     id: job.id,
     status: job.status,
     startedAt: job.startedAt,
@@ -135,5 +135,16 @@ export async function GET(
     updatedAt: job.updatedAt,
     topologySummary,
     findingsBySeverity,
+  };
+
+  // Active jobs: allow brief CDN/browser caching (5s) to reduce polling pressure.
+  // Terminal states (COMPLETED/FAILED): no-store so the UI always reads final state.
+  const cacheControl =
+    job.status === "COMPLETED" || job.status === "FAILED"
+      ? "no-store"
+      : "public, max-age=5, stale-while-revalidate=10";
+
+  return NextResponse.json(payload, {
+    headers: { "Cache-Control": cacheControl },
   });
 }

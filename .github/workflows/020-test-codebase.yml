@@ -1,7 +1,7 @@
 # CI pipeline — hardened
 # Changes from original:
 #   - All actions pinned to SHA digest (supply chain security)
-#   - Python matrix: 3.11 + 3.12 (catches version-specific regressions)
+#   - Python matrix: 3.13 + 3.14 (current stable lines)
 #   - pip cache via actions/cache (60-80% faster installs)
 #   - Coverage XML uploaded to Codecov
 #   - SARIF upload for gitleaks findings (Security tab visibility)
@@ -22,6 +22,11 @@ permissions:
   contents: read
   security-events: write   # required for SARIF upload
   pull-requests: read
+
+env:
+  # Opt JavaScript actions into GitHub's Node 24 runtime while third-party
+  # actions finish publishing node24-native releases.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
 
@@ -53,9 +58,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Cache pip
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: lint-${{ hashFiles('pyproject.toml') }}
@@ -66,7 +71,7 @@ jobs:
         run: ruff format --check .
 
   # ------------------------------------------------------------------
-  # 3. Unit tests — Python matrix 3.11 + 3.12
+  # 3. Unit tests — Python matrix 3.13 + 3.14
   # ------------------------------------------------------------------
   test:
     name: Unit Tests (Python ${{ matrix.python-version }})
@@ -76,14 +81,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache pip
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: test-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
@@ -97,7 +102,7 @@ jobs:
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80
       - name: Upload coverage report
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.14'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: coverage-xml
@@ -116,9 +121,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Cache pip
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: moddep-${{ hashFiles('pyproject.toml') }}
@@ -161,9 +166,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Cache pip
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: pip-audit-${{ hashFiles('pyproject.toml') }}

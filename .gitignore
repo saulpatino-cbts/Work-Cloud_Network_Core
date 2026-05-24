@@ -35,3 +35,16 @@ htmlcov/
 out/
 apps/cna-web/.env.local
 apps/cna-web/.env*.local
+
+# Build artifacts — should not be committed
+cna.egg-info/
+*.egg-info/
+apps/cna-web/tsconfig.tsbuildinfo
+
+# Operational logs and payloads — contain runtime data, not source
+*.log
+payload*.json
+
+# Terraform plan files — contain sensitive variable values
+*.tfplan
+tfplan

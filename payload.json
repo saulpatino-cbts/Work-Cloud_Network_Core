@@ -1,9 +1,0 @@
-{
-    "name": "cna-github-env-dev",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:saulpatinojr/MVP-Cloud_Network_Assessment:environment:dev",
-    "description": "GitHub Actions Dev Environment OIDC",
-    "audiences": [
-        "api://AzureADTokenExchange"
-    ]
-}

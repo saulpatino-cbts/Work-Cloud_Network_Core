@@ -24,17 +24,22 @@ export async function startAllDiscovery(
   const apiUrl = process.env.CNA_API_INTERNAL_URL;
   if (!apiUrl) return { error: "Discovery API is not configured." };
 
-  // Fire one independent job per credential so each subscription gets its own
-  // progress bar, log, run count, and completion timestamp. The inventory merge
-  // on the Inventory page reads the latest topology per credentialId, so
-  // independent jobs compose correctly into the full multi-subscription view.
-  let started = 0;
-  for (const cred of credentials) {
-    const job = await prisma.discoveryJob.create({
-      data: { engagementId, credentialId: cred.id, status: "QUEUED" },
-    });
-    const spSecret = cred.spSecretEnc ? decrypt(cred.spSecretEnc) : null;
-    try {
+  // Create all job records first in a single transaction so the UI
+  // can display them immediately before any network I/O starts.
+  const jobs = await prisma.$transaction(
+    credentials.map((cred) =>
+      prisma.discoveryJob.create({
+        data: { engagementId, credentialId: cred.id, status: "QUEUED" },
+      }),
+    ),
+  );
+
+  // Fan out all API calls concurrently — previously sequential (for…of await)
+  // which meant N credentials = N * round-trip latency before the action returned.
+  const results = await Promise.allSettled(
+    credentials.map(async (cred, i) => {
+      const job = jobs[i];
+      const spSecret = cred.spSecretEnc ? decrypt(cred.spSecretEnc) : null;
       const res = await fetch(`${apiUrl}/discovery/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,16 +58,29 @@ export async function startAllDiscovery(
           where: { id: job.id },
           data: { status: "FAILED", errorMessage: `API error ${res.status}` },
         });
-      } else {
-        started++;
+        throw new Error(`API error ${res.status}`);
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      await prisma.discoveryJob.update({
-        where: { id: job.id },
-        data: { status: "FAILED", errorMessage: message },
-      });
-    }
+    }),
+  );
+
+  const started = results.filter((r) => r.status === "fulfilled").length;
+  const failed = results.filter((r) => r.status === "rejected").length;
+  if (failed > 0) {
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) => String(r.reason))
+      .join("; ");
+    await Promise.allSettled(
+      results.map((r, i) => {
+        if (r.status === "rejected") {
+          return prisma.discoveryJob.update({
+            where: { id: jobs[i].id },
+            data: { status: "FAILED", errorMessage: String((r as PromiseRejectedResult).reason) },
+          });
+        }
+      }),
+    );
+    if (started === 0) return { error: `All ${failed} discovery job(s) failed: ${errors}` };
   }
 
   revalidatePath(`/engagements/${engagementId}`);
@@ -90,12 +108,10 @@ export async function startDiscovery(
   });
   if (!cred || cred.engagementId !== engagementId) return { error: "Credential not found." };
 
-  // Create the job record in QUEUED state first so the UI can show it immediately.
   const job = await prisma.discoveryJob.create({
     data: { engagementId, credentialId, status: "QUEUED" },
   });
 
-  // Hand off to cna-api which will run discovery in a background task.
   const apiUrl = process.env.CNA_API_INTERNAL_URL;
   if (!apiUrl) {
     await prisma.discoveryJob.update({

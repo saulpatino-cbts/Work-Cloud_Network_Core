@@ -59,7 +59,7 @@ jobs:
         with:
           path: ~/.cache/pip
           key: lint-${{ hashFiles('pyproject.toml') }}
-      - run: pip install "ruff==0.15.9"
+      - run: pip install "ruff>=0.15.10"
       - name: ruff check (lint)
         run: ruff check . --output-format=github
       - name: ruff format check
@@ -94,12 +94,11 @@ jobs:
           pytest tests/unit/ -v --tb=short \
             --cov=cna \
             --cov-report=term-missing \
-            --cov-report=xml:coverage.xml
-      - name: Coverage gate (80% minimum)
-        run: pytest tests/unit/ --cov=cna --cov-fail-under=80
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=80
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7  # TODO: re-pin to SHA once confirmed current
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: coverage-xml
           path: coverage.xml

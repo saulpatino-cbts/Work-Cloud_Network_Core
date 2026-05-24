@@ -1,11 +1,11 @@
 {
-  "sha_tag": "sha-1da9494",
-  "commit": "1da9494d22b0b482ee2874f8636bef3cb187895d",
-  "built_at": "2026-05-24T00:22:26Z",
-  "run_id": "26347261702",
+  "sha_tag": "sha-c73885f",
+  "commit": "c73885f19b6192d702200401b89cdea0eb9cfbda",
+  "built_at": "2026-05-24T00:24:25Z",
+  "run_id": "26347349718",
   "images": {
-    "api":    "ghcr.io/saulpatinojr/cna-api:sha-1da9494",
-    "worker": "ghcr.io/saulpatinojr/cna-worker:sha-1da9494",
-    "web":    "ghcr.io/saulpatinojr/cna-web:sha-1da9494"
+    "api":    "ghcr.io/saulpatinojr/cna-api:sha-c73885f",
+    "worker": "ghcr.io/saulpatinojr/cna-worker:sha-c73885f",
+    "web":    "ghcr.io/saulpatinojr/cna-web:sha-c73885f"
   }
 }

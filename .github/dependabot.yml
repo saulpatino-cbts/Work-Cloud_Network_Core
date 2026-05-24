@@ -87,6 +87,15 @@ updates:
     labels:
       - dependencies
       - npm
+    ignore:
+      # Prisma 7 requires the new prisma.config.ts datasource model. Keep Prisma
+      # major upgrades manual until the schema/runtime migration is implemented.
+      - dependency-name: "prisma"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@prisma/*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       azure-sdk:
         patterns:

@@ -122,7 +122,6 @@ jobs:
           printf '{"status":"%s","checkov_exit":%s}\n' "$STATUS" "$CK_EXIT" > "$GATE"
           cat "$GATE"
           [ "$STATUS" = "passed" ] || exit 1
-        run: echo '{"status":"passed"}' > $GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json
 
       - name: Upload policy gate report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

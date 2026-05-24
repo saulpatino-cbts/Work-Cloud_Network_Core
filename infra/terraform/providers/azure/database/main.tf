@@ -4,6 +4,7 @@
 # the security module and its ID passed in via var.postgres_private_dns_zone_id.
 
 resource "azurerm_postgresql_flexible_server" "this" {
+  #checkov:skip=CKV2_AZURE_57:Flexible Server is private through delegated subnet plus private DNS; this is the intended Azure private access model.
   name                          = local.server_name
   resource_group_name           = var.resource_group_name
   location                      = var.location

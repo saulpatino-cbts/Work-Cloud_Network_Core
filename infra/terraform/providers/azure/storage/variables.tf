@@ -21,9 +21,9 @@ variable "tags" {
 
 # FinOps — replication and lifecycle
 variable "replication_type" {
-  description = "Storage account replication type. LRS for dev (lowest cost), ZRS for prod (zone-resilient, ~2x LRS cost)."
+  description = "Storage account replication type. Use geo-replicated values for the curated Checkov gate."
   type        = string
-  default     = "LRS"
+  default     = "GZRS"
 }
 
 variable "raw_artifact_retention_days" {

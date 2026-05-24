@@ -9,15 +9,23 @@ resource "azurerm_user_assigned_identity" "this" {
 
 
 resource "azurerm_key_vault" "this" {
-  name                       = local.key_vault_name
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  tenant_id                  = var.tenant_id
-  sku_name                   = "standard"
-  soft_delete_retention_days = var.key_vault_soft_delete_retention_days
-  purge_protection_enabled   = var.key_vault_purge_protection_enabled
-  rbac_authorization_enabled = true
-  tags                       = var.tags
+  #checkov:skip=CKV2_AZURE_32:Private endpoint is created in the security module and wired to this vault through its resource ID.
+  name                          = local.key_vault_name
+  location                      = var.location
+  resource_group_name           = var.resource_group_name
+  tenant_id                     = var.tenant_id
+  sku_name                      = "standard"
+  soft_delete_retention_days    = var.key_vault_soft_delete_retention_days
+  purge_protection_enabled      = var.key_vault_purge_protection_enabled
+  rbac_authorization_enabled    = true
+  public_network_access_enabled = false
+
+  network_acls {
+    bypass         = "AzureServices"
+    default_action = "Deny"
+  }
+
+  tags = var.tags
 }
 
 resource "azurerm_role_assignment" "terraform_key_vault_officer" {

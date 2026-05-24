@@ -35,3 +35,9 @@ variable "entra_client_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "secret_expiration_date" {
+  description = "RFC3339 expiration timestamp applied to Terraform-managed Key Vault secrets"
+  type        = string
+  default     = "2027-12-31T23:59:59Z"
+}

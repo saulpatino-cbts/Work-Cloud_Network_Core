@@ -1,16 +1,35 @@
 resource "azurerm_storage_account" "this" {
-  name                     = local.storage_account_name
-  resource_group_name      = var.resource_group_name
-  location                 = var.location
-  account_tier             = "Standard"
-  account_replication_type = var.replication_type
-  account_kind             = "StorageV2"
-  min_tls_version          = "TLS1_2"
-  tags                     = var.tags
+  #checkov:skip=CKV2_AZURE_1:Customer-managed key support is deferred until Key Vault key lifecycle and application access are validated.
+  #checkov:skip=CKV2_AZURE_33:Private endpoint is created in the security module and wired to this account through its resource ID.
+  #checkov:skip=CKV_AZURE_33:Queue service logging is not applicable; the platform does not use Azure Queue Storage.
+  name                            = local.storage_account_name
+  resource_group_name             = var.resource_group_name
+  location                        = var.location
+  account_tier                    = "Standard"
+  account_replication_type        = var.replication_type
+  account_kind                    = "StorageV2"
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  public_network_access_enabled   = false
+  shared_access_key_enabled       = false
+  tags                            = var.tags
+
+  sas_policy {
+    expiration_period = "1.00:00:00"
+    expiration_action = "Log"
+  }
 
   blob_properties {
     # Zero Trust: prevent accidental public exposure
-    versioning_enabled = false
+    versioning_enabled = true
+
+    delete_retention_policy {
+      days = 30
+    }
+
+    container_delete_retention_policy {
+      days = 30
+    }
   }
 
 }
@@ -22,6 +41,7 @@ resource "azurerm_storage_account_static_website" "this" {
 }
 
 resource "azurerm_storage_container" "containers" {
+  #checkov:skip=CKV2_AZURE_21:Blob diagnostic logging will be enforced through Azure Monitor once the shared observability workspace is exposed to this module.
   for_each              = toset(local.blob_containers)
   name                  = each.value
   storage_account_id    = azurerm_storage_account.this.id

@@ -69,8 +69,8 @@ module "storage" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  # FinOps: LRS cheapest replication; dev data is non-critical
-  replication_type            = "LRS"
+  # Strict parity with prod: GZRS satisfies the curated geo-replication gate.
+  replication_type            = "GZRS"
   raw_artifact_retention_days = 30 # move to Cool after 30 days, auto-delete after 365
   deliverable_retention_days  = 90
 }
@@ -254,6 +254,21 @@ module "security" {
   storage_account_name                   = module.storage.storage_account_name
 }
 
+resource "azurerm_subnet_network_security_group_association" "container_apps_infra" {
+  subnet_id                 = azurerm_subnet.container_apps_infra.id
+  network_security_group_id = module.security.network_security_group_id
+}
+
+resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
+  subnet_id                 = azurerm_subnet.private_endpoints.id
+  network_security_group_id = module.security.network_security_group_id
+}
+
+resource "azurerm_subnet_network_security_group_association" "database" {
+  subnet_id                 = azurerm_subnet.database.id
+  network_security_group_id = module.security.network_security_group_id
+}
+
 # ─── Database ─────────────────────────────────────────────────────────────────
 # PostgreSQL Flexible Server with VNet delegation (not private endpoint).
 # The postgres private DNS zone is created in the security module and its ID
@@ -268,4 +283,10 @@ module "database" {
   admin_username               = var.postgres_admin_username
   admin_password               = var.postgres_admin_password
   tags                         = local.tags
+
+  # Strict parity with prod: dev accepts higher cost so the deployment gate is uniform.
+  sku_name                     = "GP_Standard_D2s_v3"
+  storage_mb                   = 65536
+  backup_retention_days        = 30
+  geo_redundant_backup_enabled = true
 }

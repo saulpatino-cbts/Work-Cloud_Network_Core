@@ -69,8 +69,8 @@ module "storage" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  # FinOps: ZRS adds zone-resiliency at ~2x LRS cost — acceptable for prod
-  replication_type            = "ZRS"
+  # Strict durability: GZRS provides zone and geo redundancy.
+  replication_type            = "GZRS"
   raw_artifact_retention_days = 30 # move to Cool after 30 days
   deliverable_retention_days  = 90
 }
@@ -228,6 +228,21 @@ module "security" {
   private_endpoint_subnet_id             = azurerm_subnet.private_endpoints.id
   storage_account_id                     = module.storage.storage_account_id
   storage_account_name                   = module.storage.storage_account_name
+}
+
+resource "azurerm_subnet_network_security_group_association" "container_apps_infra" {
+  subnet_id                 = azurerm_subnet.container_apps_infra.id
+  network_security_group_id = module.security.network_security_group_id
+}
+
+resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
+  subnet_id                 = azurerm_subnet.private_endpoints.id
+  network_security_group_id = module.security.network_security_group_id
+}
+
+resource "azurerm_subnet_network_security_group_association" "database" {
+  subnet_id                 = azurerm_subnet.database.id
+  network_security_group_id = module.security.network_security_group_id
 }
 
 # ─── Container App RBAC ───────────────────────────────────────────────────────

@@ -7,15 +7,19 @@ locals {
 }
 
 resource "azurerm_key_vault_secret" "openai_endpoint" {
-  name         = "cna-azure-openai-endpoint"
-  value        = var.azure_openai_endpoint
-  key_vault_id = var.key_vault_id
+  name            = "cna-azure-openai-endpoint"
+  value           = var.azure_openai_endpoint
+  key_vault_id    = var.key_vault_id
+  content_type    = "Azure OpenAI endpoint"
+  expiration_date = var.secret_expiration_date
 }
 
 resource "azurerm_key_vault_secret" "appinsights_connection_string" {
-  name         = "cna-applicationinsights-connection-string"
-  value        = var.application_insights_connection_string
-  key_vault_id = var.key_vault_id
+  name            = "cna-applicationinsights-connection-string"
+  value           = var.application_insights_connection_string
+  key_vault_id    = var.key_vault_id
+  content_type    = "Application Insights connection string"
+  expiration_date = var.secret_expiration_date
 }
 
 resource "azurerm_role_assignment" "key_vault_secrets_officer" {

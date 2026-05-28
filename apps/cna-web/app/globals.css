@@ -16,7 +16,7 @@
   --color-navy-700: #142d52;
   --color-navy-600: #1a3a68;
   --color-navy-500: #2a5298;
-  --color-navy-400: #3d6db0;
+  --color-navy-400: var(--navy-400);
   --color-navy-300: #6a93c8;
   --color-navy-200: #a0bedd;
   --color-navy-100: #d1e2f0;
@@ -55,6 +55,9 @@
   --accent-glow:       rgba(62, 201, 184, 0.32);
   --accent-subtle:     rgba(62, 201, 184, 0.10);
   --accent-subtle-border: rgba(62, 201, 184, 0.30);
+
+  /* WAI-09: Contrast-compliant navy-400 for light mode */
+  --navy-400: #254b8c;
 }
 
 /* ── Design tokens — dark mode ────────────────────────────────────────────── */
@@ -73,6 +76,9 @@
     --header-bg:         rgba(6, 16, 30, 0.88);
     --header-border:     rgba(255, 255, 255, 0.07);
 
+    /* WAI-09: Contrast-compliant navy-400 for dark mode */
+    --navy-400: #79a2d6;
+
     --accent-subtle:     rgba(62, 201, 184, 0.12);
     --accent-subtle-border: rgba(62, 201, 184, 0.25);
   }
@@ -80,9 +86,13 @@
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
 
-html {
-  -webkit-font-smoothing:  antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* W3C-04: -webkit-font-smoothing is non-standard and disables ClearType on Windows.
+   Scope to macOS retina displays only where subpixel rendering is less relevant. */
+@media screen and (-webkit-min-device-pixel-ratio: 2) {
+  html {
+    -webkit-font-smoothing:  antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
 body {
@@ -103,21 +113,31 @@ body {
 /* ── Glass card ───────────────────────────────────────────────────────────── */
 
 .glass {
-  background:             var(--glass-bg);
-  border:                 1px solid var(--glass-border);
-  box-shadow:             var(--glass-shadow);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter:        blur(14px);
-  border-radius:          1rem;
+  background:    var(--glass-bg);
+  border:        1px solid var(--glass-border);
+  box-shadow:    var(--glass-shadow);
+  border-radius: 1rem;
+  /* W3C-06: opaque fallback for browsers without backdrop-filter support (Firefox < 103) */
+}
+/* W3C-06: progressive enhancement — only apply blur where supported */
+@supports (backdrop-filter: blur(1px)) {
+  .glass {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter:         blur(14px);
+  }
 }
 
 .glass-sm {
-  background:             var(--glass-bg);
-  border:                 1px solid var(--glass-border);
-  box-shadow:             var(--glass-shadow);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter:        blur(14px);
-  border-radius:          0.75rem;
+  background:    var(--glass-bg);
+  border:        1px solid var(--glass-border);
+  box-shadow:    var(--glass-shadow);
+  border-radius: 0.75rem;
+}
+@supports (backdrop-filter: blur(1px)) {
+  .glass-sm {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter:         blur(14px);
+  }
 }
 
 .glass-hover {
@@ -135,10 +155,14 @@ body {
 /* ── Header ───────────────────────────────────────────────────────────────── */
 
 .header-glass {
-  background:              var(--header-bg);
-  border-bottom:           1px solid var(--header-border);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter:         blur(20px);
+  background:    var(--header-bg);
+  border-bottom: 1px solid var(--header-border);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .header-glass {
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter:         blur(20px);
+  }
 }
 
 /* ── Teal CTA button ──────────────────────────────────────────────────────── */
@@ -162,6 +186,12 @@ body {
   background:   var(--accent-hover);
   box-shadow:   0 0 22px var(--accent-glow);
   transform:    translateY(-1px);
+}
+/* WAI-10: visible focus ring for keyboard navigation */
+.btn-teal:focus-visible {
+  outline:        2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius:  0.625rem;
 }
 .btn-teal:active  { transform: translateY(0); }
 .btn-teal:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -203,7 +233,22 @@ body {
 
 /* ── Thin teal scrollbar ──────────────────────────────────────────────────── */
 
+/* W3C-03: W3C standard scrollbar properties (Chrome 121+, Firefox, Safari 18.2+) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+/* Vendor-prefix fallback for older WebKit browsers */
 ::-webkit-scrollbar              { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track        { background: transparent; }
 ::-webkit-scrollbar-thumb        { background: var(--accent); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover  { background: var(--accent-hover); }
+
+/* WAI-10: Global focus-visible baseline — ensures ALL interactive elements have
+   a visible keyboard focus indicator. Component-level focus-visible rings take
+   precedence via specificity. */
+:focus-visible {
+  outline:        2px solid var(--accent);
+  outline-offset: 2px;
+}

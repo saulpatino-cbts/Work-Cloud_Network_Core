@@ -83,9 +83,13 @@ function InstanceRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100"
+        aria-expanded={open}
+        aria-controls={`finding-instance-${finding.id}`}
+        className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
       >
         <svg
+          aria-hidden="true"
+          focusable="false"
           className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${open ? "rotate-90" : ""}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
         >
@@ -101,7 +105,7 @@ function InstanceRow({
         )}
       </button>
       {open && (
-        <div className="pb-4 pl-5">
+        <div id={`finding-instance-${finding.id}`} className="pb-4 pl-5">
           <p className="mb-2.5 text-sm leading-relaxed text-navy-300">{finding.description}</p>
           {finding.recommendation && (
             <div className="rounded-lg border border-teal-900/30 bg-teal-900/10 px-3 py-2.5">
@@ -113,12 +117,13 @@ function InstanceRow({
                 href={finding.msLearnUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
               >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg aria-hidden="true" focusable="false" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 MS Learn docs
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
             </div>
           )}
@@ -270,7 +275,13 @@ export function FindingsClient({ findings }: Props) {
         </div>
 
         {/* Proportional severity bar */}
-        <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full">
+        <div
+          className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full"
+          role="img"
+          aria-label={`Severity breakdown: ${SEV_ORDER.filter((s) => sevCounts[s] > 0)
+            .map((s) => `${SEV_META[s].label}: ${sevCounts[s]}`)
+            .join(", ")}`}
+        >
           {SEV_ORDER.filter((s) => sevCounts[s] > 0).map((sev) => (
             <div
               key={sev}
@@ -291,15 +302,16 @@ export function FindingsClient({ findings }: Props) {
           <p className="mb-4 text-[10px] text-navy-600">Raw finding counts across all subscriptions and resources</p>
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
+              <caption className="sr-only">Risk Matrix — Severity counts by Category</caption>
               <thead>
                 <tr className="border-b border-navy-700/40">
-                  <th className="w-40 pb-2 text-left text-xs font-semibold text-navy-400">Category</th>
+                  <th scope="col" className="w-40 pb-2 text-left text-xs font-semibold text-navy-400">Category</th>
                   {SEV_ORDER.map((sev) => (
-                    <th key={sev} className="pb-2 text-center font-semibold text-navy-400">
+                    <th key={sev} scope="col" className="pb-2 text-center font-semibold text-navy-400">
                       {SEV_META[sev].label}
                     </th>
                   ))}
-                  <th className="pb-2 text-center font-semibold text-navy-400">Total</th>
+                  <th scope="col" className="pb-2 text-center font-semibold text-navy-400">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-navy-700/30">
@@ -309,7 +321,7 @@ export function FindingsClient({ findings }: Props) {
                   );
                   return (
                     <tr key={cat} className="hover:bg-navy-800/20">
-                      <td className="py-2 pr-4 text-xs font-medium text-navy-200">{cat}</td>
+                      <th scope="row" className="py-2 pr-4 text-left text-xs font-medium text-navy-200 font-normal">{cat}</th>
                       {SEV_ORDER.map((sev) => {
                         const count = findings.filter((f) => f.category === cat && f.severity === sev).length;
                         return (
@@ -338,13 +350,14 @@ export function FindingsClient({ findings }: Props) {
       <div className="glass p-4">
         <div className="flex flex-wrap items-center gap-2">
           {/* Severity toggles */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter findings by severity">
             <button
               type="button"
               onClick={() => setSevFilter("ALL")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              aria-pressed={sevFilter === "ALL"}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
                 sevFilter === "ALL"
-                  ? "bg-navy-600 text-navy-100"
+                  ? "bg-navy-600 text-navy-100 ring-2 ring-teal-500/50"
                   : "bg-navy-800/40 text-navy-400 hover:text-navy-300 hover:bg-navy-700/40"
               }`}
             >
@@ -355,9 +368,10 @@ export function FindingsClient({ findings }: Props) {
                 key={sev}
                 type="button"
                 onClick={() => setSevFilter(sevFilter === sev ? "ALL" : sev)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                aria-pressed={sevFilter === sev}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
                   sevFilter === sev
-                    ? SEV_META[sev].badge
+                    ? `${SEV_META[sev].badge} ring-2 ring-teal-500/50`
                     : "bg-navy-800/40 text-navy-400 hover:text-navy-300 hover:bg-navy-700/40"
                 }`}
               >
@@ -374,7 +388,7 @@ export function FindingsClient({ findings }: Props) {
               aria-label="Filter by category"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="ALL">All Categories</option>
               {categories.map((cat) => (
@@ -385,7 +399,7 @@ export function FindingsClient({ findings }: Props) {
               aria-label="Filter by source"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value as "ALL" | "LIVE" | "AI")}
-              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="rounded-lg border border-navy-700/40 bg-navy-800/40 px-3 py-1 text-xs text-navy-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="ALL">All Sources</option>
               <option value="LIVE">Live Discovery</option>
@@ -428,10 +442,11 @@ export function FindingsClient({ findings }: Props) {
                 <button
                   type="button"
                   onClick={() => setExpandedGroupKey(isExpanded ? null : groupKey)}
-                  className={`w-full px-5 py-3.5 text-left transition-colors ${
+                  aria-expanded={isExpanded}
+                  aria-controls={`finding-group-${groupKey}`}
+                  className={`w-full px-5 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${
                     isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"
                   }`}
-                  aria-expanded={isExpanded}
                 >
                   <div className="flex items-start gap-3">
                     <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${meta.badge}`}>
@@ -460,6 +475,8 @@ export function FindingsClient({ findings }: Props) {
                       </div>
                     </div>
                     <svg
+                      aria-hidden="true"
+                      focusable="false"
                       className={`mt-0.5 h-4 w-4 shrink-0 text-navy-600 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                       fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                     >
@@ -470,7 +487,7 @@ export function FindingsClient({ findings }: Props) {
 
                 {/* Expanded content */}
                 {isExpanded && (
-                  <div className="divide-y divide-navy-700/20 bg-navy-800/10">
+                  <div id={`finding-group-${groupKey}`} className="divide-y divide-navy-700/20 bg-navy-800/10">
                     {isGroup ? (
                       /* Multiple affected resources — one row per resource */
                       dedupedInstances.map(({ label, finding, count }) => (
@@ -496,11 +513,12 @@ export function FindingsClient({ findings }: Props) {
                               {rep.recommendation}
                             </p>
                             <a href={rep.msLearnUrl} target="_blank" rel="noopener noreferrer"
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-400 hover:text-teal-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                              <svg aria-hidden="true" focusable="false" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
                               MS Learn docs
+                              <span className="sr-only"> (opens in new tab)</span>
                             </a>
                           </div>
                         )}

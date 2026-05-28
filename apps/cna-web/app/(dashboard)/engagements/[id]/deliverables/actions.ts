@@ -79,6 +79,26 @@ function buildTitle(type: string, clientOrg: string, seqNum: number): string {
   return `${clientOrg} — ${label} — ${date} — #${seqNum}`;
 }
 
+// OWA-07: SSRF Defense - Validate that external image URLs are restricted to trusted domains
+function validateLogoUrl(url: string | null): { error?: string } | null {
+  if (!url || url.trim() === "") return null;
+  try {
+    if (!url.startsWith("/")) {
+      const parsed = new URL(url);
+      const allowedLogoHosts = ["cdn.cbts.com", "storage.azure.com", "githubusercontent.com", "cbts.com"];
+      const isAllowed = allowedLogoHosts.some(
+        (host) => parsed.hostname === host || parsed.hostname.endsWith("." + host)
+      );
+      if (!isAllowed) {
+        return { error: "Logo URL must be hosted on an approved CDN (e.g., *.cbts.com)." };
+      }
+    }
+    return null;
+  } catch {
+    return { error: "Invalid customer logo URL format." };
+  }
+}
+
 // ─── Generate single assessment ───────────────────────────────────────────────
 
 export async function generateDeliverable(
@@ -91,6 +111,8 @@ export async function generateDeliverable(
   const engagementId = formData.get("engagementId") as string | null;
   const type = formData.get("type") as string | null;
   const customerLogoUrl = (formData.get("customerLogoUrl") as string | null) ?? null;
+  const validationError = validateLogoUrl(customerLogoUrl);
+  if (validationError) return validationError;
 
   if (!engagementId || !type) return { error: "Missing required fields." };
 
@@ -188,6 +210,9 @@ export async function generateAllAssessments(
 
   const engagementId = formData.get("engagementId") as string | null;
   const customerLogoUrl = (formData.get("customerLogoUrl") as string | null) ?? null;
+  const validationError = validateLogoUrl(customerLogoUrl);
+  if (validationError) return validationError;
+
   if (!engagementId) return { error: "Missing engagement ID." };
 
   const member = await prisma.engagementMember.findUnique({

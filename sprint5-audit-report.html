@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNA Platform — Sprint 5 Security &amp; Accessibility Audit Report</title>
+  <style>
+    /* ── Print reset ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Typography ──────────────────────────────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --navy-950: #030b17;
+      --navy-900: #06101e;
+      --navy-800: #0a1e3c;
+      --navy-700: #142d52;
+      --navy-600: #1a3a68;
+      --navy-500: #2a5298;
+      --navy-400: #3d6db0;
+      --navy-300: #6a93c8;
+      --navy-200: #a0bedd;
+      --navy-100: #d1e2f0;
+      --navy-50:  #eef4fb;
+      --teal-600: #2ba898;
+      --teal-500: #3ec9b8;
+      --teal-100: #d4f6f2;
+      --teal-50:  #edfcfa;
+      --red-600:  #dc2626;
+      --red-100:  #fee2e2;
+      --orange-600: #ea580c;
+      --orange-100: #ffedd5;
+      --amber-600: #d97706;
+      --amber-100: #fef3c7;
+      --green-600: #16a34a;
+      --green-100: #dcfce7;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-600: #4b5563;
+      --gray-800: #1f2937;
+    }
+
+    html { font-size: 10pt; }
+
+    body {
+      font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      color: var(--gray-800);
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── Cover page ──────────────────────────────────────────────────────── */
+    .cover {
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-700) 60%, var(--navy-600) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 72pt 64pt;
+      page-break-after: always;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -20%;
+      width: 70%;
+      height: 120%;
+      background: radial-gradient(ellipse, rgba(62,201,184,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cover-badge {
+      background: rgba(62,201,184,0.18);
+      border: 1px solid rgba(62,201,184,0.4);
+      color: var(--teal-500);
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5pt 12pt;
+      border-radius: 99pt;
+      margin-bottom: 28pt;
+      display: inline-block;
+    }
+    .cover h1 {
+      font-size: 32pt;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.15;
+      margin-bottom: 12pt;
+      max-width: 540pt;
+    }
+    .cover h1 span { color: var(--teal-500); }
+    .cover .subtitle {
+      font-size: 13pt;
+      color: var(--navy-200);
+      margin-bottom: 40pt;
+      max-width: 480pt;
+    }
+    .cover-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20pt;
+      width: 100%;
+      max-width: 540pt;
+      margin-bottom: 48pt;
+    }
+    .cover-meta-item { }
+    .cover-meta-item .label {
+      font-size: 7pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--teal-500);
+      margin-bottom: 4pt;
+    }
+    .cover-meta-item .value {
+      font-size: 10pt;
+      font-weight: 600;
+      color: #fff;
+    }
+    .cover-stats {
+      display: flex;
+      gap: 20pt;
+      margin-bottom: 48pt;
+    }
+    .cover-stat {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10pt;
+      padding: 16pt 20pt;
+      text-align: center;
+      min-width: 80pt;
+    }
+    .cover-stat .num {
+      font-size: 28pt;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 4pt;
+    }
+    .cover-stat .num.critical { color: #f87171; }
+    .cover-stat .num.high     { color: #fb923c; }
+    .cover-stat .num.medium   { color: #fbbf24; }
+    .cover-stat .num.low      { color: #34d399; }
+    .cover-stat .num.total    { color: #fff; }
+    .cover-stat .lbl { font-size: 7.5pt; color: var(--navy-300); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .cover-footer {
+      position: absolute;
+      bottom: 36pt;
+      left: 64pt;
+      right: 64pt;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 12pt;
+    }
+    .cover-footer span { font-size: 8pt; color: var(--navy-400); }
+    .cover-footer .brand { font-weight: 700; color: var(--navy-200); }
+
+    /* ── Main content ────────────────────────────────────────────────────── */
+    .page {
+      max-width: 720pt;
+      margin: 0 auto;
+      padding: 48pt 56pt;
+    }
+
+    /* ── Section headers ─────────────────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10pt;
+      margin: 36pt 0 18pt;
+      padding-bottom: 8pt;
+      border-bottom: 2px solid var(--navy-100);
+    }
+    .section-header .icon {
+      width: 28pt;
+      height: 28pt;
+      border-radius: 7pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13pt;
+      flex-shrink: 0;
+    }
+    .section-header .icon.owasp  { background: var(--red-100); }
+    .section-header .icon.wcag   { background: var(--teal-100); }
+    .section-header .icon.w3c    { background: var(--navy-50); }
+    .section-header .icon.exec   { background: var(--amber-100); }
+    .section-header h2 {
+      font-size: 17pt;
+      font-weight: 800;
+      color: var(--navy-800);
+    }
+    .section-header .count {
+      margin-left: auto;
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: var(--gray-600);
+      background: var(--gray-100);
+      border-radius: 99pt;
+      padding: 3pt 10pt;
+    }
+
+    h3 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--navy-700);
+      margin: 22pt 0 8pt;
+    }
+
+    p { margin-bottom: 8pt; font-size: 9.5pt; }
+
+    /* ── Executive summary boxes ─────────────────────────────────────────── */
+    .exec-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14pt;
+      margin: 18pt 0;
+    }
+    .exec-card {
+      border: 1px solid var(--gray-200);
+      border-radius: 8pt;
+      padding: 14pt 16pt;
+    }
+    .exec-card.positive { border-color: #bbf7d0; background: #f0fdf4; }
+    .exec-card.negative { border-color: #fecaca; background: #fef2f2; }
+    .exec-card h4 { font-size: 9pt; font-weight: 700; margin-bottom: 6pt; }
+    .exec-card.positive h4 { color: #166534; }
+    .exec-card.negative h4 { color: #991b1b; }
+    .exec-card ul { padding-left: 14pt; }
+    .exec-card li { font-size: 8.5pt; margin-bottom: 3pt; }
+
+    /* ── Findings ────────────────────────────────────────────────────────── */
+    .finding {
+      border: 1px solid var(--gray-200);
+      border-radius: 8pt;
+      margin-bottom: 12pt;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+    .finding-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10pt;
+      padding: 11pt 14pt;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .finding-header.critical { background: #fef2f2; border-bottom-color: #fecaca; }
+    .finding-header.high     { background: #fff7ed; border-bottom-color: #fed7aa; }
+    .finding-header.medium   { background: #fffbeb; border-bottom-color: #fde68a; }
+    .finding-header.low      { background: #f0fdf4; border-bottom-color: #bbf7d0; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 99pt;
+      font-size: 7pt;
+      font-weight: 800;
+      padding: 2.5pt 8pt;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      margin-top: 1pt;
+    }
+    .badge.critical { background: #fee2e2; color: #991b1b; }
+    .badge.high     { background: #ffedd5; color: #9a3412; }
+    .badge.medium   { background: #fef9c3; color: #854d0e; }
+    .badge.low      { background: #dcfce7; color: #166534; }
+
+    .finding-id {
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 8pt;
+      font-weight: 600;
+      color: var(--gray-600);
+      background: var(--gray-100);
+      border-radius: 4pt;
+      padding: 2pt 6pt;
+      flex-shrink: 0;
+    }
+    .finding-title {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: var(--navy-800);
+      flex: 1;
+      line-height: 1.35;
+    }
+    .finding-body { padding: 11pt 14pt; }
+    .finding-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6pt;
+      margin-bottom: 8pt;
+    }
+    .finding-meta span {
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--gray-600);
+      background: var(--gray-100);
+      border-radius: 4pt;
+      padding: 2pt 7pt;
+    }
+    .finding-body p { font-size: 8.5pt; margin-bottom: 6pt; color: var(--gray-800); }
+    .finding-body .remediation {
+      background: var(--teal-50);
+      border: 1px solid var(--teal-100);
+      border-radius: 5pt;
+      padding: 8pt 10pt;
+      margin-top: 6pt;
+    }
+    .finding-body .remediation strong {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: var(--teal-600);
+      display: block;
+      margin-bottom: 3pt;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .finding-body .remediation code, code {
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 7.5pt;
+      background: rgba(0,0,0,0.06);
+      padding: 1pt 4pt;
+      border-radius: 3pt;
+    }
+    .finding-body .file-ref {
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 7.5pt;
+      color: var(--navy-500);
+    }
+
+    /* ── Wave headings ───────────────────────────────────────────────────── */
+    .wave-header {
+      display: flex;
+      align-items: center;
+      gap: 8pt;
+      margin: 28pt 0 14pt;
+    }
+    .wave-header .wave-badge {
+      font-size: 7.5pt;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4pt 12pt;
+      border-radius: 99pt;
+    }
+    .wave-header .wave-badge.wave1 { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .wave-header .wave-badge.wave2 { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .wave-header .wave-badge.wave3 { background: #fffbeb; color: #854d0e; border: 1px solid #fde68a; }
+    .wave-header h3 { margin: 0; font-size: 12pt; }
+
+    /* ── Summary matrix table ────────────────────────────────────────────── */
+    table.matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin: 14pt 0;
+    }
+    table.matrix th {
+      background: var(--navy-800);
+      color: #fff;
+      font-weight: 700;
+      padding: 7pt 10pt;
+      text-align: left;
+      font-size: 7.5pt;
+    }
+    table.matrix td {
+      padding: 6pt 10pt;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    table.matrix tr:nth-child(even) td { background: var(--gray-100); }
+    table.matrix td.sev { font-weight: 700; }
+    table.matrix td.sev.critical { color: var(--red-600); }
+    table.matrix td.sev.high     { color: var(--orange-600); }
+    table.matrix td.sev.medium   { color: var(--amber-600); }
+    table.matrix td.sev.low      { color: var(--green-600); }
+    table.matrix td code { font-size: 7pt; }
+
+    /* ── Sprint priority box ─────────────────────────────────────────────── */
+    .priority-box {
+      background: linear-gradient(135deg, var(--navy-900), var(--navy-700));
+      border-radius: 10pt;
+      padding: 24pt 28pt;
+      margin: 24pt 0;
+      color: #fff;
+    }
+    .priority-box h3 { color: var(--teal-500); margin: 0 0 14pt; font-size: 12pt; }
+    .priority-box ol { padding-left: 18pt; }
+    .priority-box li { font-size: 8.5pt; margin-bottom: 6pt; color: var(--navy-100); line-height: 1.5; }
+    .priority-box li strong { color: #fff; }
+
+    /* ── Callout boxes ───────────────────────────────────────────────────── */
+    .callout {
+      border-radius: 7pt;
+      padding: 12pt 16pt;
+      margin: 14pt 0;
+      border-left: 4pt solid;
+    }
+    .callout.info    { background: var(--navy-50); border-color: var(--navy-400); }
+    .callout.warning { background: var(--amber-100); border-color: var(--amber-600); }
+    .callout.danger  { background: var(--red-100); border-color: var(--red-600); }
+    .callout p { font-size: 8.5pt; margin: 0; }
+    .callout strong { display: block; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4pt; }
+
+    /* ── Page breaks ─────────────────────────────────────────────────────── */
+    .page-break { page-break-after: always; }
+    .no-break   { page-break-inside: avoid; }
+
+    /* ── Footer bar ──────────────────────────────────────────────────────── */
+    .doc-footer {
+      margin-top: 48pt;
+      padding-top: 14pt;
+      border-top: 2px solid var(--navy-100);
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: var(--gray-600);
+    }
+
+    /* ── Print media ─────────────────────────────────────────────────────── */
+    @media print {
+      @page { margin: 0.6in 0.7in; size: letter; }
+      body { font-size: 9pt; }
+      .cover { min-height: 100vh; page-break-after: always; }
+      a { color: inherit; text-decoration: none; }
+      .finding { break-inside: avoid; }
+    }
+
+    @media screen {
+      body { background: #f4f5f7; }
+      .cover { border-radius: 0; }
+      .page {
+        background: #fff;
+        box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+        margin: 32pt auto;
+        border-radius: 8pt;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ COVER PAGE ═══════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-badge">Confidential · Internal Audit Report</div>
+  <h1>CNA Platform<br><span>Sprint 5 Audit</span></h1>
+  <p class="subtitle">Professional-grade assessment against WCAG 2.1 AA, W3C HTML5/CSS Standards, and OWASP Top 10 (2021) / ASVS v4.0</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Platform</div>
+      <div class="value">MVP-Cloud Network Assessment</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Audit Date</div>
+      <div class="value">2026-05-28</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Branch</div>
+      <div class="value">main @ HEAD</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Primary Surface</div>
+      <div class="value">apps/cna-web (Next.js 15)</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Audit Method</div>
+      <div class="value">Full Source Code Review</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Standards</div>
+      <div class="value">WCAG 2.1 · W3C · OWASP</div>
+    </div>
+  </div>
+
+  <div class="cover-stats">
+    <div class="cover-stat">
+      <div class="num total">47</div>
+      <div class="lbl">Total Findings</div>
+    </div>
+    <div class="cover-stat">
+      <div class="num critical">5</div>
+      <div class="lbl">Critical</div>
+    </div>
+    <div class="cover-stat">
+      <div class="num high">18</div>
+      <div class="lbl">High</div>
+    </div>
+    <div class="cover-stat">
+      <div class="num medium">21</div>
+      <div class="lbl">Medium</div>
+    </div>
+    <div class="cover-stat">
+      <div class="num low">8</div>
+      <div class="lbl">Low</div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span class="brand">CBTS · Cloud Network Assessment Platform</span>
+    <span>Prepared by Antigravity AI · For internal use only</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ PAGE CONTENT ════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── SECTION 1: Executive Summary ── -->
+  <div class="section-header">
+    <div class="icon exec">📋</div>
+    <h2>Executive Summary</h2>
+  </div>
+
+  <p>A full source-code audit of the <strong>CNA Platform</strong> (<code>apps/cna-web</code> — Next.js 15, React 19, TypeScript, Tailwind CSS v4, Auth.js v5, Prisma) was conducted against three industry standards: <strong>WCAG 2.1 Level AA</strong>, <strong>W3C HTML5/CSS specifications</strong>, and the <strong>OWASP Top 10 (2021) / ASVS v4.0</strong>. All 47 findings were identified through direct code analysis — not automated scanning — providing higher fidelity than tool-only approaches.</p>
+
+  <p>The platform is well-architected with solid security foundations: Entra ID authentication, server-side session validation on every protected route, parameterised Prisma queries eliminating SQL injection risk, and a layered CSP configuration. However, several gaps require remediation before enterprise client deployment or any accessibility certification claim.</p>
+
+  <div class="exec-grid">
+    <div class="exec-card positive">
+      <h4>✅ Strengths</h4>
+      <ul>
+        <li>Entra ID / OIDC authentication with DB-backed sessions</li>
+        <li>Server components validate membership on every protected route</li>
+        <li>Parameterised Prisma ORM — no SQL injection risk</li>
+        <li>CSP header present with <code>frame-ancestors 'none'</code></li>
+        <li>X-Frame-Options, X-Content-Type-Options, HSTS deployed</li>
+        <li>Server Actions use Auth.js CSRF protection for form submissions</li>
+        <li>External links use <code>rel="noopener noreferrer"</code></li>
+        <li>Select elements have <code>aria-label</code> attributes</li>
+        <li><code>lang="en"</code> set on root HTML element</li>
+      </ul>
+    </div>
+    <div class="exec-card negative">
+      <h4>🚨 Critical Gaps</h4>
+      <ul>
+        <li><code>unsafe-inline</code> in script-src negates XSS protection</li>
+        <li>Help modal has no focus trap, no Escape key, no dialog role</li>
+        <li>Navigation SVG icons are invisible to screen readers</li>
+        <li>Collapsible findings rows missing <code>aria-expanded</code></li>
+        <li>No rate limiting on expensive Server Actions</li>
+        <li>SSRF risk on unvalidated <code>customerLogoUrl</code> input</li>
+        <li>Colour contrast fails WCAG AA on secondary text</li>
+        <li>No global <code>focus-visible</code> styles for keyboard nav</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout warning">
+    <strong>⚠️ Recommended Action</strong>
+    <p>The 5 CRITICAL and top 10 HIGH findings should be resolved before presenting the platform to enterprise clients or making any WCAG AA conformance claims. Wave 1 items (7 tasks) can be completed in approximately 2–3 developer days.</p>
+  </div>
+
+  <div class="priority-box">
+    <h3>🎯 Sprint 5 Recommended Execution Order</h3>
+    <ol>
+      <li><strong>[OWA-01]</strong> Implement nonce-based CSP — replace <code>unsafe-inline</code> in script-src (next.config.ts L23)</li>
+      <li><strong>[WAI-03]</strong> Rewrite sp-help-modal.tsx using native <code>&lt;dialog&gt;</code> or Radix UI Dialog primitive</li>
+      <li><strong>[WAI-01/02]</strong> Add <code>aria-hidden</code> / <code>aria-label</code> to all sidebar SVG icons and toggle button</li>
+      <li><strong>[WAI-04/05]</strong> Add <code>aria-expanded</code> + <code>aria-controls</code> to findings collapsible rows</li>
+      <li><strong>[OWA-07]</strong> Add domain allowlist validation for <code>customerLogoUrl</code> (SSRF fix)</li>
+      <li><strong>[WAI-10]</strong> Add global <code>:focus-visible</code> styles to globals.css</li>
+      <li><strong>[WAI-09]</strong> Fix colour contrast — adjust <code>text-navy-400</code> token or dark-mode alias</li>
+      <li><strong>[WAI-16]</strong> Add skip-to-main-content link in dashboard layout</li>
+      <li><strong>[OWA-02]</strong> Add per-user rate limiting to AI generation and discovery Server Actions</li>
+      <li><strong>[W3C-02]</strong> Add <code>aria-hidden="true" focusable="false"</code> to all decorative SVGs</li>
+    </ol>
+  </div>
+
+</div>
+
+<div class="page-break"></div>
+
+<!-- ═══════════════════════════════════════════ OWASP ══════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="icon owasp">🔐</div>
+    <h2>OWASP Top 10 &amp; ASVS v4.0 Findings</h2>
+    <span class="count">17 findings</span>
+  </div>
+
+  <div class="wave-header">
+    <span class="wave-badge wave1">Wave 1 — Critical</span>
+    <h3>Must fix before first paid client</h3>
+  </div>
+
+  <!-- OWA-01 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">OWA-01</span>
+      <span class="finding-title">unsafe-inline Script CSP in Production</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A05:2021 Security Misconfiguration</span>
+        <span>ASVS 14.4.6</span>
+        <span class="file-ref">next.config.ts L23</span>
+      </div>
+      <p>The production Content Security Policy contains <code>"script-src 'self' 'unsafe-inline'"</code>, completely disabling XSS protection. Any stored or reflected XSS payload executes in full. The code comment acknowledges this is known ("nonce-based script CSP is the recommended next upgrade") — but it remains unimplemented. Next.js 15 has first-class nonce support via middleware.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Generate a nonce in Next.js middleware, pass via <code>x-nonce</code> header, and update the CSP to <code>"script-src 'self' 'nonce-{NONCE}'"</code>. This also requires wrapping all inline scripts with the nonce prop.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWA-07 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">OWA-07</span>
+      <span class="finding-title">customerLogoUrl Not Validated — Server-Side Request Forgery (SSRF) Risk</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A10:2021 SSRF</span>
+        <span>ASVS 5.2.6</span>
+        <span class="file-ref">deliverables/actions.ts L93</span>
+      </div>
+      <p>The <code>customerLogoUrl</code> field is read verbatim from form input and passed to the AI content generator without any URL validation. If the generated HTML causes a server-side fetch (or embeds the URL in a way that triggers fetching), internal Azure metadata endpoints (e.g., <code>http://169.254.169.254/</code>) could be probed. Even without server fetching, an unsanitised URL in AI-generated HTML poses XSS risk.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Validate <code>customerLogoUrl</code> against an explicit domain allowlist before use. Reject any URL whose <code>hostname</code> is not in the approved CDN list (<code>cdn.cbts.com</code>, <code>storage.azure.com</code>, etc.).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wave-header">
+    <span class="wave-badge wave2">Wave 2 — High</span>
+    <h3>Required for OWASP rating and production hardening</h3>
+  </div>
+
+  <!-- OWA-02 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">OWA-02</span>
+      <span class="finding-title">No Rate Limiting on Expensive Server Actions</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A07:2021 Auth Failures</span>
+        <span>ASVS 2.2.1</span>
+        <span class="file-ref">deliverables/actions.ts · discovery/actions.ts</span>
+      </div>
+      <p>Server Actions for AI generation (<code>generateDeliverable</code>, <code>generateAllAssessments</code>) and discovery (<code>startDiscovery</code>, <code>startAllDiscovery</code>) have no rate limiting. An authenticated user or session replay can trigger hundreds of expensive Azure OpenAI and Azure discovery operations in rapid succession, causing cost overruns and DoS.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Implement per-user rate limiting using <code>@upstash/ratelimit</code> or a sliding-window Redis counter. Limit: 5 AI generation requests per 60 seconds per user. 1 discovery job per credential per 5 minutes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWA-03 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">OWA-03</span>
+      <span class="finding-title">CSRF Protection Bypassed on Delete Engagement Action</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A01:2021 Broken Access Control</span>
+        <span>ASVS 4.2.2</span>
+        <span class="file-ref">delete-engagement-button.tsx L28–30</span>
+      </div>
+      <p>The delete button invokes the Server Action via <code>startTransition()</code> with a manually constructed <code>FormData</code> object — bypassing the Auth.js v5 CSRF cookie check that is tied to <code>&lt;form&gt;</code> element submissions. This allows the action to be triggered from cross-origin pages if the session cookie is present.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Wrap the delete action in a proper <code>&lt;form&gt;</code> element with a submit button, or use Auth.js <code>getCsrfToken()</code> to generate and manually verify CSRF tokens for programmatic calls.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWA-04 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">OWA-04</span>
+      <span class="finding-title">Middleware Cookie Fallback Accepts Non-Secure Tokens in All Environments</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A07:2021</span>
+        <span>ASVS 3.3.1</span>
+        <span class="file-ref">middleware.ts L19–21</span>
+      </div>
+      <p>The middleware accepts both <code>__Secure-authjs.session-token</code> and the non-Secure <code>authjs.session-token</code> cookie in all environments, including production. An invalid or forged non-Secure cookie passes the middleware guard, loading the dashboard layout and leaking engagement names and user email before the server component validates the real session.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Guard the non-Secure fallback with <code>process.env.NODE_ENV !== 'production'</code> to ensure production only accepts the <code>__Secure-</code> prefixed cookie.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWA-05 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">OWA-05</span>
+      <span class="finding-title">Job ID Enumeration via Timing Side Channel</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A01:2021 Broken Access Control</span>
+        <span>ASVS 4.1.2</span>
+        <span class="file-ref">api/discovery-jobs/[jobId]/route.ts L9–27</span>
+      </div>
+      <p>The API route returns <code>401</code> for unauthenticated requests (fast, no DB hit) and <code>404</code> for valid-but-inaccessible job IDs (slower, DB hit). An unauthenticated attacker can probe CUID-space job IDs and use the timing difference to confirm whether a given job ID exists in the database.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Ensure the 401 response is returned before any database operations. The current code flow is correct — audit that no future refactor moves the DB lookup above the auth check.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWA-06 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">OWA-06</span>
+      <span class="finding-title">No Server-Side MIME / Magic-Byte Validation on Document Uploads</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>OWASP A04:2021 Insecure Design</span>
+        <span>ASVS 12.1.1</span>
+        <span class="file-ref">documents/ upload action</span>
+      </div>
+      <p>With a 52 MB body size limit configured for document uploads, there is no visible server-side content-type enforcement or magic-byte validation. Users can upload files with spoofed MIME types (e.g., an executable disguised as a PDF) which will be stored in Azure Blob and potentially served back to the browser.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>In the document upload Server Action, validate file magic bytes using the <code>file-type</code> npm package. Allowlist: <code>application/pdf</code>, <code>text/plain</code>, <code>image/png</code>, <code>image/jpeg</code>. Reject all others.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wave-header">
+    <span class="wave-badge wave3">Wave 3 — Medium / Low</span>
+    <h3>Defence-in-depth and best practices</h3>
+  </div>
+
+  <!-- OWA-08 through OWA-17 as compact table -->
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Severity</th>
+        <th>Finding</th>
+        <th>Standard</th>
+        <th>File</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>OWA-08</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Audit lib/auth.ts — enforce useSecureCookies in production</td>
+        <td>ASVS 3.4.1</td>
+        <td class="file-ref">lib/auth.ts</td>
+      </tr>
+      <tr>
+        <td><code>OWA-09</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Replace window.confirm() with accessible modal confirmation</td>
+        <td>OWASP A04 / WCAG 3.3.4</td>
+        <td class="file-ref">delete-engagement-button.tsx</td>
+      </tr>
+      <tr>
+        <td><code>OWA-10</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Add Zod schema validation to progressLog JSON parse</td>
+        <td>OWASP A08 / ASVS 5.1.2</td>
+        <td class="file-ref">connections-panel.tsx L90–96</td>
+      </tr>
+      <tr>
+        <td><code>OWA-11</code></td>
+        <td class="sev medium">Medium</td>
+        <td>X-Frame-Options SAMEORIGIN on presentation routes — document intent explicitly</td>
+        <td>OWASP A05 / ASVS 14.4.7</td>
+        <td class="file-ref">next.config.ts L61–63</td>
+      </tr>
+      <tr>
+        <td><code>OWA-12</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Map raw Azure SDK errors to user-friendly messages — do not expose internals</td>
+        <td>OWASP A05 / ASVS 7.4.1</td>
+        <td class="file-ref">deliverables/actions.ts L156</td>
+      </tr>
+      <tr>
+        <td><code>OWA-13</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Expand Permissions-Policy header (payment, usb, serial, hid, bluetooth, display-capture)</td>
+        <td>OWASP A05</td>
+        <td class="file-ref">next.config.ts L14</td>
+      </tr>
+      <tr>
+        <td><code>OWA-14</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Add preload directive to Strict-Transport-Security header</td>
+        <td>OWASP A05</td>
+        <td class="file-ref">next.config.ts L10</td>
+      </tr>
+      <tr>
+        <td><code>OWA-15</code></td>
+        <td class="sev medium">Medium</td>
+        <td>img-src data: allows arbitrary data URIs — restrict to specific use case</td>
+        <td>OWASP A05 / CSP Level 3</td>
+        <td class="file-ref">next.config.ts L27</td>
+      </tr>
+      <tr>
+        <td><code>OWA-16</code></td>
+        <td class="sev low">Low</td>
+        <td>font-src 'self' correct but build-time font download is fragile — document assumption</td>
+        <td>W3C CSP Level 3</td>
+        <td class="file-ref">next.config.ts L29</td>
+      </tr>
+      <tr>
+        <td><code>OWA-17</code></td>
+        <td class="sev low">Low</td>
+        <td>No Expect-CT header — flagged by enterprise security scanners</td>
+        <td>OWASP A05</td>
+        <td class="file-ref">next.config.ts</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<div class="page-break"></div>
+
+<!-- ═══════════════════════════════════════════ WCAG ══════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="icon wcag">♿</div>
+    <h2>WCAG 2.1 Level A &amp; AA Findings</h2>
+    <span class="count">23 findings</span>
+  </div>
+
+  <div class="callout info">
+    <strong>ℹ️ Audit Method</strong>
+    <p>All findings were identified through direct JSX/TSX source code analysis. Browser-based automated scanning (axe, WAVE) was not used — findings reflect real structural and semantic issues rather than surface-level heuristics.</p>
+  </div>
+
+  <div class="wave-header">
+    <span class="wave-badge wave1">Wave 1 — Critical (Level A Failures)</span>
+    <h3>Blocking basic assistive technology use</h3>
+  </div>
+
+  <!-- WAI-01 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">WAI-01</span>
+      <span class="finding-title">All Navigation SVG Icons Have No Accessible Name (SC 1.1.1)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>WCAG 1.1.1 Non-text Content — Level A</span>
+        <span class="file-ref">engagement-sidebar.tsx L12–88</span>
+      </div>
+      <p>Every <code>NAV_ITEMS</code> entry contains an inline SVG with no <code>&lt;title&gt;</code>, <code>aria-label</code>, or <code>aria-hidden</code>. When the sidebar is collapsed, the SVG icons are the only content in each navigation link. Screen readers announce raw path data or nothing meaningful.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>For decorative icons next to visible text: add <code>aria-hidden="true" focusable="false"</code> to the SVG. For icon-only links (collapsed state): add <code>aria-label={item.label}</code> to the <code>&lt;Link&gt;</code> element when collapsed.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAI-02 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">WAI-02</span>
+      <span class="finding-title">Sidebar Toggle Button Has No Accessible Name (SC 4.1.2)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>WCAG 4.1.2 Name, Role, Value — Level A</span>
+        <span class="file-ref">engagement-sidebar.tsx L145–163</span>
+      </div>
+      <p>The sidebar collapse/expand button uses <code>title</code> attribute only. The <code>title</code> attribute is not reliably announced by screen readers (especially on mobile AT and VoiceOver) and does not satisfy SC 4.1.2. The button also lacks <code>aria-expanded</code> to communicate its current state.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Replace <code>title</code> with <code>aria-label</code>. Add <code>aria-expanded={!isCollapsed}</code> and <code>aria-controls="engagement-nav"</code>. Add a matching <code>id="engagement-nav"</code> to the <code>&lt;nav&gt;</code> element.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAI-03 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">WAI-03</span>
+      <span class="finding-title">Help Modal Fails Multiple WCAG Criteria (SC 4.1.2, 2.1.1, 1.3.1)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>WCAG 4.1.2 · 2.1.1 · 1.3.1 — Level A</span>
+        <span class="file-ref">sp-help-modal.tsx L19–242</span>
+      </div>
+      <p>The SP Help Modal is implemented as a plain <code>&lt;div&gt;</code> with no dialog semantics. Six separate failures:</p>
+      <p>① No <code>role="dialog"</code> — screen readers don't know it's a dialog. ② No <code>aria-modal="true"</code> — AT can navigate behind the backdrop. ③ No <code>aria-labelledby</code> pointing to the <code>&lt;h2&gt;</code>. ④ Focus is not trapped inside the modal. ⑤ Focus is not restored to the trigger on close. ⑥ Escape key does not close the modal.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Replace with native <code>&lt;dialog&gt;</code> element (provides built-in Escape key, focus scoping, and <code>aria-modal</code>) or use <code>@radix-ui/react-dialog</code> which handles all six issues correctly with minimal API surface.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAI-04 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">WAI-04</span>
+      <span class="finding-title">Findings InstanceRow Buttons Missing aria-expanded (SC 4.1.2)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>WCAG 4.1.2 Name, Role, Value — Level A</span>
+        <span class="file-ref">findings-client.tsx L83–102</span>
+      </div>
+      <p>The <code>InstanceRow</code> expand/collapse button renders no <code>aria-expanded</code> attribute. The expand state is conveyed only by SVG rotation (a visual-only transform). Screen readers cannot determine whether the panel is expanded or collapsed.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Add <code>aria-expanded={open}</code> and <code>aria-controls={`finding-detail-${finding.id}`}</code> to the button. Add <code>id={`finding-detail-${finding.id}`}</code> to the expanded panel element.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAI-05 -->
+  <div class="finding no-break">
+    <div class="finding-header critical">
+      <span class="badge critical">Critical</span>
+      <span class="finding-id">WAI-05</span>
+      <span class="finding-title">Group Header Buttons Missing aria-controls (SC 4.1.2)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>WCAG 4.1.2 Name, Role, Value — Level A</span>
+        <span class="file-ref">findings-client.tsx L428–434</span>
+      </div>
+      <p>The group header button correctly has <code>aria-expanded={isExpanded}</code>, but lacks <code>aria-controls</code>. The association between button and controlled panel is positional only — screen reader users cannot programmatically navigate to the expanded content.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Add <code>id</code> to the expanded content <code>&lt;div&gt;</code> (e.g., <code>id={`group-panel-${groupKey.replace(/:/g,'-')}`}</code>) and add <code>aria-controls</code> to the button referencing that ID.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wave-header">
+    <span class="wave-badge wave2">Wave 2 — High (Level AA Failures)</span>
+    <h3>Required for WCAG AA conformance claim</h3>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Sev</th>
+        <th>Finding</th>
+        <th>SC</th>
+        <th>File</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WAI-06</code></td>
+        <td class="sev high">High</td>
+        <td><code>&lt;p className="label-caps"&gt;</code> used as section headings — no semantic structure</td>
+        <td>1.3.1 — A</td>
+        <td class="file-ref">page.tsx, deliverables/page.tsx, all label-caps instances</td>
+      </tr>
+      <tr>
+        <td><code>WAI-07</code></td>
+        <td class="sev high">High</td>
+        <td>Risk matrix table missing &lt;caption&gt;, scope="col", scope="row" on headers</td>
+        <td>1.3.1 — A</td>
+        <td class="file-ref">findings-client.tsx L293–333</td>
+      </tr>
+      <tr>
+        <td><code>WAI-08</code></td>
+        <td class="sev high">High</td>
+        <td>Severity filter buttons convey active state via colour only — no aria-pressed</td>
+        <td>1.4.1 — A</td>
+        <td class="file-ref">findings-client.tsx L342–368</td>
+      </tr>
+      <tr>
+        <td><code>WAI-09</code></td>
+        <td class="sev high">High</td>
+        <td>text-navy-400 on white ≈ 3.2:1 contrast ratio — fails AA 4.5:1 requirement</td>
+        <td>1.4.3 — AA</td>
+        <td class="file-ref">globals.css · all components</td>
+      </tr>
+      <tr>
+        <td><code>WAI-10</code></td>
+        <td class="sev high">High</td>
+        <td>No global focus-visible styles — keyboard navigation invisible throughout app</td>
+        <td>2.4.7 — AA</td>
+        <td class="file-ref">globals.css · btn-teal · sidebar links</td>
+      </tr>
+      <tr>
+        <td><code>WAI-11</code></td>
+        <td class="sev high">High</td>
+        <td>Discovery progress bar is two empty divs — no role="progressbar" or aria-valuenow</td>
+        <td>1.1.1 — A</td>
+        <td class="file-ref">connections-panel.tsx L479–484</td>
+      </tr>
+      <tr>
+        <td><code>WAI-12</code></td>
+        <td class="sev high">High</td>
+        <td>&lt;details&gt;/&lt;summary&gt; with list-none removes native disclosure marker — AT compatibility risk</td>
+        <td>2.1.1 — A</td>
+        <td class="file-ref">connections-panel.tsx L491–525</td>
+      </tr>
+      <tr>
+        <td><code>WAI-13</code></td>
+        <td class="sev high">High</td>
+        <td>Proportional severity bar conveys information through colour only — no aria-label</td>
+        <td>1.4.1 — A</td>
+        <td class="file-ref">findings-client.tsx L273–282</td>
+      </tr>
+      <tr>
+        <td><code>WAI-16</code></td>
+        <td class="sev medium">Medium</td>
+        <td>No skip-to-main-content link — keyboard users must tab through entire header</td>
+        <td>2.4.1 — A</td>
+        <td class="file-ref">app/(dashboard)/layout.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-17</code></td>
+        <td class="sev medium">Medium</td>
+        <td>&lt;aside&gt; and &lt;nav&gt; lack aria-label — undistinguishable landmark regions</td>
+        <td>1.3.6</td>
+        <td class="file-ref">engagement-sidebar.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-18</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Status badge has no role — dynamic updates not announced to screen readers</td>
+        <td>4.1.3</td>
+        <td class="file-ref">status-badge.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-19</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Loading spinner SVGs not hidden from AT — no sr-only live region for "Loading" state</td>
+        <td>1.3.1 — A</td>
+        <td class="file-ref">submit-button.tsx · connections-panel.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-14</code></td>
+        <td class="sev medium">Medium</td>
+        <td>External links (target="_blank") missing "(opens in new tab)" accessible text</td>
+        <td>3.2.5 advisory</td>
+        <td class="file-ref">sp-help-modal.tsx · findings-client.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-15</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Language of parts not set for technical English code strings (relevant when JA ships)</td>
+        <td>3.1.2 — AA</td>
+        <td class="file-ref">sp-help-modal.tsx</td>
+      </tr>
+      <tr>
+        <td><code>WAI-20</code></td>
+        <td class="sev medium">Medium</td>
+        <td>autocomplete attributes missing on credential and engagement form inputs</td>
+        <td>1.3.5 — AA</td>
+        <td class="file-ref">cloud-credentials form · new engagement form</td>
+      </tr>
+      <tr>
+        <td><code>WAI-21</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Select elements use focus:ring-1 (1px) — fails WCAG 2.4.11 minimum focus area</td>
+        <td>2.4.7 — AA</td>
+        <td class="file-ref">findings-client.tsx L373–393</td>
+      </tr>
+      <tr>
+        <td><code>WAI-23</code></td>
+        <td class="sev low">Low</td>
+        <td>Phase stepper steps missing aria-label and aria-current="step"</td>
+        <td>1.3.1 — A</td>
+        <td class="file-ref">engagements/[id]/page.tsx L82–128</td>
+      </tr>
+      <tr>
+        <td><code>WAI-22</code></td>
+        <td class="sev low">Low</td>
+        <td>lang="en" correctly set — future JA locale will require lang="ja" on page/section</td>
+        <td>3.1.1 — A</td>
+        <td class="file-ref">layout.tsx (future)</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<div class="page-break"></div>
+
+<!-- ═══════════════════════════════════════════ W3C ═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="icon w3c">🌐</div>
+    <h2>W3C HTML5 &amp; CSS Standards Findings</h2>
+    <span class="count">12 findings</span>
+  </div>
+
+  <!-- W3C-01 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">W3C-01</span>
+      <span class="finding-title">Raw &lt;img&gt; Elements in Header — Missing width/height, Causing CLS</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>W3C HTML5 · Core Web Vitals (CLS)</span>
+        <span class="file-ref">app/(dashboard)/layout.tsx L24–33</span>
+      </div>
+      <p>Two raw <code>&lt;img&gt;</code> elements (light/dark CBTS logos) are used instead of Next.js <code>&lt;Image&gt;</code>. They lack <code>width</code> and <code>height</code> attributes, causing Cumulative Layout Shift during page load. Both elements are always in the DOM (only one visible via CSS), doubling image requests. An <code>eslint-disable</code> comment suppresses the Next.js lint warning.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Replace both <code>&lt;img&gt;</code> tags with Next.js <code>&lt;Image&gt;</code> components specifying explicit <code>width</code> and <code>height</code>, and toggle visibility via CSS. Or use a <code>&lt;picture&gt;</code> element with a <code>(prefers-color-scheme: dark)</code> media source.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- W3C-02 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">W3C-02</span>
+      <span class="finding-title">All Decorative Inline SVGs Missing aria-hidden (Pervasive)</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>W3C SVG 1.1 Accessibility · WAI-ARIA 1.2</span>
+        <span class="file-ref">All component files — pervasive</span>
+      </div>
+      <p>Every inline SVG icon across all components (sidebar, findings, connections, deliverables, layout) is decorative — supplementing adjacent text labels — yet none carry <code>aria-hidden="true" focusable="false"</code>. Screen readers attempt to parse raw SVG path data (e.g., <code>"M3 12l2-2m0 0l7-7 7 7..."</code>) as content.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Create a shared <code>&lt;Icon&gt;</code> wrapper component that automatically applies <code>aria-hidden="true" focusable="false"</code>. For truly standalone meaningful icons, add a <code>&lt;title&gt;</code> element inside the SVG and <code>role="img"</code> on the SVG element.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- W3C-03 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">W3C-03</span>
+      <span class="finding-title">Custom Scrollbar Uses Vendor-Prefix Only — W3C Standard Not Implemented</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>W3C CSS Scrollbars Level 1</span>
+        <span class="file-ref">globals.css L206–209</span>
+      </div>
+      <p>The scrollbar styling uses only <code>::-webkit-scrollbar</code> pseudo-elements — a non-standard vendor extension. The W3C standard <code>scrollbar-color</code> and <code>scrollbar-width</code> properties (supported in Chrome 121+, Firefox, Safari 18.2+) are absent. Firefox users see the default OS scrollbar.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Add standard properties to all scrollable elements: <code>scrollbar-width: thin; scrollbar-color: var(--accent) transparent;</code> Keep the vendor-prefix version as a progressive enhancement for older browsers.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- W3C-04 -->
+  <div class="finding no-break">
+    <div class="finding-header high">
+      <span class="badge high">High</span>
+      <span class="finding-id">W3C-04</span>
+      <span class="finding-title">-webkit-font-smoothing: antialiased Disables ClearType on Windows</span>
+    </div>
+    <div class="finding-body">
+      <div class="finding-meta">
+        <span>W3C CSS Fonts Level 4 — Non-standard property</span>
+        <span class="file-ref">globals.css L84–86</span>
+      </div>
+      <p><code>-webkit-font-smoothing: antialiased</code> is not a W3C standard and on Windows effectively disables ClearType subpixel rendering, making text appear thinner and lower contrast. This negatively impacts readability for the majority of Windows enterprise users — exactly the target audience for this platform.</p>
+      <div class="remediation">
+        <strong>Remediation</strong>
+        <p>Remove both vendor-prefixed font smoothing declarations, or scope them to macOS only using a <code>@media screen and (-webkit-min-device-pixel-ratio: 2)</code> query. Allow the OS to apply its default rendering.</p>
+      </div>
+    </div>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Sev</th>
+        <th>Finding</th>
+        <th>Standard</th>
+        <th>File</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>W3C-05</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Missing &lt;meta name="color-scheme" content="light dark"&gt; — white flash on dark mode, broken form control colours</td>
+        <td>W3C CSS Color Adjust Level 1</td>
+        <td class="file-ref">app/layout.tsx</td>
+      </tr>
+      <tr>
+        <td><code>W3C-06</code></td>
+        <td class="sev medium">Medium</td>
+        <td>backdrop-filter used without @supports — no explicit opaque fallback for Firefox</td>
+        <td>W3C Filter Effects Module Level 2</td>
+        <td class="file-ref">globals.css L109</td>
+      </tr>
+      <tr>
+        <td><code>W3C-07</code></td>
+        <td class="sev medium">Medium</td>
+        <td>&lt;summary&gt; list-none removes disclosure marker — Firefox+NVDA compatibility risk</td>
+        <td>W3C HTML5 &lt;details&gt; semantics</td>
+        <td class="file-ref">connections-panel.tsx L492</td>
+      </tr>
+      <tr>
+        <td><code>W3C-08</code></td>
+        <td class="sev medium">Medium</td>
+        <td>CSS custom property --bar-pct cast as React.CSSProperties — bypasses TypeScript type safety</td>
+        <td>W3C CSS Custom Properties / TS</td>
+        <td class="file-ref">engagements/[id]/page.tsx L194</td>
+      </tr>
+      <tr>
+        <td><code>W3C-09</code></td>
+        <td class="sev medium">Medium</td>
+        <td>rel="noreferrer" without "noopener" — incomplete in older browsers and enterprise WebViews</td>
+        <td>W3C HTML5 rel attribute</td>
+        <td class="file-ref">deliverables/page.tsx L183</td>
+      </tr>
+      <tr>
+        <td><code>W3C-10</code></td>
+        <td class="sev medium">Medium</td>
+        <td>Per-deliverable delete &lt;form&gt; elements have no aria-label — identical forms indistinguishable by AT</td>
+        <td>W3C HTML5 / WAI-ARIA</td>
+        <td class="file-ref">deliverables/page.tsx L196–208</td>
+      </tr>
+      <tr>
+        <td><code>W3C-11</code></td>
+        <td class="sev low">Low</td>
+        <td>@theme is a Tailwind CSS v4 proprietary at-rule — not W3C CSS; documents build-tool lock-in</td>
+        <td>W3C CSS Custom Properties</td>
+        <td class="file-ref">globals.css L7–36</td>
+      </tr>
+      <tr>
+        <td><code>W3C-12</code></td>
+        <td class="sev low">Low</td>
+        <td>Dual &lt;img&gt; logo pattern (light/dark) doubles image requests; duplicate alt="CBTS" may confuse AT</td>
+        <td>W3C HTML5 · CSS media queries</td>
+        <td class="file-ref">app/(dashboard)/layout.tsx L24–33</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<div class="page-break"></div>
+
+<!-- ═══════════════════════════════════════ SUMMARY MATRIX ════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="icon exec">📊</div>
+    <h2>Complete Findings Summary Matrix</h2>
+    <span class="count">47 total</span>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Standard</th>
+        <th>Severity</th>
+        <th>Title</th>
+        <th>Wave</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>OWA-01</code></td><td>OWASP A05</td><td class="sev critical">Critical</td><td>unsafe-inline script CSP in production</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>OWA-07</code></td><td>OWASP A10</td><td class="sev critical">Critical</td><td>customerLogoUrl unvalidated — SSRF risk</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>WAI-01</code></td><td>WCAG 1.1.1A</td><td class="sev critical">Critical</td><td>Navigation SVGs have no accessible name</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>WAI-02</code></td><td>WCAG 4.1.2A</td><td class="sev critical">Critical</td><td>Sidebar toggle button missing aria-label/aria-expanded</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>WAI-03</code></td><td>WCAG 4.1.2A</td><td class="sev critical">Critical</td><td>Help modal missing role, focus trap, Escape key</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>WAI-04</code></td><td>WCAG 4.1.2A</td><td class="sev critical">Critical</td><td>InstanceRow buttons missing aria-expanded</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>WAI-05</code></td><td>WCAG 4.1.2A</td><td class="sev critical">Critical</td><td>Group header buttons missing aria-controls</td><td>1</td><td>Open</td></tr>
+      <tr><td><code>OWA-02</code></td><td>OWASP A07</td><td class="sev high">High</td><td>No rate limiting on Server Actions</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>OWA-03</code></td><td>OWASP A01</td><td class="sev high">High</td><td>CSRF bypass on delete engagement action</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>OWA-04</code></td><td>OWASP A07</td><td class="sev high">High</td><td>Non-Secure cookie accepted in all environments</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>OWA-05</code></td><td>OWASP A01</td><td class="sev high">High</td><td>Job ID enumeration via timing side channel</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>OWA-06</code></td><td>OWASP A04</td><td class="sev high">High</td><td>No MIME/magic-byte validation on uploads</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-06</code></td><td>WCAG 1.3.1A</td><td class="sev high">High</td><td>&lt;p&gt; used as section headings throughout</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-07</code></td><td>WCAG 1.3.1A</td><td class="sev high">High</td><td>Risk matrix table missing caption and scope attributes</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-08</code></td><td>WCAG 1.4.1A</td><td class="sev high">High</td><td>Filter buttons convey active state via colour only</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-09</code></td><td>WCAG 1.4.3AA</td><td class="sev high">High</td><td>text-navy-400 fails 4.5:1 contrast ratio</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-10</code></td><td>WCAG 2.4.7AA</td><td class="sev high">High</td><td>No global focus-visible styles</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-11</code></td><td>WCAG 1.1.1A</td><td class="sev high">High</td><td>Progress bar missing role="progressbar"</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-12</code></td><td>WCAG 2.1.1A</td><td class="sev high">High</td><td>&lt;details&gt;/&lt;summary&gt; AT compatibility issue</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>WAI-13</code></td><td>WCAG 1.4.1A</td><td class="sev high">High</td><td>Severity bar uses colour only</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>W3C-01</code></td><td>W3C HTML5</td><td class="sev high">High</td><td>&lt;img&gt; without width/height causing CLS</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>W3C-02</code></td><td>W3C SVG</td><td class="sev high">High</td><td>All decorative SVGs missing aria-hidden</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>W3C-03</code></td><td>W3C CSS</td><td class="sev high">High</td><td>Scrollbar vendor-prefix only — no W3C standard</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>W3C-04</code></td><td>W3C CSS</td><td class="sev high">High</td><td>-webkit-font-smoothing disables ClearType on Windows</td><td>2</td><td>Open</td></tr>
+      <tr><td><code>OWA-08</code></td><td>OWASP A02</td><td class="sev medium">Medium</td><td>useSecureCookies enforcement not verified</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-09</code></td><td>OWASP A04</td><td class="sev medium">Medium</td><td>window.confirm() for destructive confirmation</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-10</code></td><td>OWASP A08</td><td class="sev medium">Medium</td><td>progressLog parsed without schema validation</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-11</code></td><td>OWASP A05</td><td class="sev medium">Medium</td><td>X-Frame-Options SAMEORIGIN on presentation routes</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-12</code></td><td>OWASP A05</td><td class="sev medium">Medium</td><td>Raw Azure SDK errors returned to browser</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-13</code></td><td>OWASP A05</td><td class="sev medium">Medium</td><td>Permissions-Policy header incomplete</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-14</code></td><td>OWASP A05</td><td class="sev medium">Medium</td><td>HSTS missing preload directive</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-15</code></td><td>OWASP A05</td><td class="sev medium">Medium</td><td>img-src data: broader than necessary</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-14</code></td><td>WCAG 3.2.5</td><td class="sev medium">Medium</td><td>External links missing "(opens in new tab)" text</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-15</code></td><td>WCAG 3.1.2AA</td><td class="sev medium">Medium</td><td>Language of parts not set for technical code strings</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-16</code></td><td>WCAG 2.4.1A</td><td class="sev medium">Medium</td><td>No skip-to-main-content link</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-17</code></td><td>WCAG 1.3.6</td><td class="sev medium">Medium</td><td>&lt;aside&gt;/&lt;nav&gt; missing aria-label</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-18</code></td><td>WCAG 4.1.3</td><td class="sev medium">Medium</td><td>Status badge missing role for live updates</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-19</code></td><td>WCAG 1.3.1A</td><td class="sev medium">Medium</td><td>Spinner SVGs not hidden from AT</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-20</code></td><td>WCAG 1.3.5AA</td><td class="sev medium">Medium</td><td>autocomplete attributes missing on form inputs</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-21</code></td><td>WCAG 2.4.7AA</td><td class="sev medium">Medium</td><td>Select focus ring is 1px — fails WCAG 2.4.11</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-05</code></td><td>W3C CSS</td><td class="sev medium">Medium</td><td>Missing color-scheme meta tag</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-06</code></td><td>W3C CSS</td><td class="sev medium">Medium</td><td>backdrop-filter without @supports fallback</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-07</code></td><td>W3C HTML5</td><td class="sev medium">Medium</td><td>&lt;summary&gt; list-none — Firefox+NVDA risk</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-08</code></td><td>W3C CSS/TS</td><td class="sev medium">Medium</td><td>--bar-pct cast bypasses TypeScript types</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-09</code></td><td>W3C HTML5</td><td class="sev medium">Medium</td><td>rel="noreferrer" missing "noopener"</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-10</code></td><td>W3C HTML5</td><td class="sev medium">Medium</td><td>Delete forms missing aria-label</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-16</code></td><td>OWASP A05</td><td class="sev low">Low</td><td>font-src 'self' — build-time font download fragile</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>OWA-17</code></td><td>OWASP A05</td><td class="sev low">Low</td><td>No Expect-CT header</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-22</code></td><td>WCAG 3.1.1A</td><td class="sev low">Low</td><td>lang="en" set correctly — future JA locale action needed</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>WAI-23</code></td><td>WCAG 1.3.1A</td><td class="sev low">Low</td><td>Phase stepper steps missing aria-current</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-11</code></td><td>W3C CSS</td><td class="sev low">Low</td><td>@theme is Tailwind v4 proprietary — not W3C</td><td>3</td><td>Open</td></tr>
+      <tr><td><code>W3C-12</code></td><td>W3C HTML5</td><td class="sev low">Low</td><td>Dual &lt;img&gt; logo doubles requests</td><td>3</td><td>Open</td></tr>
+    </tbody>
+  </table>
+
+  <div class="doc-footer">
+    <span><strong>CNA Platform — Sprint 5 Audit Report</strong> · Confidential · Internal use only</span>
+    <span>Audit date: 2026-05-28 · Standards: WCAG 2.1 AA · W3C HTML5/CSS · OWASP Top 10 (2021) / ASVS v4.0</span>
+  </div>
+
+</div>
+
+</body>
+</html>

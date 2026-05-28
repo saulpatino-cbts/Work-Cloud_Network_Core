@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function DashboardLayout({
   children,
@@ -15,22 +16,35 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* WAI-16: Skip-to-main-content — visible on focus, hidden otherwise */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-navy-800 focus:shadow-lg focus:ring-2 focus:ring-teal-500 dark:focus:bg-navy-900 dark:focus:text-navy-100"
+      >
+        Skip to main content
+      </a>
+
       {/* ── Glass header ── */}
       <header className="header-glass sticky top-0 z-50">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-3">
           {/* Logo + wordmark */}
           <Link href="/dashboard" className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/* W3C-01 / W3C-12: next/image eliminates CLS; single image toggled by CSS dark class */}
+            <Image
               src="/cbts_light.png"
               alt="CBTS"
+              height={32}
+              width={96}
               className="h-8 w-auto dark:hidden"
+              priority
             />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/cbts_dark.png"
               alt="CBTS"
-              className="h-8 w-auto hidden dark:block"
+              height={32}
+              width={96}
+              className="hidden h-8 w-auto dark:block"
+              priority
             />
             <div className="mx-1 h-5 w-px bg-navy-100 dark:bg-navy-700" />
             <span className="hidden text-sm font-semibold tracking-tight text-navy-500 dark:text-navy-200 sm:block">
@@ -61,7 +75,7 @@ export default async function DashboardLayout({
             >
               <button
                 type="submit"
-                className="rounded-lg border border-navy-100 bg-white/60 px-3.5 py-1.5 text-xs font-semibold text-navy-600 transition-colors hover:bg-white/90 dark:border-navy-700 dark:bg-white/5 dark:text-navy-200 dark:hover:bg-white/10"
+                className="rounded-lg border border-navy-100 bg-white/60 px-3.5 py-1.5 text-xs font-semibold text-navy-600 transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:border-navy-700 dark:bg-white/5 dark:text-navy-200 dark:hover:bg-white/10"
               >
                 Sign out
               </button>
@@ -71,7 +85,8 @@ export default async function DashboardLayout({
       </header>
 
       {/* ── Page content ── */}
-      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-8">
+      {/* WAI-16: id="main-content" is the skip-link target */}
+      <main id="main-content" className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-8">
         {children}
       </main>
     </div>

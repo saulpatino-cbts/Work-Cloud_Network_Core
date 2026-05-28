@@ -87,10 +87,15 @@ function JobEntry({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id, job.status]);
 
+  // OWA-10: Schema check — parse JSON and ensure it is an array of strings
   const progress: string[] = (() => {
     if (!job.progressLog) return [];
     try {
-      return JSON.parse(job.progressLog) as string[];
+      const parsed = JSON.parse(job.progressLog);
+      if (Array.isArray(parsed) && parsed.every((line) => typeof line === "string")) {
+        return parsed;
+      }
+      return [String(job.progressLog)];
     } catch {
       return [job.progressLog];
     }
@@ -118,10 +123,14 @@ function JobEntry({
             <StatusBadge value={job.status} variant="job" />
           )}
           {isActive && (
-            <svg className="h-3.5 w-3.5 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            <>
+              {/* WAI-19: Hide decorative spinner from screen readers, convey status with sr-only */}
+              <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="sr-only" aria-live="polite">Discovery run in progress...</span>
+            </>
           )}
           {isCompleted && job.findingsCount != null && (
             <span className="rounded-full bg-blue-900/30 px-2 py-0.5 text-xs font-semibold text-blue-400">
@@ -463,9 +472,18 @@ function CredentialCard({
           {/* Active job progress bar */}
           {isActive && (() => {
             const activeJob = liveJobs.find((j) => ACTIVE_STATUSES.has(j.status));
+            // OWA-10: Schema check — parse JSON and ensure it is an array of strings
             const steps: string[] = (() => {
               if (!activeJob?.progressLog) return [];
-              try { return JSON.parse(activeJob.progressLog) as string[]; } catch { return [activeJob.progressLog]; }
+              try {
+                const parsed = JSON.parse(activeJob.progressLog);
+                if (Array.isArray(parsed) && parsed.every((line) => typeof line === "string")) {
+                  return parsed;
+                }
+                return [String(activeJob.progressLog)];
+              } catch {
+                return [activeJob.progressLog];
+              }
             })();
             const ESTIMATED_STEPS = 28;
             const pct = steps.length === 0 ? 8 : Math.min(94, Math.round((steps.length / ESTIMATED_STEPS) * 100));
@@ -476,7 +494,15 @@ function CredentialCard({
                   <p className="truncate text-xs text-navy-400">{lastStep}</p>
                   <span className="shrink-0 text-xs font-semibold text-navy-400">{pct}%</span>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-navy-700/50">
+                {/* WAI-11: progressbar role and values */}
+                <div
+                  role="progressbar"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`Discovery progress: ${pct}%`}
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-navy-700/50"
+                >
                   <div
                     className="h-full rounded-full bg-teal-500 transition-all duration-700"
                     style={{ width: `${pct}%` }}
@@ -487,10 +513,13 @@ function CredentialCard({
           })()}
 
           {/* Last run + collapsible toggle */}
+          {/* WAI-12: Improve keyboard accessibility & focus indicator */}
           {liveJobs.length > 0 && (
             <details className="mt-1 group/runs">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded-sm">
                 <svg
+                  aria-hidden="true"
+                  focusable="false"
                   className="h-3 w-3 transition-transform group-open/runs:rotate-90"
                   fill="none"
                   viewBox="0 0 24 24"

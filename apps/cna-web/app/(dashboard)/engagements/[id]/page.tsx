@@ -71,34 +71,41 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Phase stepper ── */}
       <div className="glass p-6">
-        <p className="label-caps mb-5 text-navy-300 dark:text-navy-500">
+        <h2 className="label-caps mb-5 text-navy-300 dark:text-navy-500">
           Engagement Progress
-        </p>
-        <div className="flex items-center">
-          {PHASE_STEPS.map((step, idx) => {
-            const done   = idx < currentPhaseIdx;
-            const active = idx === currentPhaseIdx;
-            return (
-              <div key={step.key} className="flex flex-1 items-center">
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={[
-                      "flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-colors",
-                      done
-                        ? "bg-teal-500 text-white shadow-md shadow-teal-500/30"
-                        : active
-                          ? "bg-navy-800 text-white ring-2 ring-teal-500/50 dark:bg-navy-600"
-                          : "bg-navy-50 text-navy-300 dark:bg-navy-800/60 dark:text-navy-500",
-                    ].join(" ")}
-                  >
-                    {done ? (
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      idx + 1
-                    )}
-                  </div>
+        </h2>
+        {/* WAI-23: Stepper wrapped in nav and ol for accessibility */}
+        <nav aria-label="Engagement progress stepper">
+          <ol className="flex items-center">
+            {PHASE_STEPS.map((step, idx) => {
+              const done   = idx < currentPhaseIdx;
+              const active = idx === currentPhaseIdx;
+              return (
+                <li
+                  key={step.key}
+                  className="flex flex-1 items-center"
+                  aria-current={active ? "step" : undefined}
+                >
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div
+                      aria-label={`Step ${idx + 1}: ${step.label} (${active ? "current step" : done ? "completed" : "upcoming"})`}
+                      className={[
+                        "flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-colors",
+                        done
+                          ? "bg-teal-500 text-white shadow-md shadow-teal-500/30"
+                          : active
+                            ? "bg-navy-800 text-white ring-2 ring-teal-500/50 dark:bg-navy-600"
+                            : "bg-navy-50 text-navy-300 dark:bg-navy-800/60 dark:text-navy-500",
+                      ].join(" ")}
+                    >
+                      {done ? (
+                        <svg aria-hidden="true" focusable="false" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        idx + 1
+                      )}
+                    </div>
                   <span
                     className={[
                       "text-xs font-medium",
@@ -112,20 +119,21 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
                     {step.label}
                   </span>
                 </div>
-                {idx < PHASE_STEPS.length - 1 && (
-                  <div
-                    className={[
-                      "mb-5 h-0.5 flex-1 transition-colors",
-                      idx < currentPhaseIdx
-                        ? "bg-teal-400"
-                        : "bg-navy-100 dark:bg-navy-800",
-                    ].join(" ")}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  {idx < PHASE_STEPS.length - 1 && (
+                    <div
+                      className={[
+                        "mb-5 h-0.5 flex-1 transition-colors",
+                        idx < currentPhaseIdx
+                          ? "bg-teal-400"
+                          : "bg-navy-100 dark:bg-navy-800",
+                      ].join(" ")}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
       </div>
 
       {/* ── Bento stat row ── */}
@@ -172,9 +180,9 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
           {totalFindings > 0 && (
             <div className="glass p-6">
               <div className="mb-4 flex items-center justify-between">
-                <p className="label-caps text-navy-300 dark:text-navy-500">
+                <h3 className="label-caps text-navy-300 dark:text-navy-500">
                   Findings Breakdown
-                </p>
+                </h3>
                 <Link href={`/engagements/${id}/findings`} className="text-xs font-semibold text-teal-600 hover:underline dark:text-teal-400">
                   View all →
                 </Link>
@@ -216,9 +224,9 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
           {base.deliverables.length > 0 && (
             <div className="glass p-6">
               <div className="mb-4 flex items-center justify-between">
-                <p className="label-caps text-navy-300 dark:text-navy-500">
+                <h3 className="label-caps text-navy-300 dark:text-navy-500">
                   Latest Deliverables
-                </p>
+                </h3>
                 <Link href={`/engagements/${id}/deliverables`} className="text-xs font-semibold text-teal-600 hover:underline dark:text-teal-400">
                   View all →
                 </Link>
@@ -251,18 +259,18 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
 
       {/* ── Quick links bento ── */}
       <div>
-        <p className="label-caps mb-3 text-navy-300 dark:text-navy-500">
+        <h2 className="label-caps mb-3 text-navy-300 dark:text-navy-500">
           Jump to
-        </p>
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {QUICK_LINKS.map((item) => (
             <Link
               key={item.href}
               href={`/engagements/${id}/${item.href}`}
-              className="glass glass-hover flex items-start gap-3 p-4"
+              className="glass glass-hover flex items-start gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
             >
               <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
-                <svg className="h-4 w-4 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg aria-hidden="true" focusable="false" className="h-4 w-4 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                 </svg>
               </div>

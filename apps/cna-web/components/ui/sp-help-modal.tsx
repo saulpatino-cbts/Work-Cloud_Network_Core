@@ -1,9 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export function SpHelpModal() {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    } else {
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+  }, [open]);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+    const dialog = dialogRef.current;
+    if (e.target === dialog) {
+      setOpen(false);
+    }
+  };
 
   return (
     <>
@@ -15,20 +38,18 @@ export function SpHelpModal() {
         How do I create these?
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setOpen(false)}
-          />
-
-          {/* Panel */}
-          <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+      <dialog
+        ref={dialogRef}
+        onClose={() => setOpen(false)}
+        onClick={handleBackdropClick}
+        aria-labelledby="sp-modal-title"
+        className="m-auto w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl border-0 p-0 outline-none backdrop:bg-black/40"
+      >
+        <div className="relative z-10 w-full bg-white">
             {/* Header */}
             <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">
+                <h2 id="sp-modal-title" className="text-base font-semibold text-gray-900">
                   Creating an Azure Service Principal
                 </h2>
                 <p className="mt-0.5 text-xs text-gray-500">
@@ -39,7 +60,8 @@ export function SpHelpModal() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close dialog"
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <svg
                   className="h-5 w-5"
@@ -233,17 +255,16 @@ export function SpHelpModal() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 Got it
               </button>
             </div>
           </div>
-        </div>
-      )}
-    </>
-  );
-}
+        </dialog>
+      </>
+    );
+  }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -318,9 +339,25 @@ function ExternalLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-blue-600 hover:underline"
+      className="inline-flex items-center gap-1 text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
       {children}
+      <span className="sr-only">(opens in new tab)</span>
+      <svg
+        aria-hidden="true"
+        focusable="false"
+        className="h-3 w-3"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+        />
+      </svg>
     </a>
   );
 }

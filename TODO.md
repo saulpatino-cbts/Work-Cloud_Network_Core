@@ -264,13 +264,13 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ### 🔴 #1 PRIORITY — Generate & Distribute Audit PDF
 
-- [ ] **[SPRINT5-PDF] Open audit report and save as PDF for distribution**
+- [x] **[SPRINT5-PDF] Open audit report and save as PDF for distribution**
   File: `sprint5-audit-report.html` (project root)
   Steps: Open in Chrome/Edge → Ctrl+P → Change destination to "Save as PDF" → Save
   Distribute to: Engineering lead, security reviewer, accessibility lead
   Filename convention: `CBTS-CNA-Sprint5-Audit-YYYYMMDD.pdf`
 
-- [ ] **[SPRINT5-PDF] Commit the HTML audit report to source control**
+- [x] **[SPRINT5-PDF] Commit the HTML audit report to source control**
   The report lives at project root as `sprint5-audit-report.html`.
   Commit message: `docs: add Sprint 5 WCAG/W3C/OWASP audit report (47 findings)`
 
@@ -282,80 +282,80 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ### Wave 1 — CRITICAL (Accessibility + Security Hard Blockers)
 
-- [ ] **[OWA-01] Implement nonce-based CSP** — replace `unsafe-inline` in `script-src` with `'nonce-{NONCE}'`
+- [x] **[OWA-01] Implement nonce-based CSP** — replace `unsafe-inline` in `script-src` with `'nonce-{NONCE}'`
   Next.js 15 supports nonce via middleware. Required for OWASP A05 / ASVS 14.4.6 compliance.
   File: `apps/cna-web/next.config.ts` L23
 
-- [ ] **[WAI-03] Replace `sp-help-modal.tsx` with accessible `<dialog>` element**
+- [x] **[WAI-03] Replace `sp-help-modal.tsx` with accessible `<dialog>` element**
   Current modal has no `role="dialog"`, no focus trap, no Escape key handler, and no `aria-modal`.
   Fix: use native `<dialog>` element or `@radix-ui/react-dialog` primitive.
   File: `apps/cna-web/components/ui/sp-help-modal.tsx`
 
-- [ ] **[WAI-01] Add `aria-hidden` / `aria-label` to all navigation SVG icons**
+- [x] **[WAI-01] Add `aria-hidden` / `aria-label` to all navigation SVG icons**
   All `NAV_ITEMS` SVGs lack `aria-hidden="true"`. In collapsed mode, icons are the only content.
   File: `apps/cna-web/components/ui/engagement-sidebar.tsx`
 
-- [ ] **[WAI-02] Replace `title` attribute with `aria-label` on sidebar toggle button**
+- [x] **[WAI-02] Replace `title` attribute with `aria-label` on sidebar toggle button**
   Add `aria-label`, `aria-expanded`, `aria-controls` to the collapse/expand button.
   File: `apps/cna-web/components/ui/engagement-sidebar.tsx` L145–163
 
-- [ ] **[WAI-04] Add `aria-expanded` + `aria-controls` to `InstanceRow` buttons in findings**
+- [x] **[WAI-04] Add `aria-expanded` + `aria-controls` to `InstanceRow` buttons in findings**
   Expand/collapse state is visual-only; screen readers cannot detect it.
   File: `apps/cna-web/app/(dashboard)/engagements/[id]/findings/findings-client.tsx` L83–102
 
-- [ ] **[WAI-05] Add `aria-controls` (with matching `id`) to group header buttons in findings**
+- [x] **[WAI-05] Add `aria-controls` (with matching `id`) to group header buttons in findings**
   `aria-expanded` exists but `aria-controls` is missing — panel cannot be programmatically associated.
   File: `apps/cna-web/app/(dashboard)/engagements/[id]/findings/findings-client.tsx` L428–434
 
-- [ ] **[OWA-07] Validate `customerLogoUrl` server-side — SSRF risk**
+- [x] **[OWA-07] Validate `customerLogoUrl` server-side — SSRF risk**
   URL is taken verbatim from form data and passed to AI generation. Add domain allowlist.
   File: `apps/cna-web/app/(dashboard)/engagements/[id]/deliverables/actions.ts` L93
 
 ### Wave 2 — HIGH (Required for WCAG AA Conformance + OWASP Rating)
 
-- [ ] **[WAI-06] Replace label-caps `<p>` elements with semantic heading elements**
+- [/] **[WAI-06] Replace label-caps `<p>` elements with semantic heading elements**
   Section labels like "Engagement Progress", "Jump to", "Generate Assessment" must be `<h2>`/`<h3>`.
   Files: `page.tsx`, `deliverables/page.tsx`, and all pages with `.label-caps` labels
 
-- [ ] **[WAI-07] Fix risk matrix table — add `<caption>`, `scope="col"`, `scope="row"`**
+- [x] **[WAI-07] Fix risk matrix table — add `<caption>`, `scope="col"`, `scope="row"`**
   File: `findings-client.tsx` L293–333
 
-- [ ] **[WAI-08] Add `aria-pressed` / `aria-checked` to severity filter toggle buttons**
+- [x] **[WAI-08] Add `aria-pressed` / `aria-checked` to severity filter toggle buttons**
   Add non-colour active state indicator (border/underline/icon).
   File: `findings-client.tsx` L342–368
 
-- [ ] **[WAI-09] Fix colour contrast for `text-navy-400` on light and dark backgrounds**
+- [x] **[WAI-09] Fix colour contrast for `text-navy-400` on light and dark backgrounds**
   `navy-400` on white ≈ 3.2:1 (fails AA 4.5:1). Adjust token or use higher-contrast alias.
   File: `globals.css`, all components using `text-navy-400`
 
-- [ ] **[WAI-10] Add global `focus-visible` styles to `globals.css`**
+- [x] **[WAI-10] Add global `focus-visible` styles to `globals.css`**
   No global focus indicator. All interactive elements missing visible keyboard focus ring.
   File: `apps/cna-web/app/globals.css`, `btn-teal`, sidebar links
 
-- [ ] **[WAI-11] Add `role="progressbar"` and `aria-valuenow` to discovery progress bar**
+- [x] **[WAI-11] Add `role="progressbar"` and `aria-valuenow` to discovery progress bar**
   File: `connections-panel.tsx` L479–484
 
-- [ ] **[WAI-13] Add `aria-label` to severity bar segments in findings summary**
+- [x] **[WAI-13] Add `aria-label` to severity bar segments in findings summary**
   Proportional severity bar conveys information through colour only.
   File: `findings-client.tsx` L273–282
 
-- [ ] **[WAI-16] Add skip-to-main-content link at top of dashboard layout**
+- [x] **[WAI-16] Add skip-to-main-content link at top of dashboard layout**
   File: `apps/cna-web/app/(dashboard)/layout.tsx`
 
-- [ ] **[WAI-19] Add `aria-hidden="true"` to spinner SVGs; add `sr-only` live region**
+- [x] **[WAI-19] Add `aria-hidden="true"` to spinner SVGs; add `sr-only` live region**
   Files: `submit-button.tsx`, `connections-panel.tsx`
 
-- [ ] **[W3C-01] Replace `<img>` logo elements with `next/image` in dashboard header**
+- [x] **[W3C-01] Replace `<img>` logo elements with `next/image` in dashboard header**
   Eliminates CLS and removes `eslint-disable` suppression.
   File: `apps/cna-web/app/(dashboard)/layout.tsx` L24–33
 
-- [ ] **[W3C-02] Add `aria-hidden="true" focusable="false"` to all decorative inline SVGs**
+- [/] **[W3C-02] Add `aria-hidden="true" focusable="false"` to all decorative inline SVGs**
   Affects all components. Consider creating a shared `<Icon>` wrapper component.
 
-- [ ] **[W3C-03] Add W3C standard scrollbar CSS alongside webkit vendor prefix**
+- [x] **[W3C-03] Add W3C standard scrollbar CSS alongside webkit vendor prefix**
   Add `scrollbar-width: thin; scrollbar-color: var(--accent) transparent;` to `globals.css`.
 
-- [ ] **[W3C-04] Remove or scope `-webkit-font-smoothing: antialiased`**
+- [x] **[W3C-04] Remove or scope `-webkit-font-smoothing: antialiased`**
   Disables ClearType on Windows — degrades readability for Windows users.
   File: `apps/cna-web/app/globals.css` L84–86
 
@@ -366,10 +366,10 @@ Once the environment is up and smoke-tested, run through these scenarios:
 - [ ] **[OWA-03] Fix CSRF protection on `deleteEngagement` — wrap in `<form>` element**
   File: `apps/cna-web/components/ui/delete-engagement-button.tsx` L28–30
 
-- [ ] **[OWA-04] Restrict non-Secure session cookie fallback to `NODE_ENV !== 'production'`**
+- [x] **[OWA-04] Restrict non-Secure session cookie fallback to `NODE_ENV !== 'production'`**
   File: `apps/cna-web/middleware.ts` L19–21
 
-- [ ] **[OWA-05] Return 401 before DB lookup in discovery-jobs API route**
+- [x] **[OWA-05] Return 401 before DB lookup in discovery-jobs API route**
   Prevents job ID enumeration via timing side channel.
   File: `apps/cna-web/app/api/discovery-jobs/[jobId]/route.ts`
 

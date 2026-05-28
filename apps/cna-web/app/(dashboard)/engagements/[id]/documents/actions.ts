@@ -218,11 +218,32 @@ export async function uploadDocument(
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
-  // Extract text for plain-text file types so AI analysis can use them.
-  let parsedText: string | null = null;
   const ext = file.name.toLowerCase().split(".").pop();
-  if (ext && ["csv", "txt", "json", "yaml", "yml"].includes(ext)) {
-    parsedText = new TextDecoder().decode(bytes);
+
+  // OWA-06: Server-side MIME & Magic-byte validation to prevent extension spoofing
+  const magicBytes = buffer.subarray(0, 4);
+  const isPdf = magicBytes[0] === 0x25 && magicBytes[1] === 0x50 && magicBytes[2] === 0x44 && magicBytes[3] === 0x46; // %PDF
+  const isPng = magicBytes[0] === 0x89 && magicBytes[1] === 0x50 && magicBytes[2] === 0x4E && magicBytes[3] === 0x47; // \x89PNG
+  const isJpeg = magicBytes[0] === 0xFF && magicBytes[1] === 0xD8 && magicBytes[2] === 0xFF; // JPEG SOI
+
+  const allowedTextExts = ["csv", "txt", "json", "yaml", "yml"];
+  const isTextExt = ext && allowedTextExts.includes(ext);
+
+  let isValid = isPdf || isPng || isJpeg;
+  let parsedText: string | null = null;
+
+  if (!isValid && isTextExt) {
+    try {
+      // Validate that text files decode cleanly as UTF-8
+      parsedText = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      isValid = true;
+    } catch {
+      isValid = false;
+    }
+  }
+
+  if (!isValid) {
+    return { error: "Invalid file type. Only PDF, PNG, JPEG, CSV, TXT, JSON, and YAML files are allowed." };
   }
 
   const blobPath = await uploadEngagementFile(

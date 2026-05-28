@@ -42,6 +42,7 @@
   --mesh-b: rgba(10, 30, 60, 0.05);
 
   --glass-bg:          rgba(255, 255, 255, 0.72);
+  --glass-fallback-bg: #ffffff;
   --glass-border:      rgba(255, 255, 255, 0.90);
   --glass-shadow:      0 2px 20px rgba(10, 30, 60, 0.07), 0 1px 0 rgba(255, 255, 255, 0.65) inset;
   --glass-shadow-md:   0 6px 32px rgba(10, 30, 60, 0.12), 0 1px 0 rgba(255, 255, 255, 0.85) inset;
@@ -68,6 +69,7 @@
     --mesh-b: rgba(62, 201, 184, 0.04);
 
     --glass-bg:          rgba(255, 255, 255, 0.055);
+    --glass-fallback-bg: #0a1e3c;
     --glass-border:      rgba(255, 255, 255, 0.11);
     --glass-shadow:      0 2px 20px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
     --glass-shadow-md:   0 6px 32px rgba(0, 0, 0, 0.58), 0 1px 0 rgba(255, 255, 255, 0.09) inset;
@@ -113,28 +115,29 @@ body {
 /* ── Glass card ───────────────────────────────────────────────────────────── */
 
 .glass {
-  background:    var(--glass-bg);
+  background:    var(--glass-fallback-bg);
   border:        1px solid var(--glass-border);
   box-shadow:    var(--glass-shadow);
   border-radius: 1rem;
-  /* W3C-06: opaque fallback for browsers without backdrop-filter support (Firefox < 103) */
 }
-/* W3C-06: progressive enhancement — only apply blur where supported */
+/* W3C-06: progressive enhancement — only apply blur where supported, overlaying transparent bg */
 @supports (backdrop-filter: blur(1px)) {
   .glass {
+    background:              var(--glass-bg);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter:         blur(14px);
   }
 }
 
 .glass-sm {
-  background:    var(--glass-bg);
+  background:    var(--glass-fallback-bg);
   border:        1px solid var(--glass-border);
   box-shadow:    var(--glass-shadow);
   border-radius: 0.75rem;
 }
 @supports (backdrop-filter: blur(1px)) {
   .glass-sm {
+    background:              var(--glass-bg);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter:         blur(14px);
   }

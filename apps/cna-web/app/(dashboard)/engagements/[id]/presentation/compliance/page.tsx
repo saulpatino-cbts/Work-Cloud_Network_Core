@@ -47,7 +47,7 @@ function RadarChart({ dims }: { dims: MaturityDimension[] }) {
   }));
 
   return (
-    <svg viewBox="0 0 240 240" className="h-56 w-56">
+    <svg role="img" aria-label="Maturity Radar Chart" viewBox="0 0 240 240" className="h-56 w-56">
       {/* Grid rings */}
       {[2, 4, 6, 8, 10].map((level) => (
         <polygon
@@ -180,7 +180,7 @@ export default async function CompliancePage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Header ── */}
       <div>
-        <p className="label-caps text-navy-500">Compliance & Maturity Assessment</p>
+        <h2 className="label-caps text-navy-500">Compliance & Maturity Assessment</h2>
         <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
       </div>
 
@@ -190,7 +190,7 @@ export default async function CompliancePage({ params }: PageProps) {
           <RadarChart dims={dims} />
           <div className="flex-1 space-y-3">
             <div>
-              <p className="label-caps text-navy-500">Overall Security Maturity</p>
+              <h2 className="label-caps text-navy-500">Overall Security Maturity</h2>
               <p className="mt-1 text-4xl font-black text-navy-100">{avgScore}<span className="text-xl text-navy-400">/10</span></p>
               <span className={`mt-1 inline-block rounded-full border px-3 py-0.5 text-xs font-bold ${overallLabel.cls}`}>
                 {overallLabel.label}

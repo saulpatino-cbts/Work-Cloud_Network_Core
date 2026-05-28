@@ -60,7 +60,7 @@ export default async function ExecutivePage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Header ── */}
       <div>
-        <p className="label-caps text-navy-500">Executive Risk Assessment</p>
+        <h2 className="label-caps text-navy-500">Executive Risk Assessment</h2>
         <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
       </div>
 

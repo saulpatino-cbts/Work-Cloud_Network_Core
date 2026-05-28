@@ -41,7 +41,7 @@ export default async function RemediationPage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Header ── */}
       <div>
-        <p className="label-caps text-navy-500">Remediation & Transformation Plan</p>
+        <h2 className="label-caps text-navy-500">Remediation & Transformation Plan</h2>
         <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
       </div>
 
@@ -132,6 +132,8 @@ export default async function RemediationPage({ params }: PageProps) {
                     </div>
                     <div className="mt-3 flex gap-2">
                       <svg
+                        aria-hidden="true"
+                        focusable="false"
                         className="mt-0.5 h-4 w-4 shrink-0 text-teal-500"
                         fill="none"
                         viewBox="0 0 24 24"

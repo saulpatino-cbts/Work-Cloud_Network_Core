@@ -1,6 +1,5 @@
 "use client";
-
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { deleteEngagement } from "@/app/(dashboard)/dashboard/actions";
 
 interface Props {
@@ -15,6 +14,9 @@ export function DeleteEngagementButton({
   engagementName,
   variant = "header",
 }: Props) {
+  const [showDialog, setShowDialog] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
   const [_, formAction, isPending] = useActionState(
     async (prevState: any, formData: FormData) => {
       await deleteEngagement(formData);
@@ -23,46 +25,80 @@ export function DeleteEngagementButton({
     null
   );
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (
-      !confirm(
-        `Delete "${engagementName}"? This will permanently remove all documents, findings, and deliverables. This cannot be undone.`,
-      )
-    ) {
-      e.preventDefault();
-    }
+  function openModal(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowDialog(true);
+    // Dialog needs to be opened via .showModal() for native focus trap and accessibility
+    setTimeout(() => {
+      dialogRef.current?.showModal();
+    }, 0);
   }
 
-  if (variant === "inline") {
-    return (
-      <form
-        action={formAction}
-        onSubmit={handleSubmit}
-        className="inline-block"
-        onClick={(e) => e.stopPropagation()} // prevent Link navigation click bubbling
-      >
-        <input type="hidden" name="engagementId" value={engagementId} />
+  function closeModal() {
+    dialogRef.current?.close();
+    setShowDialog(false);
+  }
+
+  function handleConfirm() {
+    closeModal();
+  }
+
+  return (
+    <>
+      {variant === "inline" ? (
         <button
-          type="submit"
+          type="button"
+          onClick={openModal}
           disabled={isPending}
           className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
         >
           {isPending ? "Deleting…" : "Delete"}
         </button>
-      </form>
-    );
-  }
+      ) : (
+        <button
+          type="button"
+          onClick={openModal}
+          disabled={isPending}
+          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+        >
+          {isPending ? "Deleting…" : "Delete engagement"}
+        </button>
+      )}
 
-  return (
-    <form action={formAction} onSubmit={handleSubmit} className="inline-block">
-      <input type="hidden" name="engagementId" value={engagementId} />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
-      >
-        {isPending ? "Deleting…" : "Delete engagement"}
-      </button>
-    </form>
+      {showDialog && (
+        <dialog
+          ref={dialogRef}
+          onClose={closeModal}
+          className="rounded-xl border border-navy-700 bg-navy-900 p-6 text-navy-100 shadow-2xl backdrop:bg-black/50 w-full max-w-md focus-visible:outline-none"
+        >
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-navy-50">Delete Engagement?</h2>
+            <p className="text-sm text-navy-300 font-normal">
+              Are you sure you want to delete <strong className="text-navy-100">"{engagementName}"</strong>? This will permanently remove all documents, findings, and deliverables. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-lg border border-navy-700 bg-navy-800/40 px-4 py-2 text-xs font-medium text-navy-300 hover:bg-navy-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              >
+                Cancel
+              </button>
+              <form action={formAction} onSubmit={handleConfirm}>
+                <input type="hidden" name="engagementId" value={engagementId} />
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50"
+                >
+                  {isPending ? "Deleting…" : "Confirm Delete"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </dialog>
+      )}
+    </>
   );
 }

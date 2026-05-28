@@ -211,7 +211,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="label-caps text-navy-500">Assessment Overview</p>
+          <h2 className="label-caps text-navy-500">Assessment Overview</h2>
           <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
         </div>
         {jobDate && (
@@ -254,7 +254,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
         <div className="glass flex flex-col items-center gap-3 rounded-xl p-6 sm:flex-row">
           <MaturityRadar dims={dims} />
           <div className="w-full space-y-2">
-            <p className="label-caps text-navy-500">Maturity Dimensions</p>
+            <h2 className="label-caps text-navy-500">Maturity Dimensions</h2>
             {dims.map((d) => (
               <div key={d.label} className="flex items-center gap-2">
                 <span className="w-24 truncate text-xs text-navy-400">{d.fullLabel}</span>
@@ -275,7 +275,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
       {/* ── Row 2: Severity Distribution ── */}
       {findings.length > 0 && (
         <div className="glass rounded-xl p-5">
-          <p className="label-caps mb-4 text-navy-500">Severity Distribution</p>
+          <h2 className="label-caps mb-4 text-navy-500">Severity Distribution</h2>
           <div className="grid grid-cols-5 gap-3">
             {SEV_ORDER.map((sev) => {
               const count = bySev[sev]?.length ?? 0;
@@ -319,7 +319,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
       {/* ── Row 3: Infrastructure Stats ── */}
       {topology && (
         <div className="glass rounded-xl p-5">
-          <p className="label-caps mb-4 text-navy-500">Infrastructure Topology</p>
+          <h2 className="label-caps mb-4 text-navy-500">Infrastructure Topology</h2>
           <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">
             {[
               { label: "Subscriptions", value: stats.subscriptions },
@@ -349,7 +349,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
 
       {!topology && findings.length === 0 && (
         <div className="glass flex flex-col items-center gap-3 rounded-xl border border-dashed border-navy-700 px-8 py-10 text-center">
-          <svg className="h-8 w-8 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg aria-hidden="true" focusable="false" className="h-8 w-8 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.633 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
           </svg>
           <p className="text-sm font-semibold text-navy-300">No assessment data yet</p>
@@ -361,7 +361,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
 
       {/* ── Row 4: Navigation Cards ── */}
       <div>
-        <p className="label-caps mb-3 text-navy-500">Explore the Assessment</p>
+        <h2 className="label-caps mb-3 text-navy-500">Explore the Assessment</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <NavCard
             href={`${base}/executive`}
@@ -369,7 +369,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
             description="Risk posture, key metrics, and leadership narrative"
             accent="bg-red-900/40 text-red-400"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" focusable="false" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </NavCard>
@@ -380,7 +380,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
             description="Full findings list, risk matrix, and network inventory"
             accent="bg-orange-900/40 text-orange-400"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" focusable="false" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
             </svg>
           </NavCard>
@@ -391,7 +391,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
             description="Phased action plan with timelines and priorities"
             accent="bg-amber-900/40 text-amber-400"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" focusable="false" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </NavCard>
@@ -402,7 +402,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
             description="Maturity radar, dimension scores, and framework mapping"
             accent="bg-teal-900/40 text-teal-400"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" focusable="false" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </NavCard>

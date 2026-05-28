@@ -29,23 +29,17 @@ export default async function DashboardLayout({
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-3">
           {/* Logo + wordmark */}
           <Link href="/dashboard" className="flex items-center gap-3">
-            {/* W3C-01 / W3C-12: next/image eliminates CLS; single image toggled by CSS dark class */}
-            <Image
-              src="/cbts_light.png"
-              alt="CBTS"
-              height={32}
-              width={96}
-              className="h-8 w-auto dark:hidden"
-              priority
-            />
-            <Image
-              src="/cbts_dark.png"
-              alt="CBTS"
-              height={32}
-              width={96}
-              className="hidden h-8 w-auto dark:block"
-              priority
-            />
+            {/* W3C-01 / W3C-12: picture tag with prefers-color-scheme prevents duplicate downloads and CLS */}
+            <picture>
+              <source srcSet="/cbts_dark.png" media="(prefers-color-scheme: dark)" />
+              <img
+                src="/cbts_light.png"
+                alt="CBTS"
+                className="h-8 w-auto"
+                width={96}
+                height={32}
+              />
+            </picture>
             <div className="mx-1 h-5 w-px bg-navy-100 dark:bg-navy-700" />
             <span className="hidden text-sm font-semibold tracking-tight text-navy-500 dark:text-navy-200 sm:block">
               Cloud Network Assessment

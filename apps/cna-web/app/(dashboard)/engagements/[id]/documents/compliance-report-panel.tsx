@@ -45,7 +45,7 @@ export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }
 
       {needsResync && hasTopology && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3">
-          <svg className="h-4 w-4 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+          <svg aria-hidden="true" focusable="false" className="h-4 w-4 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 110-12 6 6 0 010 12zm-1-9a1 1 0 112 0v4a1 1 0 11-2 0V7zm0 6a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" />
           </svg>
           <p className="text-sm text-amber-300">
@@ -58,10 +58,10 @@ export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }
       <form action={action} className="space-y-4">
         <input type="hidden" name="engagementId" value={engagementId} />
 
-        <div>
-          <label className="label-caps mb-2 block text-navy-500">
+        <fieldset>
+          <legend className="label-caps mb-2 block text-navy-500">
             Compliance Framework
-          </label>
+          </legend>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {FRAMEWORKS.map((fw) => (
               <label
@@ -87,7 +87,7 @@ export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <p className="text-xs text-navy-500">
           Analysis uses live topology data, uploaded documents, and existing findings as
@@ -115,7 +115,7 @@ export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }
           >
             {isPending ? (
               <>
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg aria-hidden="true" focusable="false" className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -123,7 +123,7 @@ export function ComplianceReportPanel({ engagementId, hasTopology, needsResync }
               </>
             ) : (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg aria-hidden="true" focusable="false" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Run compliance check

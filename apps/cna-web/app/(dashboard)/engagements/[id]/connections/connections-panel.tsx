@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { startDiscovery, startAllDiscovery } from "../discovery/actions";
 import { deleteCloudCredential } from "../cloud-credentials/actions";
@@ -87,13 +88,14 @@ function JobEntry({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id, job.status]);
 
-  // OWA-10: Schema check — parse JSON and ensure it is an array of strings
+  // OWA-10: Schema check — parse JSON and validate with Zod (array of strings)
   const progress: string[] = (() => {
     if (!job.progressLog) return [];
     try {
       const parsed = JSON.parse(job.progressLog);
-      if (Array.isArray(parsed) && parsed.every((line) => typeof line === "string")) {
-        return parsed;
+      const safeLog = z.array(z.string()).safeParse(parsed);
+      if (safeLog.success) {
+        return safeLog.data;
       }
       return [String(job.progressLog)];
     } catch {
@@ -409,6 +411,7 @@ function CredentialCard({
   initialJobs: JobSummary[];
   engagementId: string;
 }) {
+  const [runsOpen, setRunsOpen] = useState(false);
   // Live job map: starts from server-rendered data, updated by polling.
   const [liveJobMap, setLiveJobMap] = useState<Map<string, JobSummary>>(
     () => new Map(initialJobs.map((j) => [j.id, j])),
@@ -472,13 +475,14 @@ function CredentialCard({
           {/* Active job progress bar */}
           {isActive && (() => {
             const activeJob = liveJobs.find((j) => ACTIVE_STATUSES.has(j.status));
-            // OWA-10: Schema check — parse JSON and ensure it is an array of strings
+            // OWA-10: Schema check — parse JSON and validate with Zod (array of strings)
             const steps: string[] = (() => {
               if (!activeJob?.progressLog) return [];
               try {
                 const parsed = JSON.parse(activeJob.progressLog);
-                if (Array.isArray(parsed) && parsed.every((line) => typeof line === "string")) {
-                  return parsed;
+                const safeLog = z.array(z.string()).safeParse(parsed);
+                if (safeLog.success) {
+                  return safeLog.data;
                 }
                 return [String(activeJob.progressLog)];
               } catch {
@@ -515,8 +519,14 @@ function CredentialCard({
           {/* Last run + collapsible toggle */}
           {/* WAI-12: Improve keyboard accessibility & focus indicator */}
           {liveJobs.length > 0 && (
-            <details className="mt-1 group/runs">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded-sm">
+            <details
+              className="mt-1 group/runs"
+              onToggle={(e) => setRunsOpen((e.target as HTMLDetailsElement).open)}
+            >
+              <summary
+                aria-expanded={runsOpen}
+                className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded-sm"
+              >
                 <svg
                   aria-hidden="true"
                   focusable="false"

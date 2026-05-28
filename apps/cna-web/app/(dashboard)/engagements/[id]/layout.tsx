@@ -34,7 +34,7 @@ export default async function EngagementLayout({ children, params }: LayoutProps
             href="/dashboard"
             className="inline-flex items-center gap-1 text-xs font-medium text-navy-400 hover:text-teal-600 dark:text-navy-400 dark:hover:text-teal-400 transition-colors"
           >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
             All engagements

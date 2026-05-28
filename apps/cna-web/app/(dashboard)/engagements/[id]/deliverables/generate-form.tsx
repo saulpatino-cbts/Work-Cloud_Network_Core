@@ -83,7 +83,7 @@ export function GenerateDeliverableForm({ engagementId }: { engagementId: string
 
         {/* Assessment type */}
         <div>
-          <p className="label-caps mb-2 text-navy-500">Assessment Type</p>
+          <h3 className="label-caps mb-2 text-navy-500">Assessment Type</h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {ASSESSMENT_TYPES.map((opt, i) => (
               <label key={opt.value} className={`${CARD_BASE} ${CARD_CHECKED}`}>
@@ -96,7 +96,7 @@ export function GenerateDeliverableForm({ engagementId }: { engagementId: string
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <svg className="h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={opt.icon} />
                     </svg>
                     <p className="text-xs font-semibold text-navy-100">{opt.label}</p>
@@ -111,7 +111,7 @@ export function GenerateDeliverableForm({ engagementId }: { engagementId: string
 
         {/* Customer logo */}
         <div>
-          <p className="label-caps mb-1 text-navy-500">Customer Logo (optional)</p>
+          <h3 className="label-caps mb-1 text-navy-500">Customer Logo (optional)</h3>
           <p className="mb-2 text-xs text-navy-600">
             PNG or SVG — personalizes the report header. Leave blank to use the default logo.
           </p>

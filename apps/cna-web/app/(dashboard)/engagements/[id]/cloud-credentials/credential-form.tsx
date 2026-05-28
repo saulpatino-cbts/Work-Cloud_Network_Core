@@ -229,6 +229,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                   value={tenantId}
                   onChange={(e) => setTenantId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  autoComplete="off"
                   className={INPUT_CLS}
                 />
               </div>
@@ -239,6 +240,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                   value={spClientId}
                   onChange={(e) => setSpClientId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  autoComplete="off"
                   className={INPUT_CLS}
                 />
               </div>
@@ -318,6 +320,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Subscription name"
+                autoComplete="off"
                 className="w-48 shrink-0 rounded-lg border border-navy-600/50 bg-navy-800/60 px-3 py-2 text-sm text-navy-100 placeholder-navy-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <div className="flex flex-1 flex-col">
@@ -327,6 +330,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                   onChange={(e) => { setManualSubId(e.target.value); setManualSubIdError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addManual()}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  autoComplete="off"
                   className={`block w-full rounded-lg border px-3 py-2 text-sm text-navy-100 placeholder-navy-500 focus:outline-none focus:ring-1 bg-navy-800/60 ${
                     manualSubIdError
                       ? "border-red-700/60 focus:border-red-500 focus:ring-red-500"

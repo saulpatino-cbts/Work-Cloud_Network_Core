@@ -89,7 +89,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
 
       {!hasAnyContent && (
         <div className="glass flex min-h-[24vh] flex-col items-center justify-center rounded-xl p-10 text-center">
-          <svg className="mb-4 h-10 w-10 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg aria-hidden="true" focusable="false" className="mb-4 h-10 w-10 text-navy-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p className="font-semibold text-navy-300">Nothing published yet</p>
@@ -102,12 +102,12 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
 
       {/* ── Interactive Assessment ── */}
       <section className="space-y-2">
-        <p className="label-caps text-navy-300 dark:text-navy-500">Interactive Assessment</p>
+        <h2 className="label-caps text-navy-300 dark:text-navy-500">Interactive Assessment</h2>
         {interactiveAssessment ? (
           <div className="glass flex items-center justify-between gap-4 p-5">
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
-                <svg className="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg aria-hidden="true" focusable="false" className="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={TYPE_META.INTERACTIVE_ASSESSMENT.iconPath} />
                 </svg>
               </div>
@@ -126,30 +126,31 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 rounded-lg border border-teal-700/50 px-3 py-1.5 text-xs font-semibold text-teal-400 transition-colors hover:bg-teal-900/20"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                   View Report
+                  <span className="sr-only"> (opens in new tab)</span>
                 </a>
               )}
               <Link
                 href={`/engagements/${id}/presentation`}
                 className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-500"
               >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 Dashboard
               </Link>
-              <form action={deleteDeliverableFromPortal}>
+              <form action={deleteDeliverableFromPortal} aria-label={`Delete ${interactiveAssessment.title}`}>
                 <input type="hidden" name="deliverableId" value={interactiveAssessment.id} />
                 <input type="hidden" name="engagementId" value={id} />
                 <button
                   type="submit"
-                  title="Delete interactive assessment"
+                  aria-label={`Delete ${interactiveAssessment.title}`}
                   className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-800/40 text-red-400 transition-colors hover:bg-red-900/20"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -177,16 +178,16 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Published assessments ── */}
       {publishedAssessments.length > 0 && (
         <section className="space-y-2">
-          <p className="label-caps text-navy-300 dark:text-navy-500">
+          <h2 className="label-caps text-navy-300 dark:text-navy-500">
             Published Assessments — {publishedAssessments.length}
-          </p>
+          </h2>
           {publishedAssessments.map((d) => {
             const meta = TYPE_META[d.type] ?? { label: d.type.replace(/_/g, " "), audience: "General", iconPath: DOC_ICON };
             return (
               <div key={d.id} className="glass flex items-center justify-between gap-4 p-5">
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
-                    <svg className="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg aria-hidden="true" focusable="false" className="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={meta.iconPath} />
                     </svg>
                   </div>
@@ -205,18 +206,19 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
                   {d.content && (
                     <a href={`/api/deliverables/${d.id}`} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-500">
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                       View / Print
+                      <span className="sr-only"> (opens in new tab)</span>
                     </a>
                   )}
-                  <form action={deleteDeliverableFromPortal}>
+                  <form action={deleteDeliverableFromPortal} aria-label={`Delete ${d.title}`}>
                     <input type="hidden" name="deliverableId" value={d.id} />
                     <input type="hidden" name="engagementId" value={id} />
-                    <button type="submit" title="Delete"
+                    <button type="submit" aria-label={`Delete ${d.title}`}
                       className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-800/40 text-red-400 transition-colors hover:bg-red-900/20">
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -231,7 +233,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Draft assessments ── */}
       {draftAssessments.length > 0 && (
         <section className="space-y-2">
-          <p className="label-caps text-navy-300 dark:text-navy-500">Drafts — {draftAssessments.length}</p>
+          <h2 className="label-caps text-navy-300 dark:text-navy-500">Drafts — {draftAssessments.length}</h2>
           <div className="glass p-4">
             <ul className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
               {draftAssessments.map((d) => (
@@ -242,12 +244,12 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-400">Draft</span>
-                    <form action={deleteDeliverableFromPortal}>
+                    <form action={deleteDeliverableFromPortal} aria-label={`Delete ${d.title}`}>
                       <input type="hidden" name="deliverableId" value={d.id} />
                       <input type="hidden" name="engagementId" value={id} />
-                      <button type="submit" title="Delete"
+                      <button type="submit" aria-label={`Delete ${d.title}`}
                         className="flex h-6 w-6 items-center justify-center rounded border border-red-800/40 text-red-400 transition-colors hover:bg-red-900/20">
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <svg aria-hidden="true" focusable="false" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -263,12 +265,12 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Uploaded Documents ── */}
       {engagement.documents.length > 0 && (
         <section className="space-y-2">
-          <p className="label-caps text-navy-300 dark:text-navy-500">Uploaded Documents — {engagement.documents.length}</p>
+          <h2 className="label-caps text-navy-300 dark:text-navy-500">Uploaded Documents — {engagement.documents.length}</h2>
           <div className="glass divide-y divide-navy-700/30">
             {engagement.documents.map((doc) => (
               <div key={doc.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
                 <div className="flex items-center gap-3 min-w-0">
-                  <svg className="h-5 w-5 shrink-0 text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <svg aria-hidden="true" focusable="false" className="h-5 w-5 shrink-0 text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={DOC_ICON} />
                   </svg>
                   <div className="min-w-0">
@@ -279,12 +281,12 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
                     </p>
                   </div>
                 </div>
-                <form action={deleteDocument} className="shrink-0">
+                <form action={deleteDocument} className="shrink-0" aria-label={`Delete document ${doc.fileName}`}>
                   <input type="hidden" name="documentId" value={doc.id} />
                   <input type="hidden" name="engagementId" value={id} />
-                  <button type="submit" title="Delete document"
+                  <button type="submit" aria-label={`Delete document ${doc.fileName}`}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-800/40 text-red-400 transition-colors hover:bg-red-900/20">
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>

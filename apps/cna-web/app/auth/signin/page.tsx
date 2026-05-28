@@ -6,18 +6,17 @@ export default function SignInPage() {
       {/* Glass card */}
       <div className="glass w-full max-w-sm p-8">
         {/* Logo */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/cbts_light.png"
-          alt="CBTS"
-          className="mb-6 h-9 w-auto dark:hidden"
-        />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/cbts_dark.png"
-          alt="CBTS"
-          className="mb-6 h-9 w-auto hidden dark:block"
-        />
+        {/* W3C-01 / W3C-12: picture tag with prefers-color-scheme prevents duplicate downloads and CLS */}
+        <picture>
+          <source srcSet="/cbts_dark.png" media="(prefers-color-scheme: dark)" />
+          <img
+            src="/cbts_light.png"
+            alt="CBTS"
+            className="mb-6 h-9 w-auto"
+            width={108}
+            height={36}
+          />
+        </picture>
 
         <h1 className="mb-1 text-2xl font-black tracking-tight text-navy-800 dark:text-navy-50">
           Cloud Network Assessment
@@ -33,7 +32,7 @@ export default function SignInPage() {
           }}
         >
           <button type="submit" className="btn-teal w-full justify-center py-2.5 text-sm">
-            <svg className="h-4 w-4" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg aria-hidden="true" focusable="false" className="h-4 w-4" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="1"  y="1"  width="9" height="9" fill="#f25022" />
               <rect x="11" y="1"  width="9" height="9" fill="#7fba00" />
               <rect x="1"  y="11" width="9" height="9" fill="#00a4ef" />

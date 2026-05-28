@@ -51,7 +51,7 @@ export default async function TechnicalPage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Header ── */}
       <div>
-        <p className="label-caps text-navy-500">Technical Network Findings</p>
+        <h2 className="label-caps text-navy-500">Technical Network Findings</h2>
         <h1 className="mt-0.5 text-xl font-black text-navy-100">{engagement.clientOrg}</h1>
         {jobDate && (
           <p className="mt-0.5 text-xs text-navy-500">
@@ -198,9 +198,9 @@ export default async function TechnicalPage({ params }: PageProps) {
           <h2 className="mb-4 text-base font-bold text-navy-100">Network Inventory</h2>
           {topology.subscriptions.map((sub) => (
             <div key={sub.subscription_id} className="mb-6 last:mb-0">
-              <p className="label-caps mb-2 text-navy-500">
+              <h3 className="label-caps mb-2 text-navy-500">
                 {sub.subscription_name ?? sub.subscription_id}
-              </p>
+              </h3>
               {sub.vnets.length > 0 ? (
                 sub.vnets.map((vnet) => (
                   <div
@@ -262,7 +262,7 @@ export default async function TechnicalPage({ params }: PageProps) {
               {/* Firewalls */}
               {(sub.firewalls?.length ?? 0) > 0 && (
                 <div className="mt-3">
-                  <p className="label-caps mb-2 text-navy-600">Azure Firewalls</p>
+                  <h3 className="label-caps mb-2 text-navy-600">Azure Firewalls</h3>
                   <div className="divide-y divide-navy-700/30 rounded-xl border border-navy-700/40">
                     {sub.firewalls.map((fw) => (
                       <div key={fw.name} className="flex items-center justify-between px-4 py-2.5">

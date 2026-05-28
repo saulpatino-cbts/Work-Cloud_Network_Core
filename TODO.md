@@ -1,9 +1,9 @@
 # CNA Platform — Active TODO
 
-> **Status as of 2026-05-28 · Sprint 5 opened**
+> **Status as of 2026-05-28 · Sprint 5 completed**
 > Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
 > Sprint 1 (Beta Hard Blockers), Sprint 2 (East-West Visibility), Sprint 3 (Production Hardening), and Sprint 4 (Assessment Completeness) are now closed.
-> **Sprint 5 (WCAG 2.1 / W3C / OWASP Audit) is now open — 47 findings across 3 standards.**
+> **Sprint 5 (WCAG 2.1 / W3C / OWASP Audit) is now closed — all 47 findings resolved.**
 > **19 of 19 Azure rules are active.** Beta deployment sequence is ready to run.
 
 ---
@@ -313,7 +313,7 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ### Wave 2 — HIGH (Required for WCAG AA Conformance + OWASP Rating)
 
-- [/] **[WAI-06] Replace label-caps `<p>` elements with semantic heading elements**
+- [x] **[WAI-06] Replace label-caps `<p>` elements with semantic heading elements**
   Section labels like "Engagement Progress", "Jump to", "Generate Assessment" must be `<h2>`/`<h3>`.
   Files: `page.tsx`, `deliverables/page.tsx`, and all pages with `.label-caps` labels
 
@@ -349,7 +349,7 @@ Once the environment is up and smoke-tested, run through these scenarios:
   Eliminates CLS and removes `eslint-disable` suppression.
   File: `apps/cna-web/app/(dashboard)/layout.tsx` L24–33
 
-- [/] **[W3C-02] Add `aria-hidden="true" focusable="false"` to all decorative inline SVGs**
+- [x] **[W3C-02] Add `aria-hidden="true" focusable="false"` to all decorative inline SVGs**
   Affects all components. Consider creating a shared `<Icon>` wrapper component.
 
 - [x] **[W3C-03] Add W3C standard scrollbar CSS alongside webkit vendor prefix**
@@ -359,11 +359,11 @@ Once the environment is up and smoke-tested, run through these scenarios:
   Disables ClearType on Windows — degrades readability for Windows users.
   File: `apps/cna-web/app/globals.css` L84–86
 
-- [ ] **[OWA-02] Add per-user rate limiting to Server Actions (AI generation, discovery start)**
+- [x] **[OWA-02] Add per-user rate limiting to Server Actions (AI generation, discovery start)**
   Implement with `@upstash/ratelimit` or similar. 5 requests per 60s per user per action.
   Files: `deliverables/actions.ts`, `discovery/actions.ts`
 
-- [ ] **[OWA-03] Fix CSRF protection on `deleteEngagement` — wrap in `<form>` element**
+- [x] **[OWA-03] Fix CSRF protection on `deleteEngagement` — wrap in `<form>` element**
   File: `apps/cna-web/components/ui/delete-engagement-button.tsx` L28–30
 
 - [x] **[OWA-04] Restrict non-Secure session cookie fallback to `NODE_ENV !== 'production'`**
@@ -375,66 +375,66 @@ Once the environment is up and smoke-tested, run through these scenarios:
 
 ### Wave 3 — MEDIUM (Best Practice / Defence-in-Depth)
 
-- [ ] **[OWA-08] Audit `lib/auth.ts` — enforce `useSecureCookies: true` unconditionally in prod**
+- [x] **[OWA-08] Audit `lib/auth.ts` — enforce `useSecureCookies: true` unconditionally in prod**
 
-- [ ] **[OWA-09] Replace `confirm()` dialogs with accessible modal confirmation components**
+- [x] **[OWA-09] Replace `confirm()` dialogs with accessible modal confirmation components**
   Files: `delete-engagement-button.tsx`, any other uses of `window.confirm()`
 
-- [ ] **[OWA-10] Add Zod validation to `progressLog` JSON parse in `connections-panel.tsx`**
+- [x] **[OWA-10] Add Zod validation to `progressLog` JSON parse in `connections-panel.tsx`**
   File: `connections-panel.tsx` L90–96
 
-- [ ] **[OWA-12] Map raw Azure SDK errors to user-friendly messages in `deliverables/actions.ts`**
+- [x] **[OWA-12] Map raw Azure SDK errors to user-friendly messages in `deliverables/actions.ts`**
   Do not return raw error strings containing Azure resource names to the browser.
 
-- [ ] **[OWA-13] Expand `Permissions-Policy` header with all modern browser APIs**
+- [x] **[OWA-13] Expand `Permissions-Policy` header with all modern browser APIs**
   Add: `payment=()`, `usb=()`, `serial=()`, `hid=()`, `bluetooth=()`, `display-capture=()`
   File: `next.config.ts` L14
 
-- [ ] **[OWA-14] Add `preload` directive to `Strict-Transport-Security` header**
+- [x] **[OWA-14] Add `preload` directive to `Strict-Transport-Security` header**
   File: `next.config.ts` L10
 
-- [ ] **[OWA-06] Add server-side MIME / magic-byte validation to document upload action**
+- [x] **[OWA-06] Add server-side MIME / magic-byte validation to document upload action**
   Allowlist: `application/pdf`, `text/plain`, `image/png`, `image/jpeg`.
 
-- [ ] **[WAI-12] Fix `<details>/<summary>` accessibility for Firefox+NVDA compatibility**
+- [x] **[WAI-12] Fix `<details>/<summary>` accessibility for Firefox+NVDA compatibility**
   Add `aria-expanded` explicitly or revert to button-based expand pattern.
   File: `connections-panel.tsx` L491–525
 
-- [ ] **[WAI-14] Add "(opens in new tab)" `sr-only` text to all `target="_blank"` links**
+- [x] **[WAI-14] Add "(opens in new tab)" `sr-only` text to all `target="_blank"` links**
   Files: `sp-help-modal.tsx`, `findings-client.tsx`
 
-- [ ] **[WAI-17] Add `aria-label` to `<aside>` and `<nav>` landmark elements in sidebar**
+- [x] **[WAI-17] Add `aria-label` to `<aside>` and `<nav>` landmark elements in sidebar**
   File: `engagement-sidebar.tsx`
 
-- [ ] **[WAI-20] Add `autocomplete` attributes to credential and engagement form inputs**
+- [x] **[WAI-20] Add `autocomplete` attributes to credential and engagement form inputs**
   Sensitive fields: `autocomplete="off"`. Non-sensitive: use SC 1.3.5 tokens.
 
-- [ ] **[WAI-21] Increase `focus:ring-1` to `focus:ring-2` on `<select>` elements**
+- [x] **[WAI-21] Increase `focus:ring-1` to `focus:ring-2` on `<select>` elements**
   File: `findings-client.tsx` L373–393
 
-- [ ] **[WAI-23] Add `aria-label` and `aria-current="step"` to phase stepper steps**
+- [x] **[WAI-23] Add `aria-label` and `aria-current="step"` to phase stepper steps**
   File: `apps/cna-web/app/(dashboard)/engagements/[id]/page.tsx` L82–128
 
-- [ ] **[W3C-05] Add `<meta name="color-scheme" content="light dark">` to root layout**
+- [x] **[W3C-05] Add `<meta name="color-scheme" content="light dark">` to root layout**
   Prevents white flash on dark mode load and fixes form control colours.
   File: `apps/cna-web/app/layout.tsx`
 
-- [ ] **[W3C-06] Add `@supports (backdrop-filter: blur(1px))` feature query to `.glass` class**
+- [x] **[W3C-06] Add `@supports (backdrop-filter: blur(1px))` feature query to `.glass` class**
   Provides proper opaque fallback for Firefox.
   File: `globals.css`
 
-- [ ] **[W3C-08] Add CSS custom property type declarations for `--bar-pct`**
+- [x] **[W3C-08] Add CSS custom property type declarations for `--bar-pct`**
   Replace `as React.CSSProperties` cast with a typed module augmentation.
   File: `apps/cna-web/types/css.d.ts` (new)
 
-- [ ] **[W3C-09] Update `rel="noreferrer"` to `rel="noopener noreferrer"` on deliverable links**
+- [x] **[W3C-09] Update `rel="noreferrer"` to `rel="noopener noreferrer"` on deliverable links**
   File: `deliverables/page.tsx` L183
 
-- [ ] **[W3C-10] Add `aria-label` to all per-deliverable delete `<form>` elements**
+- [x] **[W3C-10] Add `aria-label` to all per-deliverable delete `<form>` elements**
   Prevents screen readers announcing identical "delete" forms.
   File: `deliverables/page.tsx` L196–208
 
-- [ ] **[W3C-12] Replace dual `<img>` logo pattern with `<picture>` element**
+- [x] **[W3C-12] Replace dual `<img>` logo pattern with `<picture>` element**
   Eliminates duplicate image requests and duplicate `alt` announcements.
   File: `apps/cna-web/app/(dashboard)/layout.tsx` L24–33
 

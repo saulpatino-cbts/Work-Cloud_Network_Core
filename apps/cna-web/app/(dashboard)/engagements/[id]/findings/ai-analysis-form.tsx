@@ -103,8 +103,8 @@ export function AiAnalysisForm({ engagementId }: { engagementId: string }) {
 
         <div className="space-y-4">
           {ANALYSIS_OPTIONS.map((group) => (
-            <div key={group.group}>
-              <p className="label-caps mb-2 text-navy-500">{group.group}</p>
+            <fieldset key={group.group}>
+              <legend className="label-caps mb-2 block text-navy-500">{group.group}</legend>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {group.items.map((opt, i) => (
                   <label key={opt.value} className={`${CARD_BASE} ${CARD_CHECKED}`}>
@@ -122,7 +122,7 @@ export function AiAnalysisForm({ engagementId }: { engagementId: string }) {
                   </label>
                 ))}
               </div>
-            </div>
+            </fieldset>
           ))}
         </div>
 

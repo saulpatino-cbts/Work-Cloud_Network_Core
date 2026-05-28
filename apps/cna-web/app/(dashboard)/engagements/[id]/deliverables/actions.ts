@@ -183,10 +183,11 @@ export async function generateDeliverable(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("[generateDeliverable][error]", err);
     if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
       return { error: "AI generation failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
     }
-    return { error: `AI generation failed: ${msg.slice(0, 200)}` };
+    return { error: "AI generation failed. Please check the server logs for details." };
   }
 
   const ext = type === "COMPREHENSIVE_ASSESSMENT" ? "html" : "md";

@@ -22,9 +22,9 @@ export default async function DashboardPage() {
       {/* ── Page header ── */}
       <div className="mb-8 flex items-end justify-between">
         <div>
-          <p className="label-caps text-navy-400 dark:text-navy-300">
+          <h2 className="label-caps text-navy-400 dark:text-navy-300">
             CBTS Cloud Network Assessment
-          </p>
+          </h2>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-navy-800 dark:text-navy-50">
             Engagements
           </h1>
@@ -35,7 +35,7 @@ export default async function DashboardPage() {
           )}
         </div>
         <Link href="/engagements/new" className="btn-teal">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg aria-hidden="true" focusable="false" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           New engagement
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
       {engagements.length === 0 && (
         <div className="glass flex flex-col items-center gap-4 py-20 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-900/40">
-            <svg className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg aria-hidden="true" focusable="false" className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
@@ -101,13 +101,13 @@ export default async function DashboardPage() {
                 {/* Stats row */}
                 <div className="mt-auto flex items-center gap-3 pt-3 border-t border-navy-100/50 dark:border-navy-700/50">
                   <div className="flex items-center gap-1.5 text-xs text-navy-400 dark:text-navy-300">
-                    <svg className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                     </svg>
                     <span className="font-semibold text-navy-700 dark:text-navy-100">{eng._count.findings}</span> findings
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-navy-400 dark:text-navy-300">
-                    <svg className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg aria-hidden="true" focusable="false" className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span className="font-semibold text-navy-700 dark:text-navy-100">{eng._count.documents}</span> docs
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
             className="glass glass-hover flex flex-col items-center justify-center gap-3 py-14 text-center opacity-60 hover:opacity-100"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-dashed border-teal-400 dark:border-teal-600">
-              <svg className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg aria-hidden="true" focusable="false" className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
             </div>

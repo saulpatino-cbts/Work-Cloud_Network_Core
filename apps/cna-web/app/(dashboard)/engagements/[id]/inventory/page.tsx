@@ -359,7 +359,7 @@ export default async function InventoryPage({ params }: PageProps) {
     return (
       <div className="glass p-10 text-center">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-100 dark:bg-navy-800">
-          <svg className="h-6 w-6 text-navy-400 dark:text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg aria-hidden="true" focusable="false" className="h-6 w-6 text-navy-400 dark:text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>
         </div>
@@ -401,7 +401,7 @@ export default async function InventoryPage({ params }: PageProps) {
       {/* ── Header bar ── */}
       <div className="glass flex items-center justify-between p-4">
         <div>
-          <p className="label-caps text-navy-300 dark:text-navy-500">Network Inventory</p>
+          <h2 className="label-caps text-navy-300 dark:text-navy-500">Network Inventory</h2>
           <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">
             {subs.length} subscription{subs.length !== 1 ? "s" : ""} · Tenant {topology.tenant_id.slice(0, 8)}…
             {jobDate && <span className="ml-2">· Discovered {new Date(jobDate).toLocaleString()}</span>}
@@ -1052,7 +1052,7 @@ function InvCard({
   return (
     <div className="glass p-5">
       <div className="mb-4 flex items-center gap-3">
-        <p className="label-caps text-navy-300 dark:text-navy-500">{title}</p>
+        <h3 className="label-caps text-navy-300 dark:text-navy-500">{title}</h3>
         <span className="pill-teal">{count}</span>
         {badge && (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeVariant === "warn" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"}`}>

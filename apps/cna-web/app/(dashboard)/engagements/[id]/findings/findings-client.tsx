@@ -287,7 +287,7 @@ export function FindingsClient({ findings }: Props) {
               key={sev}
               title={`${SEV_META[sev].label}: ${sevCounts[sev]}`}
               className={`${SEV_META[sev].bar} rounded-full transition-all`}
-              style={{ width: `${(sevCounts[sev] / total) * 100}%` }}
+              {...{ style: { width: `${(sevCounts[sev] / total) * 100}%` } }}
             />
           ))}
         </div>

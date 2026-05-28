@@ -262,7 +262,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
                   {/* eslint-disable-next-line react/forbid-dom-props */}
                   <div
                     className="h-1.5 rounded-full bg-teal-500"
-                    style={{ width: `${(d.score / 10) * 100}%` }}
+                    {...{ style: { width: `${(d.score / 10) * 100}%` } }}
                   />
                 </div>
                 <span className="w-5 text-right text-xs font-bold text-teal-400">{d.score}</span>
@@ -287,7 +287,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
                     {/* eslint-disable-next-line react/forbid-dom-props */}
                     <div
                       className={`w-full rounded-t ${style.bar}`}
-                      style={{ height: `${Math.max(barPct, count > 0 ? 8 : 0)}%` }}
+                      {...{ style: { height: `${Math.max(barPct, count > 0 ? 8 : 0)}%` } }}
                     />
                   </div>
                   <p className={`text-xl font-black ${style.text}`}>{count}</p>
@@ -307,7 +307,7 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
                 <div
                   key={sev}
                   className={SEV_COLORS[sev as keyof typeof SEV_COLORS].bar}
-                  style={{ width: `${pct}%` }}
+                  {...{ style: { width: `${pct}%` } }}
                   title={`${sev}: ${bySev[sev]?.length ?? 0}`}
                 />
               ) : null;

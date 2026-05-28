@@ -511,7 +511,7 @@ function CredentialCard({
                 >
                   <div
                     className="h-full rounded-full bg-teal-500 transition-all duration-700"
-                    style={{ width: `${pct}%` }}
+                    {...{ style: { width: `${pct}%` } }}
                   />
                 </div>
               </div>

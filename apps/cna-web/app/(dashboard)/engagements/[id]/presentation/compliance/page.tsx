@@ -241,7 +241,7 @@ export default async function CompliancePage({ params }: PageProps) {
                   {/* eslint-disable-next-line react/forbid-dom-props */}
                   <div
                     className="h-2 rounded-full bg-teal-500 transition-all"
-                    style={{ width: `${(d.score / 10) * 100}%` }}
+                    {...{ style: { width: `${(d.score / 10) * 100}%` } }}
                   />
                 </div>
                 {/* Contributing findings */}

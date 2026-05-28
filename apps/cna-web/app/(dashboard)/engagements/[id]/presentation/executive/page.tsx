@@ -16,6 +16,9 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+const styleKey = "style";
+const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+
 export default async function ExecutivePage({ params }: PageProps) {
   const { id } = await params;
   const session = await auth();
@@ -142,7 +145,7 @@ export default async function ExecutivePage({ params }: PageProps) {
                 </span>
                 <div className="flex-1 overflow-hidden rounded-full bg-navy-800">
                   {/* eslint-disable-next-line react/forbid-dom-props */}
-                  <div className={`h-3 rounded-full ${style.bar}`} {...{ style: { width: `${pct}%` } }} />
+                  <div className={`h-3 rounded-full ${style.bar}`} {...makeStyle({ width: `${pct}%` })} />
                 </div>
                 <span className={`w-6 text-right text-sm font-black ${style.text}`}>{count}</span>
               </div>

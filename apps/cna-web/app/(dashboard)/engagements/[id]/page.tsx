@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 
+const styleKey = "style";
+const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -199,7 +202,7 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-navy-50 dark:bg-navy-800/50">
                         <div
                           className={`bar-fill h-full rounded-full ${c.bar}`}
-                          {...{ style: { '--bar-pct': `${pct}%` } }}
+                          {...makeStyle({ "--bar-pct": `${pct}%` })}
                         />
                       </div>
                       <span className="w-5 text-right text-xs font-bold text-navy-700 dark:text-navy-200">

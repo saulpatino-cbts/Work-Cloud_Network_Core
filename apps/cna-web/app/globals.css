@@ -237,9 +237,11 @@ body {
 /* ── Thin teal scrollbar ──────────────────────────────────────────────────── */
 
 /* W3C-03: W3C standard scrollbar properties (Chrome 121+, Firefox, Safari 18.2+) */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) transparent;
+  }
 }
 
 /* Vendor-prefix fallback for older WebKit browsers */

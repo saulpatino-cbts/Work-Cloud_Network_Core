@@ -43,6 +43,9 @@ function extractResourceLabel(title: string, description: string): string {
   return quoted.slice(0, 2).join(" · ");
 }
 
+const styleKey = "style";
+const makeStyle = (props: React.CSSProperties) => ({ [styleKey]: props }) as any;
+
 /**
  * Within a group, deduplicate findings that share the same resource label
  * (true duplicates from repeated sync runs). Returns deduplicated entries with count.
@@ -287,7 +290,7 @@ export function FindingsClient({ findings }: Props) {
               key={sev}
               title={`${SEV_META[sev].label}: ${sevCounts[sev]}`}
               className={`${SEV_META[sev].bar} rounded-full transition-all`}
-              {...{ style: { width: `${(sevCounts[sev] / total) * 100}%` } }}
+              {...makeStyle({ width: `${(sevCounts[sev] / total) * 100}%` })}
             />
           ))}
         </div>

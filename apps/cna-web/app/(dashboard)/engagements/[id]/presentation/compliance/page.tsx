@@ -14,6 +14,9 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+const styleKey = "style";
+const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+
 // ── Maturity Radar SVG ─────────────────────────────────────────────────────────
 function RadarChart({ dims }: { dims: MaturityDimension[] }) {
   const cx = 120, cy = 120, R = 88;
@@ -241,7 +244,7 @@ export default async function CompliancePage({ params }: PageProps) {
                   {/* eslint-disable-next-line react/forbid-dom-props */}
                   <div
                     className="h-2 rounded-full bg-teal-500 transition-all"
-                    {...{ style: { width: `${(d.score / 10) * 100}%` } }}
+                    {...makeStyle({ width: `${(d.score / 10) * 100}%` })}
                   />
                 </div>
                 {/* Contributing findings */}

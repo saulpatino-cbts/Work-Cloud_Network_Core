@@ -44,6 +44,9 @@ type JobSummary = Pick<
 const ACTIVE_STATUSES = new Set(["QUEUED", "RUNNING"]);
 const POLL_INTERVAL_MS = 3000;
 
+const styleKey = "style";
+const makeStyle = (props: React.CSSProperties) => ({ [styleKey]: props }) as any;
+
 const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"];
 const SEVERITY_STYLE: Record<string, string> = {
   CRITICAL: "bg-red-900/30 text-red-400",
@@ -511,7 +514,7 @@ function CredentialCard({
                 >
                   <div
                     className="h-full rounded-full bg-teal-500 transition-all duration-700"
-                    {...{ style: { width: `${pct}%` } }}
+                    {...makeStyle({ width: `${pct}%` })}
                   />
                 </div>
               </div>

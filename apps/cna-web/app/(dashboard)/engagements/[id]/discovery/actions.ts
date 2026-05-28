@@ -4,12 +4,19 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { revalidatePath } from "next/cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function startAllDiscovery(
   engagementId: string,
 ): Promise<{ error?: string; started?: number }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // OWA-02: Rate limit starting all discovery (5 requests per 60s)
+  const isAllowed = await checkRateLimit(session.user.id, "startAllDiscovery");
+  if (!isAllowed) {
+    return { error: "Too many requests. Please wait before starting discovery again." };
+  }
 
   const member = await prisma.engagementMember.findUnique({
     where: { engagementId_userId: { engagementId, userId: session.user.id } },
@@ -93,6 +100,12 @@ export async function startDiscovery(
 ): Promise<{ error?: string; jobId?: string }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // OWA-02: Rate limit starting single discovery (5 requests per 60s)
+  const isAllowed = await checkRateLimit(session.user.id, "startDiscovery");
+  if (!isAllowed) {
+    return { error: "Too many requests. Please wait before starting discovery again." };
+  }
 
   const engagementId = formData.get("engagementId") as string | null;
   const credentialId = formData.get("credentialId") as string | null;

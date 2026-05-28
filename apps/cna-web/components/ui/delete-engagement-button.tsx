@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useActionState } from "react";
 import { deleteEngagement } from "@/app/(dashboard)/dashboard/actions";
 
 interface Props {
@@ -15,43 +15,54 @@ export function DeleteEngagementButton({
   engagementName,
   variant = "header",
 }: Props) {
-  const [isPending, startTransition] = useTransition();
+  const [_, formAction, isPending] = useActionState(
+    async (prevState: any, formData: FormData) => {
+      await deleteEngagement(formData);
+      return prevState;
+    },
+    null
+  );
 
-  function handleClick() {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     if (
       !confirm(
         `Delete "${engagementName}"? This will permanently remove all documents, findings, and deliverables. This cannot be undone.`,
       )
     ) {
-      return;
+      e.preventDefault();
     }
-    const formData = new FormData();
-    formData.set("engagementId", engagementId);
-    startTransition(() => deleteEngagement(formData));
   }
 
   if (variant === "inline") {
     return (
-      <button
-        onClick={(e) => {
-          e.preventDefault(); // don't bubble into parent <Link>
-          handleClick();
-        }}
-        disabled={isPending}
-        className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+      <form
+        action={formAction}
+        onSubmit={handleSubmit}
+        className="inline-block"
+        onClick={(e) => e.stopPropagation()} // prevent Link navigation click bubbling
       >
-        {isPending ? "Deleting…" : "Delete"}
-      </button>
+        <input type="hidden" name="engagementId" value={engagementId} />
+        <button
+          type="submit"
+          disabled={isPending}
+          className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+        >
+          {isPending ? "Deleting…" : "Delete"}
+        </button>
+      </form>
     );
   }
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={isPending}
-      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-    >
-      {isPending ? "Deleting…" : "Delete engagement"}
-    </button>
+    <form action={formAction} onSubmit={handleSubmit} className="inline-block">
+      <input type="hidden" name="engagementId" value={engagementId} />
+      <button
+        type="submit"
+        disabled={isPending}
+        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+      >
+        {isPending ? "Deleting…" : "Delete engagement"}
+      </button>
+    </form>
   );
 }

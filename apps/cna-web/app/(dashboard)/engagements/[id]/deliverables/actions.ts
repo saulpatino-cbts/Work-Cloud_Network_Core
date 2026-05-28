@@ -7,6 +7,7 @@ import { generateDeliverableContent } from "@/lib/openai";
 import type { DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 import type { DeliverableType } from "@prisma/client";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // ─── Multi-subscription topology merge ────────────────────────────────────────
 // Each CloudCredential is one subscription sync group. We take the latest
@@ -108,6 +109,12 @@ export async function generateDeliverable(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
+  // OWA-02: Rate limit deliverable generation (5 requests per 60s)
+  const isAllowed = await checkRateLimit(session.user.id, "generateDeliverable");
+  if (!isAllowed) {
+    return { error: "Too many requests. Please wait before generating deliverables again." };
+  }
+
   const engagementId = formData.get("engagementId") as string | null;
   const type = formData.get("type") as string | null;
   const customerLogoUrl = (formData.get("customerLogoUrl") as string | null) ?? null;
@@ -207,6 +214,12 @@ export async function generateAllAssessments(
 ): Promise<{ error?: string; success?: boolean; count?: number }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // OWA-02: Rate limit generating all assessments (5 requests per 60s)
+  const isAllowed = await checkRateLimit(session.user.id, "generateAllAssessments");
+  if (!isAllowed) {
+    return { error: "Too many requests. Please wait before generating deliverables again." };
+  }
 
   const engagementId = formData.get("engagementId") as string | null;
   const customerLogoUrl = (formData.get("customerLogoUrl") as string | null) ?? null;

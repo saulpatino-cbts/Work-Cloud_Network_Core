@@ -516,7 +516,7 @@ Once the environment is up and smoke-tested, run through these scenarios:
 ## Dependency Hygiene Backlog (added 2026-04-28)
 
 | Item | Priority | Notes |
-|------|----------|-------|
+| --- | --- | --- |
 | Upgrade `next-auth` from `5.0.0-beta.30` to stable v5 when released | HIGH | No stable v5 exists as of 2026-04-28. Track [nextauthjs/next-auth releases](https://github.com/nextauthjs/next-auth/releases). |
 | Merge 6 open Dependabot PRs (#13–#18) | HIGH | rich, n2g, tenacity, boto3, ruff, python base image updates |
 | Evaluate whether `openai>=1.50` (Python) and `openai: ^6.34.0` (Node) can be aligned | LOW | Different major versions reflect API SDK generations; document intentionally. |

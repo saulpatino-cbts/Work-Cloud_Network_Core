@@ -150,7 +150,7 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={toggle}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!isCollapsed}
+            {...{ "aria-expanded": !isCollapsed }}
             aria-controls="engagement-nav"
             className={[
               "flex h-7 w-7 items-center justify-center rounded-lg text-navy-300 transition-colors hover:bg-teal-50 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:text-navy-500 dark:hover:bg-teal-900/30 dark:hover:text-teal-400",

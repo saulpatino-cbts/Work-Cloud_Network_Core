@@ -83,7 +83,7 @@ function InstanceRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        {...{ "aria-expanded": open }}
         aria-controls={`finding-instance-${finding.id}`}
         className="flex w-full items-center gap-2 py-2.5 text-left hover:text-navy-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
       >
@@ -354,7 +354,7 @@ export function FindingsClient({ findings }: Props) {
             <button
               type="button"
               onClick={() => setSevFilter("ALL")}
-              aria-pressed={sevFilter === "ALL"}
+              {...{ "aria-pressed": sevFilter === "ALL" }}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
                 sevFilter === "ALL"
                   ? "bg-navy-600 text-navy-100 ring-2 ring-teal-500/50"
@@ -368,7 +368,7 @@ export function FindingsClient({ findings }: Props) {
                 key={sev}
                 type="button"
                 onClick={() => setSevFilter(sevFilter === sev ? "ALL" : sev)}
-                aria-pressed={sevFilter === sev}
+                {...{ "aria-pressed": sevFilter === sev }}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
                   sevFilter === sev
                     ? `${SEV_META[sev].badge} ring-2 ring-teal-500/50`
@@ -442,7 +442,7 @@ export function FindingsClient({ findings }: Props) {
                 <button
                   type="button"
                   onClick={() => setExpandedGroupKey(isExpanded ? null : groupKey)}
-                  aria-expanded={isExpanded}
+                  {...{ "aria-expanded": isExpanded }}
                   aria-controls={`finding-group-${groupKey}`}
                   className={`w-full px-5 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${
                     isExpanded ? "bg-navy-800/20" : "hover:bg-navy-800/10"

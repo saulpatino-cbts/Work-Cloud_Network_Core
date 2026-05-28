@@ -501,9 +501,11 @@ function CredentialCard({
                 {/* WAI-11: progressbar role and values */}
                 <div
                   role="progressbar"
-                  aria-valuenow={pct}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
+                  {...{
+                    "aria-valuenow": pct,
+                    "aria-valuemin": 0,
+                    "aria-valuemax": 100,
+                  }}
                   aria-label={`Discovery progress: ${pct}%`}
                   className="h-1.5 w-full overflow-hidden rounded-full bg-navy-700/50"
                 >
@@ -524,7 +526,7 @@ function CredentialCard({
               onToggle={(e) => setRunsOpen((e.target as HTMLDetailsElement).open)}
             >
               <summary
-                aria-expanded={runsOpen}
+                {...{ "aria-expanded": runsOpen }}
                 className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-navy-400 hover:text-navy-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded-sm"
               >
                 <svg

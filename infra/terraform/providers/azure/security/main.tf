@@ -307,7 +307,9 @@ resource "azurerm_cdn_frontdoor_route" "web" {
   patterns_to_match               = ["/*"]
   forwarding_protocol             = "HttpsOnly"
   https_redirect_enabled          = true
-  link_to_default_domain          = !local.use_custom_domain
+  # Keep the azurefd.net endpoint routable even when a custom domain is bound.
+  # This enables synthetic monitors/appliances to target the stable default hostname.
+  link_to_default_domain          = true
   cdn_frontdoor_custom_domain_ids = local.use_custom_domain ? [azurerm_cdn_frontdoor_custom_domain.platform[0].id] : []
 }
 

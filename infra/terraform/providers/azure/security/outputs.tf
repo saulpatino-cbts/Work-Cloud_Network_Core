@@ -48,11 +48,6 @@ output "frontdoor_secret_id" {
   value       = local.use_customer_managed_tls ? azurerm_cdn_frontdoor_secret.platform[0].id : null
 }
 
-output "openai_endpoint_secret_name" {
-  description = "Key Vault secret name for the Azure OpenAI endpoint"
-  value       = azurerm_key_vault_secret.openai_endpoint.name
-}
-
 output "postgres_private_dns_zone_id" {
   description = "Private DNS zone resource ID for PostgreSQL Flexible Server VNet integration"
   value       = azurerm_private_dns_zone.postgres.id

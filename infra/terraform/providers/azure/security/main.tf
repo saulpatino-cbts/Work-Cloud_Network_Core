@@ -6,14 +6,6 @@ locals {
   use_customer_managed_tls   = var.frontdoor_secret_versionless_id != null && var.frontdoor_certificate_type == "CustomerCertificate"
 }
 
-resource "azurerm_key_vault_secret" "openai_endpoint" {
-  name            = "cna-azure-openai-endpoint"
-  value           = var.azure_openai_endpoint
-  key_vault_id    = var.key_vault_id
-  content_type    = "Azure OpenAI endpoint"
-  expiration_date = var.secret_expiration_date
-}
-
 resource "azurerm_key_vault_secret" "appinsights_connection_string" {
   name            = "cna-applicationinsights-connection-string"
   value           = var.application_insights_connection_string
@@ -58,11 +50,6 @@ resource "azurerm_private_dns_zone" "keyvault" {
   resource_group_name = var.resource_group_name
 }
 
-resource "azurerm_private_dns_zone" "openai" {
-  name                = "privatelink.openai.azure.com"
-  resource_group_name = var.resource_group_name
-}
-
 # PostgreSQL Flexible Server requires a dedicated private DNS zone and VNet link.
 # The database module depends on this zone ID being available before the server is created.
 resource "azurerm_private_dns_zone" "postgres" {
@@ -81,13 +68,6 @@ resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
   name                  = "pdns-link-${var.name_prefix}-keyvault"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
-  virtual_network_id    = var.virtual_network_id
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "openai" {
-  name                  = "pdns-link-${var.name_prefix}-openai"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.openai.name
   virtual_network_id    = var.virtual_network_id
 }
 
@@ -133,25 +113,6 @@ resource "azurerm_private_endpoint" "keyvault" {
   private_dns_zone_group {
     name                 = "pdzg-keyvault"
     private_dns_zone_ids = [azurerm_private_dns_zone.keyvault.id]
-  }
-}
-
-resource "azurerm_private_endpoint" "openai" {
-  name                = "pe-${var.name_prefix}-openai"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = var.private_endpoint_subnet_id
-
-  private_service_connection {
-    name                           = "psc-${var.name_prefix}-openai"
-    private_connection_resource_id = var.azure_openai_account_id
-    subresource_names              = ["account"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "pdzg-openai"
-    private_dns_zone_ids = [azurerm_private_dns_zone.openai.id]
   }
 }
 
@@ -299,14 +260,14 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
 }
 
 resource "azurerm_cdn_frontdoor_route" "web" {
-  name                            = local.frontdoor_route_name
-  cdn_frontdoor_endpoint_id       = azurerm_cdn_frontdoor_endpoint.platform.id
-  cdn_frontdoor_origin_group_id   = azurerm_cdn_frontdoor_origin_group.web.id
-  cdn_frontdoor_origin_ids        = [azurerm_cdn_frontdoor_origin.web.id]
-  supported_protocols             = ["Http", "Https"]
-  patterns_to_match               = ["/*"]
-  forwarding_protocol             = "HttpsOnly"
-  https_redirect_enabled          = true
+  name                          = local.frontdoor_route_name
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.platform.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.web.id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.web.id]
+  supported_protocols           = ["Http", "Https"]
+  patterns_to_match             = ["/*"]
+  forwarding_protocol           = "HttpsOnly"
+  https_redirect_enabled        = true
   # Keep the azurefd.net endpoint routable even when a custom domain is bound.
   # This enables synthetic monitors/appliances to target the stable default hostname.
   link_to_default_domain          = true

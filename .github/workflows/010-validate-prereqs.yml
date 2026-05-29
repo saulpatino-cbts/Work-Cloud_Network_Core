@@ -93,7 +93,12 @@ jobs:
           TFSTATE_CONTAINER:         ${{ vars.TFSTATE_CONTAINER }}
           CNA_ENTRA_CLIENT_ID:       ${{ vars.CNA_ENTRA_CLIENT_ID }}
           CNA_NEXTAUTH_URL:          ${{ vars.CNA_NEXTAUTH_URL }}
-          CNA_AZURE_OPENAI_DEPLOY:   ${{ vars.CNA_AZURE_OPENAI_DEPLOYMENT }}
+          CNA_AI_ENGINE_DEFAULT:     ${{ vars.CNA_AI_ENGINE_DEFAULT }}
+          FOUNDRY_CLAUDE_ENDPOINT:   ${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}
+          FOUNDRY_CLAUDE_MODEL:      ${{ vars.FOUNDRY_CLAUDE_MODEL }}
+          CNA_AZURE_MCP_ENDPOINT:    ${{ vars.CNA_AZURE_MCP_ENDPOINT }}
+          CNA_AWS_MCP_ENDPOINT:      ${{ vars.CNA_AWS_MCP_ENDPOINT }}
+          CNA_DRAWIO_MCP_URL:        ${{ vars.CNA_DRAWIO_MCP_URL }}
           APPLICATION_INSIGHTS_NAME: ${{ vars.APPLICATION_INSIGHTS_NAME }}
           KEY_VAULT_NAME:            ${{ vars.KEY_VAULT_NAME }}
         run: |
@@ -123,13 +128,31 @@ jobs:
             fi
           }
 
+          check_optional_var() {
+            local name="$1"
+            local value="$2"
+            if [[ -z "$value" || "$value" == "none" ]]; then
+              echo "| \`$name\` | _not configured_ | ℹ️ Optional |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$name\` | \`$value\` | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
           # Core tfstate vars — must be set, must not be placeholders
           check_var "TFSTATE_RESOURCE_GROUP"  "$TFSTATE_RESOURCE_GROUP"
           check_var "TFSTATE_STORAGE_ACCOUNT" "$TFSTATE_STORAGE_ACCOUNT"
           check_var "TFSTATE_CONTAINER"       "$TFSTATE_CONTAINER"
           check_var "CNA_ENTRA_CLIENT_ID"     "$CNA_ENTRA_CLIENT_ID"
           check_var "CNA_NEXTAUTH_URL"        "$CNA_NEXTAUTH_URL"
-          check_var "CNA_AZURE_OPENAI_DEPLOYMENT" "$CNA_AZURE_OPENAI_DEPLOY"
+
+          # AI/MCP vars — optional because Terraform defaults to Azure OpenAI
+          # and the app marks unconfigured optional providers unavailable.
+          check_optional_var "CNA_AI_ENGINE_DEFAULT"   "$CNA_AI_ENGINE_DEFAULT"
+          check_optional_var "FOUNDRY_CLAUDE_ENDPOINT" "$FOUNDRY_CLAUDE_ENDPOINT"
+          check_optional_var "FOUNDRY_CLAUDE_MODEL"    "$FOUNDRY_CLAUDE_MODEL"
+          check_optional_var "CNA_AZURE_MCP_ENDPOINT"  "$CNA_AZURE_MCP_ENDPOINT"
+          check_optional_var "CNA_AWS_MCP_ENDPOINT"    "$CNA_AWS_MCP_ENDPOINT"
+          check_optional_var "CNA_DRAWIO_MCP_URL"      "$CNA_DRAWIO_MCP_URL"
 
           # Post-deploy vars — allowed to be 'none' before first Terraform run
           check_var "APPLICATION_INSIGHTS_NAME" "$APPLICATION_INSIGHTS_NAME" "true"

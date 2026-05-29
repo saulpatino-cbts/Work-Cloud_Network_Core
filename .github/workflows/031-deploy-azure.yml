@@ -202,73 +202,13 @@ jobs:
           echo "  worker: ${WORKER_IMG}"
           echo "  web:    ${WEB_IMG}"
 
-      - name: Import pre-existing OpenAI role assignments
-        # terraform import requires all declared variables to be satisfied — even for
-        # resources that don't use them. Export TF_VAR_* so the import commands don't
-        # fail with "No value for required variable" and get silently swallowed by || true.
-        # Also moves the renamed cognitive deployment resource in state (gpt4o → model)
-        # so Terraform does not destroy-and-recreate it unnecessarily.
-        env:
-          TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
-          TF_VAR_entra_client_id: ${{ vars.CNA_ENTRA_CLIENT_ID }}
-          TF_VAR_entra_client_secret: ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
-          TF_VAR_nextauth_secret: ${{ secrets.CNA_NEXTAUTH_SECRET }}
-          TF_VAR_nextauth_url: ${{ vars.CNA_NEXTAUTH_URL }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_ghcr_pat: ${{ secrets.GHCR_PAT }}
-          TF_VAR_credential_encryption_key: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
-        run: |
-          ENV="${{ inputs.environment }}"
-          # Move renamed cognitive deployment resource in state (one-time, idempotent).
-          # Old name: module.ai.azurerm_cognitive_deployment.gpt4o
-          # New name: module.ai.azurerm_cognitive_deployment.model
-          terraform state mv \
-            "module.ai.azurerm_cognitive_deployment.gpt4o" \
-            "module.ai.azurerm_cognitive_deployment.model" 2>&1 || true
-          RG="rg-cna-${ENV}-scus"
-
-          # Resolve OpenAI account resource ID
-          OPENAI_ID=$(az cognitiveservices account list \
-            --resource-group "$RG" \
-            --query "[0].id" -o tsv 2>/dev/null || true)
-
-          if [ -z "$OPENAI_ID" ]; then
-            echo "No OpenAI account found in $RG — skipping role assignment import"
-            exit 0
-          fi
-          echo "OpenAI scope: $OPENAI_ID"
-
-          # Map Terraform resource → Container App name
-          declare -A APP_TF_MAP=(
-            ["azurerm_role_assignment.web_openai_user"]="ca-cna-${ENV}-scus-web"
-            ["azurerm_role_assignment.api_openai_user"]="ca-cna-${ENV}-scus-api"
-            ["azurerm_role_assignment.worker_openai_user"]="ca-cna-${ENV}-scus-worker"
-          )
-
-          for TF_RESOURCE in "${!APP_TF_MAP[@]}"; do
-            APP_NAME="${APP_TF_MAP[$TF_RESOURCE]}"
-            PRINCIPAL_ID=$(az containerapp show \
-              --name "$APP_NAME" \
-              --resource-group "$RG" \
-              --query "identity.principalId" -o tsv 2>/dev/null || true)
-
-            [ -z "$PRINCIPAL_ID" ] && { echo "$APP_NAME not found, skipping"; continue; }
-
-            RA_NAME=$(az role assignment list \
-              --scope "$OPENAI_ID" \
-              --role "Cognitive Services OpenAI User" \
-              --assignee "$PRINCIPAL_ID" \
-              --query "[0].name" -o tsv 2>/dev/null || true)
-
-            [ -z "$RA_NAME" ] && { echo "No existing assignment for $APP_NAME, skipping"; continue; }
-
-            RESOURCE_ID="${OPENAI_ID}/providers/Microsoft.Authorization/roleAssignments/${RA_NAME}"
-            echo "Importing $TF_RESOURCE <- $RESOURCE_ID"
-            terraform import "$TF_RESOURCE" "$RESOURCE_ID" 2>&1 || true
-          done
-
       - name: Terraform plan
         run: |
+          AI_ENGINE_DEFAULT="${{ vars.CNA_AI_ENGINE_DEFAULT }}"
+          FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
+          AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
+          AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
             -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}" \
@@ -280,7 +220,16 @@ jobs:
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
-            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
+            -var="foundry_claude_endpoint=${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}" \
+            -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
+            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
+            -var="azure_mcp_endpoint=${{ vars.CNA_AZURE_MCP_ENDPOINT }}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
+            -var="aws_mcp_endpoint=${{ vars.CNA_AWS_MCP_ENDPOINT }}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
+            -var="drawio_mcp_url=${{ vars.CNA_DRAWIO_MCP_URL }}"
 
       - name: Create deployment manifest
         run: |
@@ -658,6 +607,11 @@ jobs:
 
       - name: Terraform drift plan
         run: |
+          AI_ENGINE_DEFAULT="${{ vars.CNA_AI_ENGINE_DEFAULT }}"
+          FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
+          AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
+          AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
             -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest" \
@@ -669,4 +623,13 @@ jobs:
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
-            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
+            -var="foundry_claude_endpoint=${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}" \
+            -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
+            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
+            -var="azure_mcp_endpoint=${{ vars.CNA_AZURE_MCP_ENDPOINT }}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
+            -var="aws_mcp_endpoint=${{ vars.CNA_AWS_MCP_ENDPOINT }}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
+            -var="drawio_mcp_url=${{ vars.CNA_DRAWIO_MCP_URL }}"

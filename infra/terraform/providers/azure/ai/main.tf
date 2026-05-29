@@ -6,43 +6,45 @@ resource "azurerm_application_insights" "this" {
   tags                = var.tags
 }
 
-resource "azurerm_cognitive_account" "this" {
-  #checkov:skip=CKV2_AZURE_22:Customer-managed key support for Azure OpenAI is deferred until key lifecycle and regional support are validated.
-  #checkov:skip=CKV_AZURE_247:DLP requires a validated outbound FQDN allowlist; outbound network access is restricted while the allowlist is finalized.
-  name                  = local.cognitive_account_name
-  location              = local.openai_location
-  resource_group_name   = var.resource_group_name
-  kind                  = "OpenAI"
-  sku_name              = "S0"
-  custom_subdomain_name = local.cognitive_account_name
-  local_auth_enabled    = false
+resource "azurerm_resource_group" "foundry" {
+  name     = var.foundry_resource_group_name
+  location = var.foundry_location
+  tags     = merge(var.tags, local.foundry_tags)
+}
 
-  public_network_access_enabled      = false
-  outbound_network_access_restricted = true
+resource "azurerm_cognitive_account" "foundry" {
+  name                          = var.foundry_account_name
+  location                      = azurerm_resource_group.foundry.location
+  resource_group_name           = azurerm_resource_group.foundry.name
+  kind                          = "AIServices"
+  sku_name                      = "S0"
+  custom_subdomain_name         = var.foundry_account_name
+  project_management_enabled    = true
+  local_auth_enabled            = true
+  public_network_access_enabled = true
 
   identity {
     type = "SystemAssigned"
   }
 
-  network_acls {
-    default_action = "Deny"
-  }
-
-  tags = var.tags
+  tags = merge(var.tags, local.foundry_tags)
 }
 
-resource "azurerm_cognitive_deployment" "model" {
-  name                 = var.openai_model_name
-  cognitive_account_id = azurerm_cognitive_account.this.id
+resource "azapi_resource" "foundry_project" {
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
+  name      = var.foundry_project_name
+  parent_id = azurerm_cognitive_account.foundry.id
+  location  = azurerm_resource_group.foundry.location
 
-  model {
-    format  = "OpenAI"
-    name    = var.openai_model_name
-    version = var.openai_model_version
+  body = {
+    identity = {
+      type = "SystemAssigned"
+    }
+    properties = {
+      displayName = var.foundry_project_name
+      description = "CNA ${var.environment} Foundry project for Claude and model-routing validation"
+    }
   }
 
-  sku {
-    name     = "GlobalStandard"
-    capacity = var.openai_deployment_capacity
-  }
+  tags = merge(var.tags, local.foundry_tags)
 }

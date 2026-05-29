@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -17,3 +21,7 @@ provider "azurerm" {
 }
 
 data "azurerm_client_config" "current" {}
+
+provider "azapi" {
+  use_oidc = true
+}

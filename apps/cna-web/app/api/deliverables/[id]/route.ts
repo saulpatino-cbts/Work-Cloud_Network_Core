@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { generateSasUrl } from "@/lib/blob";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -111,9 +112,13 @@ export async function GET(
   }
 
   if (!deliverable.content) {
-    return new NextResponse("No content available for this deliverable.", {
-      status: 404,
-    });
+    if (!deliverable.blobPath) {
+      return new NextResponse("No content available for this deliverable.", {
+        status: 404,
+      });
+    }
+    const sasUrl = await generateSasUrl(deliverable.blobPath, 1);
+    return NextResponse.redirect(sasUrl, { status: 302 });
   }
 
   const content = deliverable.content;

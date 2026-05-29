@@ -110,13 +110,11 @@ module "compute" {
   # ── Plain env vars injected at container start ─────────────────────────────
   api_env_vars = {
     CNA_STORAGE_ACCOUNT_NAME              = module.storage.storage_account_name
-    CNA_AZURE_OPENAI_ENDPOINT             = module.ai.azure_openai_endpoint
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
   }
 
   worker_env_vars = {
     CNA_STORAGE_ACCOUNT_NAME              = module.storage.storage_account_name
-    CNA_AZURE_OPENAI_ENDPOINT             = module.ai.azure_openai_endpoint
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
   }
 
@@ -129,9 +127,14 @@ module "compute" {
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
     AZURE_STORAGE_ACCOUNT_NAME            = module.storage.storage_account_name
     AZURE_STORAGE_CONTAINER_ENGAGEMENTS   = "raw-artifacts"
-    AZURE_OPENAI_ENDPOINT                 = module.ai.azure_openai_endpoint
-    AZURE_OPENAI_DEPLOYMENT               = module.ai.openai_deployment_name
-    AZURE_OPENAI_API_VERSION              = module.ai.openai_api_version
+    CNA_AI_ENGINE_DEFAULT                 = var.ai_engine_default
+    FOUNDRY_CLAUDE_ENDPOINT               = var.foundry_claude_endpoint != "" ? var.foundry_claude_endpoint : module.ai.foundry_claude_messages_endpoint
+    FOUNDRY_CLAUDE_MODEL                  = var.foundry_claude_model
+    CNA_AZURE_MCP_ENDPOINT                = var.azure_mcp_endpoint
+    CNA_AZURE_MCP_TRANSPORT               = var.azure_mcp_transport
+    CNA_AWS_MCP_ENDPOINT                  = var.aws_mcp_endpoint
+    CNA_AWS_MCP_TRANSPORT                 = var.aws_mcp_transport
+    CNA_DRAWIO_MCP_URL                    = var.drawio_mcp_url
   }
 
   # Secret-backed env vars — reference Container App secrets by name
@@ -140,6 +143,7 @@ module "compute" {
     AUTH_SECRET               = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
     AZURE_AD_CLIENT_SECRET    = "entra-client-secret"
     CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key"
+    FOUNDRY_CLAUDE_API_KEY    = "foundry-claude-api-key"
   }
 
   # Container App secrets — encrypted values stored within the Container App.
@@ -151,6 +155,7 @@ module "compute" {
     "nextauth-secret"           = var.nextauth_secret
     "entra-client-secret"       = var.entra_client_secret
     "credential-encryption-key" = var.credential_encryption_key
+    "foundry-claude-api-key"    = var.foundry_claude_api_key
   }
 }
 
@@ -161,15 +166,11 @@ module "ai" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  # Model — update here when upgrading; all downstream env vars pick up automatically.
-  # gpt-5.2 (2026-02-10) is only available in eastus2 for this subscription.
-  # The cognitive account is deployed to eastus2 while all other resources stay in southcentralus.
-  # TODO: switch to gpt-5.4 once quota is approved in eastus2 for this subscription.
-  openai_location            = "eastus2"
-  openai_model_name          = "gpt-5.2-chat"
-  openai_model_version       = "2026-02-10"
-  openai_api_version         = "2024-12-01-preview"
-  openai_deployment_capacity = 30
+  environment                 = var.environment
+  foundry_resource_group_name = "rg-cna-ai-prod-eus2"
+  foundry_location            = "eastus2"
+  foundry_account_name        = "fdry-cna-prod-eus2"
+  foundry_project_name        = "proj-cna-prod-eus2"
 }
 
 
@@ -221,8 +222,6 @@ module "security" {
   web_container_app_id                   = module.compute.web_id
   web_container_app_fqdn                 = module.compute.web_fqdn
   worker_container_app_id                = module.compute.worker_id
-  azure_openai_account_id                = module.ai.azure_openai_account_id
-  azure_openai_endpoint                  = module.ai.azure_openai_endpoint
   application_insights_connection_string = module.ai.application_insights_connection_string
   virtual_network_id                     = azurerm_virtual_network.platform.id
   private_endpoint_subnet_id             = azurerm_subnet.private_endpoints.id
@@ -266,24 +265,5 @@ resource "azurerm_role_assignment" "api_storage_blob_data_contributor" {
 resource "azurerm_role_assignment" "worker_storage_blob_data_contributor" {
   scope                = module.storage.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = module.compute.worker_principal_id
-}
-
-# Azure OpenAI: all three apps call the completions API via managed identity.
-resource "azurerm_role_assignment" "web_openai_user" {
-  scope                = module.ai.azure_openai_account_id
-  role_definition_name = "Cognitive Services OpenAI User"
-  principal_id         = module.compute.web_principal_id
-}
-
-resource "azurerm_role_assignment" "api_openai_user" {
-  scope                = module.ai.azure_openai_account_id
-  role_definition_name = "Cognitive Services OpenAI User"
-  principal_id         = module.compute.api_principal_id
-}
-
-resource "azurerm_role_assignment" "worker_openai_user" {
-  scope                = module.ai.azure_openai_account_id
-  role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = module.compute.worker_principal_id
 }

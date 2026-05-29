@@ -1,6 +1,6 @@
-import { AzureOpenAI } from "openai";
-import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
 import type { FindingSeverity } from "@prisma/client";
+
+import { generateAiCompletion } from "@/lib/ai-engine";
 
 export interface RawFinding {
   title: string;
@@ -10,24 +10,6 @@ export interface RawFinding {
   recommendation: string;
   msLearnLinks?: string[];
   frameworkMapping?: string;
-}
-
-function getClient(): AzureOpenAI {
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT is not set");
-
-  const credential = new DefaultAzureCredential();
-  const azureADTokenProvider = getBearerTokenProvider(
-    credential,
-    "https://cognitiveservices.azure.com/.default",
-  );
-
-  return new AzureOpenAI({
-    endpoint,
-    azureADTokenProvider,
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-12-01-preview",
-    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2-chat",
-  });
 }
 
 export type AnalysisFocus =
@@ -288,7 +270,6 @@ export async function analyzeEngagement(
   },
 ): Promise<RawFinding[]> {
   const { topologyJson, documents = [], existingFindings = [], focus, extraInstruction } = options;
-  const client = getClient();
   const focusInstruction = FOCUS_PROMPTS[focus];
 
   const systemPrompt = `You are a senior Azure cloud network security architect performing a Cloud Network Assessment (CNA) for a CBTS customer engagement.
@@ -335,19 +316,16 @@ ${FINDING_SCHEMA}`;
 
   const userPrompt = `Perform a ${FOCUS_LABELS[focus]} analysis on the following network assessment data. Identify security findings not already covered by existing findings:${extraInstruction ? `\n\n${extraInstruction}` : ""}\n\n${parts.join("\n\n")}`;
 
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2";
-  const response = await client.chat.completions.create({
-    model: deployment,
+  const raw = await generateAiCompletion({
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 8000,
+    responseFormat: "json_object",
+    maxCompletionTokens: 8000,
   });
 
-  const raw = response.choices[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(raw) as { findings?: RawFinding[] };
+  const parsed = JSON.parse(raw || "{}") as { findings?: RawFinding[] };
   return parsed.findings ?? [];
 }
 
@@ -606,7 +584,6 @@ Output ONLY a complete, self-contained HTML document.
 export async function generateDeliverableContent(
   ctx: DeliverableContext,
 ): Promise<string> {
-  const client = getClient();
   const isHtml = ctx.type === "COMPREHENSIVE_ASSESSMENT";
   const typePrompt = DELIVERABLE_PROMPTS[ctx.type];
   const date = new Date().toISOString().split("T")[0];
@@ -709,20 +686,18 @@ ${outputInstruction}`;
 
   const userPrompt = `Generate the ${ctx.type.replace(/_/g, " ")} for this assessment.\n\nIMPORTANT: This report covers ${ctx.credentialsInfo?.length ?? 1} subscription(s). The data below is current as of ${date}. Include ALL ${ctx.findings.length} findings without omission.\n\n${parts.join("\n")}`;
 
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5.2";
   // COMPREHENSIVE_ASSESSMENT uses full token budget for the complete HTML document
   const maxTokens = ctx.type === "COMPREHENSIVE_ASSESSMENT" ? 32000 : 16000;
 
-  const response = await client.chat.completions.create({
-    model: deployment,
+  const content = await generateAiCompletion({
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_completion_tokens: maxTokens,
+    maxCompletionTokens: maxTokens,
   });
 
-  return response.choices[0]?.message?.content ?? (
+  return content || (
     isHtml
       ? "<!DOCTYPE html><html><body><h1>Error generating content</h1><p>Please try again.</p></body></html>"
       : "# Error generating content\n\nPlease try again."

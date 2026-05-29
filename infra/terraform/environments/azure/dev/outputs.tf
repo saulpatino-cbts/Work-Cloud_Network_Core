@@ -40,16 +40,28 @@ output "worker_name" {
   value = module.compute.worker_name
 }
 
-output "azure_openai_account_name" {
-  value = module.ai.azure_openai_account_name
-}
-
-output "azure_openai_endpoint" {
-  value = module.ai.azure_openai_endpoint
-}
-
 output "application_insights_name" {
   value = module.ai.application_insights_name
+}
+
+output "foundry_resource_group_name" {
+  value = module.ai.foundry_resource_group_name
+}
+
+output "foundry_account_name" {
+  value = module.ai.foundry_account_name
+}
+
+output "foundry_project_name" {
+  value = module.ai.foundry_project_name
+}
+
+output "foundry_endpoint" {
+  value = module.ai.foundry_endpoint
+}
+
+output "foundry_claude_messages_endpoint" {
+  value = module.ai.foundry_claude_messages_endpoint
 }
 
 output "storage_role_assignment_id" {
@@ -90,10 +102,6 @@ output "frontdoor_custom_domain_id" {
 output "frontdoor_secret_id" {
   description = "Azure Front Door secret resource ID"
   value       = module.security.frontdoor_secret_id
-}
-
-output "openai_endpoint_secret_name" {
-  value = module.security.openai_endpoint_secret_name
 }
 
 output "database_server_name" {

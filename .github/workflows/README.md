@@ -209,6 +209,7 @@ Full Terraform plan + apply. Includes:
 | `CNA_POSTGRES_ADMIN_PASSWORD` | PostgreSQL admin password (min 8 chars, mixed case + special) |
 | `CNA_ENTRA_CLIENT_SECRET` | Entra ID OAuth2 client secret for NextAuth |
 | `CNA_NEXTAUTH_SECRET` | NextAuth JWT signing secret (`openssl rand -base64 32`) |
+| `FOUNDRY_CLAUDE_API_KEY` | Optional Foundry Claude API key; required only to enable the Claude engine |
 
 **Required GitHub Repository Variables:**
 
@@ -219,7 +220,14 @@ Full Terraform plan + apply. Includes:
 | `TFSTATE_CONTAINER` | `tfstate` | Set after running workflow 000 |
 | `CNA_ENTRA_CLIENT_ID` | `<app registration client ID>` | From Azure Entra app registration |
 | `CNA_NEXTAUTH_URL` | `none` | Placeholder — update after first Terraform deploy |
-| `CNA_AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` | Azure OpenAI model deployment name |
+| `CNA_AI_ENGINE_DEFAULT` | `foundry-claude` | Default engine if the database setting `ai.activeEngine` does not exist |
+| `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Foundry Claude Messages API endpoint; leave blank/none until configured |
+| `FOUNDRY_CLAUDE_MODEL` | `claude-sonnet-4-6` | Foundry Claude model id injected into cna-web |
+| `CNA_AZURE_MCP_ENDPOINT` | `none` | Azure MCP server endpoint surfaced on the AI Engine page |
+| `CNA_AZURE_MCP_TRANSPORT` | `sse` | Azure MCP server transport |
+| `CNA_AWS_MCP_ENDPOINT` | `none` | AWS MCP server endpoint surfaced on the AI Engine page |
+| `CNA_AWS_MCP_TRANSPORT` | `stdio` | AWS MCP server transport |
+| `CNA_DRAWIO_MCP_URL` | `none` | draw.io MCP endpoint surfaced on the AI Engine page |
 | `APPLICATION_INSIGHTS_NAME` | `none` | Replace after Terraform creates it |
 | `KEY_VAULT_NAME` | `none` | Replace after Terraform creates it |
 
@@ -248,6 +256,7 @@ Full Terraform plan + apply. Includes:
        - CNA_ENTRA_CLIENT_SECRET      (client secret from step 1)
        - CNA_POSTGRES_ADMIN_PASSWORD  (generate: openssl rand -base64 16)
        - CNA_NEXTAUTH_SECRET          (generate: openssl rand -base64 32)
+       - FOUNDRY_CLAUDE_API_KEY       (optional; required to enable Claude)
 
 [ ] 3. Set GitHub Variables (Settings → Secrets and variables → Actions → Variables):
        - TFSTATE_RESOURCE_GROUP       = rg-cna-tfstate (set after step 4)
@@ -255,7 +264,14 @@ Full Terraform plan + apply. Includes:
        - TFSTATE_CONTAINER            = tfstate          (set after step 4)
        - CNA_ENTRA_CLIENT_ID          = <app registration client ID>
        - CNA_NEXTAUTH_URL             = none             (update after step 8)
-       - CNA_AZURE_OPENAI_DEPLOYMENT  = gpt-4o
+       - CNA_AI_ENGINE_DEFAULT        = foundry-claude
+       - FOUNDRY_CLAUDE_ENDPOINT      = none             (update when Claude is provisioned)
+       - FOUNDRY_CLAUDE_MODEL         = claude-sonnet-4-6
+       - CNA_AZURE_MCP_ENDPOINT       = none
+       - CNA_AZURE_MCP_TRANSPORT      = sse
+       - CNA_AWS_MCP_ENDPOINT         = none
+       - CNA_AWS_MCP_TRANSPORT        = stdio
+       - CNA_DRAWIO_MCP_URL           = none
        - APPLICATION_INSIGHTS_NAME    = none             (update after step 8)
        - KEY_VAULT_NAME               = none             (update after step 8)
 

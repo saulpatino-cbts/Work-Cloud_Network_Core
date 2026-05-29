@@ -103,3 +103,64 @@ variable "credential_encryption_key" {
   type        = string
   sensitive   = true
 }
+
+# ─── AI Engine + MCP configuration ────────────────────────────────────────────
+variable "ai_engine_default" {
+  description = "Default global GenAI engine when no database setting exists."
+  type        = string
+  default     = "foundry-claude"
+
+  validation {
+    condition     = contains(["azure-openai", "foundry-claude"], var.ai_engine_default)
+    error_message = "ai_engine_default must be azure-openai or foundry-claude."
+  }
+}
+
+variable "foundry_claude_endpoint" {
+  description = "Foundry Claude Messages API endpoint for the web app."
+  type        = string
+  default     = ""
+}
+
+variable "foundry_claude_model" {
+  description = "Foundry Claude model identifier."
+  type        = string
+  default     = "claude-sonnet-4-6"
+}
+
+variable "foundry_claude_api_key" {
+  description = "Foundry Claude API key exposed to cna-web as a Container App secret."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "azure_mcp_endpoint" {
+  description = "Azure MCP server endpoint surfaced in cna-web."
+  type        = string
+  default     = ""
+}
+
+variable "azure_mcp_transport" {
+  description = "Azure MCP server transport."
+  type        = string
+  default     = "sse"
+}
+
+variable "aws_mcp_endpoint" {
+  description = "AWS MCP server endpoint surfaced in cna-web."
+  type        = string
+  default     = ""
+}
+
+variable "aws_mcp_transport" {
+  description = "AWS MCP server transport."
+  type        = string
+  default     = "stdio"
+}
+
+variable "drawio_mcp_url" {
+  description = "draw.io MCP endpoint surfaced in cna-web."
+  type        = string
+  default     = ""
+}

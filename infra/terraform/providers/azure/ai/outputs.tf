@@ -7,23 +7,30 @@ output "application_insights_connection_string" {
   sensitive = true
 }
 
-output "azure_openai_account_id" {
-  value = azurerm_cognitive_account.this.id
+output "foundry_resource_group_name" {
+  value = azurerm_resource_group.foundry.name
 }
 
-output "azure_openai_account_name" {
-  value = azurerm_cognitive_account.this.name
+output "foundry_account_id" {
+  value = azurerm_cognitive_account.foundry.id
 }
 
-output "azure_openai_endpoint" {
-  value = azurerm_cognitive_account.this.endpoint
+output "foundry_account_name" {
+  value = azurerm_cognitive_account.foundry.name
 }
 
-output "openai_deployment_name" {
-  value = azurerm_cognitive_deployment.model.name
+output "foundry_endpoint" {
+  value = azurerm_cognitive_account.foundry.endpoint
 }
 
-output "openai_api_version" {
-  description = "Azure OpenAI API version to use — consumed by environment env vars"
-  value       = var.openai_api_version
+output "foundry_project_id" {
+  value = azapi_resource.foundry_project.id
+}
+
+output "foundry_project_name" {
+  value = var.foundry_project_name
+}
+
+output "foundry_claude_messages_endpoint" {
+  value = "https://${azurerm_cognitive_account.foundry.custom_subdomain_name}.services.ai.azure.com/anthropic/v1/messages"
 }

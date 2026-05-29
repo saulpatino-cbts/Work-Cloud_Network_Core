@@ -47,7 +47,7 @@ All features below were built, deployed, and validated in the Alpha stage (endin
 ### Findings & Analysis
 
 - **Findings count display** — Header shows the count of unique issue groups (deduplicated by severity + category + title). The subtitle shows raw finding count, live-scanned vs. AI-generated breakdown, and filter state.
-- **AI-powered findings** — Azure OpenAI analysis generates per-resource findings enriched with Microsoft Learn documentation fetched at generation time.
+- **AI-powered findings** — Microsoft Foundry analysis generates per-resource findings enriched with Microsoft Learn documentation fetched at generation time.
 
 ### Deliverables
 
@@ -59,7 +59,7 @@ All features below were built, deployed, and validated in the Alpha stage (endin
 
 ### Interactive Assessment
 
-- **AI generation on every create** — "Create Interactive Assessment" calls Azure OpenAI (COMPREHENSIVE_ASSESSMENT type) with merged topology + all findings + all documents + MS Learn context. Fresh HTML content is stored on every create/recreate.
+- **AI generation on every create** — "Create Interactive Assessment" calls the active AI engine (COMPREHENSIVE_ASSESSMENT type) with merged topology + all findings + all documents + MS Learn context. Fresh HTML content is stored on every create/recreate.
 - **View Report + Dashboard split** — The deliverables portal shows a "View Report" button (AI-generated HTML) alongside "Dashboard" (live presentation site) once content exists.
 - **Generation feedback** — Button shows "Generating with AI…" with a 60-second hint; errors surface in the UI.
 
@@ -80,7 +80,7 @@ The platform is a fully deployable multi-user web application:
 - **PostgreSQL Flexible Server** — VNet-delegated, private DNS zone, Prisma ORM (7 migrations)
 - **Microsoft Entra ID** — analyst/reviewer/client/admin role model via NextAuth v5
 - **Azure Front Door Standard** — WAF + CDN, TLS termination, origin = cna-web FQDN
-- **Azure OpenAI** — AI enrichment with MS Learn context injection; error messages surface in UI
+- **Microsoft Foundry** — AI enrichment with MS Learn context injection; error messages surface in UI
 - **Azure Blob Storage** — engagement deliverables and uploaded documents
 - **Azure Key Vault** — all platform secrets; synced to GitHub via workflow 011
 
@@ -173,7 +173,14 @@ Full workflow documentation is in [`.github/workflows/README.md`](.github/workfl
 | `TFSTATE_CONTAINER` | 031 | Terraform state blob container |
 | `CNA_ENTRA_CLIENT_ID` | 031 | Entra ID application client ID |
 | `CNA_NEXTAUTH_URL` | 031 | Canonical URL of deployed web app (Front Door hostname) |
-| `CNA_AZURE_OPENAI_DEPLOYMENT` | 031 | OpenAI model deployment name (e.g. `gpt-4o`) |
+| `CNA_AI_ENGINE_DEFAULT` | 031 | Optional default engine (`foundry-claude` when omitted) |
+| `FOUNDRY_CLAUDE_ENDPOINT` | 031 | Optional Foundry Claude Messages API endpoint |
+| `FOUNDRY_CLAUDE_MODEL` | 031 | Optional Foundry Claude model id (`claude-sonnet-4-6` when omitted) |
+| `CNA_AZURE_MCP_ENDPOINT` | 031 | Optional Azure MCP server endpoint |
+| `CNA_AZURE_MCP_TRANSPORT` | 031 | Optional Azure MCP transport (`sse` when omitted) |
+| `CNA_AWS_MCP_ENDPOINT` | 031 | Optional AWS MCP server endpoint |
+| `CNA_AWS_MCP_TRANSPORT` | 031 | Optional AWS MCP transport (`stdio` when omitted) |
+| `CNA_DRAWIO_MCP_URL` | 031 | Optional draw.io MCP endpoint |
 | `APPLICATION_INSIGHTS_NAME` | 031 | App Insights resource name (for health queries, set to `none` until created) |
 | `KEY_VAULT_NAME` | 031, 011 | Key Vault name (set to `none` until created) |
 | `FRONTDOOR_CERTIFICATE_NAME` | 031 | Key Vault certificate name for Front Door (optional) |
@@ -253,7 +260,7 @@ infra/terraform/
     ├── compute/                     # 3 Container Apps (api internal, web external, worker)
     ├── database/                    # PostgreSQL Flexible Server + private DNS
     ├── identity/                    # Managed Identity + Key Vault
-    ├── ai/                          # Azure OpenAI + Application Insights
+    ├── ai/                          # Microsoft Foundry + Application Insights
     ├── network/                     # VNet + subnets (apps/pe/db)
     ├── security/                    # Front Door · WAF · private endpoints
     ├── storage/                     # Blob storage for engagement deliverables
@@ -360,4 +367,3 @@ release gating, progressive rollout control, and renewal-aware certificate gover
 
 *Maintained by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert*
 *Version 1.0.0 Released 2026-05-28 · Production Ready*
-

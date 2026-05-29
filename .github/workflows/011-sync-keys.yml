@@ -36,7 +36,6 @@ jobs:
         run: |
           VAULT="${{ vars.KEY_VAULT_NAME }}"
           REQUIRED=(
-            "cna-azure-openai-endpoint"
             "cna-applicationinsights-connection-string"
             "cna-database-url"
             "cna-nextauth-secret"
@@ -65,7 +64,6 @@ jobs:
             az keyvault secret show --vault-name "$VAULT" --name "$1" --query value --output tsv
           }
 
-          OPENAI_ENDPOINT=$(get_secret "cna-azure-openai-endpoint")
           APPINSIGHTS_CS=$(get_secret "cna-applicationinsights-connection-string")
           DATABASE_URL=$(get_secret "cna-database-url")
           NEXTAUTH_SECRET=$(get_secret "cna-nextauth-secret")
@@ -80,10 +78,16 @@ jobs:
           AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-          # ─── Azure OpenAI ─────────────────────────────────────────────────────
-          CNA_AZURE_OPENAI_ENDPOINT=${OPENAI_ENDPOINT}
-          AZURE_OPENAI_DEPLOYMENT=${{ vars.CNA_AZURE_OPENAI_DEPLOYMENT }}
-          AZURE_OPENAI_API_VERSION=2024-02-15-preview
+          # ─── GenAI Engine Switching ───────────────────────────────────────────
+          CNA_AI_ENGINE_DEFAULT=${{ vars.CNA_AI_ENGINE_DEFAULT }}
+          FOUNDRY_CLAUDE_ENDPOINT=${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}
+          FOUNDRY_CLAUDE_MODEL=${{ vars.FOUNDRY_CLAUDE_MODEL }}
+          FOUNDRY_CLAUDE_API_KEY=
+          CNA_AZURE_MCP_ENDPOINT=${{ vars.CNA_AZURE_MCP_ENDPOINT }}
+          CNA_AZURE_MCP_TRANSPORT=${{ vars.CNA_AZURE_MCP_TRANSPORT }}
+          CNA_AWS_MCP_ENDPOINT=${{ vars.CNA_AWS_MCP_ENDPOINT }}
+          CNA_AWS_MCP_TRANSPORT=${{ vars.CNA_AWS_MCP_TRANSPORT }}
+          CNA_DRAWIO_MCP_URL=${{ vars.CNA_DRAWIO_MCP_URL }}
 
           # ─── Azure Monitoring ─────────────────────────────────────────────────
           APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CS}

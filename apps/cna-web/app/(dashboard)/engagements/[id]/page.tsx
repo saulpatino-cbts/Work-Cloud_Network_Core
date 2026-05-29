@@ -32,6 +32,7 @@ const QUICK_LINKS = [
   { label: "Connections",   desc: "Cloud credentials & discovery runs", href: "connections",   icon: "M13 10V3L4 14h7v7l9-11h-7z" },
   { label: "Findings",      desc: "Security risk matrix & AI analysis",  href: "findings",      icon: "M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" },
   { label: "Inventory",     desc: "VNets, NSGs, IPs & resources",        href: "inventory",     icon: "M4 6h16M4 10h16M4 14h16M4 18h16" },
+  { label: "Diagram",       desc: "Build and export architecture diagrams", href: "diagram",     icon: "M7 8h10M7 12h7m-7 4h10M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" },
   { label: "Documents",     desc: "Upload configs & architecture notes",  href: "documents",     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
   { label: "Deliverables",  desc: "Generate & publish reports",          href: "deliverables",  icon: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" },
   { label: "Presentation",  desc: "Interactive full-report view",         href: "presentation",  icon: "M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" },

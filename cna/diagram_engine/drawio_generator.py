@@ -29,8 +29,15 @@ from cna.core.topology_schema import (
     SubnetType,
     TransitGateway,
 )
+from cna.diagram_engine.shape_catalog import shape_style
 
 # ── Draw.io style constants ─────────────────────────────────────────────────
+#
+# Constants below are FALLBACK defaults — they remain the runtime source of
+# truth if the curated shape catalog (cna/diagram_engine/data/*_shapes.json)
+# is missing or has been filtered to remove an entry. When the catalog has a
+# match it wins; this lets us refresh icon styles by editing JSON (or via the
+# in-app draw.io MCP `search_shapes` tool) without touching this file.
 
 STYLE_VPC = (
     "rounded=1;whiteSpace=wrap;html=1;"
@@ -54,21 +61,29 @@ STYLE_SUBNET_ISOLATED = (
 STYLE_SUBNET_UNKNOWN = (
     "rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;"
 )
-STYLE_IGW = (
+STYLE_IGW = shape_style(
+    "aws4",
+    "igw",
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;"
-    "fillColor=#FF8000;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+    "fillColor=#FF8000;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
-STYLE_NAT = (
+STYLE_NAT = shape_style(
+    "aws4",
+    "nat_gateway",
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.nat_gateway;"
-    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
-STYLE_TGW = (
+STYLE_TGW = shape_style(
+    "aws4",
+    "transit_gateway",
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transit_gateway;"
-    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
-STYLE_VWAN_HUB = (
+STYLE_VWAN_HUB = shape_style(
+    "azure2",
+    "vwan_hub",
     "shape=mxgraph.azure2.virtual_hub;"
-    "fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+    "fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
 STYLE_EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;"
 

@@ -1,0 +1,16 @@
+{
+  "vnet": "shape=mxgraph.azure2.virtual_networks;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "subnet": "shape=mxgraph.azure2.subnet;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "vwan_hub": "shape=mxgraph.azure2.virtual_hub;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "firewall": "shape=mxgraph.azure2.firewalls;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "nsg": "shape=mxgraph.azure2.network_security_groups;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "vnet_gateway": "shape=mxgraph.azure2.virtual_network_gateways;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "private_endpoint": "shape=mxgraph.azure2.private_link;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "nat_gateway": "shape=mxgraph.azure2.nat;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "bastion": "shape=mxgraph.azure2.bastions;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "load_balancer": "shape=mxgraph.azure2.load_balancers;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "public_ip": "shape=mxgraph.azure2.public_ip_addresses;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "expressroute": "shape=mxgraph.azure2.expressroute_circuits;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "application_gateway": "shape=mxgraph.azure2.application_gateways;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "route_table": "shape=mxgraph.azure2.route_tables;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+}

@@ -1,0 +1,11 @@
+{
+  "vpc": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpc;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "igw": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;fillColor=#FF8000;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "nat_gateway": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.nat_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "transit_gateway": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transit_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "direct_connect": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.direct_connect;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "vpn_gateway": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpn_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "network_firewall": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.network_firewall;fillColor=#DD3522;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "route_table": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.route_table;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+  "elb": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+}

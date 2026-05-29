@@ -1,10 +1,8 @@
 # CNA Platform — Active TODO
 
-> **Status as of 2026-05-28 · Sprint 5 completed**
-> Alpha stage is complete and closed. All six delivery phases (A–F) are signed off.
-> Sprint 1 (Beta Hard Blockers), Sprint 2 (East-West Visibility), Sprint 3 (Production Hardening), and Sprint 4 (Assessment Completeness) are now closed.
-> **Sprint 5 (WCAG 2.1 / W3C / OWASP Audit) is now closed — all 47 findings resolved.**
-> **19 of 19 Azure rules are active.** Beta deployment sequence is ready to run.
+> **Status as of 2026-05-28 · Version 1.0.0 Released**
+> Version 1.0.0 release stage is complete. All delivery phases, Beta hardening sprints (1–4), and the Sprint 5 WCAG/W3C/OWASP security audit are signed off and closed.
+> All findings resolved, all rules active, and platform is ready for production.
 
 ---
 
@@ -451,8 +449,12 @@ Once the environment is up and smoke-tested, run through these scenarios:
 | ~~App Gateway capacity metrics~~ | ~~Low~~ | ✅ Done — collector #9 in `_collect_network_metrics`; AZ-NET-019 rule live |
 | ~~Defender for Cloud network recommendations~~ | ~~Low~~ | ✅ Done — `_collect_defender_assessments()` + `defender_assessments` on topology |
 | ~~CISA ZTMM v2 framework mappings~~ | ~~Low~~ | ✅ Done — all 30 rule emissions include CISA ZTMM v2 pillar/control mappings |
+| MCP integration | **High** | Wire live MCP endpoints (e.g. `cna/modules/*/module.yaml`) to background worker and AI engine |
+| Draw.io integration | **Medium** | Build diagram export to `.drawio` XML format for custom user editing |
+| AWS assessment | **Medium** | Support AWS network and security assessments with custom finding rules |
+| UI Update for new badging | **Low** | Refresh frontend elements with status badges (compliant, warning, error, etc.) |
+| Replatform to AWS | **High** | Migrate Next.js frontend, FastAPI backend, and DB resources to AWS (ECS, RDS, CloudFront) |
 | JA (Japanese) language toggle | Low | `ja_review_complete` flag — requires translated glossary review |
-| MCP server wiring | Low | `cna/modules/*/module.yaml` specifies servers — needs live MCP endpoints |
 | Pre-commit hook enforcement monitoring | Ongoing | `detect-secrets` + `gitleaks` — monitor for false positives |
 
 ---

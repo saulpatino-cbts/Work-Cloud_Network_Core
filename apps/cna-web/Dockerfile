@@ -18,6 +18,11 @@ COPY . .
 # Generate Prisma client before building.
 RUN npx prisma generate
 
+# Pin draw.io shape catalog to ALLOWED_LIBS (azure2 + aws4) at build time.
+# This is layer #1 of the triple-enforced icon-library pinning; the route
+# handler and the Python client re-filter on every call.
+RUN node scripts/filter-shape-index.mjs lib/drawio-mcp/shape-index.json
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build

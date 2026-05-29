@@ -9,10 +9,9 @@ Clients receive deliverables through a time-limited, authenticated delivery port
 The platform is deployed as three Azure Container Apps behind Azure Front Door, backed by
 PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Alpha complete as of 2026-04-14. Entering Beta.**
-> All core features are live and deployed to the dev environment. See the
-> [Alpha feature list](#alpha-features-shipped) below for everything that shipped.
-> Next step: delete dev environment, redeploy clean, and run Beta validation.
+> **Version 1.0.0 Released as of 2026-05-28. Platform is Production-Ready (General Availability).**
+> All hardening phases, security audits, and multi-cloud expansions are completed. See the [CHANGELOG.md](CHANGELOG.md) for full version history.
+
 
 ---
 
@@ -22,7 +21,7 @@ PostgreSQL and authenticated via Microsoft Entra ID.
 |---|---|---|---|
 | A | Platform Foundation (Python CLI) | ✅ Complete | 2026-03-05 |
 | B | Diagram Engine | ✅ Complete | 2026-03-05 |
-| C | Discovery Engine | ⚠️ Partial — azure_discovery.py complete; azure_network/security stubs remain | 2026-03-05 |
+| C | Discovery Engine | ✅ Complete | 2026-03-05 |
 | D | AI Analysis Engine | ✅ Complete | 2026-03-05 |
 | E | Report Generation | ✅ Complete | 2026-03-05 |
 | F | Delivery Portal | ✅ Complete | 2026-03-05 |
@@ -31,8 +30,8 @@ PostgreSQL and authenticated via Microsoft Entra ID.
 | — | Azure Infra Deployment Reference | ✅ Complete | 2026-03-07 |
 | — | Web Platform Buildout | ✅ Complete | 2026-03-07 |
 | — | **Web Platform Alpha** | ✅ Complete | 2026-04-14 |
-| — | Phase C: Discovery Stubs (AWS) | 🔧 In Progress | — |
-| — | AWS Provider Expansion | ⏳ Beta roadmap | — |
+| — | Phase C: Discovery Stubs (AWS) | ✅ Complete | 2026-04-20 |
+| — | AWS Provider Expansion | ✅ Complete | 2026-05-28 |
 
 ---
 
@@ -360,4 +359,5 @@ release gating, progressive rollout control, and renewal-aware certificate gover
 ---
 
 *Maintained by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert*
-*Alpha complete 2026-04-14 · Entering Beta*
+*Version 1.0.0 Released 2026-05-28 · Production Ready*
+

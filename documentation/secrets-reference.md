@@ -110,7 +110,7 @@ If none of these are set, `cna analyze` falls back to offline recommendations (D
 
 | Variable | Required | Description | Default |
 |---|---|---|---|
-| `CNA_VERSION` | Optional | Platform version (informational) | `0.1.0` |
+| `CNA_VERSION` | Optional | Platform version (informational) | `1.0.0` |
 | `CNA_LOG_LEVEL` | Optional | Log verbosity | `INFO` |
 | `CNA_DATA_DIR` | Optional | Where engagement folders are written | `./engagements` |
 

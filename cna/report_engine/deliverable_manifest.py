@@ -27,6 +27,10 @@ class DeliverableRecord:
     rendered_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     findings_checksum: str | None = None  # SHA-256 of FindingsReport JSON at render time
     size_bytes: int | None = None
+    # C4 audience tag (set when this record came from the diagram pipeline).
+    # One of: "executive", "architect", "engineer", or None for non-diagram
+    # artefacts. See cna.diagram_engine.c4_layering.AUDIENCE_BY_LAYER.
+    audience: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -37,6 +41,7 @@ class DeliverableRecord:
             "rendered_at": self.rendered_at,
             "findings_checksum": self.findings_checksum,
             "size_bytes": self.size_bytes,
+            "audience": self.audience,
         }
 
 

@@ -1,0 +1,152 @@
+[
+  {
+    "name": "Virtual Network",
+    "library": "azure2",
+    "tags": ["azure", "network", "vnet", "virtual network"],
+    "style": "shape=mxgraph.azure2.virtual_networks;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Subnet",
+    "library": "azure2",
+    "tags": ["azure", "network", "subnet"],
+    "style": "shape=mxgraph.azure2.subnet;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Virtual Hub",
+    "library": "azure2",
+    "tags": ["azure", "vwan", "virtual wan", "hub"],
+    "style": "shape=mxgraph.azure2.virtual_hub;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Azure Firewall",
+    "library": "azure2",
+    "tags": ["azure", "firewall", "security"],
+    "style": "shape=mxgraph.azure2.firewalls;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Network Security Group",
+    "library": "azure2",
+    "tags": ["azure", "nsg", "security"],
+    "style": "shape=mxgraph.azure2.network_security_groups;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Virtual Network Gateway",
+    "library": "azure2",
+    "tags": ["azure", "vpn", "expressroute", "gateway"],
+    "style": "shape=mxgraph.azure2.virtual_network_gateways;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Private Endpoint",
+    "library": "azure2",
+    "tags": ["azure", "private link", "endpoint"],
+    "style": "shape=mxgraph.azure2.private_link;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "NAT Gateway",
+    "library": "azure2",
+    "tags": ["azure", "nat", "gateway"],
+    "style": "shape=mxgraph.azure2.nat;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Bastion",
+    "library": "azure2",
+    "tags": ["azure", "bastion", "jumphost"],
+    "style": "shape=mxgraph.azure2.bastions;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Load Balancer",
+    "library": "azure2",
+    "tags": ["azure", "load balancer", "lb"],
+    "style": "shape=mxgraph.azure2.load_balancers;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Public IP",
+    "library": "azure2",
+    "tags": ["azure", "public ip", "pip"],
+    "style": "shape=mxgraph.azure2.public_ip_addresses;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "ExpressRoute Circuit",
+    "library": "azure2",
+    "tags": ["azure", "expressroute", "circuit"],
+    "style": "shape=mxgraph.azure2.expressroute_circuits;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Application Gateway",
+    "library": "azure2",
+    "tags": ["azure", "app gateway", "waf"],
+    "style": "shape=mxgraph.azure2.application_gateways;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Route Table",
+    "library": "azure2",
+    "tags": ["azure", "route table", "udr"],
+    "style": "shape=mxgraph.azure2.route_tables;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "VPC",
+    "library": "aws4",
+    "tags": ["aws", "vpc", "network"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpc;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Internet Gateway",
+    "library": "aws4",
+    "tags": ["aws", "igw", "internet gateway"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;fillColor=#FF8000;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "NAT Gateway",
+    "library": "aws4",
+    "tags": ["aws", "nat", "gateway"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.nat_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Transit Gateway",
+    "library": "aws4",
+    "tags": ["aws", "tgw", "transit gateway"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transit_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Direct Connect",
+    "library": "aws4",
+    "tags": ["aws", "direct connect", "dx"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.direct_connect;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "VPN Gateway",
+    "library": "aws4",
+    "tags": ["aws", "vpn", "gateway"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpn_gateway;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Security Group",
+    "library": "aws4",
+    "tags": ["aws", "security group", "sg"],
+    "style": "shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;strokeColor=#DD3522;fillColor=none;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Network ACL",
+    "library": "aws4",
+    "tags": ["aws", "nacl", "network acl"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpc_network_access_analyzer;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Network Firewall",
+    "library": "aws4",
+    "tags": ["aws", "firewall", "network firewall"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.network_firewall;fillColor=#DD3522;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Route Table",
+    "library": "aws4",
+    "tags": ["aws", "route table"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.route_table;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  },
+  {
+    "name": "Elastic Load Balancer",
+    "library": "aws4",
+    "tags": ["aws", "elb", "load balancer"],
+    "style": "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;"
+  }
+]

@@ -228,5 +228,5 @@ jobs:
           git commit -m "chore(build): update latest-build manifest to sha-$(echo '${{ github.sha }}' | cut -c1-7) [skip ci]"
           # Pull rebase in case main moved while builds were running (common in parallel jobs).
           # -X theirs: during conflicts, prefer our new manifest over whatever is on remote.
-          git pull --rebase -X theirs origin main
+          git pull --rebase --autostash -X theirs origin main
           git push

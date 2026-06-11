@@ -185,7 +185,7 @@ resource "azurerm_container_app" "worker" {
 }
 
 # ─── cna-web ──────────────────────────────────────────────────────────────────
-# Next.js 15 frontend + API routes. Public face of the CNA platform.
+# Next.js frontend + API routes. Public face of the CNA platform.
 # Azure Front Door terminates TLS and WAF here. Port 3000.
 resource "azurerm_container_app" "web" {
   name                         = local.web_app_name

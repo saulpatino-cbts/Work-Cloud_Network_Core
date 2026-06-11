@@ -2,13 +2,13 @@
 # Terraform state lives in a separate dedicated RG (rg-cna-tfstate) created
 # by workflow 01, so this RG can be safely destroyed without affecting state.
 resource "azurerm_resource_group" "this" {
-  name     = "rg-${local.name_prefix}"
+  name     = "${local.name_prefix}-rg"
   location = var.location
   tags     = local.tags
 }
 
 resource "azurerm_virtual_network" "platform" {
-  name                = "vnet-${local.name_prefix}-platform"
+  name                = "${local.name_prefix}-vnet"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   address_space       = ["10.40.0.0/16"]
@@ -16,7 +16,7 @@ resource "azurerm_virtual_network" "platform" {
 }
 
 resource "azurerm_subnet" "container_apps_infra" {
-  name                 = "snet-${local.name_prefix}-aca-infra"
+  name                 = "${local.name_prefix}-snet-aca"
   resource_group_name  = azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.platform.name
   address_prefixes     = ["10.40.0.0/23"]
@@ -34,7 +34,7 @@ resource "azurerm_subnet" "container_apps_infra" {
 }
 
 resource "azurerm_subnet" "private_endpoints" {
-  name                              = "snet-${local.name_prefix}-private-endpoints"
+  name                              = "${local.name_prefix}-snet-pe"
   resource_group_name               = azurerm_resource_group.this.name
   virtual_network_name              = azurerm_virtual_network.platform.name
   address_prefixes                  = ["10.40.2.0/24"]
@@ -45,7 +45,7 @@ resource "azurerm_subnet" "private_endpoints" {
 # use a private endpoint. The subnet must be delegated to
 # Microsoft.DBforPostgreSQL/flexibleServers and cannot contain other resources.
 resource "azurerm_subnet" "database" {
-  name                 = "snet-${local.name_prefix}-database"
+  name                 = "${local.name_prefix}-snet-db"
   resource_group_name  = azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.platform.name
   address_prefixes     = ["10.40.3.0/24"]
@@ -122,7 +122,7 @@ module "compute" {
     AUTH_TRUST_HOST                       = "true"
     AZURE_AD_TENANT_ID                    = var.tenant_id
     AZURE_AD_CLIENT_ID                    = var.entra_client_id
-    CNA_API_INTERNAL_URL                  = "http://ca-${local.name_prefix}-api"
+    CNA_API_INTERNAL_URL                  = "http://${local.name_prefix}-ca-api"
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
     AZURE_STORAGE_ACCOUNT_NAME            = module.storage.storage_account_name
     AZURE_STORAGE_CONTAINER_ENGAGEMENTS   = "raw-artifacts"
@@ -169,11 +169,10 @@ module "ai" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  environment                 = var.environment
-  foundry_resource_group_name = "rg-cna-ai-dev-eus2"
-  foundry_location            = "eastus2"
-  foundry_account_name        = "fdry-cna-dev-eus2"
-  foundry_project_name        = "proj-cna-dev-eus2"
+  environment          = var.environment
+  foundry_location     = "eastus2"
+  foundry_account_name = "cbts-cna-dev-eus2-aif"
+  foundry_project_name = "cbts-cna-dev-eus2-aif-proj"
 }
 
 

@@ -6,16 +6,10 @@ resource "azurerm_application_insights" "this" {
   tags                = var.tags
 }
 
-resource "azurerm_resource_group" "foundry" {
-  name     = var.foundry_resource_group_name
-  location = var.foundry_location
-  tags     = merge(var.tags, local.foundry_tags)
-}
-
 resource "azurerm_cognitive_account" "foundry" {
   name                          = var.foundry_account_name
-  location                      = azurerm_resource_group.foundry.location
-  resource_group_name           = azurerm_resource_group.foundry.name
+  location                      = var.foundry_location
+  resource_group_name           = var.resource_group_name
   kind                          = "AIServices"
   sku_name                      = "S0"
   custom_subdomain_name         = var.foundry_account_name
@@ -34,7 +28,7 @@ resource "azapi_resource" "foundry_project" {
   type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
   name      = var.foundry_project_name
   parent_id = azurerm_cognitive_account.foundry.id
-  location  = azurerm_resource_group.foundry.location
+  location  = var.foundry_location
 
   body = {
     identity = {

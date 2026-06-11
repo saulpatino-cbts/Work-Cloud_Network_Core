@@ -1,0 +1,175 @@
+name: "032 · Teardown Azure Platform"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to destroy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      confirm:
+        description: "Type DESTROY to confirm — this deletes ALL resources in the target environment"
+        required: true
+        type: string
+      destroy_tfstate_backend:
+        description: "Also destroy the Terraform state backend (stcnatfstate / rg-cna-tfstate) — only for full reset"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-azure-runtime-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Safety gate ──────────────────────────────────────────────────────────────
+  preflight:
+    name: Preflight safety check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation string
+        run: |
+          if [[ "${{ github.event.inputs.confirm }}" != "DESTROY" ]]; then
+            echo "::error::Confirmation string must be exactly 'DESTROY'. Got: '${{ github.event.inputs.confirm }}'"
+            exit 1
+          fi
+          echo "Confirmation accepted. Proceeding with teardown of ${{ github.event.inputs.environment }}."
+
+      - name: Block prod teardown on non-default branch
+        if: github.event.inputs.environment == 'prod'
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "::error::Production teardown must be triggered from the main branch."
+            exit 1
+          fi
+
+  # ── Terraform destroy ────────────────────────────────────────────────────────
+  terraform-destroy:
+    name: "terraform destroy (${{ github.event.inputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: preflight
+    environment: ${{ github.event.inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+        with:
+          terraform_version: "~1.9"
+
+      - uses: azure/login@2dd0bbf4064d5a1812889dc200bb8eed2597f82a
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${{ github.event.inputs.environment }}.terraform.tfstate"
+
+      - name: Terraform destroy
+        run: |
+          terraform destroy -auto-approve \
+            -var="environment=${{ github.event.inputs.environment }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
+            -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest" \
+            -var="web_image=ghcr.io/saulpatinojr/cna-web:latest" \
+            -var="ghcr_username=${{ secrets.GHCR_USERNAME }}" \
+            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="postgres_admin_username=${{ secrets.POSTGRES_ADMIN_USERNAME }}" \
+            -var="postgres_admin_password=${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
+            -var="nextauth_secret=${{ secrets.NEXTAUTH_SECRET }}" \
+            -var="entra_client_id=${{ secrets.ENTRA_CLIENT_ID }}" \
+            -var="entra_client_secret=${{ secrets.ENTRA_CLIENT_SECRET }}" \
+            -var="credential_encryption_key=${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}" \
+            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}"
+
+  # ── Clean up drifted resources not in Terraform state ────────────────────────
+  cleanup-drift:
+    name: "Remove drifted resources (${{ github.event.inputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: terraform-destroy
+    steps:
+      - uses: azure/login@2dd0bbf4064d5a1812889dc200bb8eed2597f82a
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete drifted resources (not managed by Terraform)
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          RG="cbts-cna-${ENV}-scus-rg"
+
+          echo "Checking for drifted resources in ${RG}..."
+
+          # Standalone Azure OpenAI (not in TF — created manually)
+          for NAME in "aoaicnadevscus" "aoaicnaprodscus"; do
+            if az cognitiveservices account show --name "${NAME}" --resource-group "${RG}" &>/dev/null; then
+              echo "Deleting standalone OpenAI: ${NAME}"
+              az cognitiveservices account delete --name "${NAME}" --resource-group "${RG}" --yes
+            fi
+          done
+
+          # OpenAI private endpoint (not in TF)
+          for NAME in "pe-cna-${ENV}-scus-openai" "cbts-cna-${ENV}-scus-pep-oai"; do
+            if az network private-endpoint show --name "${NAME}" --resource-group "${RG}" &>/dev/null; then
+              echo "Deleting OpenAI private endpoint: ${NAME}"
+              az network private-endpoint delete --name "${NAME}" --resource-group "${RG}"
+            fi
+          done
+
+          # OpenAI private DNS zone (not in TF)
+          if az network private-dns zone show --name "privatelink.openai.azure.com" --resource-group "${RG}" &>/dev/null; then
+            echo "Deleting OpenAI DNS zone"
+            az network private-dns zone delete --name "privatelink.openai.azure.com" --resource-group "${RG}" --yes
+          fi
+
+          echo "Drift cleanup complete."
+
+  # ── Optional: wipe TF state backend ─────────────────────────────────────────
+  destroy-backend:
+    name: "Destroy TF state backend"
+    runs-on: ubuntu-latest
+    needs: cleanup-drift
+    if: github.event.inputs.destroy_tfstate_backend == 'true' && github.event.inputs.environment == 'dev'
+    steps:
+      - uses: azure/login@2dd0bbf4064d5a1812889dc200bb8eed2597f82a
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete Terraform state backend resources
+        run: |
+          echo "WARNING: Deleting Terraform state backend. All state will be permanently lost."
+          TF_STATE_RG="${{ secrets.TF_STATE_RG }}"
+
+          az storage account delete \
+            --name "${{ secrets.TF_STATE_STORAGE }}" \
+            --resource-group "${TF_STATE_RG}" \
+            --yes || true
+
+          az group delete \
+            --name "${TF_STATE_RG}" \
+            --yes --no-wait || true
+
+          echo "State backend deletion initiated (--no-wait). Run 000-bootstrap-backend to recreate."

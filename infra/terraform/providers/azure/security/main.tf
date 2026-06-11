@@ -1,6 +1,6 @@
 locals {
-  frontdoor_origin_name      = "origin-${var.name_prefix}-web"
-  frontdoor_route_name       = "route-${var.name_prefix}-web"
+  frontdoor_origin_name      = "${var.name_prefix}-afd-origin"
+  frontdoor_route_name       = "${var.name_prefix}-afd-route"
   use_custom_domain          = var.frontdoor_custom_domain_host_name != ""
   use_custom_domain_dns_zone = local.use_custom_domain && var.frontdoor_custom_domain_dns_zone_id != null
   use_customer_managed_tls   = var.frontdoor_secret_versionless_id != null && var.frontdoor_certificate_type == "CustomerCertificate"
@@ -21,7 +21,7 @@ resource "azurerm_role_assignment" "key_vault_secrets_officer" {
 }
 
 resource "azurerm_network_security_group" "platform" {
-  name                = "nsg-${var.name_prefix}-platform"
+  name                = "${var.name_prefix}-nsg"
   location            = var.location
   resource_group_name = var.resource_group_name
 }
@@ -58,34 +58,34 @@ resource "azurerm_private_dns_zone" "postgres" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
-  name                  = "pdns-link-${var.name_prefix}-blob"
+  name                  = "${var.name_prefix}-pdns-blob"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.blob.name
   virtual_network_id    = var.virtual_network_id
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
-  name                  = "pdns-link-${var.name_prefix}-keyvault"
+  name                  = "${var.name_prefix}-pdns-kv"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
   virtual_network_id    = var.virtual_network_id
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "pdns-link-${var.name_prefix}-postgres"
+  name                  = "${var.name_prefix}-pdns-pg"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.postgres.name
   virtual_network_id    = var.virtual_network_id
 }
 
 resource "azurerm_private_endpoint" "storage_blob" {
-  name                = "pe-${var.name_prefix}-storage-blob"
+  name                = "${var.name_prefix}-pep-blob"
   location            = var.location
   resource_group_name = var.resource_group_name
   subnet_id           = var.private_endpoint_subnet_id
 
   private_service_connection {
-    name                           = "psc-${var.name_prefix}-storage-blob"
+    name                           = "${var.name_prefix}-pep-psc-blob"
     private_connection_resource_id = var.storage_account_id
     subresource_names              = ["blob"]
     is_manual_connection           = false
@@ -98,13 +98,13 @@ resource "azurerm_private_endpoint" "storage_blob" {
 }
 
 resource "azurerm_private_endpoint" "keyvault" {
-  name                = "pe-${var.name_prefix}-keyvault"
+  name                = "${var.name_prefix}-pep-kv"
   location            = var.location
   resource_group_name = var.resource_group_name
   subnet_id           = var.private_endpoint_subnet_id
 
   private_service_connection {
-    name                           = "psc-${var.name_prefix}-keyvault"
+    name                           = "${var.name_prefix}-pep-psc-kv"
     private_connection_resource_id = var.key_vault_id
     subresource_names              = ["vault"]
     is_manual_connection           = false
@@ -117,14 +117,14 @@ resource "azurerm_private_endpoint" "keyvault" {
 }
 
 resource "azurerm_cdn_frontdoor_profile" "platform" {
-  name                = "afd-${var.name_prefix}-platform"
+  name                = "${var.name_prefix}-afd"
   resource_group_name = var.resource_group_name
   sku_name            = "Premium_AzureFrontDoor"
 }
 
 resource "azurerm_cdn_frontdoor_secret" "platform" {
   count                    = local.use_customer_managed_tls ? 1 : 0
-  name                     = "afd-secret-${var.name_prefix}"
+  name                     = "${var.name_prefix}-afd-cert"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 
   secret {
@@ -135,12 +135,12 @@ resource "azurerm_cdn_frontdoor_secret" "platform" {
 }
 
 resource "azurerm_cdn_frontdoor_endpoint" "platform" {
-  name                     = "afd-endpoint-${var.name_prefix}"
+  name                     = "${var.name_prefix}-afd-ep"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 }
 
 resource "azurerm_cdn_frontdoor_origin_group" "web" {
-  name                     = "og-${var.name_prefix}-web"
+  name                     = "${var.name_prefix}-afd-og"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 
   load_balancing {}
@@ -167,7 +167,7 @@ resource "azurerm_cdn_frontdoor_origin" "web" {
 
 resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
   count                    = local.use_custom_domain ? 1 : 0
-  name                     = "afd-domain-${var.name_prefix}"
+  name                     = "${var.name_prefix}-afd-domain"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
   dns_zone_id              = local.use_custom_domain_dns_zone ? var.frontdoor_custom_domain_dns_zone_id : null
   host_name                = var.frontdoor_custom_domain_host_name
@@ -181,7 +181,7 @@ resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
 
 resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   # Azure requires WAF policy names to be alphanumeric only — no hyphens allowed.
-  name                = "afdwaf${replace(var.name_prefix, "-", "")}platform"
+  name                = "${replace(var.name_prefix, "-", "")}fdfp"
   resource_group_name = var.resource_group_name
   sku_name            = "Premium_AzureFrontDoor"
   mode                = "Prevention"
@@ -275,7 +275,7 @@ resource "azurerm_cdn_frontdoor_route" "web" {
 }
 
 resource "azurerm_cdn_frontdoor_security_policy" "platform" {
-  name                     = "afd-security-${var.name_prefix}"
+  name                     = "${var.name_prefix}-afd-sec"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.platform.id
 
   security_policies {

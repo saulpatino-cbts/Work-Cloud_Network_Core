@@ -30,11 +30,6 @@ variable "application_type" {
   default     = "web"
 }
 
-variable "foundry_resource_group_name" {
-  description = "Resource group for the regional Microsoft Foundry resource."
-  type        = string
-}
-
 variable "foundry_location" {
   description = "Azure region for Microsoft Foundry resources."
   type        = string

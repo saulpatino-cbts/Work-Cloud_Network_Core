@@ -1,4 +1,4 @@
 locals {
-  server_name   = "psqlf-${var.name_prefix}-platform"
+  server_name   = "${var.name_prefix}-psql"
   database_name = "cna"
 }

@@ -1,8 +1,8 @@
 locals {
-  container_apps_env_name = "cae-${var.name_prefix}-platform"
-  api_app_name            = "ca-${var.name_prefix}-api"
-  worker_app_name         = "ca-${var.name_prefix}-worker"
-  web_app_name            = "ca-${var.name_prefix}-web"
+  container_apps_env_name = "${var.name_prefix}-cae"
+  api_app_name            = "${var.name_prefix}-ca-api"
+  worker_app_name         = "${var.name_prefix}-ca-worker"
+  web_app_name            = "${var.name_prefix}-ca-web"
 
   # GHCR requires PAT auth (Azure Managed Identity only works with Azure Container Registry).
   # When ghcr_pat is non-empty the registry block uses username + password_secret_name.

@@ -1,10 +1,12 @@
 locals {
-  name_prefix = "${var.project_name}-${var.environment}-${var.region_short}"
+  org_name    = "cbts"
+  name_prefix = "${local.org_name}-${var.project_name}-${var.environment}-${var.region_short}"
   tags = {
-    project     = var.project_name
-    environment = var.environment
-    region      = var.region_short
-    managed_by  = "terraform"
-    platform    = "cna"
+    Environment = title(var.environment)
+    CostCenter  = "CBTS-CNA"
+    Owner       = "cna-platform@cbts.com"
+    Project     = var.project_name
+    Org         = local.org_name
+    ManagedBy   = "terraform"
   }
 }

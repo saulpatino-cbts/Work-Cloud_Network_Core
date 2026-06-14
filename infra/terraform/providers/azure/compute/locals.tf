@@ -6,7 +6,7 @@ locals {
 
   # GHCR requires PAT auth (Azure Managed Identity only works with Azure Container Registry).
   # When ghcr_pat is non-empty the registry block uses username + password_secret_name.
-  use_ghcr_auth = var.ghcr_pat != ""
+  use_ghcr_auth = nonsensitive(var.ghcr_pat != "")
 
   api_plain_env_vars = [
     for name, value in var.api_env_vars : {

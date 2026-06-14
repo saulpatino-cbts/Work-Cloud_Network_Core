@@ -105,17 +105,16 @@ if (-not $account) {
 
 $workloadRg = "rg-cna-$Environment-scus"
 $tfstateRg = "rg-cna-tfstate"
-$foundryRg = "rg-cna-ai-$Environment-eus2"
 $managedRgPatterns = @(
-    "ai_appi-cna-$Environment-scus-platform_*_managed",
-    "ME_cae-cna-$Environment-scus-platform_rg-cna-$Environment-scus_*"
+    "ai_*cna-$Environment-scus*_*_managed",
+    "ME_*_rg-cna-$Environment-scus_*"
 )
 
 $staleOpenAiAccount = if ($Environment -eq "dev") { "aoaicnadevscus" } else { "aoaicnaprodscus" }
 $staleOpenAiPe = "pe-cna-$Environment-scus-openai"
 $staleOpenAiZone = "privatelink.openai.azure.com"
 $staleOpenAiDnsLink = "pdns-link-cna-$Environment-scus-openai"
-$keyVault = "kv-cna-$Environment-scus-platform"
+$keyVault = "cna-$Environment-scus-kv"
 $keyVaultSecret = "cna-azure-openai-endpoint"
 
 $allGroups = ConvertTo-FlatArray (Invoke-AzJson @("group", "list"))
@@ -132,16 +131,12 @@ switch ($Scope) {
                 Add-GroupName -Groups $groupNames -Name ([string]$match.name)
             }
         }
-        if ($IncludeFoundry) {
-            Add-GroupName -Groups $groupNames -Name $foundryRg
-        }
     }
     "AllCna" {
         foreach ($match in @($allGroups | Where-Object {
             $_.name -eq $workloadRg -or
-            $_.name -eq $foundryRg -or
-            $_.name -like "ai_appi-cna-$Environment-*" -or
-            $_.name -like "ME_cae-cna-$Environment-*"
+            $_.name -like "ai_*cna-$Environment-*" -or
+            $_.name -like "ME_*_rg-cna-$Environment-scus_*"
         })) {
             Add-GroupName -Groups $groupNames -Name ([string]$match.name)
         }
@@ -155,10 +150,6 @@ $groups = @($groupNames.ToArray() | Sort-Object -Unique)
 if (-not $IncludeTfState) {
     $groups = @($groups | Where-Object { $_ -ne $tfstateRg })
 }
-if (-not $IncludeFoundry -and $Scope -ne "AllCna") {
-    $groups = @($groups | Where-Object { $_ -ne $foundryRg })
-}
-
 $rows = [System.Collections.Generic.List[object]]::new()
 
 Write-Host "Subscription: $($account.name) ($($account.id))"
@@ -289,7 +280,6 @@ if ($Scope -eq "StaleAi") {
 } else {
     foreach ($groupName in $groups) {
         if ($groupName -eq $tfstateRg -and -not $IncludeTfState) { continue }
-        if ($groupName -eq $foundryRg -and -not $IncludeFoundry -and $Scope -ne "AllCna") { continue }
 
         Remove-IfRequested "Resource group $groupName" {
             az group delete --name $groupName --yes --no-wait --only-show-errors | Out-Null

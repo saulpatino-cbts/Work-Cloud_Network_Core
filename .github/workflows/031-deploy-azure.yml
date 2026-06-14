@@ -54,7 +54,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: deploy-azure-runtime-${{ github.event.inputs.environment || 'schedule' }}
+  group: deploy-azure-platform-${{ github.event.inputs.environment || 'schedule' }}
   cancel-in-progress: false
 
 env:
@@ -62,6 +62,7 @@ env:
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
   EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}
+  EFFECTIVE_MIGRATOR_IMAGE: ghcr.io/saulpatinojr/cna-migrator:latest
   AZURE_MONITOR_HEALTH_THRESHOLD: "95"
   APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
   CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
@@ -194,13 +195,16 @@ jobs:
           API_IMG=$(resolve "${{ env.EFFECTIVE_API_IMAGE }}" "api")
           WORKER_IMG=$(resolve "${{ env.EFFECTIVE_WORKER_IMAGE }}" "worker")
           WEB_IMG=$(resolve "${{ env.EFFECTIVE_WEB_IMAGE }}" "web")
+          MIGRATOR_IMG=$(resolve "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}" "migrator")
           echo "EFFECTIVE_API_IMAGE=${API_IMG}" >> "$GITHUB_ENV"
           echo "EFFECTIVE_WORKER_IMAGE=${WORKER_IMG}" >> "$GITHUB_ENV"
           echo "EFFECTIVE_WEB_IMAGE=${WEB_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_MIGRATOR_IMAGE=${MIGRATOR_IMG}" >> "$GITHUB_ENV"
           echo "Resolved images:"
           echo "  api:    ${API_IMG}"
           echo "  worker: ${WORKER_IMG}"
           echo "  web:    ${WEB_IMG}"
+          echo "  migrator: ${MIGRATOR_IMG}"
 
       - name: Terraform plan
         run: |
@@ -208,6 +212,18 @@ jobs:
           FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
           AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
           AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+          optional_var() {
+            local VALUE="$1"
+            if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
+              echo ""
+            else
+              echo "$VALUE"
+            fi
+          }
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
@@ -222,14 +238,14 @@ jobs:
             -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
             -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
-            -var="foundry_claude_endpoint=${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}" \
+            -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
             -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
-            -var="azure_mcp_endpoint=${{ vars.CNA_AZURE_MCP_ENDPOINT }}" \
+            -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
-            -var="aws_mcp_endpoint=${{ vars.CNA_AWS_MCP_ENDPOINT }}" \
+            -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
             -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
-            -var="drawio_mcp_url=${{ vars.CNA_DRAWIO_MCP_URL }}"
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}"
 
       - name: Create deployment manifest
         run: |
@@ -241,6 +257,7 @@ jobs:
             "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
             "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
             "web_image": "${{ env.EFFECTIVE_WEB_IMAGE }}",
+            "migrator_image": "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}",
             "commit_sha": "${{ github.sha }}",
             "workflow_run_id": "${{ github.run_id }}",
             "approval_status": "pending",
@@ -325,7 +342,7 @@ jobs:
         run: |
           DB_URL=$(terraform output -raw database_connection_string)
           RG="rg-cna-${{ inputs.environment }}-scus"
-          CAE="cae-cna-${{ inputs.environment }}-scus-platform"
+          CAE="cna-${{ inputs.environment }}-scus-cae"
           JOB="job-migrate-${{ github.run_id }}"
           echo "Creating migration job $JOB..."
           az containerapp job create \
@@ -337,7 +354,7 @@ jobs:
             --replica-retry-limit 1 \
             --replica-completion-count 1 \
             --parallelism 1 \
-            --image "ghcr.io/${{ github.repository_owner }}/cna-migrator:latest" \
+            --image "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}" \
             --secrets "db-url=$DB_URL" \
             --env-vars "DATABASE_URL=secretref:db-url" \
             --registry-server "ghcr.io" \
@@ -480,7 +497,7 @@ jobs:
       - name: Query Azure Monitor health directly
         run: |
           mkdir -p .verification/${{ inputs.environment }}
-          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
+          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/cna-${{ inputs.environment }}-scus-afd/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
           THRESHOLD="${AZURE_MONITOR_HEALTH_THRESHOLD:-95}"
           VDIR=".verification/${{ inputs.environment }}"
           MAX_WAIT=30
@@ -511,7 +528,7 @@ jobs:
       - name: Execute progressive Front Door promotion actions
         run: |
           az afd route show \
-            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/afd-cna-${{ inputs.environment }}-scus-platform/afdEndpoints/afd-endpoint-cna-${{ inputs.environment }}-scus/routes/route-cna-${{ inputs.environment }}-scus-web" \
+            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/cna-${{ inputs.environment }}-scus-afd/afdEndpoints/cna-${{ inputs.environment }}-scus-afd-ep/routes/cna-${{ inputs.environment }}-scus-afd-route" \
             > .verification/${{ inputs.environment }}/staged-promotion.json
 
       - name: Query certificate monitoring and trigger renewal workflow
@@ -611,6 +628,18 @@ jobs:
           FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
           AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
           AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+          optional_var() {
+            local VALUE="$1"
+            if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
+              echo ""
+            else
+              echo "$VALUE"
+            fi
+          }
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
@@ -625,11 +654,11 @@ jobs:
             -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
             -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
-            -var="foundry_claude_endpoint=${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}" \
+            -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
             -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
-            -var="azure_mcp_endpoint=${{ vars.CNA_AZURE_MCP_ENDPOINT }}" \
+            -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
-            -var="aws_mcp_endpoint=${{ vars.CNA_AWS_MCP_ENDPOINT }}" \
+            -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
             -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
-            -var="drawio_mcp_url=${{ vars.CNA_DRAWIO_MCP_URL }}"
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}"

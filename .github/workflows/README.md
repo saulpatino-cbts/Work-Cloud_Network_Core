@@ -16,6 +16,7 @@
 022 → (manual)    Publish — deliver reports to client portals
 030 → (on push)   Build & publish all three container images to GHCR
 031 → (manual)    Deploy Azure infrastructure + containers via Terraform
+032 → (manual)    Teardown Azure environment with DESTROY safety gate
 ```
 
 ---
@@ -45,7 +46,7 @@ Workload RGs are created and managed by Terraform (workflow 031):
 | dev | `rg-cna-dev-scus` |
 | prod | `rg-cna-prod-scus` |
 
-See `documentation/architecture/40-naming-conventions.md` for the full reference.
+See the GitHub Wiki page `Architecture 40 Naming Conventions` for the full reference.
 
 ---
 
@@ -206,9 +207,11 @@ Full Terraform plan + apply. Includes:
 | `AZURE_CLIENT_ID` | OIDC app registration Client ID (federated credential) |
 | `AZURE_TENANT_ID` | Azure AD tenant GUID |
 | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+| `GHCR_PAT` | GitHub PAT with `read:packages` for Container Apps image pulls |
 | `CNA_POSTGRES_ADMIN_PASSWORD` | PostgreSQL admin password (min 8 chars, mixed case + special) |
 | `CNA_ENTRA_CLIENT_SECRET` | Entra ID OAuth2 client secret for NextAuth |
 | `CNA_NEXTAUTH_SECRET` | NextAuth JWT signing secret (`openssl rand -base64 32`) |
+| `CNA_CREDENTIAL_ENCRYPTION_KEY` | Encryption key for stored customer cloud credentials |
 | `FOUNDRY_CLAUDE_API_KEY` | Optional Foundry Claude API key; required only to enable the Claude engine |
 
 **Required GitHub Repository Variables:**
@@ -216,7 +219,7 @@ Full Terraform plan + apply. Includes:
 | Variable | Initial Value | Notes |
 | --- | --- | --- |
 | `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` | Set after running workflow 000 |
-| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` | Set after running workflow 000 |
+| `TFSTATE_STORAGE_ACCOUNT` | customer-specific `stcna...tfstate` | Set after running workflow 000 |
 | `TFSTATE_CONTAINER` | `tfstate` | Set after running workflow 000 |
 | `CNA_ENTRA_CLIENT_ID` | `<app registration client ID>` | From Azure Entra app registration |
 | `CNA_NEXTAUTH_URL` | `none` | Placeholder — update after first Terraform deploy |
@@ -239,67 +242,38 @@ Full Terraform plan + apply. Includes:
 ## First Deployment Checklist
 
 ```
-[ ] 1. Create Entra ID App Registration (Azure Portal — one-time):
-       - Azure Portal → Entra ID → App registrations → New registration
-       - Redirect URI: https://<placeholder>/api/auth/callback/microsoft-entra-id
-         (update to real Front Door hostname after step 8)
-       - API permissions: openid, profile, email, User.Read
-       - Certificates & secrets → New client secret → copy the value
-       - Add OIDC federated credential:
-           Issuer:  https://token.actions.githubusercontent.com
-           Subject: repo:saulpatinojr/MVP-Cloud_Network_Assessment:ref:refs/heads/main
+[ ] 1. Run the interactive setup script from the repo root:
+       .\scripts\Initialize-CnaGitHubSecrets.ps1 -Repo "owner/repo" -Environment dev
 
-[ ] 2. Set GitHub Secrets (Settings → Secrets and variables → Actions → Secrets):
-       - AZURE_CLIENT_ID              (app registration client ID)
-       - AZURE_TENANT_ID              (tenant GUID)
-       - AZURE_SUBSCRIPTION_ID        (subscription ID)
-       - CNA_ENTRA_CLIENT_SECRET      (client secret from step 1)
-       - CNA_POSTGRES_ADMIN_PASSWORD  (generate: openssl rand -base64 16)
-       - CNA_NEXTAUTH_SECRET          (generate: openssl rand -base64 32)
-       - FOUNDRY_CLAUDE_API_KEY       (optional; required to enable Claude)
+       The script creates or reuses the Entra app registration, configures GitHub OIDC,
+       prompts for required secrets, generates supported secrets when requested, and
+       writes the GitHub Actions secrets and variables used by the workflows.
 
-[ ] 3. Set GitHub Variables (Settings → Secrets and variables → Actions → Variables):
-       - TFSTATE_RESOURCE_GROUP       = rg-cna-tfstate (set after step 4)
-       - TFSTATE_STORAGE_ACCOUNT      = stcnatfstate    (set after step 4)
-       - TFSTATE_CONTAINER            = tfstate          (set after step 4)
-       - CNA_ENTRA_CLIENT_ID          = <app registration client ID>
-       - CNA_NEXTAUTH_URL             = none             (update after step 8)
-       - CNA_AI_ENGINE_DEFAULT        = foundry-claude
-       - FOUNDRY_CLAUDE_ENDPOINT      = none             (update when Claude is provisioned)
-       - FOUNDRY_CLAUDE_MODEL         = claude-sonnet-4-6
-       - CNA_AZURE_MCP_ENDPOINT       = none
-       - CNA_AZURE_MCP_TRANSPORT      = sse
-       - CNA_AWS_MCP_ENDPOINT         = none
-       - CNA_AWS_MCP_TRANSPORT        = stdio
-       - CNA_DRAWIO_MCP_URL           = none
-       - APPLICATION_INSIGHTS_NAME    = none             (update after step 8)
-       - KEY_VAULT_NAME               = none             (update after step 8)
-
-[ ] 4. Run workflow 000 — Bootstrap Terraform Backend (one-time, ~2 min)
+[ ] 2. Run workflow 000 — Bootstrap Terraform Backend (one-time, ~2 min)
        All inputs are pre-filled — just run with defaults.
        Update the three TFSTATE_* variables from the workflow summary.
 
-[ ] 5. Run workflow 010 — Validate Prerequisites (~1 min)
+[ ] 3. Run workflow 010 — Validate Prerequisites (~1 min)
        Confirms all secrets, variables, OIDC, and role assignments are green.
 
-[ ] 6. Push to main — workflow 030 auto-builds all three container images (~8 min)
+[ ] 4. Push to main — workflow 030 auto-builds all three container images (~8 min)
        OR run workflow 030 manually.
 
-[ ] 7. Run workflow 031 (environment: dev) — first Terraform deploy (~20 min)
+[ ] 5. Run workflow 031 (environment: dev) — first Terraform deploy (~20 min)
        Note the three Terraform outputs from the workflow summary:
          frontdoor_endpoint_host_name → your live public URL
          key_vault_name               → replace KEY_VAULT_NAME variable
          application_insights_name    → replace APPLICATION_INSIGHTS_NAME variable
 
-[ ] 8. Update GitHub Variables and Entra redirect URI with real values:
+[ ] 6. Update GitHub Variables and Entra redirect URI with real values:
        - CNA_NEXTAUTH_URL           = https://<frontdoor_endpoint_host_name>
        - KEY_VAULT_NAME             = <key_vault_name>
        - APPLICATION_INSIGHTS_NAME  = <application_insights_name>
        - Entra App redirect URI     = https://<frontdoor_endpoint_host_name>/api/auth/callback/microsoft-entra-id
 
-[ ] 9. Run workflow 031 again — applies the corrected NEXTAUTH_URL to cna-web (~5 min)
+[ ] 7. Run workflow 031 again — applies the corrected NEXTAUTH_URL to cna-web (~5 min)
 
-[ ] 10. Run workflow 011 — validate all Key Vault secrets are populated
+[ ] 8. Run workflow 011 — validate all Key Vault secrets are populated
 
-[ ] 11. Navigate to https://<frontdoor_endpoint_host_name> — sign in with Entra ID
+[ ] 9. Navigate to https://<frontdoor_endpoint_host_name> — sign in with Entra ID
 ```

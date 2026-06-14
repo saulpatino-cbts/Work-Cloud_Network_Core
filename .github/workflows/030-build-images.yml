@@ -10,7 +10,7 @@ on:
       - apps/cna-web/**
       - cna/**
       - pyproject.toml
-      - .github/workflows/02-build-and-publish-images.yml
+      - .github/workflows/030-build-images.yml
   workflow_dispatch:
 
 permissions:
@@ -212,7 +212,8 @@ jobs:
             "images": {
               "api":    "ghcr.io/${OWNER}/cna-api:${SHA_TAG}",
               "worker": "ghcr.io/${OWNER}/cna-worker:${SHA_TAG}",
-              "web":    "ghcr.io/${OWNER}/cna-web:${SHA_TAG}"
+              "web":    "ghcr.io/${OWNER}/cna-web:${SHA_TAG}",
+              "migrator":"ghcr.io/${OWNER}/cna-migrator:${SHA_TAG}"
             }
           }
           EOF

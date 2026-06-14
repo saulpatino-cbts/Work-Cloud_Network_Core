@@ -8,7 +8,7 @@ output "application_insights_connection_string" {
 }
 
 output "foundry_resource_group_name" {
-  value = azurerm_resource_group.foundry.name
+  value = var.resource_group_name
 }
 
 output "foundry_account_id" {

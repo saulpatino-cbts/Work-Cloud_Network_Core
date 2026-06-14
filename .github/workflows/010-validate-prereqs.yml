@@ -1,5 +1,5 @@
 name: "010 · Validate Prerequisites"
-# Run this workflow before 01-bootstrap-backend to confirm that all required
+# Run this workflow before 000-bootstrap-backend to confirm that all required
 # GitHub Secrets, GitHub Variables, and Azure OIDC authentication are in place.
 #
 # Safe to run at any time — read-only, makes no changes to Azure or GitHub.
@@ -34,11 +34,12 @@ jobs:
           V_CNA_POSTGRES_ADMIN_PASSWORD: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
           V_CNA_ENTRA_CLIENT_SECRET:     ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
           V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
+          V_CNA_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
           V_GHCR_PAT:                    ${{ secrets.GHCR_PAT }}
           # Optional — AWS publish (workflow 06 with cloud=aws)
           V_CNA_AWS_ROLE_ARN:            ${{ secrets.CNA_AWS_ROLE_ARN }}
           V_CNA_PUBLISH_BUCKET:          ${{ secrets.CNA_PUBLISH_BUCKET }}
-          # Optional — customer-managed TLS cert rotation (workflow 03 verify)
+          # Optional — customer-managed TLS cert rotation (workflow 031 verify)
           V_FRONTDOOR_CERT_PFX_PASSWORD: ${{ secrets.FRONTDOOR_CERTIFICATE_PFX_PASSWORD }}
         run: |
           echo "## Secret Check" >> "$GITHUB_STEP_SUMMARY"
@@ -72,12 +73,13 @@ jobs:
           check_secret "CNA_POSTGRES_ADMIN_PASSWORD" "$V_CNA_POSTGRES_ADMIN_PASSWORD"
           check_secret "CNA_ENTRA_CLIENT_SECRET"     "$V_CNA_ENTRA_CLIENT_SECRET"
           check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
+          check_secret "CNA_CREDENTIAL_ENCRYPTION_KEY" "$V_CNA_CREDENTIAL_ENCRYPTION_KEY"
           check_secret "GHCR_PAT"                    "$V_GHCR_PAT"
 
           # Optional — required only for specific workflows
           check_secret "CNA_AWS_ROLE_ARN"                   "$V_CNA_AWS_ROLE_ARN"            "workflow 06 (AWS publish)"
           check_secret "CNA_PUBLISH_BUCKET"                 "$V_CNA_PUBLISH_BUCKET"          "workflow 06 (publish portal)"
-          check_secret "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" "$V_FRONTDOOR_CERT_PFX_PASSWORD" "workflow 03 verify (customer TLS)"
+          check_secret "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" "$V_FRONTDOOR_CERT_PFX_PASSWORD" "workflow 031 verify (customer TLS)"
 
           if [[ "$FAILED" -eq 1 ]]; then
             echo ""
@@ -219,7 +221,7 @@ jobs:
             echo "::warning::User Access Administrator role not found — Terraform may fail when assigning roles to managed identities"
           fi
 
-          # Verify tfstate storage account is accessible (only after workflow 01 has run)
+          # Verify tfstate storage account is accessible (only after workflow 000 has run)
           TFSTATE_SA="${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
           TFSTATE_RG="${{ vars.TFSTATE_RESOURCE_GROUP }}"
           if [[ "$TFSTATE_SA" != "none" && -n "$TFSTATE_SA" ]]; then
@@ -230,8 +232,8 @@ jobs:
             if [[ -n "$SA_EXISTS" ]]; then
               echo "| Tfstate storage account | \`$TFSTATE_SA\` exists | ✅ |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| Tfstate storage account | \`$TFSTATE_SA\` not found | ⚠️ Run workflow 01 |" >> "$GITHUB_STEP_SUMMARY"
-              echo "::warning::Storage account $TFSTATE_SA not found in $TFSTATE_RG — run workflow 01 to create it"
+              echo "| Tfstate storage account | \`$TFSTATE_SA\` not found | ⚠️ Run workflow 000 |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Storage account $TFSTATE_SA not found in $TFSTATE_RG — run workflow 000 to create it"
             fi
           fi
 
@@ -244,6 +246,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Next step:** If all checks are green, run workflow \`01 · Bootstrap Terraform Backend\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "**Next step:** If all checks are green, run workflow \`000 · Bootstrap Backend\`." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 03)." >> "$GITHUB_STEP_SUMMARY"
+          echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 031)." >> "$GITHUB_STEP_SUMMARY"

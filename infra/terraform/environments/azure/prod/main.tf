@@ -2,7 +2,7 @@
 # Terraform state lives in a separate dedicated RG (rg-cna-tfstate) created
 # by workflow 01, so this RG can be safely destroyed without affecting state.
 resource "azurerm_resource_group" "this" {
-  name     = "${local.name_prefix}-rg"
+  name     = "rg-${local.name_prefix}"
   location = var.location
   tags     = local.tags
 }
@@ -168,8 +168,8 @@ module "ai" {
 
   environment          = var.environment
   foundry_location     = "eastus2"
-  foundry_account_name = "cbts-cna-prod-eus2-aif"
-  foundry_project_name = "cbts-cna-prod-eus2-aif-proj"
+  foundry_account_name = "cna-prod-eus2-aif"
+  foundry_project_name = "cna-prod-eus2-aif-proj"
 }
 
 

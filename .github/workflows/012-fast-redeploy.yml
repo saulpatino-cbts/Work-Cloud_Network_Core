@@ -4,7 +4,7 @@ name: "012 · Fast Redeploy"
 # one or more Container Apps — no infrastructure changes.
 # ~2 minutes vs ~10+ minutes for a full Terraform deploy.
 # Prerequisite:
-#   Azure infrastructure must already be deployed (03-deploy-azure-dev.yml)
+#   Azure infrastructure must already be deployed by workflow 031.
 
 on:
   workflow_dispatch:
@@ -71,9 +71,9 @@ jobs:
         run: |
           # Name prefix matches locals.tf: "${var.project_name}-${var.environment}-${var.region_short}"
           PREFIX="cna-${INPUT_ENV}-${INPUT_REGION}"
-          echo "api_app=ca-${PREFIX}-api"       >> "$GITHUB_OUTPUT"
-          echo "worker_app=ca-${PREFIX}-worker" >> "$GITHUB_OUTPUT"
-          echo "web_app=ca-${PREFIX}-web"       >> "$GITHUB_OUTPUT"
+          echo "api_app=${PREFIX}-ca-api"       >> "$GITHUB_OUTPUT"
+          echo "worker_app=${PREFIX}-ca-worker" >> "$GITHUB_OUTPUT"
+          echo "web_app=${PREFIX}-ca-web"       >> "$GITHUB_OUTPUT"
           echo "resource_group=rg-${PREFIX}"    >> "$GITHUB_OUTPUT"
 
       - name: Update cna-api image

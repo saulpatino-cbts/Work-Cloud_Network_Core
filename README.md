@@ -3,13 +3,13 @@
 [![CI](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml)
 [![Release](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/021-release-version.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/021-release-version.yml)
 
-A CBTS-branded, multi-user web platform for cloud network assessments across AWS and Azure.
+A CNA-branded, multi-user web platform for cloud network assessments across AWS and Azure.
 Analysts run network discoveries, AI-powered analysis, and generate presentation-ready deliverables
 including an encyclopedia-grade network report. Clients receive deliverables through a
 time-limited authenticated portal. Deployed as three Azure Container Apps behind Azure Front Door,
 backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Current status — June 2026:** Infrastructure re-deployed with CAF-compliant naming (`cbts-cna-[env]-[region]-[abbrev]`), single resource group per environment, and all Foundry AI resources consolidated. Platform is active and receiving the encyclopedia report + CBTS retheme build.
+> **Current status — June 2026:** Infrastructure is being prepared for clean redeploy with `cna-*` naming only, one workload resource group per environment, and GitHub Secrets/Variables as the deployment source of truth.
 
 ---
 
@@ -22,7 +22,7 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | AWS discovery stubs | ✅ GA | VPC, TGW, security groups |
 | AI analysis engine | ✅ GA | Azure Foundry (Claude), 11 AWS + 7 Azure rules |
 | Web platform (Next.js) | ✅ GA | Entra ID auth, engagement workflow |
-| CBTS retheme | ✅ Merged | Navy/teal palette, Aeonik font, official SVG logos |
+| CNA visual system | ✅ Merged | Navy/teal palette, Aeonik font, SVG brand assets |
 | East-West / North-South taxonomy | ✅ Merged | `traffic_direction` on all findings |
 | FinOps signals (AZ-COST-001–005) | ✅ Merged | Orphaned PIPs, idle gateways, oversized SKUs, NAT/FW waste |
 | BC/DR signals (AZ-BCDR-001–005) | ✅ Merged | Zone redundancy, active-active, single-gateway gaps |
@@ -32,7 +32,7 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | Encyclopedia report | ✅ Merged | 6-chapter, Condensed + Expanded editions, WeasyPrint PDF |
 | Grounded copilot chat | ✅ Merged | Azure Foundry, stat-master context, citation chips |
 | Frontend UX journey (8 steps) | ✅ Merged | Traffic, FinOps, Resilience, Discovery, Book Mode pages |
-| CAF naming convention | ✅ Merged | `cbts-cna-[env]-[region]-[abbrev]`, single RG per env |
+| CAF naming convention | ✅ Merged | `cna-[env]-[region_short]`, single workload RG per env |
 | Teardown workflow (032) | ✅ Merged | `DESTROY`-gated, optional state wipe |
 | CI — lint/test | ✅ Passing | ruff, pytest 3.13 + 3.14, Docker build smoke |
 | Azure deployment | ⏳ Pending | Awaiting teardown + clean redeploy with new naming |
@@ -50,7 +50,7 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
                     └─────────────────────┬────────────────────┘
                                           │ HTTPS
                     ┌─────────────────────▼────────────────────┐
-                    │        cbts-cna-[env]-[region]-ca-web     │
+                    │        cna-[env]-[region]-ca-web          │
                     │        Next.js 19 / React 19              │
                     │  • Entra ID login (NextAuth v5)           │
                     │  • 8-step engagement journey              │
@@ -59,13 +59,13 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
                     └───────────┬──────────────────┬───────────┘
                                 │ internal         │ Prisma ORM
               ┌─────────────────▼────────┐  ┌──────▼─────────────────┐
-              │  ca-[env]-[region]-ca-api │  │  cbts-cna-[env]-[region]-psql  │
+              │  cna-[env]-[region]-ca-api │  │  cna-[env]-[region]-psql │
               │  FastAPI — internal only  │  │  PostgreSQL Flexible    │
               │  /metrics  /chat  /reports│  │  VNet-delegated         │
               └─────────────────┬─────────┘  └────────────────────────┘
                                 │
               ┌─────────────────▼────────┐
-              │  cbts-cna-[env]-[region]-ca-worker  │
+              │  cna-[env]-[region]-ca-worker       │
               │  Python background worker │
               │  Discovery · AI analysis  │
               │  Report generation (PDF)  │
@@ -77,23 +77,23 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 All resources — including AI Foundry (deployed to `eastus2`) — share one resource group:
 
 ```
-cbts-cna-dev-scus-rg
-├── cbts-cna-dev-scus-vnet          Virtual network
-├── cbts-cna-dev-scus-cae           Container Apps Environment
-├── cbts-cna-dev-scus-ca-api        Container App (API)
-├── cbts-cna-dev-scus-ca-worker     Container App (worker)
-├── cbts-cna-dev-scus-ca-web        Container App (web)
-├── cbts-cna-dev-scus-psql          PostgreSQL Flexible Server
-├── cbts-cna-dev-scus-kv            Key Vault
-├── cbts-cna-dev-scus-id            Managed Identity
-├── cbtscnadevscusst                Storage Account
-├── cbts-cna-dev-scus-afd           Front Door profile
-├── cbtscandevscusfdfp              Front Door WAF policy
-├── cbts-cna-dev-scus-nsg           Network Security Group
-├── cbts-cna-dev-scus-log           Log Analytics workspace
-├── cbts-cna-dev-scus-appi          Application Insights
-├── cbts-cna-dev-eus2-aif           AI Foundry account (eus2 region)
-└── cbts-cna-dev-eus2-aif-proj      AI Foundry project
+rg-cna-dev-scus
+├── cna-dev-scus-vnet               Virtual network
+├── cna-dev-scus-cae                Container Apps Environment
+├── cna-dev-scus-ca-api             Container App (API)
+├── cna-dev-scus-ca-worker          Container App (worker)
+├── cna-dev-scus-ca-web             Container App (web)
+├── cna-dev-scus-psql               PostgreSQL Flexible Server
+├── cna-dev-scus-kv                 Key Vault
+├── cna-dev-scus-id                 Managed Identity
+├── cnadevscusst                    Storage Account
+├── cna-dev-scus-afd                Front Door profile
+├── cnadevscusfdfp                  Front Door WAF policy
+├── cna-dev-scus-nsg                Network Security Group
+├── cna-dev-scus-log                Log Analytics workspace
+├── cna-dev-scus-appi               Application Insights
+├── cna-dev-eus2-aif                AI Foundry account
+└── cna-dev-eus2-aif-proj           AI Foundry project
 ```
 
 ### Repository layout
@@ -115,7 +115,8 @@ infra/terraform/
 └── providers/azure/          Reusable modules: ai, compute, database, identity,
                               security, storage, runtime
 .github/workflows/            000–032 numbered workflow sequence
-docs/                         Architecture docs, gap analysis, audit reports
+GitHub Wiki                   Documentation and ADRs migrated to https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki
+TODO.md                       Canonical open redeploy, validation, footprint, and enhancement tasks
 scripts/                      Remove-DriftedResources.ps1, operational runbooks
 ```
 
@@ -158,9 +159,9 @@ cp .env.example .env
 To wipe an environment and redeploy clean:
 
 ```
-1. Run scripts/Remove-DriftedResources.ps1 -DryRun   (preview drifted resources)
-2. Run scripts/Remove-DriftedResources.ps1            (delete them)
-3. Trigger workflow 032 — type DESTROY to confirm teardown
+1. Run workflow 032 — type DESTROY to confirm teardown
+2. Review its cleanup preview and confirm only CNA-owned targets are listed
+3. Keep `destroy_tfstate_backend=false` unless intentionally resetting Terraform state
 4. Follow deployment steps above
 ```
 
@@ -203,10 +204,10 @@ To wipe an environment and redeploy clean:
 - Containers run as non-root (uid 1001)
 - OIDC for all CI/CD cloud credentials — no long-lived keys
 - Azure release gated by direct Azure Monitor + App Insights evidence
-- Encyclopedia/branded reports flagged `[REVIEW REQUIRED]` before client delivery per CBTS policy
-- Cost estimates in FinOps findings flagged `[VERIFY]` per CBTS review policy
+- Encyclopedia/branded reports flagged `[REVIEW REQUIRED]` before client delivery
+- Cost estimates in FinOps findings flagged `[VERIFY]` for analyst review
 
 ---
 
 *Maintained by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert*
-*CBTS Cloud Network Assessment Platform · June 2026*
+*CNA Platform · June 2026*

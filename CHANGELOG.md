@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+- Standardized active Azure deployment naming on `cna-*` resources with `rg-cna-<env>-<region>` workload resource groups.
+- Updated Terraform workload resource group naming and generic CNA tag defaults for customer deployments.
+- Aligned deployment, workflow, cleanup, and secrets documentation with GitHub Secrets/Variables as the source of truth.
+- Migrated the documentation content set to the GitHub Wiki with generated table-of-contents sections.
+- Migrated ADRs to the GitHub Wiki, consolidated remaining gap/footprint notes into `TODO.md`, and removed obsolete local audit artifacts.
+
+---
+
 ## [1.0.0] - 2026-05-28
 
 ### Added

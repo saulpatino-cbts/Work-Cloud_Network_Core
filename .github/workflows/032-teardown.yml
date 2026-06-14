@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       destroy_tfstate_backend:
-        description: "Also destroy the Terraform state backend (stcnatfstate / rg-cna-tfstate) — only for full reset"
+        description: "Also destroy the configured Terraform state backend — only for full reset"
         required: false
         default: "false"
         type: choice
@@ -26,6 +26,13 @@ on:
 permissions:
   contents: read
   id-token: write
+
+env:
+  TF_IN_AUTOMATION: true
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 concurrency:
   group: deploy-azure-platform-${{ github.event.inputs.environment }}

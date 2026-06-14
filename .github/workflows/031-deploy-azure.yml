@@ -59,6 +59,10 @@ concurrency:
 
 env:
   TF_IN_AUTOMATION: true
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
   EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}

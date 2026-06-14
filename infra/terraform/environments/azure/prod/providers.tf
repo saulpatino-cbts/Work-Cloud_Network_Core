@@ -16,7 +16,13 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      # Confirmed environment teardown must remove Azure-created child resources
+      # that are not addressable in Terraform state, such as Smart Detection.
+      prevent_deletion_if_contains_resources = false
+    }
+  }
   use_oidc = true
 }
 

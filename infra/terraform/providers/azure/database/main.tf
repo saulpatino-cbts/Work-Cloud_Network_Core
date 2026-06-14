@@ -39,10 +39,6 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
   server_id = azurerm_postgresql_flexible_server.this.id
   charset   = "utf8"
   collation = "en_US.utf8"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 # Allow extensions needed by Prisma / CNA schema.

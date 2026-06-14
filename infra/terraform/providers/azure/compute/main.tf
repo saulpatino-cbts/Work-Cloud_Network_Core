@@ -44,18 +44,18 @@ resource "azurerm_container_app" "api" {
 
   # Inject the GHCR PAT as a secret so the registry block can reference it.
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? toset(["ghcr-pat"]) : toset([])
+    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
     content {
-      name  = secret.value
+      name  = secret.value.name
       value = var.ghcr_pat
     }
   }
 
   dynamic "secret" {
-    for_each = nonsensitive(toset(keys(var.container_app_secrets)))
+    for_each = [for name in nonsensitive(keys(var.container_app_secrets)) : { name = name }]
     content {
-      name  = secret.value
-      value = var.container_app_secrets[secret.value]
+      name  = secret.value.name
+      value = var.container_app_secrets[secret.value.name]
     }
   }
 
@@ -140,18 +140,18 @@ resource "azurerm_container_app" "worker" {
   }
 
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? toset(["ghcr-pat"]) : toset([])
+    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
     content {
-      name  = secret.value
+      name  = secret.value.name
       value = var.ghcr_pat
     }
   }
 
   dynamic "secret" {
-    for_each = nonsensitive(toset(keys(var.container_app_secrets)))
+    for_each = [for name in nonsensitive(keys(var.container_app_secrets)) : { name = name }]
     content {
-      name  = secret.value
-      value = var.container_app_secrets[secret.value]
+      name  = secret.value.name
+      value = var.container_app_secrets[secret.value.name]
     }
   }
 
@@ -206,18 +206,18 @@ resource "azurerm_container_app" "web" {
   }
 
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? toset(["ghcr-pat"]) : toset([])
+    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
     content {
-      name  = secret.value
+      name  = secret.value.name
       value = var.ghcr_pat
     }
   }
 
   dynamic "secret" {
-    for_each = nonsensitive(toset(keys(var.container_app_secrets)))
+    for_each = [for name in nonsensitive(keys(var.container_app_secrets)) : { name = name }]
     content {
-      name  = secret.value
-      value = var.container_app_secrets[secret.value]
+      name  = secret.value.name
+      value = var.container_app_secrets[secret.value.name]
     }
   }
 

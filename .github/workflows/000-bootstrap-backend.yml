@@ -1,5 +1,6 @@
 name: "000 · Bootstrap Backend"
-# ONE-TIME workflow. Run this before any other workflow.
+# First application bootstrap workflow. Run this before any Terraform-backed
+# deploy in the target subscription.
 # Creates the Azure Resource Group + Storage Account used as the
 # Terraform remote backend. After this completes, set:
 #   TFSTATE_RESOURCE_GROUP   (GitHub Variable)
@@ -45,6 +46,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Verify target subscription
+        run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          SUB_NAME=$(az account show --query name -o tsv)
+          EXPECTED_SUB_ID="${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}"
+          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+
+          if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_TARGET_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
+            exit 1
+          fi
+
+          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
+            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            exit 1
+          fi
+
       - name: Create resource group
         run: |
           az group create \
@@ -85,7 +103,11 @@ jobs:
 
       - name: Summary
         run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          SUB_NAME=$(az account show --query name -o tsv)
           echo "## Bootstrap Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target subscription: \`$SUB_NAME\` (\`$SUB_ID\`)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Set these GitHub Actions **Variables** before running any other workflow:" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

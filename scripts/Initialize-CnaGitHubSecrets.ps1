@@ -224,6 +224,7 @@ $existingVariables = Get-ExistingGitHubVariableValues -RepoName $Repo
 
 $tenantId = ""
 $resolvedSubscriptionId = ""
+$resolvedSubscriptionName = ""
 $appId = ""
 $entraClientSecret = $null
 
@@ -242,6 +243,7 @@ if (-not $SkipAzureSetup) {
 
     $tenantId = [string]$account.tenantId
     $resolvedSubscriptionId = [string]$account.id
+    $resolvedSubscriptionName = [string]$account.name
     Write-Ok "Azure subscription: $($account.name) ($resolvedSubscriptionId)"
     Write-Ok "Azure tenant: $tenantId"
 
@@ -325,6 +327,7 @@ if (-not $SkipAzureSetup) {
     $appId = Read-TextValue -Name "AZURE_CLIENT_ID" -Prompt "Azure OIDC app registration client ID" -Required
     $tenantId = Read-TextValue -Name "AZURE_TENANT_ID" -Prompt "Azure tenant ID" -Required
     $resolvedSubscriptionId = Read-TextValue -Name "AZURE_SUBSCRIPTION_ID" -Prompt "Azure subscription ID" -Required
+    $resolvedSubscriptionName = Read-TextValue -Name "AZURE_TARGET_SUBSCRIPTION_NAME" -Prompt "Azure subscription name" -Default "none"
     $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL" -Default "none"
 }
 
@@ -374,6 +377,8 @@ $variableDefaults = [ordered]@{
     TFSTATE_RESOURCE_GROUP         = "rg-cna-tfstate"
     TFSTATE_STORAGE_ACCOUNT        = $defaultTfstateStorage
     TFSTATE_CONTAINER              = "tfstate"
+    AZURE_TARGET_SUBSCRIPTION_ID   = $resolvedSubscriptionId
+    AZURE_TARGET_SUBSCRIPTION_NAME = $(if ([string]::IsNullOrWhiteSpace($resolvedSubscriptionName)) { "none" } else { $resolvedSubscriptionName })
     CNA_ENTRA_CLIENT_ID            = $appId
     CNA_NEXTAUTH_URL               = $nextAuthUrlForRedirect
     CNA_AI_ENGINE_DEFAULT          = "foundry-claude"

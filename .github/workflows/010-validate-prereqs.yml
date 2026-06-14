@@ -95,6 +95,8 @@ jobs:
           TFSTATE_CONTAINER:         ${{ vars.TFSTATE_CONTAINER }}
           CNA_ENTRA_CLIENT_ID:       ${{ vars.CNA_ENTRA_CLIENT_ID }}
           CNA_NEXTAUTH_URL:          ${{ vars.CNA_NEXTAUTH_URL }}
+          AZURE_TARGET_SUBSCRIPTION_ID:   ${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}
+          AZURE_TARGET_SUBSCRIPTION_NAME: ${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}
           CNA_AI_ENGINE_DEFAULT:     ${{ vars.CNA_AI_ENGINE_DEFAULT }}
           FOUNDRY_CLAUDE_ENDPOINT:   ${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}
           FOUNDRY_CLAUDE_MODEL:      ${{ vars.FOUNDRY_CLAUDE_MODEL }}
@@ -146,6 +148,8 @@ jobs:
           check_var "TFSTATE_CONTAINER"       "$TFSTATE_CONTAINER"
           check_var "CNA_ENTRA_CLIENT_ID"     "$CNA_ENTRA_CLIENT_ID"
           check_var "CNA_NEXTAUTH_URL"        "$CNA_NEXTAUTH_URL"
+          check_optional_var "AZURE_TARGET_SUBSCRIPTION_ID"   "$AZURE_TARGET_SUBSCRIPTION_ID"
+          check_optional_var "AZURE_TARGET_SUBSCRIPTION_NAME" "$AZURE_TARGET_SUBSCRIPTION_NAME"
 
           # AI/MCP vars — optional because Terraform defaults to Azure OpenAI
           # and the app marks unconfigured optional providers unavailable.
@@ -192,6 +196,21 @@ jobs:
           echo "| Subscription | \`$SUB_NAME\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Subscription ID | \`$SUB_ID\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tenant ID | \`$TENANT_ID\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+
+          EXPECTED_SUB_ID="${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}"
+          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+
+          if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
+            echo "| Expected subscription ID | \`$EXPECTED_SUB_ID\` | ❌ Mismatch |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_TARGET_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
+            exit 1
+          fi
+
+          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
+            echo "| Expected subscription name | \`$EXPECTED_SUB_NAME\` | ❌ Mismatch |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            exit 1
+          fi
 
           # Verify Contributor role is assigned
           APP_ID="${{ secrets.AZURE_CLIENT_ID }}"

@@ -12,8 +12,10 @@ work is tracked here.
 - [ ] Run workflow `032-teardown.yml` for `dev` with `confirm=DESTROY` and `destroy_tfstate_backend=false`.
 - [ ] Confirm the `032` cleanup preview lists only CNA-owned workload resources and approved Azure-managed auxiliary groups.
 - [ ] Run workflow `030-build-images.yml` to publish current immutable GHCR image tags.
+- [ ] Set and validate `AZURE_TARGET_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
 - [ ] Run workflow `031-deploy-azure.yml` for `dev`.
 - [ ] Update `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
+- [ ] Capture the live Front Door hostname only from current Terraform/workflow outputs; do not rely on older documented `azurefd.net` references.
 - [ ] Update the Entra redirect URI to `https://<frontdoor-host>/api/auth/callback/microsoft-entra-id`.
 - [ ] Rerun workflow `031-deploy-azure.yml` so corrected runtime values are applied.
 - [ ] Run workflow `011-sync-keys.yml` after Key Vault exists to validate runtime secrets.

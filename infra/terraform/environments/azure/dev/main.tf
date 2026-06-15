@@ -95,7 +95,12 @@ module "compute" {
   api_image                            = var.api_image
   worker_image                         = var.worker_image
   web_image                            = var.web_image
-  container_apps_internal_only         = false # false = external LB so cna-web can serve public traffic
+  container_apps_internal_only         = false
+  container_apps_public_network_access = "Disabled"
+  container_app_environment_workload_profiles = [{
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }]
   infrastructure_subnet_id             = azurerm_subnet.container_apps_infra.id
   web_ingress_ip_security_restrictions = var.web_ingress_ip_security_restrictions
   ghcr_username                        = var.ghcr_username
@@ -226,8 +231,10 @@ module "security" {
   api_container_app_fqdn                 = module.compute.api_fqdn
   web_container_app_id                   = module.compute.web_id
   web_container_app_fqdn                 = module.compute.web_fqdn
+  container_app_environment_id           = module.compute.container_app_environment_id
   worker_container_app_id                = module.compute.worker_id
   application_insights_connection_string = module.ai.application_insights_connection_string
+  frontdoor_private_link_enabled         = true
   virtual_network_id                     = azurerm_virtual_network.platform.id
   private_endpoint_subnet_id             = azurerm_subnet.private_endpoints.id
   storage_account_id                     = module.storage.storage_account_id

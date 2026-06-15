@@ -58,6 +58,11 @@ variable "web_container_app_id" {
   type        = string
 }
 
+variable "container_app_environment_id" {
+  description = "Container Apps managed environment resource ID used for Front Door Private Link"
+  type        = string
+}
+
 variable "worker_container_app_id" {
   description = "Worker Container App resource ID"
   type        = string
@@ -102,6 +107,24 @@ variable "frontdoor_secret_versionless_id" {
   description = "Optional Key Vault certificate secret versionless ID for customer-managed Front Door TLS"
   type        = string
   default     = null
+}
+
+variable "frontdoor_private_link_enabled" {
+  description = "Whether Azure Front Door should connect to the Container Apps origin over Private Link."
+  type        = bool
+  default     = false
+}
+
+variable "frontdoor_private_link_target_type" {
+  description = "Target subresource used for the Front Door Private Link origin."
+  type        = string
+  default     = "managedEnvironments"
+}
+
+variable "frontdoor_private_link_request_message" {
+  description = "Request message used when Azure Front Door creates the private endpoint connection."
+  type        = string
+  default     = "Azure Front Door Private Link request for CNA web origin"
 }
 
 variable "virtual_network_id" {

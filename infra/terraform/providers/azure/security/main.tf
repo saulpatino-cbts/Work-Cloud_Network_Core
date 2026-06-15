@@ -163,6 +163,16 @@ resource "azurerm_cdn_frontdoor_origin" "web" {
   priority                       = 1
   weight                         = 1000
   certificate_name_check_enabled = true
+
+  dynamic "private_link" {
+    for_each = var.frontdoor_private_link_enabled ? [1] : []
+    content {
+      location               = var.location
+      private_link_target_id = var.container_app_environment_id
+      request_message        = var.frontdoor_private_link_request_message
+      target_type            = var.frontdoor_private_link_target_type
+    }
+  }
 }
 
 resource "azurerm_cdn_frontdoor_custom_domain" "platform" {

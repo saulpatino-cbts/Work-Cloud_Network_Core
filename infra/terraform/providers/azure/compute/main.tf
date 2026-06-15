@@ -13,8 +13,19 @@ resource "azurerm_container_app_environment" "this" {
   resource_group_name            = var.resource_group_name
   log_analytics_workspace_id     = azurerm_log_analytics_workspace.compute.id
   internal_load_balancer_enabled = var.container_apps_internal_only
+  public_network_access          = var.container_apps_public_network_access
   infrastructure_subnet_id       = var.infrastructure_subnet_id
   tags                           = var.tags
+
+  dynamic "workload_profile" {
+    for_each = var.container_app_environment_workload_profiles
+    content {
+      name                  = workload_profile.value.name
+      workload_profile_type = workload_profile.value.workload_profile_type
+      minimum_count         = try(workload_profile.value.minimum_count, null)
+      maximum_count         = try(workload_profile.value.maximum_count, null)
+    }
+  }
 
   lifecycle {
     ignore_changes = [

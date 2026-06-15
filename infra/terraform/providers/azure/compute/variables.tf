@@ -148,6 +148,28 @@ variable "container_apps_internal_only" {
   default     = false
 }
 
+variable "container_apps_public_network_access" {
+  description = "Public network access mode for the Container Apps environment. Set to Disabled when Azure Front Door reaches the app over Private Link."
+  type        = string
+  default     = "Enabled"
+
+  validation {
+    condition     = contains(["Enabled", "Disabled"], var.container_apps_public_network_access)
+    error_message = "container_apps_public_network_access must be Enabled or Disabled."
+  }
+}
+
+variable "container_app_environment_workload_profiles" {
+  description = "Optional workload profiles for the Container Apps environment. Required for features such as Azure Front Door Private Link origins."
+  type = list(object({
+    name                  = string
+    workload_profile_type = string
+    minimum_count         = optional(number)
+    maximum_count         = optional(number)
+  }))
+  default = []
+}
+
 variable "web_ingress_ip_security_restrictions" {
   description = "Optional IP-based ingress restrictions for the public web Container App. Use this to constrain direct-origin access when the selected edge pattern cannot yet use private origins."
   type = list(object({

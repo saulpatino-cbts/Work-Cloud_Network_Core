@@ -382,11 +382,28 @@ jobs:
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
 
+      - name: Export resource IDs for approval and evidence
+        id: export_ids
+        run: |
+          echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "container_app_environment_id=$(terraform output -raw container_app_environment_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Approve Front Door private endpoint connections
+        id: approve_private_link
+        env:
+          MANAGED_ENV_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
+          RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
+          REQUEST_DESCRIPTION: Azure Front Door Private Link request for CNA web origin
+          MAX_ATTEMPTS: "30"
+          SLEEP_SECONDS: "20"
+        run: bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
+
       - name: Run database migrations
         run: |
           DB_URL=$(terraform output -raw database_connection_string)
-          RG="rg-cna-${{ inputs.environment }}-scus"
-          CAE="cna-${{ inputs.environment }}-scus-cae"
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          CAE_ID="${{ steps.export_ids.outputs.container_app_environment_id }}"
+          CAE="${CAE_ID##*/}"
           JOB="job-migrate-${{ github.run_id }}"
           echo "Creating migration job $JOB..."
           az containerapp job create \
@@ -486,6 +503,8 @@ jobs:
           FRONTDOOR_ROUTE_ID: ${{ steps.export.outputs.frontdoor_route_id }}
           FRONTDOOR_CUSTOM_DOMAIN_ID: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
           FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
+          FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS: ${{ steps.approve_private_link.outputs.approved_connection_ids }}
+          CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
           NEXTAUTH_URL: ${{ steps.export.outputs.nextauth_url }}
         run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 

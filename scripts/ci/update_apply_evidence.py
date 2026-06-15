@@ -10,6 +10,8 @@ Reads from environment variables:
   FRONTDOOR_ROUTE_ID              — terraform output value
   FRONTDOOR_CUSTOM_DOMAIN_ID      — terraform output value (optional)
   FRONTDOOR_SECRET_ID             — terraform output value (optional)
+  FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS — approved private endpoint connection IDs
+  CONTAINER_APP_ENVIRONMENT_ID    — terraform output value
   NEXTAUTH_URL                    — derived runtime public URL
 """
 
@@ -23,6 +25,9 @@ with manifest.open() as f:
     data = json.load(f)
 
 data["validation_checks"]["terraform_apply"] = "passed"
+if os.environ.get("FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS"):
+    data["validation_checks"]["private_endpoint_approval"] = "passed"
+
 data["platform_context"] = {
     "frontdoor_endpoint_host_name": os.environ.get("FRONTDOOR_ENDPOINT_HOST_NAME", ""),
     "nextauth_url": os.environ.get("NEXTAUTH_URL", ""),
@@ -32,6 +37,10 @@ data["platform_context"] = {
     "frontdoor_route_id": os.environ.get("FRONTDOOR_ROUTE_ID", ""),
     "frontdoor_custom_domain_id": os.environ.get("FRONTDOOR_CUSTOM_DOMAIN_ID", ""),
     "frontdoor_secret_id": os.environ.get("FRONTDOOR_SECRET_ID", ""),
+    "frontdoor_private_link_connection_ids": os.environ.get(
+        "FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS", ""
+    ),
+    "container_app_environment_id": os.environ.get("CONTAINER_APP_ENVIRONMENT_ID", ""),
 }
 
 with manifest.open("w") as f:
@@ -40,6 +49,8 @@ with manifest.open("w") as f:
 
 print(f"Updated manifest: {manifest}")
 print("  terraform_apply = passed")
+if os.environ.get("FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS"):
+    print("  private_endpoint_approval = passed")
 print(
     f"  frontdoor_endpoint_host_name = {data['platform_context']['frontdoor_endpoint_host_name']}"
 )

@@ -20,26 +20,6 @@ resource "azurerm_role_assignment" "key_vault_secrets_officer" {
   principal_id         = var.managed_identity_principal_id
 }
 
-resource "azurerm_network_security_group" "platform" {
-  name                = "${var.name_prefix}-nsg"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-}
-
-resource "azurerm_network_security_rule" "allow_api_ingress" {
-  name                        = "allow-api-ingress"
-  priority                    = 100
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "443"
-  source_address_prefixes     = var.allowed_api_cidrs
-  destination_address_prefix  = "*"
-  resource_group_name         = var.resource_group_name
-  network_security_group_name = azurerm_network_security_group.platform.name
-}
-
 resource "azurerm_private_dns_zone" "blob" {
   name                = "privatelink.blob.core.windows.net"
   resource_group_name = var.resource_group_name

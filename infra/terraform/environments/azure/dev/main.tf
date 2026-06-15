@@ -249,7 +249,9 @@ module "observability" {
   diagnostic_targets = {
     frontdoor_profile          = module.security.frontdoor_profile_id
     frontdoor_firewall_policy  = module.security.frontdoor_firewall_policy_id
-    platform_nsg               = module.security.network_security_group_id
+    container_apps_nsg         = azurerm_network_security_group.container_apps.id
+    private_endpoints_nsg      = azurerm_network_security_group.private_endpoints.id
+    database_nsg               = azurerm_network_security_group.database.id
     container_apps_environment = module.compute.container_app_environment_id
     container_app_web          = module.compute.web_id
     container_app_api          = module.compute.api_id
@@ -262,19 +264,124 @@ module "observability" {
   }
 }
 
+resource "azurerm_network_security_group" "container_apps" {
+  name                = "${local.name_prefix}-nsg-aca"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_network_security_rule" "container_apps_to_private_endpoints_https" {
+  name                        = "allow-aca-to-pe-443"
+  priority                    = 100
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = azurerm_subnet.container_apps_infra.address_prefixes[0]
+  destination_address_prefix  = azurerm_subnet.private_endpoints.address_prefixes[0]
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_network_security_rule" "container_apps_to_database_postgres" {
+  name                        = "allow-aca-to-db-5432"
+  priority                    = 110
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = azurerm_subnet.container_apps_infra.address_prefixes[0]
+  destination_address_prefix  = azurerm_subnet.database.address_prefixes[0]
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.container_apps.name
+}
+
+resource "azurerm_network_security_group" "private_endpoints" {
+  name                = "${local.name_prefix}-nsg-pe"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_network_security_rule" "private_endpoints_from_container_apps_https" {
+  name                        = "allow-aca-to-pe-443"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = azurerm_subnet.container_apps_infra.address_prefixes[0]
+  destination_address_prefix  = azurerm_subnet.private_endpoints.address_prefixes[0]
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_network_security_rule" "private_endpoints_deny_other_vnet_inbound" {
+  name                        = "deny-other-vnet-inbound"
+  priority                    = 400
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.private_endpoints.name
+}
+
+resource "azurerm_network_security_group" "database" {
+  name                = "${local.name_prefix}-nsg-db"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_network_security_rule" "database_from_container_apps_postgres" {
+  name                        = "allow-aca-to-db-5432"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = azurerm_subnet.container_apps_infra.address_prefixes[0]
+  destination_address_prefix  = azurerm_subnet.database.address_prefixes[0]
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.database.name
+}
+
+resource "azurerm_network_security_rule" "database_deny_other_vnet_inbound" {
+  name                        = "deny-other-vnet-inbound"
+  priority                    = 400
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.this.name
+  network_security_group_name = azurerm_network_security_group.database.name
+}
+
 resource "azurerm_subnet_network_security_group_association" "container_apps_infra" {
   subnet_id                 = azurerm_subnet.container_apps_infra.id
-  network_security_group_id = module.security.network_security_group_id
+  network_security_group_id = azurerm_network_security_group.container_apps.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
   subnet_id                 = azurerm_subnet.private_endpoints.id
-  network_security_group_id = module.security.network_security_group_id
+  network_security_group_id = azurerm_network_security_group.private_endpoints.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "database" {
   subnet_id                 = azurerm_subnet.database.id
-  network_security_group_id = module.security.network_security_group_id
+  network_security_group_id = azurerm_network_security_group.database.id
 }
 
 # ─── Database ─────────────────────────────────────────────────────────────────

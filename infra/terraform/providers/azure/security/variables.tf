@@ -73,12 +73,6 @@ variable "application_insights_connection_string" {
   type        = string
 }
 
-variable "allowed_api_cidrs" {
-  description = "CIDR ranges allowed to reach the API front door"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
 variable "frontdoor_custom_domain_host_name" {
   description = "Optional custom domain hostname for Azure Front Door"
   type        = string

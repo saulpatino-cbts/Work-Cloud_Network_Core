@@ -15,6 +15,7 @@ The decisions below now reflect the approved target direction for implementation
 - `ADF-007-private-paas-connectivity-and-dns.md`
 - `ADF-008-container-apps-workload-profile-for-private-origin.md`
 - `ADF-009-private-endpoint-approval-automation.md`
+- `ADF-010-virtual-network-flow-logs.md`
 - `IMPLEMENTATION-PLAN.md`
 
 ## Current recommendation set

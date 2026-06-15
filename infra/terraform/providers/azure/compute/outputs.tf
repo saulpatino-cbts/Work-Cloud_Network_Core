@@ -41,6 +41,14 @@ output "log_analytics_workspace_id" {
   value = azurerm_log_analytics_workspace.compute.id
 }
 
+output "log_analytics_workspace_workspace_id" {
+  value = azurerm_log_analytics_workspace.compute.workspace_id
+}
+
+output "log_analytics_workspace_location" {
+  value = azurerm_log_analytics_workspace.compute.location
+}
+
 output "web_principal_id" {
   description = "System-assigned managed identity principal ID of the CNA Web Container App — used for RBAC assignments (e.g. Storage Blob Data Contributor)."
   value       = azurerm_container_app.web.identity[0].principal_id

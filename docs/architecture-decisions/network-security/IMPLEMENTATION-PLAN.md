@@ -72,7 +72,7 @@ Deliverables:
    - Front Door
    - Front Door WAF
    - Azure Firewall
-   - NSG flow logs
+   - virtual network flow logs
    - Container Apps
    - Key Vault
    - Storage

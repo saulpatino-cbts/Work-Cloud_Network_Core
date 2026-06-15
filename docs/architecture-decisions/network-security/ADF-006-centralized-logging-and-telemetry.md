@@ -8,10 +8,10 @@ Accepted
 
 The current deployment already sends Container Apps platform and workload logs
 to a Log Analytics workspace and sends application telemetry to Application
-Insights. However, network and security controls such as Front Door, WAF, NSG
-flow logs, private endpoints, Key Vault, Storage, PostgreSQL, and future Azure
-Firewall diagnostics are not yet consistently wired into the same evidence
-plane.
+Insights. However, network and security controls such as Front Door, WAF,
+virtual network flow logs, private endpoints, Key Vault, Storage, PostgreSQL,
+and future Azure Firewall diagnostics are not yet consistently wired into the
+same evidence plane.
 
 Because this platform assesses networking and security posture, customer
 environments require a clear answer to "where do the logs go?" and a single
@@ -23,7 +23,7 @@ Recommended target pattern:
 
 ```text
 Platform controls
-  -> Front Door, WAF, Azure Firewall, NSG flow logs, Key Vault, Storage,
+  -> Front Door, WAF, Azure Firewall, virtual network flow logs, Key Vault, Storage,
      PostgreSQL, Container Apps, private endpoints
   -> Shared Log Analytics workspace
 
@@ -42,7 +42,7 @@ Required telemetry sources:
 
 1. Azure Front Door access, WAF, and health diagnostics
 2. Azure Firewall application, network, threat intel, and DNS proxy logs
-3. NSG flow logs for workload-relevant subnets
+3. Virtual network flow logs with Traffic Analytics
 4. Container Apps environment and workload logs
 5. Key Vault diagnostic logs
 6. Storage diagnostic logs
@@ -73,7 +73,7 @@ Required telemetry sources:
 Positive:
 
 - Consistent incident and audit evidence.
-- Easier validation of Firewall, Front Door, and NSG behavior.
+- Easier validation of Firewall, Front Door, and routed network behavior.
 - Clear operational separation: Log Analytics for infrastructure/security,
   Application Insights for app telemetry.
 
@@ -88,7 +88,7 @@ Tradeoffs:
   isolated workspaces for the same environment.
 - Keep Application Insights in place; do not replace app telemetry with raw
   workspace logs.
-- Right-size retention by signal type, especially for NSG flow logs and
+- Right-size retention by signal type, especially for virtual network flow logs and
   Firewall logs.
 
 ## Microsoft guidance

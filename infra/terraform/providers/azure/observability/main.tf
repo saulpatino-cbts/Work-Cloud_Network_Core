@@ -42,3 +42,48 @@ resource "azurerm_monitor_diagnostic_setting" "target" {
     }
   }
 }
+
+resource "azurerm_network_watcher" "this" {
+  count = var.enable_virtual_network_flow_logs ? 1 : 0
+
+  name                = "NetworkWatcher_${replace(lower(var.location), " ", "")}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azapi_resource" "virtual_network_flow_log" {
+  count = var.enable_virtual_network_flow_logs ? 1 : 0
+
+  type      = "Microsoft.Network/networkWatchers/flowLogs@2025-05-01"
+  name      = "${var.diagnostic_setting_name_prefix}-vnet-flow"
+  parent_id = azurerm_network_watcher.this[0].id
+  location  = var.location
+  tags      = var.tags
+
+  body = {
+    properties = {
+      enabled     = true
+      recordTypes = "B,C,E,D"
+      format = {
+        type    = "JSON"
+        version = 2
+      }
+      retentionPolicy = {
+        enabled = true
+        days    = var.flow_log_retention_days
+      }
+      storageId        = var.flow_log_storage_account_id
+      targetResourceId = var.flow_log_target_resource_id
+      flowAnalyticsConfiguration = {
+        networkWatcherFlowAnalyticsConfiguration = {
+          enabled                 = true
+          trafficAnalyticsInterval = var.flow_log_traffic_analytics_interval
+          workspaceId             = var.log_analytics_workspace_workspace_id
+          workspaceRegion         = var.log_analytics_workspace_location
+          workspaceResourceId     = var.log_analytics_workspace_id
+        }
+      }
+    }
+  }
+}

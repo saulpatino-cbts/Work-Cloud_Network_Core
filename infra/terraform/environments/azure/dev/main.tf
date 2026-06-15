@@ -40,6 +40,13 @@ resource "azurerm_subnet" "private_endpoints" {
   private_endpoint_network_policies = "Disabled"
 }
 
+resource "azurerm_subnet" "firewall" {
+  name                 = "AzureFirewallSubnet"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.platform.name
+  address_prefixes     = ["10.40.4.0/26"]
+}
+
 # PostgreSQL Flexible Server requires a dedicated delegated subnet — it does NOT
 # use a private endpoint. The subnet must be delegated to
 # Microsoft.DBforPostgreSQL/flexibleServers and cannot contain other resources.
@@ -249,6 +256,8 @@ module "observability" {
   diagnostic_targets = {
     frontdoor_profile          = module.security.frontdoor_profile_id
     frontdoor_firewall_policy  = module.security.frontdoor_firewall_policy_id
+    azure_firewall             = azurerm_firewall.egress.id
+    azure_firewall_policy      = azurerm_firewall_policy.egress.id
     container_apps_nsg         = azurerm_network_security_group.container_apps.id
     private_endpoints_nsg      = azurerm_network_security_group.private_endpoints.id
     database_nsg               = azurerm_network_security_group.database.id
@@ -369,9 +378,106 @@ resource "azurerm_network_security_rule" "database_deny_other_vnet_inbound" {
   network_security_group_name = azurerm_network_security_group.database.name
 }
 
+resource "azurerm_public_ip" "firewall" {
+  name                = "${local.name_prefix}-pip-afw"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  zones               = ["1", "2", "3"]
+  tags                = local.tags
+}
+
+resource "azurerm_firewall_policy" "egress" {
+  name                = "${local.name_prefix}-afwp"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "Premium"
+  tags                = local.tags
+}
+
+resource "azurerm_firewall" "egress" {
+  name                = "${local.name_prefix}-afw"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku_name            = "AZFW_VNet"
+  sku_tier            = "Premium"
+  firewall_policy_id  = azurerm_firewall_policy.egress.id
+  tags                = local.tags
+
+  ip_configuration {
+    name                 = "primary"
+    subnet_id            = azurerm_subnet.firewall.id
+    public_ip_address_id = azurerm_public_ip.firewall.id
+  }
+}
+
+resource "azurerm_firewall_policy_rule_collection_group" "egress" {
+  name               = "${local.name_prefix}-afw-rcg"
+  firewall_policy_id = azurerm_firewall_policy.egress.id
+  priority           = 100
+
+  network_rule_collection {
+    name     = "allow-platform-dns"
+    priority = 100
+    action   = "Allow"
+
+    rule {
+      name                  = "allow-azure-dns"
+      protocols             = ["TCP", "UDP"]
+      source_addresses      = [azurerm_subnet.container_apps_infra.address_prefixes[0]]
+      destination_addresses = ["168.63.129.16"]
+      destination_ports     = ["53"]
+    }
+  }
+
+  application_rule_collection {
+    name     = "allow-web-outbound-baseline"
+    priority = 200
+    action   = "Allow"
+
+    rule {
+      name             = "allow-baseline-web-egress"
+      source_addresses = [azurerm_subnet.container_apps_infra.address_prefixes[0]]
+      destination_fqdns = ["*"]
+
+      protocols {
+        type = "Http"
+        port = 80
+      }
+
+      protocols {
+        type = "Https"
+        port = 443
+      }
+    }
+  }
+}
+
+resource "azurerm_route_table" "container_apps_egress" {
+  name                = "${local.name_prefix}-rt-aca-egress"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_route" "container_apps_default_to_firewall" {
+  name                   = "default-to-firewall"
+  resource_group_name    = azurerm_resource_group.this.name
+  route_table_name       = azurerm_route_table.container_apps_egress.name
+  address_prefix         = "0.0.0.0/0"
+  next_hop_type          = "VirtualAppliance"
+  next_hop_in_ip_address = azurerm_firewall.egress.ip_configuration[0].private_ip_address
+}
+
 resource "azurerm_subnet_network_security_group_association" "container_apps_infra" {
   subnet_id                 = azurerm_subnet.container_apps_infra.id
   network_security_group_id = azurerm_network_security_group.container_apps.id
+}
+
+resource "azurerm_subnet_route_table_association" "container_apps_egress" {
+  subnet_id      = azurerm_subnet.container_apps_infra.id
+  route_table_id = azurerm_route_table.container_apps_egress.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "private_endpoints" {

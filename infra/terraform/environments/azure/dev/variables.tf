@@ -139,13 +139,6 @@ variable "foundry_claude_model" {
   default     = "claude-sonnet-4-6"
 }
 
-variable "foundry_claude_api_key" {
-  description = "Foundry Claude API key exposed to cna-web as a Container App secret."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 variable "azure_mcp_endpoint" {
   description = "Azure MCP server endpoint surfaced in cna-web."
   type        = string

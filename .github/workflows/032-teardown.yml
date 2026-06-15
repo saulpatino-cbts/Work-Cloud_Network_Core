@@ -130,8 +130,7 @@ jobs:
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
-            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
-            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}"
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"
 
   # ── Clean up drifted resources not in Terraform state ────────────────────────
   cleanup-drift:

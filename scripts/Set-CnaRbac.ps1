@@ -108,10 +108,10 @@ $assignments = @(
   @($principals.api,    "Storage Blob Data Contributor",      $storageId, "api → Storage (artifact read/write)"),
   @($principals.worker, "Storage Blob Data Contributor",      $storageId, "worker → Storage (artifact processing)"),
 
-  # Cognitive Services OpenAI User
-  @($principals.web,    "Cognitive Services OpenAI User",     $openaiId,  "web → OpenAI (AI analysis + deliverable generation)"),
-  @($principals.api,    "Cognitive Services OpenAI User",     $openaiId,  "api → OpenAI (discovery AI enrichment)"),
-  @($principals.worker, "Cognitive Services OpenAI User",     $openaiId,  "worker → OpenAI (background AI tasks)")
+  # Cognitive Services User
+  @($principals.web,    "Cognitive Services User",     $openaiId,  "web → AI service (AI analysis + deliverable generation)"),
+  @($principals.api,    "Cognitive Services User",     $openaiId,  "api → AI service (discovery AI enrichment)"),
+  @($principals.worker, "Cognitive Services User",     $openaiId,  "worker → AI service (background AI tasks)")
 )
 
 # ── Apply assignments (idempotent) ─────────────────────────────────────────────

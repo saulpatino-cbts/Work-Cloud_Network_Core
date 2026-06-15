@@ -155,7 +155,6 @@ module "compute" {
     AUTH_SECRET               = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
     AZURE_AD_CLIENT_SECRET    = "entra-client-secret"
     CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key"
-    FOUNDRY_CLAUDE_API_KEY    = "foundry-claude-api-key"
   }
 
   # Container App secrets — encrypted values stored within the Container App.
@@ -167,7 +166,6 @@ module "compute" {
     "nextauth-secret"           = var.nextauth_secret
     "entra-client-secret"       = var.entra_client_secret
     "credential-encryption-key" = var.credential_encryption_key
-    "foundry-claude-api-key"    = var.foundry_claude_api_key
   }
 }
 

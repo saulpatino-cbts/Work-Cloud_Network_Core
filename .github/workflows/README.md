@@ -222,7 +222,6 @@ Full Terraform plan + apply. Includes:
 | `CNA_ENTRA_CLIENT_SECRET` | Entra ID OAuth2 client secret for NextAuth |
 | `CNA_NEXTAUTH_SECRET` | NextAuth JWT signing secret (`openssl rand -base64 32`) |
 | `CNA_CREDENTIAL_ENCRYPTION_KEY` | Encryption key for stored customer cloud credentials |
-| `FOUNDRY_CLAUDE_API_KEY` | Optional Foundry Claude API key; required only to enable the Claude engine |
 
 **Required GitHub Repository Variables:**
 
@@ -234,7 +233,7 @@ Full Terraform plan + apply. Includes:
 | `CNA_ENTRA_CLIENT_ID` | `<app registration client ID>` | From Azure Entra app registration |
 | `CNA_NEXTAUTH_URL` | `none` | Placeholder — update after first Terraform deploy |
 | `CNA_AI_ENGINE_DEFAULT` | `foundry-claude` | Default engine if the database setting `ai.activeEngine` does not exist |
-| `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Foundry Claude Messages API endpoint; leave blank/none until configured |
+| `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Foundry Claude Messages API endpoint used by managed identity-based runtime calls |
 | `FOUNDRY_CLAUDE_MODEL` | `claude-sonnet-4-6` | Foundry Claude model id injected into cna-web |
 | `CNA_AZURE_MCP_ENDPOINT` | `none` | Azure MCP server endpoint surfaced on the AI Engine page |
 | `CNA_AZURE_MCP_TRANSPORT` | `sse` | Azure MCP server transport |

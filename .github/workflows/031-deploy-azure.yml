@@ -283,7 +283,6 @@ jobs:
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
-            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
@@ -737,7 +736,6 @@ jobs:
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
-            -var="foundry_claude_api_key=${{ secrets.FOUNDRY_CLAUDE_API_KEY }}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \

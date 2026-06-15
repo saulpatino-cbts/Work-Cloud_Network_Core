@@ -50,7 +50,7 @@ async function getMergedTopologyJson(engagementId: string): Promise<string | nul
 // ─── Create Interactive Assessment with AI-generated content ──────────────────
 
 // Create a single INTERACTIVE_ASSESSMENT deliverable record (replaces existing).
-// Calls OpenAI to generate a fresh comprehensive HTML assessment every time.
+// Calls the active AI engine to generate a fresh comprehensive HTML assessment every time.
 export async function createInteractiveAssessment(
   engagementId: string,
 ): Promise<{ error?: string; success?: boolean }> {
@@ -117,7 +117,7 @@ export async function createInteractiveAssessment(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
-      return { error: "AI generation failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
+      return { error: "AI generation failed: the web app is missing the required 'Cognitive Services User' access on the active AI resource." };
     }
     return { error: `AI generation failed: ${msg.slice(0, 200)}` };
   }

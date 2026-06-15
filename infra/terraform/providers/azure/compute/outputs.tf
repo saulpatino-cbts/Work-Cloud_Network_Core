@@ -55,11 +55,11 @@ output "web_principal_id" {
 }
 
 output "api_principal_id" {
-  description = "System-assigned managed identity principal ID of the CNA API Container App — used for RBAC assignments (e.g. Cognitive Services OpenAI User, Storage Blob Data Contributor)."
+  description = "System-assigned managed identity principal ID of the CNA API Container App — used for RBAC assignments (e.g. Cognitive Services User, Storage Blob Data Contributor)."
   value       = azurerm_container_app.api.identity[0].principal_id
 }
 
 output "worker_principal_id" {
-  description = "System-assigned managed identity principal ID of the CNA Worker Container App — used for RBAC assignments (e.g. Cognitive Services OpenAI User, Storage Blob Data Contributor)."
+  description = "System-assigned managed identity principal ID of the CNA Worker Container App — used for RBAC assignments (e.g. Cognitive Services User, Storage Blob Data Contributor)."
   value       = azurerm_container_app.worker.identity[0].principal_id
 }

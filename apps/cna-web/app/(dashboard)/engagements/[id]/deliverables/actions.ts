@@ -238,7 +238,7 @@ export async function generateDeliverable(
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[generateDeliverable][error]", err);
     if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
-      return { error: "AI generation failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
+      return { error: "AI generation failed: the web app is missing the required 'Cognitive Services User' access on the active AI resource." };
     }
     return { error: "AI generation failed. Please check the server logs for details." };
   }
@@ -358,7 +358,7 @@ export async function generateAllAssessments(
 
   const failed = settled.filter((r) => r.status === "rejected").length;
   if (failed > 0 && saved === 0) {
-    return { error: `All ${failed} assessment generations failed. Check Azure OpenAI connectivity.` };
+    return { error: `All ${failed} assessment generations failed. Check active AI engine connectivity.` };
   }
 
   await prisma.engagement.update({

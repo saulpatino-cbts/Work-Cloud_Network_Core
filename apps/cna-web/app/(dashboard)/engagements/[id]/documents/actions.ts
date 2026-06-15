@@ -84,7 +84,7 @@ export async function runComplianceCheck(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
-      return { error: "AI analysis failed: the web app is missing the 'Cognitive Services OpenAI User' role on the Azure OpenAI resource." };
+      return { error: "AI analysis failed: the web app is missing the required 'Cognitive Services User' access on the active AI resource." };
     }
     return { error: `Compliance check failed: ${msg.slice(0, 200)}` };
   }
@@ -188,7 +188,7 @@ export async function runAllComplianceChecks(
 
   const failed = settled.filter((r) => r.status === "rejected").length;
   if (failed > 0 && unique.length === 0) {
-    return { error: `All ${failed} compliance checks failed. Check Azure OpenAI connectivity.` };
+    return { error: `All ${failed} compliance checks failed. Check active AI engine connectivity.` };
   }
 
   revalidatePath(`/engagements/${engagementId}`);

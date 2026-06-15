@@ -359,7 +359,6 @@ $secretValues = [ordered]@{
     CNA_NEXTAUTH_SECRET            = Read-SecretValue -Name "CNA_NEXTAUTH_SECRET" -Description "Auth.js signing secret" -Exists $existingSecrets.ContainsKey("CNA_NEXTAUTH_SECRET") -GenerateBytes 32 -Required
     CNA_CREDENTIAL_ENCRYPTION_KEY  = Read-SecretValue -Name "CNA_CREDENTIAL_ENCRYPTION_KEY" -Description "base64 32-byte AES key for stored cloud credentials" -Exists $existingSecrets.ContainsKey("CNA_CREDENTIAL_ENCRYPTION_KEY") -GenerateBytes 32 -Required
     GHCR_PAT                       = Read-SecretValue -Name "GHCR_PAT" -Description "GitHub PAT with read:packages for Container Apps image pulls" -Exists $existingSecrets.ContainsKey("GHCR_PAT") -Required
-    FOUNDRY_CLAUDE_API_KEY         = Read-SecretValue -Name "FOUNDRY_CLAUDE_API_KEY" -Description "optional Foundry Claude API key" -Exists $existingSecrets.ContainsKey("FOUNDRY_CLAUDE_API_KEY")
     GH_VARIABLES_PAT               = Read-SecretValue -Name "GH_VARIABLES_PAT" -Description "optional PAT that lets workflow 031 update repo variables" -Exists $existingSecrets.ContainsKey("GH_VARIABLES_PAT")
     FRONTDOOR_CERTIFICATE_PFX_PASSWORD = Read-SecretValue -Name "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" -Description "optional custom TLS certificate PFX password" -Exists $existingSecrets.ContainsKey("FRONTDOOR_CERTIFICATE_PFX_PASSWORD")
     CNA_AWS_ROLE_ARN               = Read-SecretValue -Name "CNA_AWS_ROLE_ARN" -Description "optional AWS OIDC role ARN for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_AWS_ROLE_ARN")

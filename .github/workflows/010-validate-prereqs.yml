@@ -151,8 +151,8 @@ jobs:
           check_optional_var "AZURE_TARGET_SUBSCRIPTION_ID"   "$AZURE_TARGET_SUBSCRIPTION_ID"
           check_optional_var "AZURE_TARGET_SUBSCRIPTION_NAME" "$AZURE_TARGET_SUBSCRIPTION_NAME"
 
-          # AI/MCP vars — optional because Terraform defaults to Azure OpenAI
-          # and the app marks unconfigured optional providers unavailable.
+          # AI/MCP vars — optional because the app can run with whichever
+          # engine/provider is actually configured for the environment.
           check_optional_var "CNA_AI_ENGINE_DEFAULT"   "$CNA_AI_ENGINE_DEFAULT"
           check_optional_var "FOUNDRY_CLAUDE_ENDPOINT" "$FOUNDRY_CLAUDE_ENDPOINT"
           check_optional_var "FOUNDRY_CLAUDE_MODEL"    "$FOUNDRY_CLAUDE_MODEL"

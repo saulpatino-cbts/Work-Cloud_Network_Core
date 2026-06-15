@@ -9,7 +9,8 @@ Implement the approved Azure networking security target state for CNA:
 - subnet-specific NSGs enforce east-west least privilege
 - shared Log Analytics becomes the central infrastructure and security evidence
   plane
-- Azure PaaS dependencies remain private wherever supported
+- Azure PaaS dependencies remain private wherever supported, including Azure AI
+  Foundry for the Claude runtime path
 
 ## Approved target state
 
@@ -20,8 +21,8 @@ Implement the approved Azure networking security target state for CNA:
 4. Each subnet gets its own NSG with explicit policy intent.
 5. All diagnostics go to the same Log Analytics workspace.
 6. Application Insights remains in use for app telemetry.
-7. Key Vault, Storage, and PostgreSQL stay private; future PaaS services should
-   follow the same model where supported.
+7. Key Vault, Storage, PostgreSQL, and Azure AI Foundry stay private; future
+   PaaS services should follow the same model where supported.
 
 ## Phase 1: Edge and ingress hardening
 
@@ -93,24 +94,29 @@ Deliverables:
    - removable
    - temporary exception
    - accepted long-term dependency
+4. Validate Azure AI Foundry private DNS and managed-identity inference from
+   the deployed workload path.
 
 Deliverables:
 
 - private service inventory
-- DNS and endpoint validation checklist
+- DNS, endpoint, and managed-identity inference validation checklist
 - exception register for public dependencies
 
-## Phase 6: AI Foundry exception review
+## Phase 6: AI provider boundary validation
 
-1. Review the selected Foundry feature set for private networking support.
-2. If support exists, plan a move toward private access.
-3. If not, document public Foundry access as an explicit architecture
-   exception.
+1. Confirm the deployed Foundry Claude endpoint resolves through the private
+   endpoint path from inside the CNA VNet.
+2. Confirm the web managed identity can call the Foundry Claude Messages API
+   without local authentication or API key fallback.
+3. Keep Azure OpenAI documented as optional and out-of-band unless it becomes a
+   first-class Terraform-managed provider.
 
 Deliverables:
 
-- Foundry networking decision note
-- risk acceptance or privatization backlog item
+- Foundry private DNS validation evidence
+- Foundry managed-identity inference validation evidence
+- Azure OpenAI first-class-provider backlog item, if the customer requires it
 
 ## Validation gates
 
@@ -122,6 +128,8 @@ Deliverables:
    resources.
 6. Application Insights continues capturing app traces successfully.
 7. Private PaaS name resolution works without fallback to public endpoints.
+8. Foundry Claude inference succeeds over managed identity with local
+   authentication disabled.
 
 ## Recommended implementation order
 
@@ -130,4 +138,4 @@ Deliverables:
 3. Azure Firewall and UDRs
 4. Edge/origin hardening
 5. Private PaaS validation
-6. AI Foundry exception resolution
+6. AI provider boundary validation

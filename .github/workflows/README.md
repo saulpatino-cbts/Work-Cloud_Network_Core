@@ -233,13 +233,21 @@ Full Terraform plan + apply. Includes:
 | `CNA_ENTRA_CLIENT_ID` | `<app registration client ID>` | From Azure Entra app registration |
 | `CNA_NEXTAUTH_URL` | `none` | Placeholder — update after first Terraform deploy |
 | `CNA_AI_ENGINE_DEFAULT` | `foundry-claude` | Default engine if the database setting `ai.activeEngine` does not exist |
-| `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Foundry Claude Messages API endpoint used by managed identity-based runtime calls |
+| `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Terraform-injected private Foundry Claude Messages API endpoint used by managed identity-based runtime calls |
 | `FOUNDRY_CLAUDE_MODEL` | `claude-sonnet-4-6` | Foundry Claude model id injected into cna-web |
 | `CNA_AZURE_MCP_ENDPOINT` | `none` | Azure MCP server endpoint surfaced on the AI Engine page |
 | `CNA_AZURE_MCP_TRANSPORT` | `sse` | Azure MCP server transport |
 | `CNA_AWS_MCP_ENDPOINT` | `none` | AWS MCP server endpoint surfaced on the AI Engine page |
 | `CNA_AWS_MCP_TRANSPORT` | `stdio` | AWS MCP server transport |
 | `CNA_DRAWIO_MCP_URL` | `none` | draw.io MCP endpoint surfaced on the AI Engine page |
+
+Azure AI Foundry is the Terraform-managed GenAI provider. Post-deploy
+validation must confirm the Foundry Messages API host resolves through the
+private endpoint path from inside the CNA VNet and that managed identity can
+invoke Claude without local authentication or API-key fallback. Azure OpenAI is
+optional and out-of-band unless it is later implemented as a first-class
+Terraform provider with its own private networking, RBAC, deployment, and app
+environment variables.
 | `APPLICATION_INSIGHTS_NAME` | `none` | Replace after Terraform creates it |
 | `KEY_VAULT_NAME` | `none` | Replace after Terraform creates it |
 

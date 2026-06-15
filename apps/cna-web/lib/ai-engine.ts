@@ -110,7 +110,7 @@ export function getAiEngineStatuses(activeEngine: AiEngineId): AiEngineStatus[] 
     {
       id: "azure-openai",
       label: "Azure OpenAI",
-      description: "Default CNA provider using Azure managed identity.",
+      description: "Optional out-of-band provider. Promote to first-class only after Terraform provisions Azure OpenAI networking, RBAC, deployment, and env vars.",
       configured: Boolean(azureEndpoint && azureDeployment),
       active: activeEngine === "azure-openai",
       details: [
@@ -127,7 +127,7 @@ export function getAiEngineStatuses(activeEngine: AiEngineId): AiEngineStatus[] 
     {
       id: "foundry-claude",
       label: "Foundry Claude Sonnet 4.6",
-      description: "Anthropic Messages-compatible Foundry deployment using managed identity by default, with API key fallback only when explicitly configured.",
+      description: "Terraform-managed private Foundry deployment using managed identity by default, with API key fallback only when explicitly configured.",
       configured: Boolean(claudeEndpoint && claudeModel),
       active: activeEngine === "foundry-claude",
       details: [

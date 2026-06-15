@@ -28,8 +28,9 @@ The decisions below now reflect the approved target direction for implementation
    for app telemetry.
 5. Keep Azure PaaS dependencies private wherever supported and use private DNS
    resolution patterns inside the VNet.
-6. Reduce Azure AI Foundry public exposure unless there is an approved business
-   exception.
+6. Keep Azure AI Foundry private for the Claude runtime path, with deployment
+   validation required for private DNS resolution and managed-identity
+   inference.
 7. Use a workload profile Container Apps environment for the Front Door private
    origin pattern.
 8. Automate provider-side private endpoint approval in the deployment pipeline

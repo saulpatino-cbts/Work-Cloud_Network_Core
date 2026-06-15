@@ -4,10 +4,22 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteEngagementButton } from "@/components/ui/delete-engagement-button";
 
+type DashboardEngagement = {
+  id: string;
+  name: string;
+  clientOrg: string;
+  status: string;
+  updatedAt: Date;
+  _count: {
+    findings: number;
+    documents: number;
+  };
+};
+
 export default async function DashboardPage() {
   const session = await auth();
 
-  const engagements = await prisma.engagement.findMany({
+  const engagements: DashboardEngagement[] = await prisma.engagement.findMany({
     where: { members: { some: { userId: session!.user!.id! } } },
     include: { _count: { select: { findings: true, documents: true } } },
     orderBy: { updatedAt: "desc" },

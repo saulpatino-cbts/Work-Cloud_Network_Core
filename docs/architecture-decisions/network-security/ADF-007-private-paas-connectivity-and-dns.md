@@ -6,12 +6,12 @@ Accepted
 
 ## Context
 
-The target architecture should keep Azure PaaS traffic private wherever service
-support exists. The current deployment already uses private endpoints and
-private DNS for Key Vault and Blob Storage, and uses delegated private access
-for PostgreSQL. The next decision is how to standardize this pattern so traffic
-stays local to the Azure private network path and does not depend on public
-resolution where avoidable.
+The target architecture keeps Azure PaaS traffic private wherever service
+support exists. The current deployment uses private endpoints and private DNS
+for Key Vault, Blob Storage, and Azure AI Foundry, and uses delegated private
+access for PostgreSQL. The decision is now to standardize this pattern so
+traffic stays local to the Azure private network path and does not depend on
+public resolution where avoidable.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Recommended target pattern:
 Workload subnet
   -> private endpoint or delegated private access
 Private endpoint subnet
-  -> Key Vault, Storage, future private PaaS endpoints
+  -> Key Vault, Storage, Azure AI Foundry, future private PaaS endpoints
 Database subnet
   -> PostgreSQL delegated private access
 Private DNS zones
@@ -37,9 +37,11 @@ Specific decisions:
 
 1. Keep Key Vault private via private endpoint.
 2. Keep Storage private via private endpoint.
-3. Keep PostgreSQL private with delegated subnet access and private DNS.
-4. Prefer private networking for additional supported PaaS services.
-5. Do not introduce custom DNS unless the customer already has a central DNS
+3. Keep Azure AI Foundry private via private endpoint, disabled public network
+   access, and managed-identity authentication.
+4. Keep PostgreSQL private with delegated subnet access and private DNS.
+5. Prefer private networking for additional supported PaaS services.
+6. Do not introduce custom DNS unless the customer already has a central DNS
    architecture that must be integrated.
 
 ## Flow
@@ -76,8 +78,18 @@ Tradeoffs:
 - Continue using Azure Private DNS for private endpoint-backed services.
 - If customer-managed DNS is mandatory, integrate it by forwarding to Azure
   Private DNS zones rather than replacing the private zone pattern.
-- Treat public AI Foundry access as a separately governed exception until the
-  selected feature set can be fully privatized.
+- Azure AI Foundry privatization is no longer a future exception. It is part of
+  the approved target state and must remain private unless a separate exception
+  is approved.
+- Validation required: after deployment, confirm that the Foundry Messages API
+  host resolves to the private endpoint path from inside the CNA VNet.
+- Validation required: after deployment, confirm that the CNA managed identity
+  can call the Foundry Claude Messages API without local authentication or API
+  key fallback.
+- Azure OpenAI is optional and out-of-band in this architecture. Do not present
+  it as a first-class deployed provider unless Terraform also provisions the
+  Azure OpenAI resource, private networking, RBAC, model deployment, and app
+  environment variables.
 
 ## Microsoft guidance
 

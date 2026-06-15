@@ -271,6 +271,21 @@ resource "azurerm_container_app" "web" {
     external_enabled = true # Public — Azure Front Door terminates TLS here
     target_port      = var.web_target_port
     transport        = "auto"
+
+    # Phase 1 groundwork: support origin hardening without redesigning the
+    # compute module. AzureRM currently supports CIDR-based restrictions here,
+    # which is enough to introduce controlled ingress rules when the final
+    # Front Door origin pattern is selected.
+    dynamic "ip_security_restriction" {
+      for_each = var.web_ingress_ip_security_restrictions
+      content {
+        name             = ip_security_restriction.value.name
+        action           = ip_security_restriction.value.action
+        ip_address_range = ip_security_restriction.value.ip_address_range
+        description      = try(ip_security_restriction.value.description, null)
+      }
+    }
+
     traffic_weight {
       latest_revision = true
       percentage      = 100

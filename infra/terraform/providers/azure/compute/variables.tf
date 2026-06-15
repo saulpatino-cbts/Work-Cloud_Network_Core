@@ -148,6 +148,17 @@ variable "container_apps_internal_only" {
   default     = false
 }
 
+variable "web_ingress_ip_security_restrictions" {
+  description = "Optional IP-based ingress restrictions for the public web Container App. Use this to constrain direct-origin access when the selected edge pattern cannot yet use private origins."
+  type = list(object({
+    name             = string
+    action           = string
+    ip_address_range = string
+    description      = optional(string)
+  }))
+  default = []
+}
+
 variable "infrastructure_subnet_id" {
   description = "Subnet ID delegated to the Container Apps managed environment infrastructure"
   type        = string

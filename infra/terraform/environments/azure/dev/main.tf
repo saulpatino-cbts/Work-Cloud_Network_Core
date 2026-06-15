@@ -88,18 +88,19 @@ module "identity" {
 }
 
 module "compute" {
-  source                       = "../../../providers/azure/compute"
-  resource_group_name          = azurerm_resource_group.this.name
-  location                     = azurerm_resource_group.this.location
-  name_prefix                  = local.name_prefix
-  api_image                    = var.api_image
-  worker_image                 = var.worker_image
-  web_image                    = var.web_image
-  container_apps_internal_only = false # false = external LB so cna-web can serve public traffic
-  infrastructure_subnet_id     = azurerm_subnet.container_apps_infra.id
-  ghcr_username                = var.ghcr_username
-  ghcr_pat                     = var.ghcr_pat
-  tags                         = local.tags
+  source                               = "../../../providers/azure/compute"
+  resource_group_name                  = azurerm_resource_group.this.name
+  location                             = azurerm_resource_group.this.location
+  name_prefix                          = local.name_prefix
+  api_image                            = var.api_image
+  worker_image                         = var.worker_image
+  web_image                            = var.web_image
+  container_apps_internal_only         = false # false = external LB so cna-web can serve public traffic
+  infrastructure_subnet_id             = azurerm_subnet.container_apps_infra.id
+  web_ingress_ip_security_restrictions = var.web_ingress_ip_security_restrictions
+  ghcr_username                        = var.ghcr_username
+  ghcr_pat                             = var.ghcr_pat
+  tags                                 = local.tags
 
   # FinOps: scale to zero when idle — no charge for idle Container Apps
   enable_scale_to_zero            = true

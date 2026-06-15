@@ -97,6 +97,17 @@ variable "nextauth_url" {
   default     = "https://cna.example.com"
 }
 
+variable "web_ingress_ip_security_restrictions" {
+  description = "Optional web ingress IP restrictions for direct-origin hardening."
+  type = list(object({
+    name             = string
+    action           = string
+    ip_address_range = string
+    description      = optional(string)
+  }))
+  default = []
+}
+
 # ─── Credential encryption ────────────────────────────────────────────────────
 variable "credential_encryption_key" {
   description = "Base64-encoded 32-byte AES-256 key for encrypting SP client secrets at rest. Generate with: openssl rand -base64 32"

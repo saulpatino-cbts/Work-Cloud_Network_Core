@@ -5,7 +5,7 @@ Reads:
   CATALOG_DIR  — path to the deployment catalog directory
   GITHUB_ENV   — path to the GitHub Actions environment file (auto-set by runner)
 
-Writes EFFECTIVE_API_IMAGE and EFFECTIVE_WORKER_IMAGE to GITHUB_ENV.
+Writes EFFECTIVE_API_IMAGE, EFFECTIVE_WORKER_IMAGE, and EFFECTIVE_WEB_IMAGE to GITHUB_ENV.
 """
 
 import json
@@ -55,7 +55,9 @@ selected = records[0]
 print(f"Resolved rollback target: run_id={selected.get('workflow_run_id')}")
 print(f"  api_image={selected['api_image']}")
 print(f"  worker_image={selected['worker_image']}")
+print(f"  web_image={selected['web_image']}")
 
 with github_env.open("a") as env:
     env.write(f"EFFECTIVE_API_IMAGE={selected['api_image']}\n")
     env.write(f"EFFECTIVE_WORKER_IMAGE={selected['worker_image']}\n")
+    env.write(f"EFFECTIVE_WEB_IMAGE={selected['web_image']}\n")

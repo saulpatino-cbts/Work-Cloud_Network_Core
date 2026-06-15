@@ -10,6 +10,7 @@ Reads from environment variables:
   FRONTDOOR_ROUTE_ID              — terraform output value
   FRONTDOOR_CUSTOM_DOMAIN_ID      — terraform output value (optional)
   FRONTDOOR_SECRET_ID             — terraform output value (optional)
+  NEXTAUTH_URL                    — derived runtime public URL
 """
 
 import json
@@ -24,6 +25,7 @@ with manifest.open() as f:
 data["validation_checks"]["terraform_apply"] = "passed"
 data["platform_context"] = {
     "frontdoor_endpoint_host_name": os.environ.get("FRONTDOOR_ENDPOINT_HOST_NAME", ""),
+    "nextauth_url": os.environ.get("NEXTAUTH_URL", ""),
     "frontdoor_profile_id": os.environ.get("FRONTDOOR_PROFILE_ID", ""),
     "frontdoor_endpoint_id": os.environ.get("FRONTDOOR_ENDPOINT_ID", ""),
     "frontdoor_origin_group_id": os.environ.get("FRONTDOOR_ORIGIN_GROUP_ID", ""),
@@ -41,3 +43,4 @@ print("  terraform_apply = passed")
 print(
     f"  frontdoor_endpoint_host_name = {data['platform_context']['frontdoor_endpoint_host_name']}"
 )
+print(f"  nextauth_url = {data['platform_context']['nextauth_url']}")

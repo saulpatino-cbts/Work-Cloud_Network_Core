@@ -9,12 +9,12 @@ work is tracked here.
 ## Redeploy And Validation
 
 - [ ] Run workflow `010-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
-- [ ] Run workflow `032-teardown.yml` for `dev` with `confirm=DESTROY` and `destroy_tfstate_backend=false`.
-- [ ] Confirm the `032` cleanup preview lists only CNA-owned workload resources and approved Azure-managed auxiliary groups.
+- [ ] Run workflow `032-teardown.yml` for `dev` with `confirm=DESTROY`, `destroy_tfstate_backend=false`, and `delete_drifted_resources=false`.
+- [ ] Confirm the `032` cleanup preview lists only CNA-owned workload resources and approved Azure-managed auxiliary groups, then rerun `032` with `delete_drifted_resources=true`.
 - [ ] Run workflow `030-build-images.yml` to publish current immutable GHCR image tags.
 - [ ] Set and validate `AZURE_TARGET_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
 - [ ] Run workflow `031-deploy-azure.yml` for `dev`.
-- [ ] Update `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
+- [ ] Confirm workflow `031-deploy-azure.yml` updated `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
 - [ ] Capture the live Front Door hostname only from current Terraform/workflow outputs; do not rely on older documented `azurefd.net` references.
 - [ ] Update the Entra redirect URI to `https://<frontdoor-host>/api/auth/callback/microsoft-entra-id`.
 - [ ] Rerun workflow `031-deploy-azure.yml` so corrected runtime values are applied.

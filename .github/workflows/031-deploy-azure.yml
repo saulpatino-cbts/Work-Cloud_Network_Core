@@ -36,6 +36,11 @@ on:
         required: false
         default: ""
         type: string
+      previous_web_image:
+        description: Previous web image reference for rollback operations
+        required: false
+        default: ""
+        type: string
       deploy_mode:
         description: Deployment mode
         required: true
@@ -65,7 +70,7 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
-  EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}
+  EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_web_image || github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}
   EFFECTIVE_MIGRATOR_IMAGE: ghcr.io/saulpatinojr/cna-migrator:latest
   AZURE_MONITOR_HEALTH_THRESHOLD: "95"
   APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
@@ -197,7 +202,7 @@ jobs:
           python-version: "3.12"
 
       - name: Resolve rollback targets from release catalog
-        if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '')
+        if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '' || inputs.previous_web_image == '')
         env:
           CATALOG_DIR: $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
         run: python $GITHUB_WORKSPACE/scripts/ci/resolve_rollback_target.py
@@ -336,6 +341,7 @@ jobs:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
     outputs:
       frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
+      nextauth_url: ${{ steps.export.outputs.nextauth_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -401,9 +407,11 @@ jobs:
           echo "Starting migration..."
           az containerapp job start --name "$JOB" --resource-group "$RG"
           echo "Waiting for completion..."
+          MIGRATION_STATUS="Running"
           for i in $(seq 1 30); do
             STATUS=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
               --query "[-1].properties.status" -o tsv 2>/dev/null || echo "Running")
+            MIGRATION_STATUS="$STATUS"
             echo "  [$i/30] Status: $STATUS"
             case "$STATUS" in
               Succeeded) echo "Migrations succeeded."; break ;;
@@ -412,14 +420,27 @@ jobs:
             [ $i -lt 30 ] && sleep 10 || echo "Timed out waiting for migration"
           done
           az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
+          if [ "$MIGRATION_STATUS" != "Succeeded" ]; then
+            echo "::error::Migration job did not complete successfully. Final status: $MIGRATION_STATUS"
+            exit 1
+          fi
 
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GH_VARIABLES_PAT || secrets.GITHUB_TOKEN }}
         run: |
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
+          NEXTAUTH_URL=""
           KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
           AI_NAME=$(terraform output -raw application_insights_name 2>/dev/null || echo "")
+          if [ -n "$FRONTDOOR_HOST" ]; then
+            NEXTAUTH_URL="https://$FRONTDOOR_HOST"
+            gh variable set CNA_NEXTAUTH_URL --body "$NEXTAUTH_URL" \
+              && echo "CNA_NEXTAUTH_URL updated: $NEXTAUTH_URL" \
+              || echo "WARNING: could not set CNA_NEXTAUTH_URL — set it manually in GitHub Settings → Variables"
+            echo "Entra redirect URI required: $NEXTAUTH_URL/api/auth/callback/microsoft-entra-id"
+          fi
           if [ -n "$KV_NAME" ]; then
             gh variable set KEY_VAULT_NAME --body "$KV_NAME" \
               && echo "KEY_VAULT_NAME updated: $KV_NAME" \
@@ -434,7 +455,9 @@ jobs:
       - name: Export platform outputs
         id: export
         run: |
-          echo "frontdoor_endpoint_host_name=$(terraform output -raw frontdoor_endpoint_host_name)" >> "$GITHUB_OUTPUT"
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name)
+          echo "frontdoor_endpoint_host_name=$FRONTDOOR_HOST" >> "$GITHUB_OUTPUT"
+          echo "nextauth_url=https://$FRONTDOOR_HOST" >> "$GITHUB_OUTPUT"
           echo "frontdoor_profile_id=$(terraform output -raw frontdoor_profile_id)" >> "$GITHUB_OUTPUT"
           echo "frontdoor_endpoint_id=$(terraform output -raw frontdoor_endpoint_id)" >> "$GITHUB_OUTPUT"
           echo "frontdoor_origin_group_id=$(terraform output -raw frontdoor_origin_group_id)" >> "$GITHUB_OUTPUT"
@@ -463,6 +486,7 @@ jobs:
           FRONTDOOR_ROUTE_ID: ${{ steps.export.outputs.frontdoor_route_id }}
           FRONTDOOR_CUSTOM_DOMAIN_ID: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
           FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
+          NEXTAUTH_URL: ${{ steps.export.outputs.nextauth_url }}
         run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 
       - name: Upload staged manifest

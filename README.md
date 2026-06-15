@@ -151,7 +151,8 @@ cp .env.example .env
 3. Push to main   — workflow 030 auto-builds all three container images
 4. Run workflow 031 (environment: dev) — Terraform apply (~20 min)
    → Copy Front Door hostname from outputs
-   → Update CNA_NEXTAUTH_URL GitHub Variable + Entra redirect URI
+   → Workflow 031 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
+   → Update the Entra redirect URI to match the new Front Door hostname
    → Re-run 031 to apply updated NextAuth URL
 5. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
 ```
@@ -160,9 +161,10 @@ To wipe an environment and redeploy clean:
 
 ```
 1. Run workflow 032 — type DESTROY to confirm teardown
-2. Review its cleanup preview and confirm only CNA-owned targets are listed
-3. Keep `destroy_tfstate_backend=false` unless intentionally resetting Terraform state
-4. Follow deployment steps above
+2. Leave `delete_drifted_resources=false` on the first run and review the cleanup preview
+3. Re-run workflow 032 with `delete_drifted_resources=true` only after confirming the preview lists only CNA-owned targets
+4. Keep `destroy_tfstate_backend=false` unless intentionally resetting Terraform state
+5. Follow deployment steps above
 ```
 
 ---

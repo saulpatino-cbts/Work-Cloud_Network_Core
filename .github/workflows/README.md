@@ -206,7 +206,7 @@ Full Terraform plan + apply. Includes:
 
 | Output | Action |
 | --- | --- |
-| `frontdoor_endpoint_host_name` | Set `CNA_NEXTAUTH_URL` variable; update Entra redirect URI |
+| `frontdoor_endpoint_host_name` | Confirm `CNA_NEXTAUTH_URL` was auto-updated; update Entra redirect URI |
 | `key_vault_name` | Update `KEY_VAULT_NAME` variable (replace `none`) |
 | `application_insights_name` | Update `APPLICATION_INSIGHTS_NAME` variable (replace `none`) |
 
@@ -276,7 +276,7 @@ Full Terraform plan + apply. Includes:
          key_vault_name               → replace KEY_VAULT_NAME variable
          application_insights_name    → replace APPLICATION_INSIGHTS_NAME variable
 
-[ ] 6. Update GitHub Variables and Entra redirect URI with real values:
+[ ] 6. Confirm workflow 031 updated the GitHub Variables and then update Entra redirect URI:
        - CNA_NEXTAUTH_URL           = https://<frontdoor_endpoint_host_name>
        - KEY_VAULT_NAME             = <key_vault_name>
        - APPLICATION_INSIGHTS_NAME  = <application_insights_name>

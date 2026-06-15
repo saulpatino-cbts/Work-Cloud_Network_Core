@@ -22,6 +22,14 @@ on:
         options:
           - "false"
           - "true"
+      delete_drifted_resources:
+        description: "Delete drifted AI resources after preview; leave false to review preview output first"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -143,8 +151,15 @@ jobs:
         run: pwsh -File ./scripts/cleanup-stale-ai-resources.ps1 -Environment "${{ github.event.inputs.environment }}" -Scope StaleAi
 
       - name: Delete drifted resources (not managed by Terraform)
+        if: github.event.inputs.delete_drifted_resources == 'true'
         run: |
           pwsh -File ./scripts/cleanup-stale-ai-resources.ps1 -Environment "${{ github.event.inputs.environment }}" -Scope StaleAi -Delete
+
+      - name: Require explicit rerun for drift deletion
+        if: github.event.inputs.delete_drifted_resources != 'true'
+        run: |
+          echo "Preview complete. Review the cleanup target list above."
+          echo "Re-run workflow 032 with delete_drifted_resources=true only after approving the preview."
 
   # ── Optional: wipe TF state backend ─────────────────────────────────────────
   destroy-backend:

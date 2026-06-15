@@ -28,11 +28,13 @@ Implement the approved Azure networking security target state for CNA:
 1. Confirm the final origin protection pattern behind Front Door.
 2. Eliminate direct-origin bypass for the web tier.
 3. Preserve Front Door WAF and health checks during the hardening change.
+4. Automate private endpoint approval so the deployment is fully hands-off.
 
 Deliverables:
 
 - origin protection Terraform design
 - updated ingress path
+- approval automation step in the deployment workflow
 - validation checklist for sign-in, health probes, and WAF behavior
 
 ## Phase 2: East-west segmentation
@@ -113,12 +115,13 @@ Deliverables:
 ## Validation gates
 
 1. Public traffic reaches the application only through the approved edge path.
-2. Subnet policy proves least privilege east-west access.
-3. Outbound internet access is visible and controlled through Firewall.
-4. Log Analytics receives diagnostics from all major network and security
+2. Private endpoint approval completes automatically during deployment.
+3. Subnet policy proves least privilege east-west access.
+4. Outbound internet access is visible and controlled through Firewall.
+5. Log Analytics receives diagnostics from all major network and security
    resources.
-5. Application Insights continues capturing app traces successfully.
-6. Private PaaS name resolution works without fallback to public endpoints.
+6. Application Insights continues capturing app traces successfully.
+7. Private PaaS name resolution works without fallback to public endpoints.
 
 ## Recommended implementation order
 

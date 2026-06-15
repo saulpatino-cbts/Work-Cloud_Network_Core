@@ -13,6 +13,8 @@ The decisions below now reflect the approved target direction for implementation
 - `ADF-005-front-door-vs-app-gateway-vs-firewall.md`
 - `ADF-006-centralized-logging-and-telemetry.md`
 - `ADF-007-private-paas-connectivity-and-dns.md`
+- `ADF-008-container-apps-workload-profile-for-private-origin.md`
+- `ADF-009-private-endpoint-approval-automation.md`
 - `IMPLEMENTATION-PLAN.md`
 
 ## Current recommendation set
@@ -27,3 +29,7 @@ The decisions below now reflect the approved target direction for implementation
    resolution patterns inside the VNet.
 6. Reduce Azure AI Foundry public exposure unless there is an approved business
    exception.
+7. Use a workload profile Container Apps environment for the Front Door private
+   origin pattern.
+8. Automate provider-side private endpoint approval in the deployment pipeline
+   using workload identity and least-privilege Azure access.

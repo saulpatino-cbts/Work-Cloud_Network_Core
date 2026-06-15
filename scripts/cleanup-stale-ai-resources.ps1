@@ -104,7 +104,7 @@ if (-not $account) {
 }
 
 $workloadRg = "rg-cna-$Environment-scus"
-$tfstateRg = "rg-cna-tfstate"
+$tfstateRg = "${workloadRg}-tfstate"
 $managedRgPatterns = @(
     "ai_*cna-$Environment-scus*_*_managed",
     "ME_*_rg-cna-$Environment-scus_*"
@@ -135,6 +135,7 @@ switch ($Scope) {
     "AllCna" {
         foreach ($match in @($allGroups | Where-Object {
             $_.name -eq $workloadRg -or
+            $_.name -eq $tfstateRg -or
             $_.name -like "ai_*cna-$Environment-*" -or
             $_.name -like "ME_*_rg-cna-$Environment-scus_*"
         })) {

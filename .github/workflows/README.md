@@ -7,7 +7,7 @@
 ## Execution Order
 
 ```
-000 → (one-time)  Bootstrap Terraform backend in Azure
+000 → (one-time)  Create workload RG, create tfstate RG/backend, import app RG into state
 010 → (manual)    Validate all GitHub Secrets, Variables, and Azure OIDC access
 011 → (manual)    Pull secrets from Key Vault → .env artifact (validation)
 012 → (manual)    Fast image refresh without Terraform (code-only deploys)
@@ -30,16 +30,17 @@ All Azure resources follow the pattern `{abbreviation}-{project}-{environment}-{
 | dev | South Central US (`southcentralus`) | `cna-dev-scus` | `rg-cna-dev-scus` |
 | prod | South Central US (`southcentralus`) | `cna-prod-scus` | `rg-cna-prod-scus` |
 
-Terraform state resources are isolated in their own dedicated RG, separate from workload resources.
-Workflow 000 creates this RG; it is never touched by Terraform destroy:
+Terraform state lives in its own convention-based RG so the workload RG stays dedicated to the application stack.
+Workflow 000 creates the workload RG first, then creates the backend storage account and container in the tfstate RG:
 
 | Resource | Name | Notes |
 | --- | --- | --- |
-| Terraform State RG | `rg-cna-tfstate` | Dedicated to state only — never destroyed by Terraform |
-| Storage Account | `stcnatfstate` | Single backend serving dev + prod state files |
+| Workload RG | `rg-cna-dev-scus` / `rg-cna-prod-scus` | Holds only the application stack |
+| Tfstate RG | `rg-cna-dev-scus-tfstate` / `rg-cna-prod-scus-tfstate` | Dedicated to Terraform backend resources |
+| Storage Account | `stcnatfstate0001` | Backend storage account; override only if the name is unavailable |
 | Blob Container | `tfstate` | State files keyed by environment: `dev.terraform.tfstate`, `prod.terraform.tfstate` |
 
-Workload RGs are created and managed by Terraform (workflow 031):
+Terraform continues to own the workload RG after bootstrap because workflow 000 imports it into state:
 
 | Environment | Resource Group |
 | --- | --- |
@@ -52,29 +53,38 @@ See the GitHub Wiki page `Architecture 40 Naming Conventions` for the full refer
 
 ## Workflows
 
-### `000-bootstrap-backend.yml` — Bootstrap Terraform Backend
+### `000-bootstrap-backend.yml` — Bootstrap Workload RG and Terraform Backend
 
 **Trigger:** Manual (run once before anything else)
 **Duration:** ~2 minutes
 
-Creates the Azure Resource Group + Storage Account used as the Terraform remote backend.
+Creates the workload resource group, creates the tfstate resource group and backend storage inside it, initializes the selected environment backend, and imports the workload RG into Terraform state.
 Uses OIDC — no client secret required.
 
 **Inputs (with defaults):**
 
 | Input | Default | Notes |
 | --- | --- | --- |
-| `location` | `southcentralus` | Azure region for tfstate resources |
-| `tfstate_resource_group` | `rg-cna-tfstate` | Shared backend RG (no env/region suffix) |
-| `tfstate_storage_account` | `stcnatfstate` | Must be globally unique, 3–24 chars, lowercase |
+| `environment` | `dev` | Terraform environment state to initialize (`dev` or `prod`) |
+| `location` | `southcentralus` | Azure region for workload RG and tfstate resources |
+| `region_short` | `scus` | Used to derive the workload RG name as `rg-cna-<environment>-<region_short>` |
+| `tfstate_resource_group` | _blank_ | Optional override; default resolves to `rg-cna-<environment>-<region_short>-tfstate` |
+| `tfstate_storage_account` | `stcnatfstate0001` | Must be globally unique, 3–24 chars, lowercase |
 | `tfstate_container` | `tfstate` | Blob container for state files |
+
+Bootstrap result:
+
+- Workload RG exists before first deploy
+- Tfstate RG exists separately from the application RG
+- Terraform backend exists in Azure Storage
+- The selected state key (`dev.terraform.tfstate` or `prod.terraform.tfstate`) tracks the imported workload RG
 
 After this runs, set these GitHub **Repository Variables**:
 
 | Variable | Value |
 | --- | --- |
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` |
-| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate` |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus-tfstate` or `rg-cna-prod-scus-tfstate` |
+| `TFSTATE_STORAGE_ACCOUNT` | `stcnatfstate0001` |
 | `TFSTATE_CONTAINER` | `tfstate` |
 
 ---
@@ -218,8 +228,8 @@ Full Terraform plan + apply. Includes:
 
 | Variable | Initial Value | Notes |
 | --- | --- | --- |
-| `TFSTATE_RESOURCE_GROUP` | `rg-cna-tfstate` | Set after running workflow 000 |
-| `TFSTATE_STORAGE_ACCOUNT` | customer-specific `stcna...tfstate` | Set after running workflow 000 |
+| `TFSTATE_RESOURCE_GROUP` | `rg-cna-dev-scus-tfstate` or `rg-cna-prod-scus-tfstate` | Set after running workflow 000 |
+| `TFSTATE_STORAGE_ACCOUNT` | chosen global name, e.g. `stcnatfstate0001` | Set after running workflow 000 |
 | `TFSTATE_CONTAINER` | `tfstate` | Set after running workflow 000 |
 | `CNA_ENTRA_CLIENT_ID` | `<app registration client ID>` | From Azure Entra app registration |
 | `CNA_NEXTAUTH_URL` | `none` | Placeholder — update after first Terraform deploy |
@@ -249,8 +259,9 @@ Full Terraform plan + apply. Includes:
        prompts for required secrets, generates supported secrets when requested, and
        writes the GitHub Actions secrets and variables used by the workflows.
 
-[ ] 2. Run workflow 000 — Bootstrap Terraform Backend (one-time, ~2 min)
-       All inputs are pre-filled — just run with defaults.
+[ ] 2. Run workflow 000 — Bootstrap workload RG + Terraform backend (one-time per environment, ~3 min)
+       For dev, defaults are pre-filled.
+       For prod, set environment=prod and verify the resolved workload RG and tfstate RG names before running.
        Update the three TFSTATE_* variables from the workflow summary.
 
 [ ] 3. Run workflow 010 — Validate Prerequisites (~1 min)

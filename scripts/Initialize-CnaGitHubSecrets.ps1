@@ -374,7 +374,7 @@ $defaultTfstateStorage = "stcna$($storageSuffix.ToLowerInvariant())tfstate"
 if ($defaultTfstateStorage.Length -gt 24) { $defaultTfstateStorage = $defaultTfstateStorage.Substring(0, 24) }
 
 $variableDefaults = [ordered]@{
-    TFSTATE_RESOURCE_GROUP         = "rg-cna-tfstate"
+    TFSTATE_RESOURCE_GROUP         = "rg-cna-$Environment-scus-tfstate"
     TFSTATE_STORAGE_ACCOUNT        = $defaultTfstateStorage
     TFSTATE_CONTAINER              = "tfstate"
     AZURE_TARGET_SUBSCRIPTION_ID   = $resolvedSubscriptionId
@@ -437,6 +437,6 @@ Write-Host "Secrets kept/skipped: $keptSecretCount"
 Write-Host "Variables set:    $setVariableCount"
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "1. Run workflow 000 to create the tfstate backend using the TFSTATE_* values."
+Write-Host "1. Run workflow 000 to create the workload RG, provision the tfstate backend in its own RG, and import the workload RG into Terraform state using the TFSTATE_* values."
 Write-Host "2. Run workflow 010 to validate secrets, variables, OIDC, and Azure access."
 Write-Host "3. Run workflow 030, then workflow 031 for the first deployment."

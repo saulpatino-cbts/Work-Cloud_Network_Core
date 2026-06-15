@@ -146,7 +146,7 @@ cp .env.example .env
 ### Clean deployment (first time or after teardown)
 
 ```
-1. Run workflow 000 — bootstrap Terraform state backend (one-time)
+1. Run workflow 000 — create the workload RG, bootstrap the Terraform backend, and import the RG into state (one-time per environment)
 2. Run workflow 010 — validate all secrets, variables, Azure OIDC
 3. Push to main   — workflow 030 auto-builds all three container images
 4. Run workflow 031 (environment: dev) — Terraform apply (~20 min)
@@ -171,7 +171,7 @@ To wipe an environment and redeploy clean:
 
 | File | Trigger | Purpose |
 |---|---|---|
-| `000-bootstrap-backend.yml` | Manual (one-time) | Creates TF state RG + storage account |
+| `000-bootstrap-backend.yml` | Manual (one-time per environment) | Creates workload RG, provisions tfstate backend in a separate convention-based RG, imports app RG into state |
 | `010-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
 | `011-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
 | `012-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update` |

@@ -1,6 +1,5 @@
-# Workload resource group — created and managed by Terraform.
-# Terraform state lives in a separate dedicated RG (rg-cna-tfstate) created
-# by workflow 01, so this RG can be safely destroyed without affecting state.
+# Workload resource group — created by workflow 000 and immediately imported
+# into Terraform state so 031 / 032 continue to own the full app stack RG.
 resource "azurerm_resource_group" "this" {
   name     = "rg-${local.name_prefix}"
   location = var.location

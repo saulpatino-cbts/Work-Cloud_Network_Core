@@ -127,18 +127,20 @@ export function getAiEngineStatuses(activeEngine: AiEngineId): AiEngineStatus[] 
     {
       id: "foundry-claude",
       label: "Foundry Claude Sonnet 4.6",
-      description: "Anthropic Messages-compatible Foundry deployment.",
-      configured: Boolean(claudeEndpoint && claudeModel && claudeApiKey),
+      description: "Anthropic Messages-compatible Foundry deployment using managed identity by default, with API key fallback only when explicitly configured.",
+      configured: Boolean(claudeEndpoint && claudeModel),
       active: activeEngine === "foundry-claude",
       details: [
         { label: "Endpoint", value: hostOnly(claudeEndpoint) },
         { label: "Model", value: claudeModel },
-        { label: "API key", value: maskSecret(claudeApiKey) },
+        {
+          label: "Authentication",
+          value: claudeApiKey ? `API key fallback (${maskSecret(claudeApiKey)})` : "Managed identity",
+        },
       ],
       missing: [
         ...(!claudeEndpoint ? ["FOUNDRY_CLAUDE_ENDPOINT"] : []),
         ...(!claudeModel ? ["FOUNDRY_CLAUDE_MODEL"] : []),
-        ...(!claudeApiKey ? ["FOUNDRY_CLAUDE_API_KEY"] : []),
       ],
     },
   ];
@@ -213,6 +215,26 @@ function getAzureClient(): AzureOpenAI {
   });
 }
 
+async function getFoundryAuthHeaders(apiKey: string): Promise<Record<string, string>> {
+  if (apiKey) {
+    return {
+      "api-key": apiKey,
+      "x-api-key": apiKey,
+    };
+  }
+
+  const credential = new DefaultAzureCredential();
+  const tokenProvider = getBearerTokenProvider(
+    credential,
+    "https://cognitiveservices.azure.com/.default",
+  );
+  const token = await tokenProvider();
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 function toClaudeMessages(messages: AiChatMessage[]): {
   system?: string;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -254,19 +276,19 @@ async function completeWithClaude(options: AiCompletionOptions): Promise<string>
   const model = clean(process.env.FOUNDRY_CLAUDE_MODEL) || "claude-sonnet-4-6";
   const apiKey = clean(process.env.FOUNDRY_CLAUDE_API_KEY);
 
-  if (!endpoint || !apiKey) {
-    throw new Error("Foundry Claude endpoint and API key must be configured before use.");
+  if (!endpoint) {
+    throw new Error("Foundry Claude endpoint must be configured before use.");
   }
 
   const claudePayload = toClaudeMessages(options.messages);
+  const authHeaders = await getFoundryAuthHeaders(apiKey);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      "api-key": apiKey,
-      "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      ...authHeaders,
     },
     body: JSON.stringify({
       model,

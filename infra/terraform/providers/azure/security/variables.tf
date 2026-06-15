@@ -141,6 +141,11 @@ variable "storage_account_name" {
   type        = string
 }
 
+variable "foundry_account_id" {
+  description = "Azure AI Foundry account resource ID for private endpoint wiring."
+  type        = string
+}
+
 variable "secret_expiration_date" {
   description = "RFC3339 expiration timestamp applied to Terraform-managed Key Vault secrets"
   type        = string

@@ -14,8 +14,8 @@ resource "azurerm_cognitive_account" "foundry" {
   sku_name                      = "S0"
   custom_subdomain_name         = var.foundry_account_name
   project_management_enabled    = true
-  local_auth_enabled            = true
-  public_network_access_enabled = true
+  local_auth_enabled            = false
+  public_network_access_enabled = false
 
   identity {
     type = "SystemAssigned"

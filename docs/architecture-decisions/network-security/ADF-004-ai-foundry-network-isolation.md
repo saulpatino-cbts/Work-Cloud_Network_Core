@@ -6,9 +6,9 @@ Accepted
 
 ## Context
 
-The current Terraform keeps Azure AI Foundry publicly reachable and enables
-local authentication. That may be acceptable for development velocity, but it is
-weaker than the rest of the platform's private-service posture.
+The original Terraform kept Azure AI Foundry publicly reachable and enabled
+local authentication. That posture was weaker than the rest of the platform's
+private-service model and would draw immediate customer review attention.
 
 Because customers can see architectural resources, this service will likely draw
 security review attention even if the application itself is otherwise private.
@@ -19,37 +19,32 @@ Recommended target pattern:
 
 ```text
 Application subnet
-  -> private or tightly controlled access path to AI Foundry
+  -> private endpoint path to AI Foundry account
 Azure AI Foundry
-  -> private endpoint / network isolation where supported
+  -> private endpoint plus disabled public network access
 Identity
-  -> Entra-based auth preferred over broad local key reliance
+  -> Entra-based auth preferred over local key reliance
 ```
 
 ## Decision
 
-Treat public AI Foundry exposure as an exception, not the default.
-
-Preferred order:
-
-1. Use private networking / private link isolation for Foundry where the
-   selected feature set supports it.
-2. Disable public network access when the platform and deployment model allow.
-3. Prefer managed identity or Entra-based access patterns over local auth where
-   support exists.
-4. If public access must remain enabled, document the reason, restrict callers
-   as much as possible, and treat it as an explicit risk acceptance.
+Use private endpoint isolation for the Foundry account, disable public network
+access, and disable local authentication. CNA workloads should use Microsoft
+Entra tokens via managed identity by default, with API-key fallback treated as
+temporary compatibility only.
 
 ## Flow
 
-1. CNA workload requests model access.
-2. Request uses approved identity path.
-3. Traffic stays on private connectivity when supported.
-4. Audit logs and service diagnostics record access.
+1. CNA workload resolves the Foundry custom subdomain through private DNS.
+2. Traffic reaches the Foundry account through the private endpoint on the
+   private-endpoint subnet.
+3. Runtime authenticates with Microsoft Entra token obtained by managed
+   identity.
+4. Diagnostics and Log Analytics retain the service evidence.
 
 ## Why this decision
 
-- It aligns the AI control plane with the rest of the private-data architecture.
+- It aligns the AI service path with the rest of the private-data architecture.
 - It reduces customer concern about a public AI dependency.
 - It improves the story for regulated or security-sensitive deployments.
 
@@ -63,15 +58,16 @@ Positive:
 
 Tradeoffs:
 
-- Some Foundry features still have private-networking caveats.
-- Hosted-agent and related scenarios can require public access for dependent
-  services.
+- Foundry feature support still needs periodic review as the service evolves.
+- Operator workflows that rely on direct public portal reachability must use
+  approved network paths instead of assuming unrestricted internet access.
 
 ## Implementation notes
 
-- Validate the exact Foundry feature set before disabling public network access.
-- If public access remains enabled short term, mark that as a temporary
-  exception in deployment documentation.
+- Private DNS must resolve the Foundry custom subdomain to the private endpoint
+  IP from inside the CNA virtual network.
+- The CNA app runtime must prefer managed identity over API-key headers before
+  local authentication is disabled.
 
 ## Microsoft guidance
 

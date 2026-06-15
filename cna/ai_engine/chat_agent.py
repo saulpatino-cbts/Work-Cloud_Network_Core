@@ -10,10 +10,12 @@ LLM transport mirrors apps/cna-web/lib/ai-engine.ts exactly — the same two
 Azure AI Foundry-hosted engines, the same env vars, the same wire formats:
 
   foundry-claude  — Anthropic Messages-compatible Foundry deployment.
-                    POST {FOUNDRY_CLAUDE_ENDPOINT} with api-key/x-api-key
-                    headers and anthropic-version 2023-06-01.
+                    POST {FOUNDRY_CLAUDE_ENDPOINT} with Microsoft Entra
+                    bearer token by default, or api-key/x-api-key only when
+                    FOUNDRY_CLAUDE_API_KEY is explicitly configured.
                     Env: FOUNDRY_CLAUDE_ENDPOINT, FOUNDRY_CLAUDE_MODEL
-                    (default claude-sonnet-4-6), FOUNDRY_CLAUDE_API_KEY.
+                    (default claude-sonnet-4-6), optional
+                    FOUNDRY_CLAUDE_API_KEY.
   azure-openai    — Azure OpenAI chat completions via managed identity
                     (DefaultAzureCredential bearer token, same scope as
                     lib/ai-engine.ts getAzureClient()).
@@ -100,10 +102,7 @@ def engine_configured(engine: str) -> bool:
     """Whether the engine's required env vars are present (parity with
     getAiEngineStatuses() configured flags)."""
     if engine == ENGINE_FOUNDRY_CLAUDE:
-        return bool(
-            _clean(os.environ.get("FOUNDRY_CLAUDE_ENDPOINT"))
-            and _clean(os.environ.get("FOUNDRY_CLAUDE_API_KEY"))
-        )
+        return bool(_clean(os.environ.get("FOUNDRY_CLAUDE_ENDPOINT")))
     if engine == ENGINE_AZURE_OPENAI:
         return bool(_clean(os.environ.get("AZURE_OPENAI_ENDPOINT")))
     return False
@@ -347,8 +346,8 @@ class GroundedChatAgent:
             fallback = next((e for e in VALID_ENGINES if engine_configured(e)), None)
             if fallback is None:
                 raise ChatConfigError(
-                    "No AI engine is configured. Set FOUNDRY_CLAUDE_ENDPOINT/"
-                    "FOUNDRY_CLAUDE_API_KEY or AZURE_OPENAI_ENDPOINT, or configure "
+                    "No AI engine is configured. Set FOUNDRY_CLAUDE_ENDPOINT "
+                    "or AZURE_OPENAI_ENDPOINT, or configure "
                     "an engine on the admin AI Engine page."
                 )
             self.engine = fallback
@@ -395,20 +394,26 @@ class GroundedChatAgent:
         endpoint = _clean(os.environ.get("FOUNDRY_CLAUDE_ENDPOINT"))
         api_key = _clean(os.environ.get("FOUNDRY_CLAUDE_API_KEY"))
         model = _clean(os.environ.get("FOUNDRY_CLAUDE_MODEL")) or DEFAULT_CLAUDE_MODEL
-        if not endpoint or not api_key:
-            raise ChatConfigError(
-                "Foundry Claude endpoint and API key must be configured before use."
-            )
+        if not endpoint:
+            raise ChatConfigError("Foundry Claude endpoint must be configured before use.")
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "anthropic-version": "2023-06-01",
+        }
+        if api_key:
+            headers["api-key"] = api_key
+            headers["x-api-key"] = api_key
+        else:
+            from azure.identity import DefaultAzureCredential
+
+            token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default")
+            headers["Authorization"] = f"Bearer {token.token}"
 
         response = httpx.post(
             endpoint,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "api-key": api_key,
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
+            headers=headers,
             json={
                 "model": model,
                 "max_tokens": MAX_COMPLETION_TOKENS,

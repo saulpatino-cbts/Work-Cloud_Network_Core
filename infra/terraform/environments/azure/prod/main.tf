@@ -240,6 +240,7 @@ module "security" {
   private_endpoint_subnet_id             = azurerm_subnet.private_endpoints.id
   storage_account_id                     = module.storage.storage_account_id
   storage_account_name                   = module.storage.storage_account_name
+  foundry_account_id                     = module.ai.foundry_account_id
 }
 
 module "observability" {
@@ -513,4 +514,16 @@ resource "azurerm_role_assignment" "worker_storage_blob_data_contributor" {
   scope                = module.storage.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = module.compute.worker_principal_id
+}
+
+resource "azurerm_role_assignment" "web_foundry_user" {
+  scope                = module.ai.foundry_account_id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = module.compute.web_principal_id
+}
+
+resource "azurerm_role_assignment" "api_foundry_user" {
+  scope                = module.ai.foundry_account_id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = module.compute.api_principal_id
 }

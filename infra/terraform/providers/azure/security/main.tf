@@ -37,6 +37,11 @@ resource "azurerm_private_dns_zone" "postgres" {
   resource_group_name = var.resource_group_name
 }
 
+resource "azurerm_private_dns_zone" "cognitiveservices" {
+  name                = "privatelink.cognitiveservices.azure.com"
+  resource_group_name = var.resource_group_name
+}
+
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "${var.name_prefix}-pdns-blob"
   resource_group_name   = var.resource_group_name
@@ -55,6 +60,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   name                  = "${var.name_prefix}-pdns-pg"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "cognitiveservices" {
+  name                  = "${var.name_prefix}-pdns-cog"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.cognitiveservices.name
   virtual_network_id    = var.virtual_network_id
 }
 
@@ -93,6 +105,25 @@ resource "azurerm_private_endpoint" "keyvault" {
   private_dns_zone_group {
     name                 = "pdzg-keyvault"
     private_dns_zone_ids = [azurerm_private_dns_zone.keyvault.id]
+  }
+}
+
+resource "azurerm_private_endpoint" "foundry" {
+  name                = "${var.name_prefix}-pep-aif"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "${var.name_prefix}-pep-psc-aif"
+    private_connection_resource_id = var.foundry_account_id
+    subresource_names              = ["account"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "pdzg-cognitiveservices"
+    private_dns_zone_ids = [azurerm_private_dns_zone.cognitiveservices.id]
   }
 }
 

@@ -241,6 +241,27 @@ module "security" {
   storage_account_name                   = module.storage.storage_account_name
 }
 
+module "observability" {
+  source                         = "../../../providers/azure/observability"
+  log_analytics_workspace_id     = module.compute.log_analytics_workspace_id
+  diagnostic_setting_name_prefix = local.name_prefix
+
+  diagnostic_targets = {
+    frontdoor_profile          = module.security.frontdoor_profile_id
+    frontdoor_firewall_policy  = module.security.frontdoor_firewall_policy_id
+    platform_nsg               = module.security.network_security_group_id
+    container_apps_environment = module.compute.container_app_environment_id
+    container_app_web          = module.compute.web_id
+    container_app_api          = module.compute.api_id
+    container_app_worker       = module.compute.worker_id
+    key_vault                  = module.identity.key_vault_id
+    storage_account            = module.storage.storage_account_id
+    postgres_server            = module.database.server_id
+    app_insights               = module.ai.application_insights_id
+    foundry_account            = module.ai.foundry_account_id
+  }
+}
+
 resource "azurerm_subnet_network_security_group_association" "container_apps_infra" {
   subnet_id                 = azurerm_subnet.container_apps_infra.id
   network_security_group_id = module.security.network_security_group_id

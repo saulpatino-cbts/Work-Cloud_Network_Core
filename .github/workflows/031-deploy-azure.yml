@@ -453,21 +453,79 @@ jobs:
           AI_NAME=$(terraform output -raw application_insights_name 2>/dev/null || echo "")
           if [ -n "$FRONTDOOR_HOST" ]; then
             NEXTAUTH_URL="https://$FRONTDOOR_HOST"
-            gh variable set CNA_NEXTAUTH_URL --body "$NEXTAUTH_URL" \
-              && echo "CNA_NEXTAUTH_URL updated: $NEXTAUTH_URL" \
-              || echo "WARNING: could not set CNA_NEXTAUTH_URL — set it manually in GitHub Settings → Variables"
-            echo "Entra redirect URI required: $NEXTAUTH_URL/api/auth/callback/microsoft-entra-id"
+            CURRENT=$(gh variable get CNA_NEXTAUTH_URL --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$NEXTAUTH_URL" ]; then
+              gh variable set CNA_NEXTAUTH_URL --body "$NEXTAUTH_URL" \
+                && echo "CNA_NEXTAUTH_URL updated: $NEXTAUTH_URL" \
+                || echo "WARNING: could not set CNA_NEXTAUTH_URL — set it manually in GitHub Settings → Variables"
+            else
+              echo "CNA_NEXTAUTH_URL already matches $NEXTAUTH_URL; no update needed."
+            fi
           fi
           if [ -n "$KV_NAME" ]; then
-            gh variable set KEY_VAULT_NAME --body "$KV_NAME" \
-              && echo "KEY_VAULT_NAME updated: $KV_NAME" \
-              || echo "WARNING: could not set KEY_VAULT_NAME — set it manually in GitHub Settings → Variables"
+            CURRENT=$(gh variable get KEY_VAULT_NAME --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$KV_NAME" ]; then
+              gh variable set KEY_VAULT_NAME --body "$KV_NAME" \
+                && echo "KEY_VAULT_NAME updated: $KV_NAME" \
+                || echo "WARNING: could not set KEY_VAULT_NAME — set it manually in GitHub Settings → Variables"
+            else
+              echo "KEY_VAULT_NAME already matches $KV_NAME; no update needed."
+            fi
           fi
           if [ -n "$AI_NAME" ]; then
-            gh variable set APPLICATION_INSIGHTS_NAME --body "$AI_NAME" \
-              && echo "APPLICATION_INSIGHTS_NAME updated: $AI_NAME" \
-              || echo "WARNING: could not set APPLICATION_INSIGHTS_NAME — set it manually in GitHub Settings → Variables"
+            CURRENT=$(gh variable get APPLICATION_INSIGHTS_NAME --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$AI_NAME" ]; then
+              gh variable set APPLICATION_INSIGHTS_NAME --body "$AI_NAME" \
+                && echo "APPLICATION_INSIGHTS_NAME updated: $AI_NAME" \
+                || echo "WARNING: could not set APPLICATION_INSIGHTS_NAME — set it manually in GitHub Settings → Variables"
+            else
+              echo "APPLICATION_INSIGHTS_NAME already matches $AI_NAME; no update needed."
+            fi
           fi
+
+      - name: Update Entra redirect URI
+        if: ${{ always() }}
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
+          if [ -z "$FRONTDOOR_HOST" ]; then
+            echo "No Front Door hostname yet; skipping Entra redirect URI update."
+            exit 0
+          fi
+
+          NEXTAUTH_URL="https://$FRONTDOOR_HOST"
+          export REDIRECT_URI="$NEXTAUTH_URL/api/auth/callback/microsoft-entra-id"
+
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          app_id = os.environ["AZURE_CLIENT_ID"]
+          redirect_uri = os.environ["REDIRECT_URI"]
+
+          show = subprocess.run(
+              ["az", "ad", "app", "show", "--id", app_id, "--output", "json"],
+              capture_output=True,
+              text=True,
+              check=True,
+          )
+          app = json.loads(show.stdout)
+          redirect_uris = list((app.get("web") or {}).get("redirectUris") or [])
+
+          if redirect_uri in redirect_uris:
+              print(f"Redirect URI already present: {redirect_uri}")
+          else:
+              redirect_uris.append(redirect_uri)
+              subprocess.run(
+                  ["az", "ad", "app", "update", "--id", app_id, "--web-redirect-uris", *redirect_uris],
+                  check=True,
+              )
+              print(f"Added redirect URI: {redirect_uri}")
+          PY
 
       - name: Export platform outputs
         id: export

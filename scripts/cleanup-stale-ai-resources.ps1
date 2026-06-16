@@ -31,12 +31,13 @@ function Invoke-AzJson {
 }
 
 function Remove-IfRequested {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Label,
         [scriptblock]$DeleteAction
     )
 
-    if ($Delete -and $PSCmdlet.ShouldProcess($Label, "delete")) {
+    if ($Delete -and $PSCmdlet.ShouldProcess($Label, 'delete')) {
         & $DeleteAction
     }
 }

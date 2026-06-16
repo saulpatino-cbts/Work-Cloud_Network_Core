@@ -74,6 +74,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set Azure subscription context
+        run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
       - name: Resolve bootstrap targets
         run: |
           WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${{ inputs.region_short }}"
@@ -98,22 +104,28 @@ jobs:
 
       - name: Create workload resource group
         run: |
-          if az group exists --name "$WORKLOAD_RG" >/dev/null; then
+          if az group exists \
+            --name "$WORKLOAD_RG" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
             echo "Workload resource group '$WORKLOAD_RG' already exists; skipping creation."
           else
             az group create \
               --name "$WORKLOAD_RG" \
-              --location "${{ inputs.location }}"
+              --location "${{ inputs.location }}" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           fi
 
       - name: Create tfstate resource group
         run: |
-          if az group exists --name "$TFSTATE_RG" >/dev/null; then
+          if az group exists \
+            --name "$TFSTATE_RG" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
             echo "TF state resource group '$TFSTATE_RG' already exists; skipping creation."
           else
             az group create \
               --name "$TFSTATE_RG" \
-              --location "${{ inputs.location }}"
+              --location "${{ inputs.location }}" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           fi
 
       - name: Create storage account
@@ -121,12 +133,14 @@ jobs:
           if az storage account show \
             --name "${{ inputs.tfstate_storage_account }}" \
             --resource-group "$TFSTATE_RG" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --query id -o tsv >/dev/null 2>&1; then
             echo "Storage account '${{ inputs.tfstate_storage_account }}' already exists; skipping creation."
           else
             az storage account create \
               --name "${{ inputs.tfstate_storage_account }}" \
               --resource-group "$TFSTATE_RG" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
               --location "${{ inputs.location }}" \
               --sku Standard_LRS \
               --min-tls-version TLS1_2 \
@@ -138,18 +152,21 @@ jobs:
         run: |
           ACCOUNT_KEY=$(az storage account keys list \
             --resource-group "$TFSTATE_RG" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --account-name "${{ inputs.tfstate_storage_account }}" \
             --query "[0].value" \
             --output tsv)
           if az storage container show \
             --name "${{ inputs.tfstate_container }}" \
             --account-name "${{ inputs.tfstate_storage_account }}" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --account-key "$ACCOUNT_KEY" >/dev/null 2>&1; then
             echo "Blob container '${{ inputs.tfstate_container }}' already exists; skipping creation."
           else
             az storage container create \
               --name "${{ inputs.tfstate_container }}" \
               --account-name "${{ inputs.tfstate_storage_account }}" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
               --account-key "$ACCOUNT_KEY"
           fi
 
@@ -158,12 +175,14 @@ jobs:
           STORAGE_ID=$(az storage account show \
             --name "${{ inputs.tfstate_storage_account }}" \
             --resource-group "$TFSTATE_RG" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --query id --output tsv)
           # Get the service principal object ID for the federated OIDC identity
           CLIENT_OID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id --output tsv)
           ASSIGNMENT_COUNT=$(az role assignment list \
             --assignee-object-id "$CLIENT_OID" \
             --scope "$STORAGE_ID" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --query "[?roleDefinitionName=='Storage Blob Data Contributor'] | length(@)" \
             --output tsv)
           if [[ "$ASSIGNMENT_COUNT" == "0" ]]; then
@@ -171,7 +190,8 @@ jobs:
               --role "Storage Blob Data Contributor" \
               --assignee-object-id "$CLIENT_OID" \
               --assignee-principal-type ServicePrincipal \
-              --scope "$STORAGE_ID"
+              --scope "$STORAGE_ID" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           else
             echo "Storage Blob Data Contributor assignment already exists; skipping."
           fi

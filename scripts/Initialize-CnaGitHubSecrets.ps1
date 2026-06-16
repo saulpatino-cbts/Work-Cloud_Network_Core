@@ -51,6 +51,71 @@ function ConvertFrom-SecureStringToPlainText {
     }
 }
 
+function Initialize-AzLogin {
+    [CmdletBinding()]
+    param()
+
+    Write-Step "Checking Azure CLI session"
+    $account = Invoke-AzJson -Arguments @("account", "show")
+    if ($account) {
+        Write-Ok "Azure CLI is already signed in as $($account.name) ($($account.id))"
+        return $account
+    }
+
+    Write-Warn "Azure CLI is not currently signed in. Starting interactive login..."
+    & az login --use-device-code
+    if ($LASTEXITCODE -ne 0) {
+        throw "Azure CLI login failed. Re-run the script after signing in."
+    }
+
+    $account = Invoke-AzJson -Arguments @("account", "show")
+    if (-not $account) {
+        throw "Azure CLI login completed but no account context is available yet."
+    }
+
+    return $account
+}
+
+function Select-AzSubscription {
+    [CmdletBinding()]
+    param([object]$CurrentAccount)
+
+    $accounts = Invoke-AzJson -Arguments @("account", "list")
+    if (-not $accounts -or $accounts.Count -eq 0) {
+        throw "No Azure subscriptions are available. Sign in with az login first."
+    }
+
+    if ($accounts.Count -eq 1) {
+        $selected = $accounts[0]
+        Write-Ok "Using the only available subscription: $($selected.name) ($($selected.id))"
+        return $selected
+    }
+
+    Write-Host "Available Azure subscriptions:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $accounts.Count; $i++) {
+        $a = $accounts[$i]
+        Write-Host "  [$i] $($a.name) ($($a.id))  tenant=$($a.tenantId)"
+    }
+
+    while ($true) {
+        $choice = Read-Host "Select a subscription by number, or type the subscription ID/name (default: $($CurrentAccount.name) / $($CurrentAccount.id))"
+        if ([string]::IsNullOrWhiteSpace($choice)) {
+            $choice = $CurrentAccount.id
+        }
+
+        $selected = $accounts | Where-Object { $_.id -eq $choice -or $_.name -eq $choice }
+        if ($selected) {
+            return $selected[0]
+        }
+
+        if ($choice -match '^\d+$' -and [int]$choice -ge 0 -and [int]$choice -lt $accounts.Count) {
+            return $accounts[[int]$choice]
+        }
+
+        Write-Warn "That selection was not found. Enter a number or the exact subscription ID/name."
+    }
+}
+
 function New-RandomBase64 {
     param([int]$Bytes = 32)
     $buffer = New-Object byte[] $Bytes
@@ -63,6 +128,24 @@ function New-RandomBase64 {
     }
 }
 
+function Format-ValuePreview {
+    param(
+        [string]$Value,
+        [int]$KeepTail = 5
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "(empty)"
+    }
+
+    if ($Value.Length -le 10) {
+        return $Value
+    }
+
+    $tail = [Math]::Min($KeepTail, $Value.Length)
+    return ("*" * ($Value.Length - $tail)) + $Value.Substring($Value.Length - $tail)
+}
+
 function Read-TextValue {
     param(
         [string]$Name,
@@ -71,10 +154,14 @@ function Read-TextValue {
         [switch]$Required
     )
 
-    $label = if ($Default -ne "") { "$Prompt [$Default]" } else { $Prompt }
+    $preview = if ($Default -ne "") { " [current: $(Format-ValuePreview -Value $Default)]" } else { "" }
+    $label = "$Prompt$preview"
     while ($true) {
         $value = Read-Host $label
         if ([string]::IsNullOrWhiteSpace($value)) {
+            if (-not [string]::IsNullOrWhiteSpace($Default)) {
+                return $Default.Trim()
+            }
             $value = $Default
         }
         if (-not $Required -or -not [string]::IsNullOrWhiteSpace($value)) {
@@ -85,6 +172,7 @@ function Read-TextValue {
 }
 
 function Read-SecretValue {
+    [CmdletBinding()]
     param(
         [string]$Name,
         [string]$Description,
@@ -94,24 +182,15 @@ function Read-SecretValue {
     )
 
     if ($Exists) {
-        $generatePrompt = if ($GenerateBytes -gt 0) { ", or 'generate' to create one" } else { "" }
-        $choice = Read-Host "$Name already exists ($Description). Press Enter to keep, type 'replace' to paste a new value$generatePrompt"
-        if ([string]::IsNullOrWhiteSpace($choice)) {
-            return $null
-        }
-        if ($GenerateBytes -gt 0 -and $choice.Trim().ToLowerInvariant() -eq "generate") {
-            return New-RandomBase64 -Bytes $GenerateBytes
-        }
-    } elseif ($GenerateBytes -gt 0) {
-        $choice = Read-Host "$Name is missing ($Description). Press Enter to generate, or type 'paste' to provide a value"
-        if ([string]::IsNullOrWhiteSpace($choice)) {
-            return New-RandomBase64 -Bytes $GenerateBytes
-        }
-    } elseif (-not $Required) {
-        $choice = Read-Host "$Name is optional ($Description). Press Enter to skip, or type 'paste' to provide a value"
-        if ([string]::IsNullOrWhiteSpace($choice)) {
-            return $null
-        }
+        return $null
+    }
+
+    if ($GenerateBytes -gt 0) {
+        return New-RandomBase64 -Bytes $GenerateBytes
+    }
+
+    if (-not $Required) {
+        return $null
     }
 
     while ($true) {
@@ -142,6 +221,7 @@ function Invoke-AzJson {
 }
 
 function Set-GitHubSecret {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Name,
         [string]$Value,
@@ -156,6 +236,7 @@ function Set-GitHubSecret {
 }
 
 function Set-GitHubVariable {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Name,
         [string]$Value,
@@ -214,8 +295,7 @@ if (-not $Repo) {
 Write-Ok "GitHub repo: $Repo"
 
 if (-not $AppDisplayName) {
-    $repoSlug = ($Repo.Split("/")[-1] -replace '[^A-Za-z0-9-]', '-').ToLowerInvariant()
-    $AppDisplayName = Read-TextValue -Name "AppDisplayName" -Prompt "Entra app registration display name" -Default "cna-$repoSlug"
+    $AppDisplayName = Read-TextValue -Name "AppDisplayName" -Prompt "Entra app registration display name" -Default "CNA Assessment Tool"
 }
 
 Invoke-Gh -Arguments @("auth", "status")
@@ -230,14 +310,20 @@ $entraClientSecret = $null
 
 if (-not $SkipAzureSetup) {
     Write-Step "Preparing Azure OIDC app registration"
-    $account = Invoke-AzJson -Arguments @("account", "show")
-    if (-not $account) {
-        throw "Azure CLI is not logged in. Run az login first."
-    }
+    $account = Initialize-AzLogin
 
     if ($SubscriptionId) {
         & az account set --subscription $SubscriptionId | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Failed to set Azure subscription $SubscriptionId." }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to set Azure subscription $SubscriptionId. Verify the ID is valid and available in your signed-in tenant."
+        }
+        $account = Invoke-AzJson -Arguments @("account", "show")
+    } else {
+        $account = Select-AzSubscription -CurrentAccount $account
+        & az account set --subscription $account.id | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to switch to subscription $($account.id)."
+        }
         $account = Invoke-AzJson -Arguments @("account", "show")
     }
 
@@ -299,15 +385,25 @@ if (-not $SkipAzureSetup) {
             subject   = $subject
             audiences = @("api://AzureADTokenExchange")
         } | ConvertTo-Json -Compress
-        if ($PSCmdlet.ShouldProcess($appId, "create GitHub OIDC federated credential")) {
-            & az ad app federated-credential create --id $appId --parameters $credential --output none
-            if ($LASTEXITCODE -ne 0) { throw "Failed to create federated credential." }
+        $credentialFile = [System.IO.Path]::GetTempFileName()
+        try {
+            Set-Content -Path $credentialFile -Value $credential -Encoding UTF8
+            $credentialArg = "@$credentialFile"
+            if ($PSCmdlet.ShouldProcess($appId, "create GitHub OIDC federated credential")) {
+                & az ad app federated-credential create --id $appId --parameters "$credentialArg" --output none
+                if ($LASTEXITCODE -ne 0) { throw "Failed to create federated credential." }
+            }
+        } finally {
+            Remove-Item -Path $credentialFile -Force -ErrorAction SilentlyContinue
         }
         Write-Ok "Created federated credential: $credentialName"
     }
 
-    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (use 'none' until Front Door hostname exists)" -Default "none"
+    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (leave as 'none' for first bootstrap; set a real HTTPS URL only after the Front Door hostname exists)" -Default "none"
     if ($nextAuthUrlForRedirect -ne "none") {
+        if (-not ($nextAuthUrlForRedirect -match '^https?://')) {
+            throw "CNA_NEXTAUTH_URL must be 'none' or start with http:// or https://."
+        }
         $redirectUri = "$($nextAuthUrlForRedirect.TrimEnd('/'))/api/auth/callback/microsoft-entra-id"
         $app = Invoke-AzJson -Arguments @("ad", "app", "show", "--id", $appId)
         $redirectUris = @($app.web.redirectUris)
@@ -321,6 +417,8 @@ if (-not $SkipAzureSetup) {
         } else {
             Write-Ok "Redirect URI already present: $redirectUri"
         }
+    } else {
+        Write-Host "    [INFO] CNA_NEXTAUTH_URL is 'none'. Redirect URI will be added later after workflow 031 exposes the real Front Door hostname."
     }
 } else {
     Write-Step "Collecting Azure values without Azure setup"
@@ -328,7 +426,7 @@ if (-not $SkipAzureSetup) {
     $tenantId = Read-TextValue -Name "AZURE_TENANT_ID" -Prompt "Azure tenant ID" -Required
     $resolvedSubscriptionId = Read-TextValue -Name "AZURE_SUBSCRIPTION_ID" -Prompt "Azure subscription ID" -Required
     $resolvedSubscriptionName = Read-TextValue -Name "AZURE_TARGET_SUBSCRIPTION_NAME" -Prompt "Azure subscription name (optional, for human-readable validation)" -Default "none"
-    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL" -Default "none"
+    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (leave as 'none' for first bootstrap; set a real HTTPS URL only after the Front Door hostname exists)" -Default "none"
 }
 
 Write-Step "Collecting GitHub secret values"

@@ -108,9 +108,12 @@ jobs:
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --only-show-errors
 
-          if az group exists \
+          EXISTS=$(az group exists \
             --name "$WORKLOAD_RG" \
-            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --output tsv)
+
+          if [[ "$EXISTS" == "true" ]]; then
             echo "Workload resource group '$WORKLOAD_RG' already exists; skipping creation."
           else
             az group create \
@@ -125,9 +128,12 @@ jobs:
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --only-show-errors
 
-          if az group exists \
+          EXISTS=$(az group exists \
             --name "$TFSTATE_RG" \
-            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --output tsv)
+
+          if [[ "$EXISTS" == "true" ]]; then
             echo "TF state resource group '$TFSTATE_RG' already exists; skipping creation."
           else
             az group create \

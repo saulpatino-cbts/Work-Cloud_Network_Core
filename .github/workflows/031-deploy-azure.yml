@@ -389,6 +389,8 @@ jobs:
         run: |
           echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
           echo "container_app_environment_id=$(terraform output -raw container_app_environment_id)" >> "$GITHUB_OUTPUT"
+          echo "web_container_app_name=$(terraform output -raw web_name)" >> "$GITHUB_OUTPUT"
+          echo "private_endpoint_subnet_prefix=$(terraform output -raw private_endpoint_subnet_prefix)" >> "$GITHUB_OUTPUT"
 
       - name: Approve Front Door private endpoint connections
         id: approve_private_link
@@ -443,6 +445,16 @@ jobs:
             echo "::error::Migration job did not complete successfully. Final status: $MIGRATION_STATUS"
             exit 1
           fi
+
+      - name: Validate Foundry private DNS and managed identity inference
+        id: validate_foundry_private_access
+        env:
+          RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
+          WEB_CONTAINER_APP_NAME: ${{ steps.export_ids.outputs.web_container_app_name }}
+          PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
+          MAX_ATTEMPTS: "12"
+          SLEEP_SECONDS: "20"
+        run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
 
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true
@@ -507,6 +519,9 @@ jobs:
           FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
           FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS: ${{ steps.approve_private_link.outputs.approved_connection_ids }}
           CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
+          WEB_CONTAINER_APP_NAME: ${{ steps.export_ids.outputs.web_container_app_name }}
+          PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
+          FOUNDRY_PRIVATE_ACCESS_VALIDATION: passed
           NEXTAUTH_URL: ${{ steps.export.outputs.nextauth_url }}
         run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 

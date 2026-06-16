@@ -8,11 +8,12 @@ work is tracked here.
 
 ## Open Network Review Findings
 
-- [ ] P1. Validate Foundry private DNS resolution from inside the CNA VNet against the deployed `services.ai.azure.com` endpoint path.
-- [ ] P1. Validate Foundry Claude inference with managed identity only, with local authentication disabled and no API-key fallback required.
-- [ ] P1. Review Front Door private-link approval automation for repeat deploy safety and tighten the request selector if multiple pending connections appear.
-- [ ] P2. Review Azure Firewall allowlist coverage after first deployment and expand it only if the workload or platform telemetry needs additional egress endpoints.
-- [ ] P2. Re-check the Front Door WAF auth-path allow rule after customer testing and narrow it if the pattern proves broader than needed.
+- [x] P1. Enforce Foundry private DNS validation from inside the CNA web Container App against the deployed `services.ai.azure.com` endpoint path.
+- [x] P1. Enforce Foundry Claude inference validation with managed identity only, with local authentication disabled and no API-key fallback required.
+- [x] P1. Tighten Front Door private-link approval automation so repeat deploys fail on ambiguous pending requests instead of approving the wrong connection.
+- [ ] P2. Review Azure Firewall allowlist coverage after first live deployment and expand it only if the workload or platform telemetry needs additional egress endpoints.
+- [x] P2. Narrow the Front Door WAF auth-path allow rule to expected GET/POST authentication flows.
+- [ ] P2. Re-check the narrowed Front Door WAF auth-path allow rule after customer sign-in testing.
 
 ## Redeploy And Validation
 

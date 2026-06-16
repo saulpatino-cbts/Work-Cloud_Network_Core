@@ -232,6 +232,13 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
         "/api/auth/",
       ]
     }
+
+    match_condition {
+      match_variable     = "RequestMethod"
+      operator           = "Equal"
+      negation_condition = false
+      match_values       = ["GET", "POST"]
+    }
   }
 
   managed_rule {

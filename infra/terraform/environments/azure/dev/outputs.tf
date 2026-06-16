@@ -36,6 +36,11 @@ output "web_fqdn" {
   value       = module.compute.web_fqdn
 }
 
+output "web_name" {
+  description = "CNA Web (Next.js) Container App name"
+  value       = module.compute.web_name
+}
+
 output "worker_name" {
   value = module.compute.worker_name
 }
@@ -62,6 +67,11 @@ output "foundry_endpoint" {
 
 output "foundry_claude_messages_endpoint" {
   value = module.ai.foundry_claude_messages_endpoint
+}
+
+output "private_endpoint_subnet_prefix" {
+  description = "CIDR prefix for the private endpoint subnet, used by post-deploy private DNS validation"
+  value       = azurerm_subnet.private_endpoints.address_prefixes[0]
 }
 
 output "storage_role_assignment_id" {

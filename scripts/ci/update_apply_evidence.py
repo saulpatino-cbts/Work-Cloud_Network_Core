@@ -12,6 +12,9 @@ Reads from environment variables:
   FRONTDOOR_SECRET_ID             — terraform output value (optional)
   FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS — approved private endpoint connection IDs
   CONTAINER_APP_ENVIRONMENT_ID    — terraform output value
+  WEB_CONTAINER_APP_NAME          — terraform output value
+  PRIVATE_ENDPOINT_SUBNET_PREFIX  — terraform output value
+  FOUNDRY_PRIVATE_ACCESS_VALIDATION — "passed" when runtime validation succeeded
   NEXTAUTH_URL                    — derived runtime public URL
 """
 
@@ -27,6 +30,9 @@ with manifest.open() as f:
 data["validation_checks"]["terraform_apply"] = "passed"
 if os.environ.get("FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS"):
     data["validation_checks"]["private_endpoint_approval"] = "passed"
+if os.environ.get("FOUNDRY_PRIVATE_ACCESS_VALIDATION") == "passed":
+    data["validation_checks"]["foundry_private_dns_validation"] = "passed"
+    data["validation_checks"]["foundry_managed_identity_inference"] = "passed"
 
 data["platform_context"] = {
     "frontdoor_endpoint_host_name": os.environ.get("FRONTDOOR_ENDPOINT_HOST_NAME", ""),
@@ -41,6 +47,10 @@ data["platform_context"] = {
         "FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS", ""
     ),
     "container_app_environment_id": os.environ.get("CONTAINER_APP_ENVIRONMENT_ID", ""),
+    "web_container_app_name": os.environ.get("WEB_CONTAINER_APP_NAME", ""),
+    "private_endpoint_subnet_prefix": os.environ.get(
+        "PRIVATE_ENDPOINT_SUBNET_PREFIX", ""
+    ),
 }
 
 with manifest.open("w") as f:

@@ -23,16 +23,46 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
       --output json
   )"
 
-  matching_ids="$(
+  pending_ids="$(
     jq -r --arg desc "$REQUEST_DESCRIPTION" '
       .[]
       | select(.properties.privateLinkServiceConnectionState.description == $desc)
+      | select(.properties.privateLinkServiceConnectionState.status == "Pending")
       | .id
     ' <<<"$connections_json"
   )"
 
-  if [[ -n "$matching_ids" ]]; then
-    echo "Found matching private endpoint connection request(s) on attempt ${attempt}/${MAX_ATTEMPTS}."
+  approved_existing_ids="$(
+    jq -r --arg desc "$REQUEST_DESCRIPTION" '
+      .[]
+      | select(.properties.privateLinkServiceConnectionState.description == $desc)
+      | select(.properties.privateLinkServiceConnectionState.status == "Approved")
+      | .id
+    ' <<<"$connections_json"
+  )"
+
+  pending_count="$(grep -cve '^[[:space:]]*$' <<<"$pending_ids" || true)"
+  approved_count="$(grep -cve '^[[:space:]]*$' <<<"$approved_existing_ids" || true)"
+
+  if [[ "$pending_count" -gt 1 ]]; then
+    echo "::error::Multiple pending Front Door private endpoint requests matched description '${REQUEST_DESCRIPTION}'. Refusing ambiguous approval."
+    jq -r --arg desc "$REQUEST_DESCRIPTION" '
+      .[]
+      | select(.properties.privateLinkServiceConnectionState.description == $desc)
+      | "  \(.id) status=\(.properties.privateLinkServiceConnectionState.status)"
+    ' <<<"$connections_json"
+    exit 1
+  fi
+
+  if [[ "$pending_count" -eq 1 ]]; then
+    matching_ids="$pending_ids"
+    echo "Found one pending private endpoint connection request on attempt ${attempt}/${MAX_ATTEMPTS}."
+    break
+  fi
+
+  if [[ "$approved_count" -gt 0 ]]; then
+    matching_ids="$approved_existing_ids"
+    echo "Found existing approved private endpoint connection request(s) on attempt ${attempt}/${MAX_ATTEMPTS}."
     break
   fi
 

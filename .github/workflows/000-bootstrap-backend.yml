@@ -104,6 +104,10 @@ jobs:
 
       - name: Create workload resource group
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           if az group exists \
             --name "$WORKLOAD_RG" \
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
@@ -117,6 +121,10 @@ jobs:
 
       - name: Create tfstate resource group
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           if az group exists \
             --name "$TFSTATE_RG" \
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" >/dev/null; then
@@ -130,6 +138,10 @@ jobs:
 
       - name: Create storage account
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           for attempt in $(seq 1 10); do
             if az storage account show \
               --name "${{ inputs.tfstate_storage_account }}" \
@@ -164,6 +176,10 @@ jobs:
 
       - name: Create blob container
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           ACCOUNT_KEY=$(az storage account keys list \
             --resource-group "$TFSTATE_RG" \
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
@@ -186,6 +202,10 @@ jobs:
 
       - name: Assign Storage Blob Data Contributor to CI identity
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           STORAGE_ID=$(az storage account show \
             --name "${{ inputs.tfstate_storage_account }}" \
             --resource-group "$TFSTATE_RG" \
@@ -213,6 +233,10 @@ jobs:
       - name: Terraform init for bootstrap state
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
         run: |
+          az account set \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --only-show-errors
+
           for attempt in $(seq 1 10); do
             if terraform init \
               -backend-config="resource_group_name=$TFSTATE_RG" \

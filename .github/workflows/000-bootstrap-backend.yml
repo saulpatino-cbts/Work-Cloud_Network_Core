@@ -130,14 +130,17 @@ jobs:
 
       - name: Create storage account
         run: |
-          if az storage account show \
-            --name "${{ inputs.tfstate_storage_account }}" \
-            --resource-group "$TFSTATE_RG" \
-            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            --query id -o tsv >/dev/null 2>&1; then
-            echo "Storage account '${{ inputs.tfstate_storage_account }}' already exists; skipping creation."
-          else
-            az storage account create \
+          for attempt in $(seq 1 10); do
+            if az storage account show \
+              --name "${{ inputs.tfstate_storage_account }}" \
+              --resource-group "$TFSTATE_RG" \
+              --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+              --query id -o tsv >/dev/null 2>&1; then
+              echo "Storage account '${{ inputs.tfstate_storage_account }}' already exists; skipping creation."
+              exit 0
+            fi
+
+            if az storage account create \
               --name "${{ inputs.tfstate_storage_account }}" \
               --resource-group "$TFSTATE_RG" \
               --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
@@ -145,8 +148,19 @@ jobs:
               --sku Standard_LRS \
               --min-tls-version TLS1_2 \
               --allow-blob-public-access false \
-              --https-only true
-          fi
+              --https-only true; then
+              echo "Storage account '${{ inputs.tfstate_storage_account }}' created successfully."
+              exit 0
+            fi
+
+            if [[ "$attempt" == "10" ]]; then
+              echo "Storage account creation failed after $attempt attempts."
+              exit 1
+            fi
+
+            echo "Storage account creation failed on attempt $attempt; waiting for Azure resource propagation..."
+            sleep 15
+          done
 
       - name: Create blob container
         run: |

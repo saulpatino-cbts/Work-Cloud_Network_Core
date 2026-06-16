@@ -109,17 +109,10 @@ jobs:
       - name: Verify target subscription
         run: |
           SUB_ID=$(az account show --query id -o tsv)
-          SUB_NAME=$(az account show --query name -o tsv)
-          EXPECTED_SUB_ID="${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}"
-          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+          EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
           if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
-            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_TARGET_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
-            exit 1
-          fi
-
-          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
-            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
             exit 1
           fi
 
@@ -178,17 +171,10 @@ jobs:
       - name: Verify target subscription
         run: |
           SUB_ID=$(az account show --query id -o tsv)
-          SUB_NAME=$(az account show --query name -o tsv)
-          EXPECTED_SUB_ID="${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}"
-          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+          EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
           if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
-            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_TARGET_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
-            exit 1
-          fi
-
-          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
-            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
             exit 1
           fi
 
@@ -251,10 +237,10 @@ jobs:
 
       - name: Terraform plan
         run: |
-          AI_ENGINE_DEFAULT="${{ vars.CNA_AI_ENGINE_DEFAULT }}"
-          FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
-          AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
-          AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+          AI_ENGINE_DEFAULT="foundry-claude"
+          FOUNDRY_CLAUDE_MODEL="claude-sonnet-4-6"
+          AZURE_MCP_TRANSPORT="sse"
+          AWS_MCP_TRANSPORT="stdio"
           optional_var() {
             local VALUE="$1"
             if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
@@ -263,10 +249,10 @@ jobs:
               echo "$VALUE"
             fi
           }
-          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
-          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
-          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
-          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
+          FOUNDRY_CLAUDE_ENDPOINT=""
+          AZURE_MCP_ENDPOINT=""
+          AWS_MCP_ENDPOINT=""
+          DRAWIO_MCP_URL=""
 
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
@@ -722,10 +708,10 @@ jobs:
 
       - name: Terraform drift plan
         run: |
-          AI_ENGINE_DEFAULT="${{ vars.CNA_AI_ENGINE_DEFAULT }}"
-          FOUNDRY_CLAUDE_MODEL="${{ vars.FOUNDRY_CLAUDE_MODEL }}"
-          AZURE_MCP_TRANSPORT="${{ vars.CNA_AZURE_MCP_TRANSPORT }}"
-          AWS_MCP_TRANSPORT="${{ vars.CNA_AWS_MCP_TRANSPORT }}"
+          AI_ENGINE_DEFAULT="foundry-claude"
+          FOUNDRY_CLAUDE_MODEL="claude-sonnet-4-6"
+          AZURE_MCP_TRANSPORT="sse"
+          AWS_MCP_TRANSPORT="stdio"
           optional_var() {
             local VALUE="$1"
             if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
@@ -734,10 +720,10 @@ jobs:
               echo "$VALUE"
             fi
           }
-          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
-          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
-          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
-          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
+          FOUNDRY_CLAUDE_ENDPOINT=""
+          AZURE_MCP_ENDPOINT=""
+          AWS_MCP_ENDPOINT=""
+          DRAWIO_MCP_URL=""
 
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \

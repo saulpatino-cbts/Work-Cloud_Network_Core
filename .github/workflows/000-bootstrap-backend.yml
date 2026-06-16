@@ -89,41 +89,50 @@ jobs:
         run: |
           SUB_ID=$(az account show --query id -o tsv)
           SUB_NAME=$(az account show --query name -o tsv)
-          EXPECTED_SUB_ID="${{ vars.AZURE_TARGET_SUBSCRIPTION_ID }}"
-          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+          EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
           if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
-            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_TARGET_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
-            exit 1
-          fi
-
-          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
-            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
             exit 1
           fi
 
       - name: Create workload resource group
         run: |
-          az group create \
-            --name "$WORKLOAD_RG" \
-            --location "${{ inputs.location }}"
+          if az group exists --name "$WORKLOAD_RG" >/dev/null; then
+            echo "Workload resource group '$WORKLOAD_RG' already exists; skipping creation."
+          else
+            az group create \
+              --name "$WORKLOAD_RG" \
+              --location "${{ inputs.location }}"
+          fi
 
       - name: Create tfstate resource group
         run: |
-          az group create \
-            --name "$TFSTATE_RG" \
-            --location "${{ inputs.location }}"
+          if az group exists --name "$TFSTATE_RG" >/dev/null; then
+            echo "TF state resource group '$TFSTATE_RG' already exists; skipping creation."
+          else
+            az group create \
+              --name "$TFSTATE_RG" \
+              --location "${{ inputs.location }}"
+          fi
 
       - name: Create storage account
         run: |
-          az storage account create \
+          if az storage account show \
             --name "${{ inputs.tfstate_storage_account }}" \
             --resource-group "$TFSTATE_RG" \
-            --location "${{ inputs.location }}" \
-            --sku Standard_LRS \
-            --min-tls-version TLS1_2 \
-            --allow-blob-public-access false \
-            --https-only true
+            --query id -o tsv >/dev/null 2>&1; then
+            echo "Storage account '${{ inputs.tfstate_storage_account }}' already exists; skipping creation."
+          else
+            az storage account create \
+              --name "${{ inputs.tfstate_storage_account }}" \
+              --resource-group "$TFSTATE_RG" \
+              --location "${{ inputs.location }}" \
+              --sku Standard_LRS \
+              --min-tls-version TLS1_2 \
+              --allow-blob-public-access false \
+              --https-only true
+          fi
 
       - name: Create blob container
         run: |
@@ -132,10 +141,17 @@ jobs:
             --account-name "${{ inputs.tfstate_storage_account }}" \
             --query "[0].value" \
             --output tsv)
-          az storage container create \
+          if az storage container show \
             --name "${{ inputs.tfstate_container }}" \
             --account-name "${{ inputs.tfstate_storage_account }}" \
-            --account-key "$ACCOUNT_KEY"
+            --account-key "$ACCOUNT_KEY" >/dev/null 2>&1; then
+            echo "Blob container '${{ inputs.tfstate_container }}' already exists; skipping creation."
+          else
+            az storage container create \
+              --name "${{ inputs.tfstate_container }}" \
+              --account-name "${{ inputs.tfstate_storage_account }}" \
+              --account-key "$ACCOUNT_KEY"
+          fi
 
       - name: Assign Storage Blob Data Contributor to CI identity
         run: |

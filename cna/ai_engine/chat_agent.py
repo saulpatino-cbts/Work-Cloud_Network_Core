@@ -408,7 +408,9 @@ class GroundedChatAgent:
         else:
             from azure.identity import DefaultAzureCredential
 
-            token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default")
+            token = DefaultAzureCredential().get_token(
+                "https://cognitiveservices.azure.com/.default"
+            )
             headers["Authorization"] = f"Bearer {token.token}"
 
         response = httpx.post(

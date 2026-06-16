@@ -48,9 +48,7 @@ data["platform_context"] = {
     ),
     "container_app_environment_id": os.environ.get("CONTAINER_APP_ENVIRONMENT_ID", ""),
     "web_container_app_name": os.environ.get("WEB_CONTAINER_APP_NAME", ""),
-    "private_endpoint_subnet_prefix": os.environ.get(
-        "PRIVATE_ENDPOINT_SUBNET_PREFIX", ""
-    ),
+    "private_endpoint_subnet_prefix": os.environ.get("PRIVATE_ENDPOINT_SUBNET_PREFIX", ""),
 }
 
 with manifest.open("w") as f:

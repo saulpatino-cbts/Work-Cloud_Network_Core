@@ -9,7 +9,7 @@ including an encyclopedia-grade network report. Clients receive deliverables thr
 time-limited authenticated portal. Deployed as three Azure Container Apps behind Azure Front Door,
 backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Current status — June 2026:** Infrastructure is being prepared for clean redeploy with `cna-*` naming only, one workload resource group per environment, and GitHub Secrets/Variables as the deployment source of truth.
+> **Current status — 0.8 beta, June 2026:** Code, Terraform, workflows, ADFs, TODO, changelog, and GitHub Wiki are aligned on `main`. GitHub has no open PRs or Issues. The remaining beta gate is live Azure execution: prerequisite validation, image build, dev deploy, Entra redirect update, runtime validation, and customer-like beta acceptance.
 
 ---
 
@@ -17,11 +17,11 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
 | Area | Status | Notes |
 |---|---|---|
-| Platform foundation + CLI | ✅ GA | Python `cna` package |
-| Azure discovery engine | ✅ GA | VNet, peerings, gateways, firewall, NSG, UDR, flow logs |
-| AWS discovery stubs | ✅ GA | VPC, TGW, security groups |
-| AI analysis engine | ✅ GA | Azure Foundry (Claude), 11 AWS + 7 Azure rules |
-| Web platform (Next.js) | ✅ GA | Entra ID auth, engagement workflow |
+| Platform foundation + CLI | ✅ Beta-ready | Python `cna` package |
+| Azure discovery engine | ✅ Beta-ready | VNet, peerings, gateways, firewall, NSG, UDR, flow logs |
+| AWS discovery stubs | ✅ Beta-ready | VPC, TGW, security groups |
+| AI analysis engine | ✅ Beta-ready | Azure Foundry Claude as primary managed provider |
+| Web platform (Next.js) | ✅ Beta-ready | Entra ID auth, engagement workflow |
 | CNA visual system | ✅ Merged | Navy/teal palette, Aeonik font, SVG brand assets |
 | East-West / North-South taxonomy | ✅ Merged | `traffic_direction` on all findings |
 | FinOps signals (AZ-COST-001–005) | ✅ Merged | Orphaned PIPs, idle gateways, oversized SKUs, NAT/FW waste |
@@ -35,7 +35,8 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | CAF naming convention | ✅ Merged | `cna-[env]-[region_short]`, single workload RG per env |
 | Teardown workflow (032) | ✅ Merged | `DESTROY`-gated, optional state wipe |
 | CI — lint/test | ✅ Passing | ruff, pytest 3.13 + 3.14, Docker build smoke |
-| Azure deployment | ⏳ Pending | Awaiting teardown + clean redeploy with new naming |
+| Repository hygiene | ✅ Clean | No open GitHub PRs or Issues as of 2026-06-16 |
+| Azure deployment | ⏳ Beta validation pending | Live workflow execution and customer-like validation remain |
 
 ---
 

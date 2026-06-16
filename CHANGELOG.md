@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.8.0-beta] - 2026-06-16
+
+### Added
+- Added Azure Front Door Premium private-origin hardening, private endpoint approval automation, Azure Firewall egress control, subnet-specific NSGs, centralized diagnostics, VNet flow logs, and Azure AI Foundry private access validation gates.
+- Added network security ADFs for edge ingress, east-west segmentation, north-south egress, private PaaS connectivity, centralized logging, Front Door private origin, private endpoint approval automation, and virtual network flow logs.
+- Added post-deploy Foundry validation from the web Container App to verify private DNS resolution and managed-identity inference.
+
+### Changed
+- Changed the project release posture from `1.0.0` to `0.8 beta` while beta validation remains open.
+- Updated Terraform, workflows, and documentation to use `cna-*` naming, separate tfstate resource groups, and GitHub Secrets/Variables as the deployment source of truth.
+- Updated the AI runtime decision model so Foundry Claude is the Terraform-managed private provider and Azure OpenAI remains optional and out-of-band unless promoted to a first-class Terraform-managed provider.
+- Merged or manually landed all open Dependabot PRs and closed the remaining conflicted PRs after their exact dependency updates reached `main`.
+- Confirmed GitHub has no open PRs and no open Issues for final beta sync.
+
+### Validation
+- `npm ci`, `npx prisma generate`, and `npm run build` passed after dependency updates.
+- Terraform validation passed for Azure `dev` and `prod` after network hardening changes.
+- Final live Azure beta validation remains tracked in `TODO.md`.
+
+---
+
+## [1.0.0-prep] - 2026-06-15
+
 ### Changed
 - Standardized active Azure deployment naming on `cna-*` resources with `rg-cna-<env>-<region>` workload resource groups.
 - Updated Terraform workload resource group naming and generic CNA tag defaults for customer deployments.

@@ -1,10 +1,18 @@
 # CNA TODO
 
-> Last updated: 2026-06-15
+> Last updated: 2026-06-16
 
 This is the canonical open-task list. Historical gap analysis, footprint review
 notes, ADRs, and audit artifacts have been migrated or consolidated so active
 work is tracked here.
+
+## Final Main Sync
+
+- [x] Merge or otherwise land all open pull request changes.
+- [x] Confirm GitHub has no open pull requests.
+- [x] Confirm GitHub has no open Issues.
+- [x] Update app/package version metadata to `0.8 beta`.
+- [x] Update changelog, README, ADF index, and GitHub Wiki for beta readiness.
 
 ## Open Network Review Findings
 

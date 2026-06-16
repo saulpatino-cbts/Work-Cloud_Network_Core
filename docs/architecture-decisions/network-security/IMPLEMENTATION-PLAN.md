@@ -12,6 +12,13 @@ Implement the approved Azure networking security target state for CNA:
 - Azure PaaS dependencies remain private wherever supported, including Azure AI
   Foundry for the Claude runtime path
 
+## Status
+
+0.8 beta implementation is complete in code and workflow definitions. Live Azure
+execution remains the validation gate: deploy `dev`, verify Front Door private
+origin behavior, confirm Foundry private DNS and managed-identity inference, and
+review Firewall/WAF logs before promoting the pattern.
+
 ## Approved target state
 
 1. Front Door Premium stays as the public entry point.

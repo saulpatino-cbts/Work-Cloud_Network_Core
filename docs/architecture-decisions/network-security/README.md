@@ -2,7 +2,9 @@
 
 These Architecture, Decision, Flow (ADF) records capture the Azure networking
 security decisions for the CNA platform as it moves into customer environments.
-The decisions below now reflect the approved target direction for implementation.
+The decisions below reflect the approved `0.8 beta` target direction for
+implementation. Code-level implementation is in `main`; live customer-like Azure
+validation remains tracked in the root `TODO.md`.
 
 ## Documents
 
@@ -35,3 +37,13 @@ The decisions below now reflect the approved target direction for implementation
    origin pattern.
 8. Automate provider-side private endpoint approval in the deployment pipeline
    using workload identity and least-privilege Azure access.
+
+## Beta readiness status
+
+- Implemented in Terraform/workflows: ADF-001 through ADF-010.
+- Validation gates in workflow `031`: Front Door private endpoint approval,
+  Foundry private DNS resolution, Foundry managed-identity inference, Front Door
+  health, Application Insights telemetry, and release evidence cataloging.
+- Remaining beta work: live `dev` deployment execution, Entra redirect update,
+  customer-like assessment validation, and any egress/WAF refinements discovered
+  from live logs.

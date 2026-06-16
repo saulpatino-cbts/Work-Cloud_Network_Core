@@ -102,6 +102,18 @@ jobs:
           echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
 
           FAILED=0
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [[ -z "$value" ]]; then
+              echo "| \`$name\` | _(empty)_ | ❌ Missing |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Secret $name is not set"
+              FAILED=1
+            else
+              echo "| \`$name\` | \`$value\` | ✅ Set |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
           check_var() {
             local name="$1"
             local value="$2"

@@ -1,10 +1,18 @@
 # CNA TODO
 
-> Last updated: 2026-06-14
+> Last updated: 2026-06-15
 
 This is the canonical open-task list. Historical gap analysis, footprint review
 notes, ADRs, and audit artifacts have been migrated or consolidated so active
 work is tracked here.
+
+## Open Network Review Findings
+
+- [ ] Validate Foundry private DNS resolution from inside the CNA VNet against the deployed `services.ai.azure.com` endpoint path.
+- [ ] Validate Foundry Claude inference with managed identity only, with local authentication disabled and no API-key fallback required.
+- [ ] Review Azure Firewall allowlist coverage after first deployment and expand it only if the workload or platform telemetry needs additional egress endpoints.
+- [ ] Review Front Door private-link approval automation for repeat deploy safety and tighten the request selector if multiple pending connections appear.
+- [ ] Re-check the Front Door WAF auth-path allow rule after customer testing and narrow it if the pattern proves broader than needed.
 
 ## Redeploy And Validation
 
@@ -50,3 +58,4 @@ work is tracked here.
 - Sprint 5 WCAG/W3C/OWASP audit artifacts were removed after validation because mitigations are recorded in `CHANGELOG.md` and code-level markers exist for the implemented fixes.
 - Historical ADRs were moved to the GitHub Wiki.
 - The previous gap analysis and footprint review notes were consolidated into this TODO.
+- The Foundry privatization architecture decision and related workflow/doc updates were completed and committed on 2026-06-15.

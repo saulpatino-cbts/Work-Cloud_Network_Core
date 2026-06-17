@@ -10,8 +10,8 @@ resource "azurerm_storage_account" "this" {
   account_kind                    = "StorageV2"
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  public_network_access_enabled   = false
-  shared_access_key_enabled       = false
+  public_network_access_enabled   = true
+  shared_access_key_enabled       = true
   tags                            = var.tags
 
   sas_policy {

@@ -272,12 +272,56 @@ function Get-ExistingGitHubVariableValues {
 }
 
 function Get-SafeFederatedCredentialName {
-    param([string]$RepoName, [string]$BranchName)
-    $name = "cna-$($RepoName -replace '[^A-Za-z0-9-]', '-')-$($BranchName -replace '[^A-Za-z0-9-]', '-')"
+    param([string]$RepoName, [string]$Label)
+    $name = "cna-$($RepoName -replace '[^A-Za-z0-9-]', '-')-$($Label -replace '[^A-Za-z0-9-]', '-')"
     if ($name.Length -gt 120) {
         return $name.Substring(0, 120)
     }
     return $name
+}
+
+function Get-GitHubEnvironments {
+    param([string]$RepoName)
+
+    $json = & gh api "repos/$RepoName/environments" --jq '.environments[].name' 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
+        return @()
+    }
+
+    return @($json -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+}
+
+function Ensure-GitHubFederatedCredential {
+    param(
+        [string]$AppId,
+        [string]$Name,
+        [string]$Subject
+    )
+
+    $existingCredential = & az ad app federated-credential list --id $AppId --query "[?name=='$Name'].id" -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingCredential)) {
+        Write-Ok "Federated credential exists: $Name"
+        return
+    }
+
+    $credential = @{
+        name      = $Name
+        issuer    = "https://token.actions.githubusercontent.com"
+        subject   = $Subject
+        audiences = @("api://AzureADTokenExchange")
+    } | ConvertTo-Json -Compress
+
+    $credentialFile = [System.IO.Path]::GetTempFileName()
+    try {
+        Set-Content -Path $credentialFile -Value $credential -Encoding UTF8
+        $credentialArg = "@$credentialFile"
+        & az ad app federated-credential create --id $AppId --parameters "$credentialArg" --output none
+        if ($LASTEXITCODE -ne 0) { throw "Failed to create federated credential $Name." }
+        Write-Ok "Created federated credential: $Name"
+    }
+    finally {
+        Remove-Item -Path $credentialFile -Force -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Step "Checking local prerequisites"
@@ -373,30 +417,25 @@ if (-not $SkipAzureSetup) {
         Write-Ok "Assigned role: $role"
     }
 
-    $credentialName = Get-SafeFederatedCredentialName -RepoName $Repo -BranchName $Branch
-    $subject = "repo:$Repo`:ref:refs/heads/$Branch"
-    $existingCredential = & az ad app federated-credential list --id $appId --query "[?name=='$credentialName'].id" -o tsv 2>$null
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingCredential)) {
-        Write-Ok "Federated credential exists: $credentialName"
-    } else {
-        $credential = @{
-            name      = $credentialName
-            issuer    = "https://token.actions.githubusercontent.com"
-            subject   = $subject
-            audiences = @("api://AzureADTokenExchange")
-        } | ConvertTo-Json -Compress
-        $credentialFile = [System.IO.Path]::GetTempFileName()
-        try {
-            Set-Content -Path $credentialFile -Value $credential -Encoding UTF8
-            $credentialArg = "@$credentialFile"
-            if ($PSCmdlet.ShouldProcess($appId, "create GitHub OIDC federated credential")) {
-                & az ad app federated-credential create --id $appId --parameters "$credentialArg" --output none
-                if ($LASTEXITCODE -ne 0) { throw "Failed to create federated credential." }
-            }
-        } finally {
-            Remove-Item -Path $credentialFile -Force -ErrorAction SilentlyContinue
+    $subjects = @(
+        "repo:$Repo`:ref:refs/heads/$Branch"
+    )
+
+    $environmentNames = Get-GitHubEnvironments -RepoName $Repo
+    foreach ($environmentName in $environmentNames) {
+        $subjects += "repo:$Repo`:environment:$environmentName"
+    }
+
+    foreach ($subject in ($subjects | Sort-Object -Unique)) {
+        $subjectLabel = if ($subject -match ':environment:(.+)$') {
+            "env-$($Matches[1])"
+        } else {
+            "ref-$Branch"
         }
-        Write-Ok "Created federated credential: $credentialName"
+        $credentialName = Get-SafeFederatedCredentialName -RepoName $Repo -Label $subjectLabel
+        if ($PSCmdlet.ShouldProcess($appId, "ensure GitHub OIDC federated credential for $subject")) {
+            Ensure-GitHubFederatedCredential -AppId $appId -Name $credentialName -Subject $subject
+        }
     }
 
     $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (leave as 'none' for first bootstrap; set a real HTTPS URL only after the Front Door hostname exists)" -Default "none"

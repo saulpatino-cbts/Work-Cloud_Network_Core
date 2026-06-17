@@ -53,7 +53,7 @@ variable "flow_log_storage_account_id" {
 variable "enable_virtual_network_flow_logs" {
   description = "Enable virtual network flow logs for the environment virtual network."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "flow_log_retention_days" {

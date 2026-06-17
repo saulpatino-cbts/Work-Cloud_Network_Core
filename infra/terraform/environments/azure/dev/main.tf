@@ -260,16 +260,16 @@ module "security" {
 }
 
 module "observability" {
-  source                         = "../../../providers/azure/observability"
-  log_analytics_workspace_id     = module.compute.log_analytics_workspace_id
+  source                               = "../../../providers/azure/observability"
+  log_analytics_workspace_id           = module.compute.log_analytics_workspace_id
   log_analytics_workspace_workspace_id = module.compute.log_analytics_workspace_workspace_id
-  log_analytics_workspace_location = module.compute.log_analytics_workspace_location
-  diagnostic_setting_name_prefix = local.name_prefix
-  resource_group_name            = azurerm_resource_group.this.name
-  location                       = azurerm_resource_group.this.location
-  tags                           = local.tags
-  flow_log_target_resource_id    = azurerm_virtual_network.platform.id
-  flow_log_storage_account_id    = module.storage.storage_account_id
+  log_analytics_workspace_location     = module.compute.log_analytics_workspace_location
+  diagnostic_setting_name_prefix       = local.name_prefix
+  resource_group_name                  = azurerm_resource_group.this.name
+  location                             = azurerm_resource_group.this.location
+  tags                                 = local.tags
+  flow_log_target_resource_id          = azurerm_virtual_network.platform.id
+  flow_log_storage_account_id          = module.storage.storage_account_id
 
   diagnostic_targets = {
     frontdoor_profile          = module.security.frontdoor_profile_id
@@ -456,7 +456,7 @@ resource "azurerm_firewall_policy_rule_collection_group" "egress" {
 
     rule {
       name              = "allow-baseline-web-egress"
-      source_addresses = [azurerm_subnet.container_apps_infra.address_prefixes[0]]
+      source_addresses  = [azurerm_subnet.container_apps_infra.address_prefixes[0]]
       destination_fqdns = local.firewall_application_rule_fqdns
 
       protocols {

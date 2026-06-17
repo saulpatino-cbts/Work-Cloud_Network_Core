@@ -470,6 +470,12 @@ if ([string]::IsNullOrWhiteSpace($storageSuffix)) { $storageSuffix = "state" }
 $defaultTfstateStorage = "stcna$($storageSuffix.ToLowerInvariant())tfstate"
 if ($defaultTfstateStorage.Length -gt 24) { $defaultTfstateStorage = $defaultTfstateStorage.Substring(0, 24) }
 
+$resolvedDrawioMcpUrl = if ([string]::IsNullOrWhiteSpace($nextAuthUrlForRedirect) -or $nextAuthUrlForRedirect -eq "none") {
+    "none"
+} else {
+    "$($nextAuthUrlForRedirect.TrimEnd('/'))/api/drawio-mcp"
+}
+
 $variableDefaults = [ordered]@{
     TFSTATE_RESOURCE_GROUP         = "rg-cna-$Environment-scus-tfstate"
     TFSTATE_STORAGE_ACCOUNT        = $defaultTfstateStorage
@@ -480,11 +486,11 @@ $variableDefaults = [ordered]@{
     CNA_AI_ENGINE_DEFAULT          = "foundry-claude"
     FOUNDRY_CLAUDE_ENDPOINT        = "none"
     FOUNDRY_CLAUDE_MODEL           = "claude-sonnet-4-6"
-    CNA_AZURE_MCP_ENDPOINT         = "none"
-    CNA_AZURE_MCP_TRANSPORT        = "sse"
-    CNA_AWS_MCP_ENDPOINT           = "none"
-    CNA_AWS_MCP_TRANSPORT          = "stdio"
-    CNA_DRAWIO_MCP_URL             = "none"
+    CNA_AZURE_MCP_ENDPOINT         = "https://mcp.azure.com"
+    CNA_AZURE_MCP_TRANSPORT        = "streamable-http"
+    CNA_AWS_MCP_ENDPOINT           = "https://aws-mcp.us-east-1.api.aws/mcp"
+    CNA_AWS_MCP_TRANSPORT          = "streamable-http"
+    CNA_DRAWIO_MCP_URL             = $resolvedDrawioMcpUrl
     APPLICATION_INSIGHTS_NAME      = "none"
     KEY_VAULT_NAME                 = "none"
     FRONTDOOR_CERTIFICATE_NAME     = "none"

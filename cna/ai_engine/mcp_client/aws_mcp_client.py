@@ -7,9 +7,9 @@ MCP server: https://github.com/awslabs/mcp
 Recommended tool: aws.well-architected.get-recommendation
 
 Connection:
-  - Requires MCP server running locally or accessible via stdio/SSE transport
+  - Requires a remote MCP server accessible via streamable HTTP
   - Configured via env vars: CNA_AWS_MCP_ENDPOINT, CNA_AWS_MCP_TRANSPORT
-  - Default transport: stdio (local subprocess)
+  - Default transport: streamable-http (public AWS MCP endpoint)
   - Graceful degradation: on ImportError or connection failure, returns []
 """
 
@@ -23,7 +23,7 @@ from cna.core.findings_schema import FindingRecommendation
 logger = logging.getLogger("cna.mcp.aws")
 
 _MCP_ENDPOINT = os.getenv("CNA_AWS_MCP_ENDPOINT", "")
-_MCP_TRANSPORT = os.getenv("CNA_AWS_MCP_TRANSPORT", "stdio")
+_MCP_TRANSPORT = os.getenv("CNA_AWS_MCP_TRANSPORT", "streamable-http")
 
 
 class AWSMCPClient:
@@ -32,7 +32,11 @@ class AWSMCPClient:
     Falls back gracefully if MCP SDK is not installed or server is unreachable.
     """
 
-    def __init__(self, endpoint: str = _MCP_ENDPOINT, transport: str = _MCP_TRANSPORT):
+    def __init__(
+        self,
+        endpoint: str = _MCP_ENDPOINT,
+        transport: str = _MCP_TRANSPORT,
+    ):
         self._endpoint = endpoint
         self._transport = transport
         self._session = None
@@ -40,16 +44,22 @@ class AWSMCPClient:
         self._try_init()
 
     def _try_init(self) -> None:
-        """Attempt MCP SDK import and connection. Silently marks unavailable on failure."""
+        """Attempt MCP SDK import and connection.
+
+        Silently marks the client unavailable on failure.
+        """
         try:
             import mcp  # noqa: F401 — optional dependency
 
             self._available = True
-            logger.info("AWS MCP client initialized (transport=%s)", self._transport)
+            logger.info(
+                "AWS MCP client initialized (transport=%s)",
+                self._transport,
+            )
         except ImportError:
             logger.info(
-                "mcp package not installed. AWS MCP client operating in offline mode. "
-                "Install with: pip install mcp"
+                "mcp package not installed. AWS MCP client operating in "
+                "offline mode. Install with: pip install mcp"
             )
             self._available = False
 
@@ -61,14 +71,16 @@ class AWSMCPClient:
     ) -> list[FindingRecommendation]:
         """Fetch recommendations from AWS MCP Server.
 
-        Returns empty list if MCP unavailable — caller applies offline fallback.
+        Returns empty list if MCP is unavailable; the caller applies the
+        offline fallback.
         """
         if not self._available:
             return []
 
         try:
             # MCP tool call: aws.well-architected.get-recommendation
-            # When mcp SDK is present, this sends the tool call to the MCP server.
+            # When the mcp SDK is present, this sends the tool call to the
+            # MCP server.
             # The tool takes: pillar, resource_type, issue_description
             # Returns: list of recommendation objects with text + reference_url
             result = self._call_mcp_tool(
@@ -104,5 +116,8 @@ class AWSMCPClient:
         #
         # Sync wrapper deferred until async CLI refactor (Phase F target).
         # For now: returns [] to trigger offline fallback.
-        logger.debug("MCP tool call deferred (sync wrapper not yet implemented): %s", tool_name)
+        logger.debug(
+            "MCP tool call deferred (sync wrapper not yet implemented): %s",
+            tool_name,
+        )
         return []

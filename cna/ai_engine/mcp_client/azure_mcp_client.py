@@ -9,7 +9,7 @@ Recommended tool: azure.advisor.get-recommendation
 Connection:
   - Requires Azure MCP Server running locally or accessible via SSE transport
   - Configured via env vars: CNA_AZURE_MCP_ENDPOINT, CNA_AZURE_MCP_TRANSPORT
-  - Default transport: sse (Azure MCP Server default)
+  - Default transport: streamable-http (public Azure MCP endpoint default)
   - Graceful degradation: on ImportError or connection failure, returns []
 """
 
@@ -23,7 +23,7 @@ from cna.core.findings_schema import FindingRecommendation
 logger = logging.getLogger("cna.mcp.azure")
 
 _MCP_ENDPOINT = os.getenv("CNA_AZURE_MCP_ENDPOINT", "")
-_MCP_TRANSPORT = os.getenv("CNA_AZURE_MCP_TRANSPORT", "sse")
+_MCP_TRANSPORT = os.getenv("CNA_AZURE_MCP_TRANSPORT", "streamable-http")
 
 
 class AzureMCPClient:
@@ -32,7 +32,11 @@ class AzureMCPClient:
     Falls back gracefully if MCP SDK is not installed or server unreachable.
     """
 
-    def __init__(self, endpoint: str = _MCP_ENDPOINT, transport: str = _MCP_TRANSPORT):
+    def __init__(
+        self,
+        endpoint: str = _MCP_ENDPOINT,
+        transport: str = _MCP_TRANSPORT,
+    ):
         self._endpoint = endpoint
         self._transport = transport
         self._available = False
@@ -43,11 +47,14 @@ class AzureMCPClient:
             import mcp  # noqa: F401 — optional dependency
 
             self._available = True
-            logger.info("Azure MCP client initialized (transport=%s)", self._transport)
+            logger.info(
+                "Azure MCP client initialized (transport=%s)",
+                self._transport,
+            )
         except ImportError:
             logger.info(
-                "mcp package not installed. Azure MCP client operating in offline mode. "
-                "Install with: pip install mcp"
+                "mcp package not installed. Azure MCP client operating in "
+                "offline mode. Install with: pip install mcp"
             )
             self._available = False
 
@@ -59,7 +66,8 @@ class AzureMCPClient:
     ) -> list[FindingRecommendation]:
         """Fetch recommendations from Azure MCP Server.
 
-        Returns empty list if MCP unavailable — caller applies offline fallback.
+        Returns empty list if MCP is unavailable; the caller applies the
+        offline fallback.
         """
         if not self._available:
             return []
@@ -86,6 +94,12 @@ class AzureMCPClient:
             return []
 
     def _call_mcp_tool(self, tool_name: str, params: dict) -> list[dict]:
-        """Execute an MCP tool call. See AWSMCPClient._call_mcp_tool for notes."""
-        logger.debug("MCP tool call deferred (sync wrapper not yet implemented): %s", tool_name)
+        """Execute an MCP tool call.
+
+        See AWSMCPClient._call_mcp_tool for implementation notes.
+        """
+        logger.debug(
+            "MCP tool call deferred (sync wrapper not yet implemented): %s",
+            tool_name,
+        )
         return []

@@ -235,11 +235,11 @@ Full Terraform plan + apply. Includes:
 | `CNA_AI_ENGINE_DEFAULT` | `foundry-claude` | Default engine if the database setting `ai.activeEngine` does not exist |
 | `FOUNDRY_CLAUDE_ENDPOINT` | `none` | Terraform-injected private Foundry Claude Messages API endpoint used by managed identity-based runtime calls |
 | `FOUNDRY_CLAUDE_MODEL` | `claude-sonnet-4-6` | Foundry Claude model id injected into cna-web |
-| `CNA_AZURE_MCP_ENDPOINT` | `none` | Azure MCP server endpoint surfaced on the AI Engine page |
-| `CNA_AZURE_MCP_TRANSPORT` | `sse` | Azure MCP server transport |
-| `CNA_AWS_MCP_ENDPOINT` | `none` | AWS MCP server endpoint surfaced on the AI Engine page |
-| `CNA_AWS_MCP_TRANSPORT` | `stdio` | AWS MCP server transport |
-| `CNA_DRAWIO_MCP_URL` | `none` | draw.io MCP endpoint surfaced on the AI Engine page |
+| `CNA_AZURE_MCP_ENDPOINT` | `https://mcp.azure.com` | Public Azure MCP endpoint from Microsoft Learn; override later if you wire a private endpoint |
+| `CNA_AZURE_MCP_TRANSPORT` | `streamable-http` | Azure MCP transport used by the public endpoint |
+| `CNA_AWS_MCP_ENDPOINT` | `https://aws-mcp.us-east-1.api.aws/mcp` | Official AWS MCP remote endpoint from the AWS Agent Toolkit docs |
+| `CNA_AWS_MCP_TRANSPORT` | `streamable-http` | AWS MCP transport used by the public endpoint |
+| `CNA_DRAWIO_MCP_URL` | auto-derived from `CNA_NEXTAUTH_URL` | Defaults to `<nextauth-url>/api/drawio-mcp` when a real HTTPS URL is present |
 
 Azure AI Foundry is the Terraform-managed GenAI provider. Post-deploy
 validation must confirm the Foundry Messages API host resolves through the

@@ -77,14 +77,14 @@ export function getMcpServerStatuses(): McpServerStatus[] {
       id: "azure-mcp",
       label: "Azure MCP",
       endpoint: azureEndpoint || "Not configured",
-      transport: clean(process.env.CNA_AZURE_MCP_TRANSPORT) || "sse",
+      transport: clean(process.env.CNA_AZURE_MCP_TRANSPORT) || "streamable-http",
       configured: Boolean(azureEndpoint),
     },
     {
       id: "aws-mcp",
       label: "AWS MCP",
       endpoint: awsEndpoint || "Not configured",
-      transport: clean(process.env.CNA_AWS_MCP_TRANSPORT) || "stdio",
+      transport: clean(process.env.CNA_AWS_MCP_TRANSPORT) || "streamable-http",
       configured: Boolean(awsEndpoint),
     },
     {

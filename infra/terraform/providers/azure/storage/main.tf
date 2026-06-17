@@ -2,6 +2,8 @@ resource "azurerm_storage_account" "this" {
   #checkov:skip=CKV2_AZURE_1:Customer-managed key support is deferred until Key Vault key lifecycle and application access are validated.
   #checkov:skip=CKV2_AZURE_33:Private endpoint is created in the security module and wired to this account through its resource ID.
   #checkov:skip=CKV_AZURE_33:Queue service logging is not applicable; the platform does not use Azure Queue Storage.
+  #checkov:skip=CKV_AZURE_59:Terraform apply needs temporary public data-plane access for storage account bootstrap and static website resources.
+  #checkov:skip=CKV2_AZURE_40:Terraform apply requires Shared Key authorization during bootstrap because the provider uses data-plane operations before private endpoint approvals.
   name                            = local.storage_account_name
   resource_group_name             = var.resource_group_name
   location                        = var.location

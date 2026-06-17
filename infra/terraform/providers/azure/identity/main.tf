@@ -10,6 +10,8 @@ resource "azurerm_user_assigned_identity" "this" {
 
 resource "azurerm_key_vault" "this" {
   #checkov:skip=CKV2_AZURE_32:Private endpoint is created in the security module and wired to this vault through its resource ID.
+  #checkov:skip=CKV_AZURE_109:Terraform data-plane secret creation requires temporary public access during apply; private endpoint approval is handled in the deployment workflow.
+  #checkov:skip=CKV_AZURE_189:Terraform data-plane secret creation requires temporary public access during apply; private endpoint approval is handled in the deployment workflow.
   name                          = local.key_vault_name
   location                      = var.location
   resource_group_name           = var.resource_group_name

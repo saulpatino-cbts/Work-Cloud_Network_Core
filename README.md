@@ -147,15 +147,16 @@ cp .env.example .env
 ### Clean deployment (first time or after teardown)
 
 ```
-1. Run workflow 000 — create the workload RG, bootstrap the Terraform backend, and import the RG into state (one-time per environment)
-2. Run workflow 010 — validate all secrets, variables, Azure OIDC
-3. Push to main   — workflow 030 auto-builds all three container images
-4. Run workflow 031 (environment: dev) — Terraform apply (~20 min)
+1. Run `.\scripts\Initialize-CnaGitHubSecrets.ps1` — seed GitHub secrets/variables, create the workload RG using the standard naming convention, prepare tfstate backend resources, and dispatch workflow 000 bootstrap
+2. Let workflow 000 complete — initialize Terraform remote state and import the existing workload RG into state (one-time per environment)
+3. Run workflow 010 — validate all secrets, variables, Azure OIDC
+4. Push to main   — workflow 030 auto-builds the CLI plus all three app container images
+5. Run workflow 031 (environment: dev) — Terraform apply (~20 min)
    → Copy Front Door hostname from outputs
    → Workflow 031 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
-   → Update the Entra redirect URI to match the new Front Door hostname
+   → Workflow 031 also syncs the Entra app home page URL and redirect URI to the Front Door hostname
    → Re-run 031 to apply updated NextAuth URL
-5. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
+6. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
 ```
 
 To wipe an environment and redeploy clean:
@@ -177,11 +178,11 @@ To wipe an environment and redeploy clean:
 | `000-bootstrap-backend.yml` | Manual (one-time per environment) | Creates workload RG, provisions tfstate backend in a separate convention-based RG, imports app RG into state |
 | `010-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
 | `011-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
-| `012-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update` |
+| `012-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update`, auto-targeting the workload RG from repo variables |
 | `020-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
-| `021-release-version.yml` | `git tag v*.*.*` | Tags GHCR images + creates GitHub Release |
-| `022-publish-portal.yml` | Manual | Delivers reports to client portals |
-| `030-build-images.yml` | Push to `main` | Builds + pushes cna-api/worker/web to GHCR |
+| `021-release-version.yml` | `git tag v*.*.*` | Tags GHCR CLI image + creates GitHub Release |
+| `022-publish-portal.yml` | Manual | Delivers reports to client portals from the CLI image, with artifact-backed engagement content and Azure/AWS storage support |
+| `030-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, and cna-web to GHCR |
 | `031-deploy-azure.yml` | Manual + nightly | Terraform plan → apply → health verification |
 | `032-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
 
@@ -214,3 +215,10 @@ To wipe an environment and redeploy clean:
 
 *Maintained by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert*
 *CNA Platform · June 2026*
+## Azure Notes
+
+- Container Apps creates a separate Azure-managed infrastructure resource group for the managed environment. This repo now names it deterministically as `rg-cna-<environment>-<region_short>-cae-managed`, for example `rg-cna-dev-scus-cae-managed`.
+- This managed RG is expected and separate from the workload RG. It contains Azure-managed infrastructure such as the Container Apps environment load balancer and public IP.
+- The Terraform state backend remains separate in `rg-cna-<environment>-<region_short>-tfstate` to avoid backend/self-destroy lifecycle problems.
+- The subscription must have `Microsoft.AlertsManagement` registered before `031` so Application Insights smart-detection alert deployment does not fail.
+- If you need to resync the enterprise app web link outside deployment, run `.\scripts\Sync-CnaEntraApp.ps1 -AppId <client-id> -ApplicationUrl https://<frontdoor-host>`.

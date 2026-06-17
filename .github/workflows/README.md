@@ -14,7 +14,7 @@
 020 → (on push)   CI — secret scan, lint, test, Docker build
 021 → (on tag)    Release — git tag → GHCR semver tag + GitHub Release
 022 → (manual)    Publish — deliver reports to client portals
-030 → (on push)   Build & publish all three container images to GHCR
+030 → (on push)   Build & publish CLI plus app container images to GHCR
 031 → (manual)    Deploy Azure infrastructure + containers via Terraform
 032 → (manual)    Teardown Azure environment with DESTROY safety gate
 ```
@@ -31,13 +31,14 @@ All Azure resources follow the pattern `{abbreviation}-{project}-{environment}-{
 | prod | South Central US (`southcentralus`) | `cna-prod-scus` | `rg-cna-prod-scus` |
 
 Terraform state lives in its own convention-based RG so the workload RG stays dedicated to the application stack.
-Workflow 000 creates the workload RG first, then creates the backend storage account and container in the tfstate RG:
+The setup script creates the workload RG using the standard naming convention, derives the tfstate names from the selected subscription, and pre-creates the tfstate resource group, storage account, and container so workflow 000 can focus on initializing Terraform state and importing the workload RG:
 
 | Resource | Name | Notes |
 | --- | --- | --- |
 | Workload RG | `rg-cna-dev-scus` / `rg-cna-prod-scus` | Holds only the application stack |
 | Tfstate RG | `rg-cna-dev-scus-tfstate` / `rg-cna-prod-scus-tfstate` | Dedicated to Terraform backend resources |
-| Storage Account | `stcnatfstate0001` | Backend storage account; override only if the name is unavailable |
+| ACA managed RG | `rg-cna-dev-scus-cae-managed` / `rg-cna-prod-scus-cae-managed` | Azure-managed Container Apps environment infrastructure RG, named deterministically by Terraform |
+| Storage Account | `stcnatfstate0001` | Backend storage account; script derives a unique name if the default is unavailable |
 | Blob Container | `tfstate` | State files keyed by environment: `dev.terraform.tfstate`, `prod.terraform.tfstate` |
 
 Terraform continues to own the workload RG after bootstrap because workflow 000 imports it into state:
@@ -58,7 +59,7 @@ See the GitHub Wiki page `Architecture 40 Naming Conventions` for the full refer
 **Trigger:** Manual (run once before anything else)
 **Duration:** ~2 minutes
 
-Creates the workload resource group, creates the tfstate resource group and backend storage inside it, initializes the selected environment backend, and imports the workload RG into Terraform state.
+Creates the workload resource group if needed, creates the tfstate resource group and backend storage inside it if needed, initializes the selected environment backend, and imports the workload RG into Terraform state.
 Uses OIDC — no client secret required.
 
 **Inputs (with defaults):**
@@ -74,7 +75,7 @@ Uses OIDC — no client secret required.
 
 Bootstrap result:
 
-- Workload RG exists before first deploy
+- Workload RG exists before first deploy and may already be created by the setup script
 - Tfstate RG exists separately from the application RG
 - Terraform backend exists in Azure Storage
 - The selected state key (`dev.terraform.tfstate` or `prod.terraform.tfstate`) tracks the imported workload RG
@@ -95,7 +96,7 @@ After this runs, set these GitHub **Repository Variables**:
 **Duration:** ~1 minute
 **Azure auth required:** Yes (OIDC)
 
-Read-only validation workflow. Run this before attempting any deployment to confirm
+Read-only validation workflow. Run this after workflow 000 and before attempting any deployment to confirm
 all secrets, variables, and OIDC access are correctly wired.
 
 Checks:
@@ -105,6 +106,7 @@ Checks:
 - Azure OIDC login succeeds
 - Contributor and User Access Administrator roles are assigned
 - Tfstate storage account exists (after workflow 000 has run)
+- `Microsoft.AlertsManagement` is registered in the subscription
 
 Prints a pass/fail table to the workflow step summary.
 
@@ -133,6 +135,11 @@ code-only deploys where infrastructure has not changed.
 
 After updating `cna-web`, automatically polls `/api/health` to confirm the new
 revision is healthy before completing.
+
+The workflow now derives the workload resource group from `TFSTATE_RESOURCE_GROUP`
+by stripping the `-tfstate` suffix, so the common path does not require manually
+typing `region_short`. Use the optional `resource_group` input only when you need
+to override the convention-based target.
 
 ---
 
@@ -170,6 +177,13 @@ git tag v1.0.0 && git push --tags
 
 Delivers engagement reports and assets to client portals (Azure Blob or AWS S3 via OIDC).
 
+Notes:
+
+- Uses the `ghcr.io/<owner>/cna` CLI image, which workflow `030` now publishes on every main build.
+- Supports downloading an `engagement_artifact` into `engagements/` before publish.
+- For `cloud=azure`, pass `azure_storage_account` and optionally `azure_container`.
+- For `cloud=aws`, the workflow uses `CNA_PUBLISH_BUCKET`.
+
 ---
 
 ### `030-build-images.yml` — Build and Push Container Images
@@ -177,8 +191,9 @@ Delivers engagement reports and assets to client portals (Azure Blob or AWS S3 v
 **Trigger:** Push to `main` (when `apps/**` changes), or manual
 **Duration:** ~5–10 minutes (parallel builds)
 
-Builds and pushes three images to GHCR:
+Builds and pushes four images to GHCR:
 
+- `ghcr.io/saulpatinojr/cna:<sha>`
 - `ghcr.io/saulpatinojr/cna-api:<sha>`
 - `ghcr.io/saulpatinojr/cna-worker:<sha>`
 - `ghcr.io/saulpatinojr/cna-web:<sha>`
@@ -206,7 +221,7 @@ Full Terraform plan + apply. Includes:
 
 | Output | Action |
 | --- | --- |
-| `frontdoor_endpoint_host_name` | Confirm `CNA_NEXTAUTH_URL` was auto-updated; update Entra redirect URI |
+| `frontdoor_endpoint_host_name` | Confirm `CNA_NEXTAUTH_URL` was auto-updated; Entra app homepage and redirect URI are also synced |
 | `key_vault_name` | Update `KEY_VAULT_NAME` variable (replace `none`) |
 | `application_insights_name` | Update `APPLICATION_INSIGHTS_NAME` variable (replace `none`) |
 
@@ -254,6 +269,8 @@ environment variables.
 > ⚠️ `APPLICATION_INSIGHTS_NAME` and `KEY_VAULT_NAME` must be `none` (not blank) until
 > Terraform creates them. Workflow 031 has skip guards for steps that depend on these values.
 
+> Requirement: the Azure subscription must have `Microsoft.AlertsManagement` registered before the first live deploy, otherwise Application Insights smart-detection alert provisioning can fail.
+
 ---
 
 ## First Deployment Checklist
@@ -263,13 +280,15 @@ environment variables.
        .\scripts\Initialize-CnaGitHubSecrets.ps1 -Repo "owner/repo" -Environment dev
 
        The script creates or reuses the Entra app registration, configures GitHub OIDC,
-       prompts for required secrets, generates supported secrets when requested, and
-       writes the GitHub Actions secrets and variables used by the workflows.
+       uses existing GitHub values when present, derives standard names automatically,
+       only prompts for secrets that cannot be inferred, creates the workload RG,
+       prepares the tfstate backend,
+       writes the GitHub Actions secrets and variables used by the workflows, and
+       dispatches workflow 000 by default.
 
-[ ] 2. Run workflow 000 — Bootstrap workload RG + Terraform backend (one-time per environment, ~3 min)
-       For dev, defaults are pre-filled.
-       For prod, set environment=prod and verify the resolved workload RG and tfstate RG names before running.
-       Update the three TFSTATE_* variables from the workflow summary.
+[ ] 2. Let workflow 000 — Bootstrap workload RG + Terraform backend complete (one-time per environment, ~3 min)
+       For dev, the setup script dispatches it with the seeded TFSTATE_* values, the pre-created workload RG, and the pre-created backend.
+       Use -SkipBootstrapDispatch on the setup script only when you intentionally want to launch 000 yourself.
 
 [ ] 3. Run workflow 010 — Validate Prerequisites (~1 min)
        Confirms all secrets, variables, OIDC, and role assignments are green.
@@ -283,10 +302,11 @@ environment variables.
          key_vault_name               → replace KEY_VAULT_NAME variable
          application_insights_name    → replace APPLICATION_INSIGHTS_NAME variable
 
-[ ] 6. Confirm workflow 031 updated the GitHub Variables and then update Entra redirect URI:
+[ ] 6. Confirm workflow 031 updated the GitHub Variables and synced the Entra app web settings:
        - CNA_NEXTAUTH_URL           = https://<frontdoor_endpoint_host_name>
        - KEY_VAULT_NAME             = <key_vault_name>
        - APPLICATION_INSIGHTS_NAME  = <application_insights_name>
+       - Entra App home page URL    = https://<frontdoor_endpoint_host_name>
        - Entra App redirect URI     = https://<frontdoor_endpoint_host_name>/api/auth/callback/microsoft-entra-id
 
 [ ] 7. Run workflow 031 again — applies the corrected NEXTAUTH_URL to cna-web (~5 min)

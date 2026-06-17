@@ -8,14 +8,15 @@ resource "azurerm_log_analytics_workspace" "compute" {
 }
 
 resource "azurerm_container_app_environment" "this" {
-  name                           = local.container_apps_env_name
-  location                       = var.location
-  resource_group_name            = var.resource_group_name
-  log_analytics_workspace_id     = azurerm_log_analytics_workspace.compute.id
-  internal_load_balancer_enabled = var.container_apps_internal_only
-  public_network_access          = var.container_apps_public_network_access
-  infrastructure_subnet_id       = var.infrastructure_subnet_id
-  tags                           = var.tags
+  name                               = local.container_apps_env_name
+  location                           = var.location
+  resource_group_name                = var.resource_group_name
+  log_analytics_workspace_id         = azurerm_log_analytics_workspace.compute.id
+  internal_load_balancer_enabled     = var.container_apps_internal_only
+  public_network_access              = var.container_apps_public_network_access
+  infrastructure_subnet_id           = var.infrastructure_subnet_id
+  infrastructure_resource_group_name = local.container_apps_infra_resource_group_name
+  tags                               = var.tags
 
   dynamic "workload_profile" {
     for_each = var.container_app_environment_workload_profiles
@@ -25,12 +26,6 @@ resource "azurerm_container_app_environment" "this" {
       minimum_count         = try(workload_profile.value.minimum_count, null)
       maximum_count         = try(workload_profile.value.maximum_count, null)
     }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      infrastructure_resource_group_name
-    ]
   }
 }
 

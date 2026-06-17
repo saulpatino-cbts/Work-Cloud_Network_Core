@@ -32,6 +32,21 @@ on:
         required: false
         default: 'latest'
         type: string
+      engagement_artifact:
+        description: 'Optional GitHub Actions artifact name containing the engagements/ content'
+        required: false
+        default: ''
+        type: string
+      azure_storage_account:
+        description: 'Azure Blob storage account name (required when cloud=azure)'
+        required: false
+        default: ''
+        type: string
+      azure_container:
+        description: 'Azure Blob container name (defaults to engagement_id when cloud=azure)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -48,6 +63,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Download engagement artifact
+        if: inputs.engagement_artifact != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.engagement_artifact }}
+          path: ${{ github.workspace }}/engagements
 
       # AWS OIDC — no long-lived keys
       - name: Configure AWS credentials (OIDC)
@@ -79,20 +101,47 @@ jobs:
         run: |
           docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
 
+      - name: Validate publish inputs
+        env:
+          CLOUD: ${{ inputs.cloud }}
+          STORAGE_ACCOUNT: ${{ inputs.azure_storage_account }}
+          ENGAGEMENT_ID: ${{ inputs.engagement_id }}
+        run: |
+          if [ ! -d "${{ github.workspace }}/engagements/$ENGAGEMENT_ID" ]; then
+            echo "::error::Expected engagement content under ${{ github.workspace }}/engagements/$ENGAGEMENT_ID."
+            echo "::error::Provide the files in the runner workspace or set engagement_artifact to a previously uploaded artifact."
+            exit 1
+          fi
+
+          if [ "$CLOUD" = "azure" ] && [ -z "$STORAGE_ACCOUNT" ]; then
+            echo "::error::azure_storage_account is required when cloud=azure."
+            exit 1
+          fi
+
       - name: Run cna publish
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
           ENGAGEMENT_ID: ${{ inputs.engagement_id }}
           CLOUD: ${{ inputs.cloud }}
           PUBLISH_BUCKET: ${{ secrets.CNA_PUBLISH_BUCKET }}
+          AZURE_STORAGE_ACCOUNT: ${{ inputs.azure_storage_account }}
+          AZURE_CONTAINER: ${{ inputs.azure_container }}
         run: |
+          set -euo pipefail
+
+          ARGS=(publish run --engagement-id "$ENGAGEMENT_ID" --cloud "$CLOUD" --ttl-hours 168)
+          if [ "$CLOUD" = "aws" ]; then
+            ARGS+=(--bucket "$PUBLISH_BUCKET")
+          else
+            ARGS+=(--storage-account "$AZURE_STORAGE_ACCOUNT")
+            if [ -n "$AZURE_CONTAINER" ]; then
+              ARGS+=(--container "$AZURE_CONTAINER")
+            fi
+          fi
+
           docker run --rm \
             -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
             -e AZURE_CLIENT_ID -e AZURE_TENANT_ID -e AZURE_SUBSCRIPTION_ID \
             -v "${{ github.workspace }}/engagements:/app/engagements:ro" \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG" \
-            publish run \
-              --engagement-id "$ENGAGEMENT_ID" \
-              --cloud "$CLOUD" \
-              --bucket "$PUBLISH_BUCKET" \
-              --ttl-hours 168
+            "${ARGS[@]}"

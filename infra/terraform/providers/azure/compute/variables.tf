@@ -186,3 +186,9 @@ variable "infrastructure_subnet_id" {
   type        = string
   default     = null
 }
+
+variable "container_app_environment_infrastructure_resource_group_name" {
+  description = "Deterministic name for the Azure-managed infrastructure resource group that backs the Container Apps environment."
+  type        = string
+  default     = null
+}

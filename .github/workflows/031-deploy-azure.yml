@@ -118,7 +118,7 @@ jobs:
 
       - name: Resolve Terraform backend targets
         run: |
-          echo "TFSTATE_RESOURCE_GROUP=rg-cna-${{ inputs.environment }}-scus-tfstate" >> "$GITHUB_ENV"
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
           echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
           echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
 
@@ -201,7 +201,7 @@ jobs:
 
       - name: Resolve Terraform backend targets
         run: |
-          echo "TFSTATE_RESOURCE_GROUP=rg-cna-${{ inputs.environment }}-scus-tfstate" >> "$GITHUB_ENV"
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
           echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
           echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
 
@@ -249,10 +249,6 @@ jobs:
 
       - name: Terraform plan
         run: |
-          AI_ENGINE_DEFAULT="foundry-claude"
-          FOUNDRY_CLAUDE_MODEL="claude-sonnet-4-6"
-          AZURE_MCP_TRANSPORT="sse"
-          AWS_MCP_TRANSPORT="stdio"
           optional_var() {
             local VALUE="$1"
             if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
@@ -261,10 +257,14 @@ jobs:
               echo "$VALUE"
             fi
           }
-          FOUNDRY_CLAUDE_ENDPOINT=""
-          AZURE_MCP_ENDPOINT=""
-          AWS_MCP_ENDPOINT=""
-          DRAWIO_MCP_URL=""
+          AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          FOUNDRY_CLAUDE_MODEL=$(optional_var "${{ vars.FOUNDRY_CLAUDE_MODEL }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          AWS_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AWS_MCP_TRANSPORT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
@@ -282,9 +282,9 @@ jobs:
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
-            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
-            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
             -var="drawio_mcp_url=${DRAWIO_MCP_URL}"
 
       - name: Create deployment manifest
@@ -366,7 +366,7 @@ jobs:
 
       - name: Resolve Terraform backend targets
         run: |
-          echo "TFSTATE_RESOURCE_GROUP=rg-cna-${{ inputs.environment }}-scus-tfstate" >> "$GITHUB_ENV"
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
           echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
           echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
 
@@ -501,7 +501,7 @@ jobs:
             fi
           fi
 
-      - name: Update Entra redirect URI
+      - name: Sync Entra app web URLs
         if: ${{ always() }}
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -510,40 +510,14 @@ jobs:
         run: |
           FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
           if [ -z "$FRONTDOOR_HOST" ]; then
-            echo "No Front Door hostname yet; skipping Entra redirect URI update."
+            echo "No Front Door hostname yet; skipping Entra app URL sync."
             exit 0
           fi
 
           NEXTAUTH_URL="https://$FRONTDOOR_HOST"
-          export REDIRECT_URI="$NEXTAUTH_URL/api/auth/callback/microsoft-entra-id"
-
-          python - <<'PY'
-          import json
-          import os
-          import subprocess
-
-          app_id = os.environ["AZURE_CLIENT_ID"]
-          redirect_uri = os.environ["REDIRECT_URI"]
-
-          show = subprocess.run(
-              ["az", "ad", "app", "show", "--id", app_id, "--output", "json"],
-              capture_output=True,
-              text=True,
-              check=True,
-          )
-          app = json.loads(show.stdout)
-          redirect_uris = list((app.get("web") or {}).get("redirectUris") or [])
-
-          if redirect_uri in redirect_uris:
-              print(f"Redirect URI already present: {redirect_uri}")
-          else:
-              redirect_uris.append(redirect_uri)
-              subprocess.run(
-                  ["az", "ad", "app", "update", "--id", app_id, "--web-redirect-uris", *redirect_uris],
-                  check=True,
-              )
-              print(f"Added redirect URI: {redirect_uri}")
-          PY
+          pwsh -File "$GITHUB_WORKSPACE/scripts/Sync-CnaEntraApp.ps1" \
+            -AppId "${AZURE_CLIENT_ID}" \
+            -ApplicationUrl "${NEXTAUTH_URL}"
 
       - name: Export platform outputs
         id: export
@@ -775,7 +749,7 @@ jobs:
 
       - name: Resolve Terraform backend targets
         run: |
-          echo "TFSTATE_RESOURCE_GROUP=rg-cna-${{ matrix.environment }}-scus-tfstate" >> "$GITHUB_ENV"
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
           echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
           echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
 
@@ -790,10 +764,6 @@ jobs:
 
       - name: Terraform drift plan
         run: |
-          AI_ENGINE_DEFAULT="foundry-claude"
-          FOUNDRY_CLAUDE_MODEL="claude-sonnet-4-6"
-          AZURE_MCP_TRANSPORT="sse"
-          AWS_MCP_TRANSPORT="stdio"
           optional_var() {
             local VALUE="$1"
             if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
@@ -802,10 +772,14 @@ jobs:
               echo "$VALUE"
             fi
           }
-          FOUNDRY_CLAUDE_ENDPOINT=""
-          AZURE_MCP_ENDPOINT=""
-          AWS_MCP_ENDPOINT=""
-          DRAWIO_MCP_URL=""
+          AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          FOUNDRY_CLAUDE_MODEL=$(optional_var "${{ vars.FOUNDRY_CLAUDE_MODEL }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          AWS_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AWS_MCP_TRANSPORT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -detailed-exitcode \
             -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
@@ -823,7 +797,7 @@ jobs:
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
-            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-sse}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
-            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-stdio}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
             -var="drawio_mcp_url=${DRAWIO_MCP_URL}"

@@ -195,7 +195,7 @@ resource "azurerm_cdn_frontdoor_custom_domain" "platform" {
 
   tls {
     certificate_type        = var.frontdoor_certificate_type
-    minimum_tls_version     = var.frontdoor_minimum_tls_version
+    minimum_version         = var.frontdoor_minimum_tls_version
     cdn_frontdoor_secret_id = local.use_customer_managed_tls ? azurerm_cdn_frontdoor_secret.platform[0].id : null
   }
 }

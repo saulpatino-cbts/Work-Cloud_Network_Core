@@ -11,7 +11,15 @@ param(
 
     [string]$AppDisplayName,
 
-    [switch]$SkipAzureSetup
+    [switch]$SkipAzureSetup,
+
+    [string]$BootstrapLocation = "southcentralus",
+
+    [string]$BootstrapRegionShort = "scus",
+
+    [switch]$SkipBootstrapDispatch,
+
+    [switch]$ForceInteractive
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +39,11 @@ function Write-Ok {
 function Write-Warn {
     param([string]$Message)
     Write-Host "    [!] $Message" -ForegroundColor Yellow
+}
+
+function Write-Info {
+    param([string]$Message)
+    Write-Host "    [INFO] $Message" -ForegroundColor DarkCyan
 }
 
 function Assert-Command {
@@ -85,9 +98,35 @@ function Select-AzSubscription {
         throw "No Azure subscriptions are available. Sign in with az login first."
     }
 
+    if ($SubscriptionId) {
+        $selected = $accounts | Where-Object { $_.id -eq $SubscriptionId -or $_.name -eq $SubscriptionId } | Select-Object -First 1
+        if ($selected) {
+            Write-Ok "Using requested subscription: $($selected.name) ($($selected.id))"
+            return $selected
+        }
+        throw "Requested subscription '$SubscriptionId' was not found in the current Azure account context."
+    }
+
+    if ($CurrentAccount -and $CurrentAccount.id) {
+        $selected = $accounts | Where-Object { $_.id -eq $CurrentAccount.id } | Select-Object -First 1
+        if ($selected) {
+            Write-Ok "Using current Azure subscription: $($selected.name) ($($selected.id))"
+            return $selected
+        }
+    }
+
     if ($accounts.Count -eq 1) {
         $selected = $accounts[0]
         Write-Ok "Using the only available subscription: $($selected.name) ($($selected.id))"
+        return $selected
+    }
+
+    if (-not $ForceInteractive) {
+        $selected = $accounts | Where-Object { $_.isDefault -eq $true } | Select-Object -First 1
+        if (-not $selected) {
+            $selected = $accounts[0]
+        }
+        Write-Warn "Multiple Azure subscriptions are available. Using $($selected.name) ($($selected.id)). Pass -SubscriptionId or -ForceInteractive to override."
         return $selected
     }
 
@@ -211,6 +250,51 @@ function Invoke-Gh {
     }
 }
 
+function Start-GitHubWorkflow {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$RepoName,
+        [string]$Workflow,
+        [string]$Ref = "main",
+        [hashtable]$Inputs = @{}
+    )
+
+    $args = @("workflow", "run", $Workflow, "--repo", $RepoName, "--ref", $Ref)
+    foreach ($entry in $Inputs.GetEnumerator()) {
+        $args += @("-f", "$($entry.Key)=$($entry.Value)")
+    }
+
+    if ($PSCmdlet.ShouldProcess($RepoName, "dispatch workflow $Workflow")) {
+        Invoke-Gh -Arguments $args
+    }
+}
+
+function Get-DesiredTextValue {
+    [CmdletBinding()]
+    param(
+        [string]$Name,
+        [string]$ExistingValue,
+        [string]$DefaultValue = "",
+        [switch]$PromptIfMissing
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ExistingValue)) {
+        Write-Info "Keeping existing $Name = $ExistingValue"
+        return $ExistingValue.Trim()
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DefaultValue)) {
+        Write-Info "Using derived $Name = $DefaultValue"
+        return $DefaultValue.Trim()
+    }
+
+    if ($PromptIfMissing) {
+        return Read-TextValue -Name $Name -Prompt $Name -Required
+    }
+
+    return ""
+}
+
 function Invoke-AzJson {
     param([string[]]$Arguments)
     $json = & az @Arguments -o json 2>$null
@@ -291,7 +375,7 @@ function Get-GitHubEnvironments {
     return @($json -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 }
 
-function Ensure-GitHubFederatedCredential {
+function Add-GitHubFederatedCredential {
     param(
         [string]$AppId,
         [string]$Name,
@@ -324,6 +408,153 @@ function Ensure-GitHubFederatedCredential {
     }
 }
 
+function Get-AvailableStorageAccountName {
+    [CmdletBinding()]
+    param(
+        [string]$BaseName,
+        [string]$ResourceGroupName
+    )
+
+    $candidate = ($BaseName.ToLowerInvariant() -replace '[^a-z0-9]', '')
+    if ($candidate.Length -gt 24) {
+        $candidate = $candidate.Substring(0, 24)
+    }
+
+    for ($i = 0; $i -lt 20; $i++) {
+        $name = if ($i -eq 0) {
+            $candidate
+        } else {
+            $suffix = "{0:x2}" -f $i
+            $prefixLength = [Math]::Min(24 - $suffix.Length, $candidate.Length)
+            $candidate.Substring(0, $prefixLength) + $suffix
+        }
+
+        $existingId = & az storage account show --name $name --resource-group $ResourceGroupName --query id -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingId)) {
+            return $name
+        }
+
+        $nameAvailable = & az storage account check-name --name $name --query nameAvailable -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $nameAvailable -eq "true") {
+            return $name
+        }
+    }
+
+    throw "Unable to find an available storage account name derived from '$BaseName'."
+}
+
+function Ensure-ResourceGroup {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$SubscriptionId,
+        [string]$Location,
+        [string]$ResourceGroupName,
+        [string]$PurposeLabel
+    )
+
+    $exists = & az group exists --name $ResourceGroupName --subscription $SubscriptionId --output tsv
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to determine whether resource group '$ResourceGroupName' exists."
+    }
+
+    if ($exists -ne "true") {
+        if ($PSCmdlet.ShouldProcess($ResourceGroupName, "create $PurposeLabel resource group")) {
+            & az group create --name $ResourceGroupName --location $Location --subscription $SubscriptionId --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create resource group '$ResourceGroupName'." }
+        }
+        Write-Ok "Created $PurposeLabel resource group: $ResourceGroupName"
+    } else {
+        Write-Ok "$PurposeLabel resource group exists: $ResourceGroupName"
+    }
+}
+
+function Ensure-TfstateBackendResources {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$SubscriptionId,
+        [string]$Location,
+        [string]$ResourceGroupName,
+        [string]$StorageAccountName,
+        [string]$ContainerName,
+        [string]$ClientId
+    )
+
+    Write-Step "Ensuring Terraform backend prerequisites"
+    Ensure-ResourceGroup -SubscriptionId $SubscriptionId -Location $Location -ResourceGroupName $ResourceGroupName -PurposeLabel "tfstate"
+
+    $storageId = & az storage account show --name $StorageAccountName --resource-group $ResourceGroupName --subscription $SubscriptionId --query id -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($storageId)) {
+        if ($PSCmdlet.ShouldProcess($StorageAccountName, "create tfstate storage account")) {
+            & az storage account create `
+                --name $StorageAccountName `
+                --resource-group $ResourceGroupName `
+                --subscription $SubscriptionId `
+                --location $Location `
+                --sku Standard_LRS `
+                --min-tls-version TLS1_2 `
+                --allow-blob-public-access false `
+                --https-only true `
+                --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create tfstate storage account '$StorageAccountName'." }
+        }
+        Write-Ok "Created tfstate storage account: $StorageAccountName"
+        $storageId = & az storage account show --name $StorageAccountName --resource-group $ResourceGroupName --subscription $SubscriptionId --query id -o tsv
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($storageId)) {
+            throw "Failed to resolve storage account ID for '$StorageAccountName' after creation."
+        }
+    } else {
+        Write-Ok "Tfstate storage account exists: $StorageAccountName"
+    }
+
+    $accountKey = & az storage account keys list `
+        --resource-group $ResourceGroupName `
+        --subscription $SubscriptionId `
+        --account-name $StorageAccountName `
+        --query "[0].value" `
+        --output tsv
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($accountKey)) {
+        throw "Failed to read storage account key for '$StorageAccountName'."
+    }
+
+    & az storage container show --name $ContainerName --account-name $StorageAccountName --account-key $accountKey --output none 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        if ($PSCmdlet.ShouldProcess($ContainerName, "create tfstate blob container")) {
+            & az storage container create --name $ContainerName --account-name $StorageAccountName --account-key $accountKey --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create tfstate blob container '$ContainerName'." }
+        }
+        Write-Ok "Created tfstate blob container: $ContainerName"
+    } else {
+        Write-Ok "Tfstate blob container exists: $ContainerName"
+    }
+
+    $clientObjectId = & az ad sp show --id $ClientId --query id --output tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($clientObjectId)) {
+        $assignmentCount = & az role assignment list `
+            --assignee-object-id $clientObjectId `
+            --scope $storageId `
+            --subscription $SubscriptionId `
+            --query "[?roleDefinitionName=='Storage Blob Data Contributor'] | length(@)" `
+            --output tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $assignmentCount -eq "0") {
+            if ($PSCmdlet.ShouldProcess($StorageAccountName, "assign Storage Blob Data Contributor to CI identity")) {
+                & az role assignment create `
+                    --role "Storage Blob Data Contributor" `
+                    --assignee-object-id $clientObjectId `
+                    --assignee-principal-type ServicePrincipal `
+                    --scope $storageId `
+                    --subscription $SubscriptionId `
+                    --output none
+                if ($LASTEXITCODE -ne 0) { throw "Failed to assign Storage Blob Data Contributor on '$StorageAccountName'." }
+            }
+            Write-Ok "Assigned Storage Blob Data Contributor to CI identity"
+        } else {
+            Write-Ok "CI identity already has Storage Blob Data Contributor on tfstate storage"
+        }
+    } else {
+        Write-Warn "Could not resolve service principal object ID for $ClientId. Workflow 000 may need to assign storage RBAC itself."
+    }
+}
+
 Write-Step "Checking local prerequisites"
 Assert-Command "gh"
 if (-not $SkipAzureSetup) {
@@ -339,7 +570,8 @@ if (-not $Repo) {
 Write-Ok "GitHub repo: $Repo"
 
 if (-not $AppDisplayName) {
-    $AppDisplayName = Read-TextValue -Name "AppDisplayName" -Prompt "Entra app registration display name" -Default "CNA Assessment Tool"
+    $AppDisplayName = "CNA Assessment Tool"
+    Write-Info "Using default Entra app display name: $AppDisplayName"
 }
 
 Invoke-Gh -Arguments @("auth", "status")
@@ -356,20 +588,12 @@ if (-not $SkipAzureSetup) {
     Write-Step "Preparing Azure OIDC app registration"
     $account = Initialize-AzLogin
 
-    if ($SubscriptionId) {
-        & az account set --subscription $SubscriptionId | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to set Azure subscription $SubscriptionId. Verify the ID is valid and available in your signed-in tenant."
-        }
-        $account = Invoke-AzJson -Arguments @("account", "show")
-    } else {
-        $account = Select-AzSubscription -CurrentAccount $account
-        & az account set --subscription $account.id | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to switch to subscription $($account.id)."
-        }
-        $account = Invoke-AzJson -Arguments @("account", "show")
+    $account = Select-AzSubscription -CurrentAccount $account
+    & az account set --subscription $account.id | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to switch to subscription $($account.id)."
     }
+    $account = Invoke-AzJson -Arguments @("account", "show")
 
     $tenantId = [string]$account.tenantId
     $resolvedSubscriptionId = [string]$account.id
@@ -434,11 +658,16 @@ if (-not $SkipAzureSetup) {
         }
         $credentialName = Get-SafeFederatedCredentialName -RepoName $Repo -Label $subjectLabel
         if ($PSCmdlet.ShouldProcess($appId, "ensure GitHub OIDC federated credential for $subject")) {
-            Ensure-GitHubFederatedCredential -AppId $appId -Name $credentialName -Subject $subject
+            Add-GitHubFederatedCredential -AppId $appId -Name $credentialName -Subject $subject
         }
     }
 
-    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (leave as 'none' for first bootstrap; set a real HTTPS URL only after the Front Door hostname exists)" -Default "none"
+    $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) {
+        [string]$existingVariables["CNA_NEXTAUTH_URL"]
+    } else {
+        "none"
+    }
+    Write-Info "Using CNA_NEXTAUTH_URL = $nextAuthUrlForRedirect"
     if ($nextAuthUrlForRedirect -ne "none") {
         if (-not ($nextAuthUrlForRedirect -match '^https?://')) {
             throw "CNA_NEXTAUTH_URL must be 'none' or start with http:// or https://."
@@ -465,22 +694,20 @@ if (-not $SkipAzureSetup) {
     $tenantId = Read-TextValue -Name "AZURE_TENANT_ID" -Prompt "Azure tenant ID" -Required
     $resolvedSubscriptionId = Read-TextValue -Name "AZURE_SUBSCRIPTION_ID" -Prompt "Azure subscription ID" -Required
     $resolvedSubscriptionName = Read-TextValue -Name "AZURE_TARGET_SUBSCRIPTION_NAME" -Prompt "Azure subscription name (optional, for human-readable validation)" -Default "none"
-    $nextAuthUrlForRedirect = Read-TextValue -Name "CNA_NEXTAUTH_URL" -Prompt "Initial CNA_NEXTAUTH_URL (leave as 'none' for first bootstrap; set a real HTTPS URL only after the Front Door hostname exists)" -Default "none"
+    $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) { [string]$existingVariables["CNA_NEXTAUTH_URL"] } else { "none" }
 }
 
 Write-Step "Collecting GitHub secret values"
 
 if (-not $existingSecrets.ContainsKey("CNA_ENTRA_CLIENT_SECRET")) {
     if (-not $SkipAzureSetup) {
-        $choice = Read-Host "CNA_ENTRA_CLIENT_SECRET is missing. Press Enter to create a new Entra client secret, or type 'paste' to provide one"
-        if ([string]::IsNullOrWhiteSpace($choice)) {
-            if ($PSCmdlet.ShouldProcess($appId, "create Entra client secret for NextAuth")) {
-                $entraClientSecret = (& az ad app credential reset --id $appId --append --display-name "cna-nextauth-$Environment-$(Get-Date -Format yyyyMMddHHmmss)" --years 2 --query password -o tsv).Trim()
-                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($entraClientSecret)) {
-                    throw "Failed to create Entra client secret."
-                }
+        if ($PSCmdlet.ShouldProcess($appId, "create Entra client secret for NextAuth")) {
+            $entraClientSecret = (& az ad app credential reset --id $appId --append --display-name "cna-nextauth-$Environment-$(Get-Date -Format yyyyMMddHHmmss)" --years 2 --query password -o tsv).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($entraClientSecret)) {
+                throw "Failed to create Entra client secret."
             }
         }
+        Write-Ok "Created Entra client secret for NextAuth"
     }
 }
 if ($null -eq $entraClientSecret) {
@@ -539,10 +766,16 @@ $variableDefaults = [ordered]@{
 $variableValues = [ordered]@{}
 foreach ($entry in $variableDefaults.GetEnumerator()) {
     $exists = $existingVariables.ContainsKey($entry.Key)
-    $defaultValue = if ($exists) { $existingVariables[$entry.Key] } else { $entry.Value }
-    $prompt = if ($exists) { "$($entry.Key) exists. Enter replacement value or press Enter to keep current" } else { $entry.Key }
-    $variableValues[$entry.Key] = Read-TextValue -Name $entry.Key -Prompt $prompt -Default $defaultValue
+    $existingValue = if ($exists) { [string]$existingVariables[$entry.Key] } else { "" }
+    $variableValues[$entry.Key] = Get-DesiredTextValue -Name $entry.Key -ExistingValue $existingValue -DefaultValue ([string]$entry.Value)
 }
+
+$bootstrapWorkloadResourceGroup = "rg-cna-$Environment-$BootstrapRegionShort"
+$bootstrapTfstateResourceGroup = [string]$variableValues["TFSTATE_RESOURCE_GROUP"]
+$bootstrapTfstateContainer = [string]$variableValues["TFSTATE_CONTAINER"]
+$bootstrapTfstateStorageAccount = Get-AvailableStorageAccountName -BaseName ([string]$variableValues["TFSTATE_STORAGE_ACCOUNT"]) -ResourceGroupName $bootstrapTfstateResourceGroup
+$variableValues["TFSTATE_STORAGE_ACCOUNT"] = $bootstrapTfstateStorageAccount
+Write-Info "Resolved TFSTATE_STORAGE_ACCOUNT = $bootstrapTfstateStorageAccount"
 
 Write-Step "Writing GitHub Secrets"
 $setSecretCount = 0
@@ -568,16 +801,54 @@ foreach ($entry in $variableValues.GetEnumerator()) {
     }
 }
 
+if (-not $SkipAzureSetup) {
+    Write-Step "Ensuring workload resource group"
+    Ensure-ResourceGroup `
+        -SubscriptionId $resolvedSubscriptionId `
+        -Location $BootstrapLocation `
+        -ResourceGroupName $bootstrapWorkloadResourceGroup `
+        -PurposeLabel "workload"
+
+    Ensure-TfstateBackendResources `
+        -SubscriptionId $resolvedSubscriptionId `
+        -Location $BootstrapLocation `
+        -ResourceGroupName $bootstrapTfstateResourceGroup `
+        -StorageAccountName $bootstrapTfstateStorageAccount `
+        -ContainerName $bootstrapTfstateContainer `
+        -ClientId $appId
+}
+
+if (-not $SkipBootstrapDispatch) {
+    Write-Step "Dispatching workflow 000 bootstrap"
+    Start-GitHubWorkflow -RepoName $Repo -Workflow "000-bootstrap-backend.yml" -Ref $Branch -Inputs @{
+        environment              = $Environment
+        location                 = $BootstrapLocation
+        region_short             = $BootstrapRegionShort
+        tfstate_resource_group   = $bootstrapTfstateResourceGroup
+        tfstate_storage_account  = $bootstrapTfstateStorageAccount
+        tfstate_container        = $bootstrapTfstateContainer
+    }
+    Write-Ok "Dispatched 000-bootstrap-backend.yml for environment '$Environment'"
+}
+
 Write-Step "Summary"
 Write-Host "Repository:       $Repo"
 Write-Host "Branch:           $Branch"
 Write-Host "Environment:      $Environment"
 Write-Host "App registration: $AppDisplayName ($appId)"
+Write-Host "Workload RG:      $bootstrapWorkloadResourceGroup"
+Write-Host "Tfstate RG:       $bootstrapTfstateResourceGroup"
 Write-Host "Secrets set:      $setSecretCount"
 Write-Host "Secrets kept/skipped: $keptSecretCount"
 Write-Host "Variables set:    $setVariableCount"
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "1. Run workflow 000 to create the workload RG, provision the tfstate backend in its own RG, and import the workload RG into Terraform state using the TFSTATE_* values."
-Write-Host "2. Run workflow 010 to validate secrets, variables, OIDC, and Azure access."
-Write-Host "3. Run workflow 030, then workflow 031 for the first deployment."
+if ($SkipBootstrapDispatch) {
+    Write-Host "1. Run workflow 000 to create the workload RG, provision the tfstate backend in its own RG, and import the workload RG into Terraform state using the TFSTATE_* values."
+    Write-Host "2. Run workflow 010 to validate secrets, variables, OIDC, and Azure access."
+    Write-Host "3. Run workflow 030, then workflow 031 for the first deployment."
+} else {
+    Write-Host "1. Monitor workflow 000 and confirm the bootstrap completes successfully."
+    Write-Host "2. Run workflow 010 to validate secrets, variables, OIDC, and Azure access."
+    Write-Host "3. Run workflow 030, then workflow 031 for the first deployment."
+}

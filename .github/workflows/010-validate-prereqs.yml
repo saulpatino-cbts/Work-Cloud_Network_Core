@@ -1,5 +1,5 @@
 name: "010 · Validate Prerequisites"
-# Run this workflow before 000-bootstrap-backend to confirm that all required
+# Run this workflow after 000-bootstrap-backend to confirm that all required
 # GitHub Secrets, GitHub Variables, and Azure OIDC authentication are in place.
 #
 # Safe to run at any time — read-only, makes no changes to Azure or GitHub.
@@ -79,7 +79,7 @@ jobs:
 
           if [[ "$FAILED" -eq 1 ]]; then
             echo ""
-            echo "::error::One or more required secrets are missing. Run scripts/setup-azure-prereqs.sh to set them."
+            echo "::error::One or more required secrets are missing. Run scripts/Initialize-CnaGitHubSecrets.ps1 to set them."
             exit 1
           fi
           echo "All secrets present ✅"
@@ -242,6 +242,15 @@ jobs:
             fi
           fi
 
+          ALERTS_STATE=$(az provider show --namespace Microsoft.AlertsManagement --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+          if [[ "$ALERTS_STATE" == "Registered" ]]; then
+            echo "| Microsoft.AlertsManagement | Registered | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Microsoft.AlertsManagement | $ALERTS_STATE | ❌ Register before deploy |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Microsoft.AlertsManagement is not registered in this subscription. Run: az provider register --namespace Microsoft.AlertsManagement"
+            exit 1
+          fi
+
           echo ""
           echo "Azure access verified ✅"
 
@@ -251,6 +260,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Next step:** If all checks are green, run workflow \`000 · Bootstrap Backend\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "**Next step:** If all checks are green, run workflow \`030 · Build Container Images\`, then workflow \`031 · Deploy Azure Platform\`." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 031)." >> "$GITHUB_STEP_SUMMARY"

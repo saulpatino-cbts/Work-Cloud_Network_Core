@@ -26,6 +26,7 @@ work is tracked here.
 ## Redeploy And Validation
 
 - [ ] P1. Run workflow `010-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
+- [x] P1. Register `Microsoft.AlertsManagement` in the Azure subscription so Application Insights smart-detection alert deployment does not fail.
 - [ ] P1. Set and validate `AZURE_TARGET_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
 - [ ] P1. Run workflow `030-build-images.yml` to publish current immutable GHCR image tags.
 - [ ] P1. Run workflow `031-deploy-azure.yml` for `dev`.

@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Ensures every Container App managed identity has the role assignments it
-  needs before the 031 deploy workflow runs. Safe to re-run — existing
+  needs before the 210 deploy workflow runs. Safe to re-run — existing
   assignments are detected and skipped. Run this once after a fresh infra
   bootstrap (000 workflow) or whenever a new role requirement is added.
 

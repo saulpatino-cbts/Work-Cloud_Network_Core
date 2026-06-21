@@ -25,19 +25,19 @@ work is tracked here.
 
 ## Redeploy And Validation
 
-- [ ] P1. Run workflow `010-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
+- [ ] P1. Run workflow `100-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
 - [x] P1. Register `Microsoft.AlertsManagement` in the Azure subscription so Application Insights smart-detection alert deployment does not fail.
 - [x] P1. Validate `AZURE_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
-- [ ] P1. Run workflow `030-build-images.yml` to publish current immutable GHCR image tags.
-- [ ] P1. Run workflow `031-deploy-azure.yml` for `dev`.
-- [ ] P1. Confirm workflow `031-deploy-azure.yml` updated `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
+- [ ] P1. Run workflow `200-build-images.yml` to publish current immutable GHCR image tags.
+- [ ] P1. Run workflow `210-deploy-azure.yml` for `dev`.
+- [ ] P1. Confirm workflow `210-deploy-azure.yml` updated `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
 - [ ] P1. Capture the live Front Door hostname only from current Terraform/workflow outputs; do not rely on older documented `azurefd.net` references.
 - [ ] P1. Update the Entra redirect URI to `https://<frontdoor-host>/api/auth/callback/microsoft-entra-id`.
-- [ ] P1. Rerun workflow `031-deploy-azure.yml` so corrected runtime values are applied.
-- [ ] P1. Run workflow `011-sync-keys.yml` after Key Vault exists to validate runtime secrets.
+- [ ] P1. Rerun workflow `210-deploy-azure.yml` so corrected runtime values are applied.
+- [ ] P1. Run workflow `110-sync-keys.yml` after Key Vault exists to validate runtime secrets.
 - [ ] P1. Verify Front Door URL, `/api/health`, Entra sign-in, Application Insights telemetry, and all three Container App revisions.
-- [ ] P2. Run workflow `032-teardown.yml` for `dev` with `confirm=DESTROY`, `destroy_tfstate_backend=false`, and `delete_drifted_resources=false`.
-- [ ] P2. Confirm the `032` cleanup preview lists only CNA-owned workload resources and approved Azure-managed auxiliary groups, then rerun `032` with `delete_drifted_resources=true`.
+- [ ] P2. Run workflow `220-teardown.yml` for `dev` with `confirm=DESTROY`, `destroy_tfstate_backend=false`, and `delete_drifted_resources=false`.
+- [ ] P2. Confirm the `220` cleanup preview lists only CNA-owned workload resources and approved Azure-managed auxiliary groups, then rerun `220` with `delete_drifted_resources=true`.
 
 ## Beta Acceptance
 
@@ -51,7 +51,7 @@ work is tracked here.
 
 - [ ] P3. Decide whether `dev` should keep Front Door Premium/WAF for parity or move to Standard/remove Front Door for cost savings.
 - [ ] P3. Decide whether `dev` should keep prod-grade PostgreSQL (`GP_Standard_D2s_v3`, 30-day geo-redundant backup) or use a cheaper dev SKU after policy gates are finalized.
-- [ ] P3. Document an idle-dev cadence using workflow `032` teardown and workflow `031` redeploy when active development resumes.
+- [ ] P3. Document an idle-dev cadence using workflow `220` teardown and workflow `210` redeploy when active development resumes.
 - [ ] P3. Review production PostgreSQL CPU, memory, storage, and connection metrics after live traffic before right-sizing.
 - [ ] P3. Add Azure budget/cost alerts for Foundry Claude usage and platform resource groups.
 - [ ] P3. Add per-engagement AI request limits if live copilot usage requires stronger cost controls.

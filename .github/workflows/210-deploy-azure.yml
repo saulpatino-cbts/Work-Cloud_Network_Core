@@ -1,4 +1,4 @@
-name: "031 · Deploy Azure Platform"
+name: "210 · Deploy Azure Platform"
 
 on:
   workflow_dispatch:
@@ -230,7 +230,7 @@ jobs:
 
       - name: Resolve image references from build manifest
         # When images are not explicitly provided (or still `:latest`), read the
-        # SHA-tagged references written by 030-build-images so the plan always uses
+        # SHA-tagged references written by 200-build-images so the plan always uses
         # an immutable, traceable image digest rather than the floating :latest tag.
         working-directory: ${{ github.workspace }}
         run: |
@@ -474,10 +474,17 @@ jobs:
           SLEEP_SECONDS: "20"
         run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
 
+      - name: Generate GitHub App token for repo variable updates
+        id: github_app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GH_VARIABLES_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.github_app_token.outputs.token }}
         run: |
           FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
           NEXTAUTH_URL=""
@@ -551,6 +558,17 @@ jobs:
         with:
           name: deployment-manifest-${{ inputs.environment }}
           path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Resolve workload naming
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+          fi
+
+          echo "WORKLOAD_RG=$WORKLOAD_RG" >> "$GITHUB_ENV"
+          echo "WORKLOAD_NAME_PREFIX=${WORKLOAD_RG#rg-}" >> "$GITHUB_ENV"
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
@@ -645,7 +663,7 @@ jobs:
       - name: Query Azure Monitor health directly
         run: |
           mkdir -p .verification/${{ inputs.environment }}
-          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/cna-${{ inputs.environment }}-scus-afd/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
+          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$WORKLOAD_RG/providers/Microsoft.Cdn/profiles/$WORKLOAD_NAME_PREFIX-afd/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
           THRESHOLD="${AZURE_MONITOR_HEALTH_THRESHOLD:-95}"
           VDIR=".verification/${{ inputs.environment }}"
           MAX_WAIT=30
@@ -668,7 +686,7 @@ jobs:
         run: |
           az monitor app-insights query \
             --app "${{ vars.APPLICATION_INSIGHTS_NAME }}" \
-            --resource-group "rg-cna-${{ inputs.environment }}-scus" \
+            --resource-group "$WORKLOAD_RG" \
             --analytics-query "requests | summarize successRate = todouble(sum(itemCount * iif(success == true, 1, 0))) / todouble(sum(itemCount))" \
             > .verification/${{ inputs.environment }}/canary-telemetry.json \
             || echo "App Insights query skipped — no telemetry data yet (fresh deploy)"
@@ -676,7 +694,7 @@ jobs:
       - name: Execute progressive Front Door promotion actions
         run: |
           az afd route show \
-            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-cna-${{ inputs.environment }}-scus/providers/Microsoft.Cdn/profiles/cna-${{ inputs.environment }}-scus-afd/afdEndpoints/cna-${{ inputs.environment }}-scus-afd-ep/routes/cna-${{ inputs.environment }}-scus-afd-route" \
+            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$WORKLOAD_RG/providers/Microsoft.Cdn/profiles/$WORKLOAD_NAME_PREFIX-afd/afdEndpoints/$WORKLOAD_NAME_PREFIX-afd-ep/routes/$WORKLOAD_NAME_PREFIX-afd-route" \
             > .verification/${{ inputs.environment }}/staged-promotion.json
 
       - name: Query certificate monitoring and trigger renewal workflow

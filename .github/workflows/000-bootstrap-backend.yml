@@ -3,10 +3,8 @@ name: "000 · Bootstrap Backend"
 # deploy in the target subscription.
 # Creates the workload RG, provisions the Terraform remote backend in a
 # separate tfstate RG that follows the same naming convention, and imports the
-# workload RG into the selected environment state. After this completes, set:
-#   TFSTATE_RESOURCE_GROUP   (GitHub Variable)
-#   TFSTATE_STORAGE_ACCOUNT  (GitHub Variable)
-#   TFSTATE_CONTAINER        (GitHub Variable)
+# workload RG into the selected environment state. The setup script writes the
+# TFSTATE_* GitHub Variables ahead of time; this workflow confirms them.
 
 on:
   workflow_dispatch:
@@ -96,9 +94,15 @@ jobs:
           SUB_ID=$(az account show --query id -o tsv)
           SUB_NAME=$(az account show --query name -o tsv)
           EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
 
           if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
             echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
+            exit 1
+          fi
+
+          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
+            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
             exit 1
           fi
 

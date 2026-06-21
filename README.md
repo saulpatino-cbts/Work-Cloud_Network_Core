@@ -1,7 +1,7 @@
 # Cloud Network Assessment (CNA) Platform
 
-[![CI](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/020-test-codebase.yml)
-[![Release](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/021-release-version.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/021-release-version.yml)
+[![CI](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/300-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/300-test-codebase.yml)
+[![Release](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/310-release-version.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/310-release-version.yml)
 
 A CNA-branded, multi-user web platform for cloud network assessments across AWS and Azure.
 Analysts run network discoveries, AI-powered analysis, and generate presentation-ready deliverables
@@ -33,7 +33,7 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | Grounded copilot chat | ✅ Merged | Azure Foundry, stat-master context, citation chips |
 | Frontend UX journey (8 steps) | ✅ Merged | Traffic, FinOps, Resilience, Discovery, Book Mode pages |
 | CAF naming convention | ✅ Merged | `cna-[env]-[region_short]`, single workload RG per env |
-| Teardown workflow (032) | ✅ Merged | `DESTROY`-gated, optional state wipe |
+| Teardown workflow (220) | ✅ Merged | `DESTROY`-gated, optional state wipe |
 | CI — lint/test | ✅ Passing | ruff, pytest 3.13 + 3.14, Docker build smoke |
 | Repository hygiene | ✅ Clean | No open GitHub PRs or Issues as of 2026-06-16 |
 | Azure deployment | ⏳ Beta validation pending | Live workflow execution and customer-like validation remain |
@@ -115,7 +115,7 @@ infra/terraform/
 ├── environments/azure/prod/  Prod environment root module
 └── providers/azure/          Reusable modules: ai, compute, database, identity,
                               security, storage, runtime
-.github/workflows/            000–032 numbered workflow sequence
+.github/workflows/            000–320 banded workflow sequence
 GitHub Wiki                   Documentation and ADRs migrated to https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki
 TODO.md                       Canonical open redeploy, validation, footprint, and enhancement tasks
 scripts/                      Remove-DriftedResources.ps1, operational runbooks
@@ -148,23 +148,24 @@ cp .env.example .env
 
 ```
 1. Run `.\scripts\Initialize-CnaGitHubSecrets.ps1` — seed GitHub secrets/variables, create the workload RG using the standard naming convention, prepare tfstate backend resources, and dispatch workflow 000 bootstrap
+   → The script also creates and installs the GitHub App, then writes a bootstrap report to `.reports/bootstrap/` with the selected subscription, repo, Entra app, GitHub environments, GitHub App details, and CAF naming details
 2. Let workflow 000 complete — initialize Terraform remote state and import the existing workload RG into state (one-time per environment)
-3. Run workflow 010 — validate all secrets, variables, Azure OIDC
-4. Push to main   — workflow 030 auto-builds the CLI plus all three app container images
-5. Run workflow 031 (environment: dev) — Terraform apply (~20 min)
+3. Run workflow 100 — validate all secrets, variables, Azure OIDC
+4. Push to main   — workflow 200 auto-builds the CLI plus all three app container images
+5. Run workflow 210 (environment: dev) — Terraform apply (~20 min)
    → Copy Front Door hostname from outputs
-   → Workflow 031 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
-   → Workflow 031 also syncs the Entra app home page URL and redirect URI to the Front Door hostname
-   → Re-run 031 to apply updated NextAuth URL
+   → Workflow 210 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
+   → Workflow 210 also syncs the Entra app home page URL and redirect URI to the Front Door hostname
+   → Re-run 210 to apply updated NextAuth URL
 6. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
 ```
 
 To wipe an environment and redeploy clean:
 
 ```
-1. Run workflow 032 — type DESTROY to confirm teardown
+1. Run workflow 220 — type DESTROY to confirm teardown
 2. Leave `delete_drifted_resources=false` on the first run and review the cleanup preview
-3. Re-run workflow 032 with `delete_drifted_resources=true` only after confirming the preview lists only CNA-owned targets
+3. Re-run workflow 220 with `delete_drifted_resources=true` only after confirming the preview lists only CNA-owned targets
 4. Keep `destroy_tfstate_backend=false` unless intentionally resetting Terraform state
 5. Follow deployment steps above
 ```
@@ -176,15 +177,15 @@ To wipe an environment and redeploy clean:
 | File | Trigger | Purpose |
 |---|---|---|
 | `000-bootstrap-backend.yml` | Manual (one-time per environment) | Creates workload RG, provisions tfstate backend in a separate convention-based RG, imports app RG into state |
-| `010-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
-| `011-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
-| `012-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update`, auto-targeting the workload RG from repo variables |
-| `020-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
-| `021-release-version.yml` | `git tag v*.*.*` | Tags GHCR CLI image + creates GitHub Release |
-| `022-publish-portal.yml` | Manual | Delivers reports to client portals from the CLI image, with artifact-backed engagement content and Azure/AWS storage support |
-| `030-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, and cna-web to GHCR |
-| `031-deploy-azure.yml` | Manual + nightly | Terraform plan → apply → health verification |
-| `032-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
+| `100-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
+| `110-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
+| `120-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update`, auto-targeting the workload RG from repo variables |
+| `200-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, and cna-web to GHCR |
+| `210-deploy-azure.yml` | Manual + nightly | Terraform plan → apply → health verification |
+| `220-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
+| `300-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
+| `310-release-version.yml` | `git tag v*.*.*` | Tags GHCR CLI image + creates GitHub Release |
+| `320-publish-portal.yml` | Manual | Delivers reports to client portals from the CLI image, with artifact-backed engagement content and Azure/AWS storage support |
 
 ---
 
@@ -220,5 +221,5 @@ To wipe an environment and redeploy clean:
 - Container Apps creates a separate Azure-managed infrastructure resource group for the managed environment. This repo now names it deterministically as `rg-cna-<environment>-<region_short>-cae-managed`, for example `rg-cna-dev-scus-cae-managed`.
 - This managed RG is expected and separate from the workload RG. It contains Azure-managed infrastructure such as the Container Apps environment load balancer and public IP.
 - The Terraform state backend remains separate in `rg-cna-<environment>-<region_short>-tfstate` to avoid backend/self-destroy lifecycle problems.
-- The subscription must have `Microsoft.AlertsManagement` registered before `031` so Application Insights smart-detection alert deployment does not fail.
+- The subscription must have `Microsoft.AlertsManagement` registered before `210` so Application Insights smart-detection alert deployment does not fail.
 - If you need to resync the enterprise app web link outside deployment, run `.\scripts\Sync-CnaEntraApp.ps1 -AppId <client-id> -ApplicationUrl https://<frontdoor-host>`.

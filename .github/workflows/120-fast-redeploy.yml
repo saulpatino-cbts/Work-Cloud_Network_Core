@@ -1,10 +1,10 @@
-name: "012 · Fast Redeploy"
+name: "120 · Fast Redeploy"
 # Fast image update without a full Terraform apply.
 # Use this when you only need to roll out a new container image to
 # one or more Container Apps — no infrastructure changes.
 # ~2 minutes vs ~10+ minutes for a full Terraform deploy.
 # Prerequisite:
-#   Azure infrastructure must already be deployed by workflow 031.
+#   Azure infrastructure must already be deployed by workflow 210.
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: "032 · Teardown Azure Platform"
+name: "220 · Teardown Azure Platform"
 
 on:
   workflow_dispatch:
@@ -158,7 +158,7 @@ jobs:
         if: github.event.inputs.delete_drifted_resources != 'true'
         run: |
           echo "Preview complete. Review the cleanup target list above."
-          echo "Re-run workflow 032 with delete_drifted_resources=true only after approving the preview."
+          echo "Re-run workflow 220 with delete_drifted_resources=true only after approving the preview."
 
   # ── Optional: wipe TF state backend ─────────────────────────────────────────
   destroy-backend:

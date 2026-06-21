@@ -9,7 +9,7 @@
 #   - module-dependency-check now also runs on PRs (was push-only)
 #   - Job timeout-minutes set on every job (prevent runaway billing)
 #   - Explicit permissions block (principle of least privilege)
-name: "020 · Test Codebase"
+name: "300 · Test Codebase"
 
 on:
   push:

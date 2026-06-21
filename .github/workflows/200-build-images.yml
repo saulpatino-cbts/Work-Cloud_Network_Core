@@ -1,4 +1,4 @@
-name: "030 · Build Container Images"
+name: "200 · Build Container Images"
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
       - apps/cna-web/**
       - cna/**
       - pyproject.toml
-      - .github/workflows/030-build-images.yml
+      - .github/workflows/200-build-images.yml
   workflow_dispatch:
 
 permissions:

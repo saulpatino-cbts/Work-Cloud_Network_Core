@@ -29,7 +29,7 @@ RUN npm run build
 
 # ── Stage 3: migrator ─────────────────────────────────────────────────────────
 # Standalone image used exclusively to run `prisma migrate deploy` once per
-# deployment (via workflow 03). Keeping CLI deps out of the runtime image avoids
+# deployment (via workflow 210). Keeping CLI deps out of the runtime image avoids
 # chasing Prisma's transitive dep tree (effect, fast-check, etc.) across upgrades.
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS migrator
 WORKDIR /app
@@ -64,7 +64,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static    ./app/.next/stati
 
 # Prisma runtime only — @prisma/client + generated query engine.
 # The Prisma CLI is intentionally excluded; migrations run from the
-# migrator stage in workflow 03 before this container is deployed.
+# migrator stage in workflow 210 before this container is deployed.
 # Node.js walks the directory tree, so modules at /app/node_modules are
 # found by the server running from /app/app/server.js.
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma

@@ -760,20 +760,35 @@ jobs:
           echo "Pinning $WEB_APP to min-replicas=1 (rolls fresh revision + warm replica)..."
           az containerapp update --name "$WEB_APP" --resource-group "$RG" --min-replicas 1 --output none
 
-          echo "Waiting for $WEB_APP to report a Ready replica..."
-          READY=0
+          # A replica reporting ready=true is necessary but NOT sufficient: while a
+          # freshly-rolled revision is still stabilizing, the `az containerapp exec`
+          # WebSocket proxy returns 'Handshake status 404' even though a replica is
+          # Running. The downstream Foundry validation uses the exact same exec
+          # transport, so gate on a real exec round-trip rather than the ready flag.
+          echo "Probing exec transport on $WEB_APP until it answers (revision must fully settle)..."
+          EXEC_OK=0
           for i in $(seq 1 30); do
             WEB_REV=$(az containerapp show --name "$WEB_APP" --resource-group "$RG" \
               --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
             R=$(az containerapp replica list --name "$WEB_APP" --resource-group "$RG" \
               --revision "$WEB_REV" \
               --query "[0].properties.containers[0].ready" -o tsv 2>/dev/null || echo "false")
-            echo "  [$i/30] web revision: ${WEB_REV:-none}  ready: $R"
-            if [ "$R" = "true" ]; then READY=1; echo "Web app is Ready."; break; fi
+            if [ "$R" = "true" ]; then
+              OUT=$(timeout 40 az containerapp exec --name "$WEB_APP" --resource-group "$RG" \
+                --revision "$WEB_REV" --command "echo EXEC_TRANSPORT_OK" 2>&1 || true)
+              if echo "$OUT" | grep -q "EXEC_TRANSPORT_OK"; then
+                EXEC_OK=1
+                echo "  [$i/30] revision ${WEB_REV} ready and exec transport confirmed."
+                break
+              fi
+              echo "  [$i/30] revision ${WEB_REV} ready but exec not answering yet (still settling)."
+            else
+              echo "  [$i/30] revision ${WEB_REV:-none} replica not ready yet."
+            fi
             sleep 10
           done
-          if [ "$READY" -ne 1 ]; then
-            echo "::error::Web app did not reach Ready — check ContainerAppConsoleLogs_CL for $WEB_APP."
+          if [ "$EXEC_OK" -ne 1 ]; then
+            echo "::error::Web app exec transport never became available — check ContainerAppConsoleLogs_CL for $WEB_APP."
             LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
             if [ -n "$LAW_ID" ]; then
               az monitor log-analytics query -w "$LAW_ID" \

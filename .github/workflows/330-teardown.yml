@@ -80,16 +80,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: preflight
     environment: ${{ github.event.inputs.environment }}
-    defaults:
-      run:
-        working-directory: infra/terraform/environments/azure/${{ github.event.inputs.environment }}
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
-        with:
-          terraform_version: "~1.9"
 
       - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
         with:
@@ -114,34 +107,45 @@ jobs:
             exit 1
           fi
 
-      - name: Terraform init
+      - name: Derive workload resource group name
+        id: names
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
+          INPUT_REGION_SHORT: ${{ github.event.inputs.region_short }}
+          TFSTATE_RG: ${{ vars.TFSTATE_RESOURCE_GROUP }}
         run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
-            -backend-config="key=${{ github.event.inputs.environment }}.terraform.tfstate" \
-            -backend-config="use_oidc=true"
-
-      - name: Terraform destroy
-        run: |
-          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
-            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+          RS="${INPUT_REGION_SHORT:-$REGION_SHORT}"
+          if [[ -n "$TFSTATE_RG" && "$TFSTATE_RG" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RG%-tfstate}"
+          elif [[ -n "$RS" ]]; then
+            WORKLOAD_RG="rg-cna-${{ github.event.inputs.environment }}-${RS}"
+          else
+            echo "::error::AZURE_REGION_SHORT is required to derive workload resource group name."
             exit 1
           fi
-          terraform destroy -auto-approve \
-            -var="environment=${{ github.event.inputs.environment }}" \
-            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
-            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
-            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
-            -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
-            -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
-            -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
-            -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
-            -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
-            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}"
+          echo "workload_rg=${WORKLOAD_RG}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete workload resource group (async)
+        run: |
+          RG="${{ steps.names.outputs.workload_rg }}"
+          if ! az group show --name "$RG" --only-show-errors > /dev/null 2>&1; then
+            echo "Resource group $RG does not exist — nothing to delete."
+            exit 0
+          fi
+          echo "Deleting resource group $RG asynchronously..."
+          az group delete --name "$RG" --yes --no-wait
+          echo "Deletion initiated. Monitor progress in the Azure Portal or with:"
+          echo "  az group show --name $RG --query properties.provisioningState -o tsv"
+
+      - name: Clear Terraform state blob
+        run: |
+          az storage blob delete \
+            --account-name "${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            --container-name "${{ vars.TFSTATE_CONTAINER }}" \
+            --name "${{ github.event.inputs.environment }}.terraform.tfstate" \
+            --auth-mode login \
+            --only-show-errors || true
+          echo "State file cleared — next deploy starts from a blank slate."
 
   # ── Clean up drifted resources not in Terraform state ────────────────────────
   cleanup-drift:

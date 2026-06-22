@@ -922,7 +922,7 @@ class AnalysisEngine:
                             control_name="Application and Workload Protection",
                             alignment="Disabled WAF leaves application workloads without HTTP-layer attack inspection",
                         ),
-                        ],
+                    ],
                     status=FindingStatus.OPEN,
                 )
             )

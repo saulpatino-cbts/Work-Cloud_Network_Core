@@ -730,6 +730,55 @@ jobs:
             exit 1
           fi
 
+      - name: Refresh container app secrets and wait for readiness
+        # Azure Container Apps does NOT roll a new revision when only a secret's
+        # VALUE changes (revisions roll on template changes — image/env refs).
+        # A changed DATABASE_URL therefore leaves running revisions holding the
+        # stale value, which crash-loops the app. Restart the latest revision of
+        # each secret-consuming app so it re-injects the freshly-applied secrets,
+        # then wait for the web replica to report Ready before downstream steps
+        # (Foundry exec validation) that require a live replica.
+        run: |
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
+          for APP in "$WEB_APP" "${WEB_APP/-ca-web/-ca-api}"; do
+            REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
+              --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
+            if [ -z "$REV" ]; then
+              REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
+                --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            fi
+            if [ -n "$REV" ]; then
+              echo "Restarting $APP revision $REV to pick up current secrets..."
+              az containerapp revision restart --name "$APP" --resource-group "$RG" --revision "$REV" 2>/dev/null || true
+            else
+              echo "::warning::No revision found for $APP — skipping restart."
+            fi
+          done
+
+          echo "Waiting for $WEB_APP to report a Ready replica..."
+          WEB_REV=$(az containerapp show --name "$WEB_APP" --resource-group "$RG" \
+            --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
+          READY=0
+          for i in $(seq 1 30); do
+            R=$(az containerapp replica list --name "$WEB_APP" --resource-group "$RG" \
+              --revision "$WEB_REV" \
+              --query "[0].properties.containers[0].ready" -o tsv 2>/dev/null || echo "false")
+            echo "  [$i/30] web replica ready: $R"
+            if [ "$R" = "true" ]; then READY=1; echo "Web app is Ready."; break; fi
+            sleep 10
+          done
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::Web app did not reach Ready after restart — check ContainerAppConsoleLogs_CL for $WEB_APP."
+            LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
+            if [ -n "$LAW_ID" ]; then
+              az monitor log-analytics query -w "$LAW_ID" \
+                --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${WEB_APP}' | order by TimeGenerated desc | take 30 | project TimeGenerated, Log_s" \
+                -o table 2>/dev/null || echo "log-query-unavailable"
+            fi
+            exit 1
+          fi
+
       - name: Validate Foundry private DNS and managed identity inference
         id: validate_foundry_private_access
         env:

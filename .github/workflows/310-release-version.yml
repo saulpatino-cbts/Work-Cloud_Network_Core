@@ -82,9 +82,9 @@ jobs:
           body: |
             ## CNA Platform ${{ github.ref_name }}
 
-            Docker image: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}`
+            Docker image: `${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }}`
 
             ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-            docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} --help
+            docker pull ${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }}
+            docker run --rm ${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }} --help
             ```

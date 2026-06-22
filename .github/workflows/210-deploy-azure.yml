@@ -107,6 +107,10 @@ jobs:
           }
 
           if [ "${{ inputs.deploy_mode }}" = "rollback" ]; then
+            if [[ -z "${{ inputs.previous_api_image }}" || -z "${{ inputs.previous_worker_image }}" || -z "${{ inputs.previous_web_image }}" ]]; then
+              echo "::error::Rollback requires all three previous_*_image inputs. Check .deployment-catalog/<env>/deployment-state.json for the image SHAs to roll back to."
+              exit 1
+            fi
             echo "EFFECTIVE_API_IMAGE=${{ inputs.previous_api_image }}" >> "$GITHUB_ENV"
             echo "EFFECTIVE_WORKER_IMAGE=${{ inputs.previous_worker_image }}" >> "$GITHUB_ENV"
             echo "EFFECTIVE_WEB_IMAGE=${{ inputs.previous_web_image }}" >> "$GITHUB_ENV"

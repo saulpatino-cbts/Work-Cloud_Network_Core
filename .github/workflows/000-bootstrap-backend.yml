@@ -78,7 +78,7 @@ jobs:
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             --only-show-errors
 
-      - name: Validate PostgreSQL password is URL-safe
+      - name: Validate PostgreSQL password is set
         env:
           PG_PASSWORD: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
         run: |
@@ -87,12 +87,9 @@ jobs:
             exit 1
           fi
           if echo "$PG_PASSWORD" | grep -qP '[@:/?#%\[\]]'; then
-            echo "::error::CNA_POSTGRES_ADMIN_PASSWORD contains URL-special characters (@ : / ? # % [ ])."
-            echo "::error::These characters break postgresql:// URL parsing in Prisma and SQLAlchemy."
-            echo "::error::Use only letters, digits, and - _ . ! ~ for the PostgreSQL admin password."
-            exit 1
+            echo "::notice::CNA_POSTGRES_ADMIN_PASSWORD contains URL-special characters -- they will be percent-encoded by Terraform urlencode() in the connection string."
           fi
-          echo "Password character set: OK"
+          echo "Password: OK"
 
       - name: Resolve bootstrap targets
         run: |

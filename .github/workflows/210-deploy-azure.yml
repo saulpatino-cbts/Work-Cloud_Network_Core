@@ -53,6 +53,7 @@ on:
     - cron: '0 11 * * *'
 
 permissions:
+  actions: write
   contents: write
   id-token: write
   security-events: write
@@ -474,17 +475,10 @@ jobs:
           SLEEP_SECONDS: "20"
         run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
 
-      - name: Generate GitHub App token for repo variable updates
-        id: github_app_token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.github_app_token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
           NEXTAUTH_URL=""

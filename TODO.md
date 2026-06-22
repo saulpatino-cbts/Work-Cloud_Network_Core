@@ -28,7 +28,7 @@ work is tracked here.
 - [ ] P1. Run workflow `100-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
 - [x] P1. Register `Microsoft.AlertsManagement` in the Azure subscription so Application Insights smart-detection alert deployment does not fail.
 - [x] P1. Validate `AZURE_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
-- [ ] P1. Run workflow `200-build-images.yml` to publish current immutable GHCR image tags.
+- [x] P1. Run workflow `200-build-images.yml` to publish current immutable GHCR image tags.
 - [ ] P1. Run workflow `210-deploy-azure.yml` for `dev`.
 - [ ] P1. Confirm workflow `210-deploy-azure.yml` updated `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME` from Terraform outputs.
 - [ ] P1. Capture the live Front Door hostname only from current Terraform/workflow outputs; do not rely on older documented `azurefd.net` references.

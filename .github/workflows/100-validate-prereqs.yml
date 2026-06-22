@@ -35,8 +35,6 @@ jobs:
           V_CNA_ENTRA_CLIENT_SECRET:     ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
           V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
           V_CNA_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
-          V_GH_APP_ID:                   ${{ secrets.GH_APP_ID }}
-          V_GH_APP_PRIVATE_KEY:          ${{ secrets.GH_APP_PRIVATE_KEY }}
           V_GHCR_PAT:                    ${{ secrets.GHCR_PAT }}
           # Optional — AWS publish / portal publish / customer TLS are not required for the base bootstrap path.
         run: |
@@ -72,8 +70,6 @@ jobs:
           check_secret "CNA_ENTRA_CLIENT_SECRET"     "$V_CNA_ENTRA_CLIENT_SECRET"
           check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
           check_secret "CNA_CREDENTIAL_ENCRYPTION_KEY" "$V_CNA_CREDENTIAL_ENCRYPTION_KEY"
-          check_secret "GH_APP_ID"                   "$V_GH_APP_ID"
-          check_secret "GH_APP_PRIVATE_KEY"          "$V_GH_APP_PRIVATE_KEY"
           check_secret "GHCR_PAT"                    "$V_GHCR_PAT"
 
           # Optional — required only for specific workflows

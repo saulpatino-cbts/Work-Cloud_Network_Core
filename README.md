@@ -9,7 +9,7 @@ including an encyclopedia-grade network report. Clients receive deliverables thr
 time-limited authenticated portal. Deployed as three Azure Container Apps behind Azure Front Door,
 backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Current status — 0.8 beta, June 2026:** Code, Terraform, workflows, ADFs, TODO, changelog, and GitHub Wiki are aligned on `main`. GitHub has no open PRs or Issues. The remaining beta gate is live Azure execution: prerequisite validation, image build, dev deploy, Entra redirect update, runtime validation, and customer-like beta acceptance.
+> **Current status — 0.8 beta, June 2026:** Code, Terraform, workflows, ADFs, TODO, changelog, and GitHub Wiki are aligned on `main`. GitHub has no open PRs or Issues. The remaining beta gate is live Azure execution: prerequisite validation, dev deploy, Entra redirect update, runtime validation, and customer-like beta acceptance.
 
 ---
 

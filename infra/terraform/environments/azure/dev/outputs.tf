@@ -124,6 +124,11 @@ output "database_server_fqdn" {
   value       = module.database.server_fqdn
 }
 
+output "database_subnet_prefix" {
+  description = "CIDR prefix for the PostgreSQL Flexible Server delegated subnet (used to derive the server's private IP)"
+  value       = azurerm_subnet.database.address_prefixes[0]
+}
+
 output "database_connection_string" {
   description = "Full DATABASE_URL for the migrator job — used by CI to run prisma migrate deploy"
   value       = module.database.connection_string

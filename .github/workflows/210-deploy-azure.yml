@@ -531,6 +531,8 @@ jobs:
           echo "web_container_app_name=$(terraform output -raw web_name)" >> "$GITHUB_OUTPUT"
           echo "private_endpoint_subnet_prefix=$(terraform output -raw private_endpoint_subnet_prefix)" >> "$GITHUB_OUTPUT"
           echo "database_server_name=$(terraform output -raw database_server_name)" >> "$GITHUB_OUTPUT"
+          echo "database_server_fqdn=$(terraform output -raw database_server_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "database_subnet_prefix=$(terraform output -raw database_subnet_prefix)" >> "$GITHUB_OUTPUT"
 
       - name: Approve Front Door private endpoint connections
         id: approve_private_link
@@ -570,6 +572,49 @@ jobs:
           fi
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "MIGRATOR_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Ensure PostgreSQL private DNS A record
+        run: |
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          DB_FQDN="${{ steps.export_ids.outputs.database_server_fqdn }}"
+          DB_SUBNET="${{ steps.export_ids.outputs.database_subnet_prefix }}"
+          ZONE_NAME="privatelink.postgres.database.azure.com"
+
+          # First host after Azure's 4 reserved addresses (.0-.3), e.g. 10.40.3.0/24 -> 10.40.3.4
+          DB_PRIVATE_IP=$(python3 -c "import ipaddress; net = ipaddress.IPv4Network('${DB_SUBNET}'); print(str(list(net.hosts())[3]))")
+          echo "DB FQDN: $DB_FQDN  |  Derived private IP: $DB_PRIVATE_IP"
+
+          # Resolve public DNS CNAME to get the Azure-assigned hash record name
+          # e.g. cna-dev-scus-psql.postgres.database.azure.com -> c2779f1c3041.privatelink.postgres.database.azure.com
+          HASH_NAME=$(dig +short CNAME "$DB_FQDN" @8.8.8.8 2>/dev/null | sed 's/\..*//')
+          if [[ -z "$HASH_NAME" ]]; then
+            echo "::warning::Public DNS CNAME not found for $DB_FQDN -- skipping private DNS A record check."
+            exit 0
+          fi
+          echo "Public CNAME hash record name: $HASH_NAME"
+
+          EXISTING_IP=$(az network private-dns record-set a show \
+            --resource-group "$RG" \
+            --zone-name "$ZONE_NAME" \
+            --name "$HASH_NAME" \
+            --query "aRecords[0].ipv4Address" -o tsv 2>/dev/null || echo "")
+
+          if [[ -n "$EXISTING_IP" ]]; then
+            echo "Private DNS A record OK: $HASH_NAME -> $EXISTING_IP"
+          else
+            echo "::warning::Private DNS A record missing -- Azure did not auto-register after zone update. Creating $HASH_NAME -> $DB_PRIVATE_IP"
+            az network private-dns record-set a create \
+              --resource-group "$RG" \
+              --zone-name "$ZONE_NAME" \
+              --name "$HASH_NAME" \
+              --ttl 30
+            az network private-dns record-set a add-record \
+              --resource-group "$RG" \
+              --zone-name "$ZONE_NAME" \
+              --record-set-name "$HASH_NAME" \
+              --ipv4-address "$DB_PRIVATE_IP"
+            echo "Created: $HASH_NAME -> $DB_PRIVATE_IP"
+          fi
 
       - name: Wait for PostgreSQL server to be Ready
         run: |

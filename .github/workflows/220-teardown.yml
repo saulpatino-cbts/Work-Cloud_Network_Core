@@ -46,6 +46,7 @@ env:
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
 
 concurrency:
   group: deploy-azure-platform-${{ github.event.inputs.environment }}
@@ -124,13 +125,17 @@ jobs:
 
       - name: Terraform destroy
         run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
           terraform destroy -auto-approve \
             -var="environment=${{ github.event.inputs.environment }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="api_image=docker.io/saulpatinojr/cna-api:latest" \
-            -var="worker_image=docker.io/saulpatinojr/cna-worker:latest" \
-            -var="web_image=docker.io/saulpatinojr/cna-web:latest" \
-            -var="container_registry_username=${{ secrets.DOCKERHUB_USERNAME }}" \
+            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-api:latest" \
+            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-worker:latest" \
+            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-web:latest" \
+            -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
             -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
             -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \

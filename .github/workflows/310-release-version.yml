@@ -4,7 +4,7 @@
 # with auto-generated changelog from PRs merged since last tag.
 #
 # Required repository secrets:
-#   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN — Docker Hub image push
+#   DOCKERHUB_NAMESPACE / DOCKERHUB_TOKEN — Docker Hub image push
 #
 # Required repository settings:
 #   Actions > General > Workflow permissions: Read and write
@@ -27,7 +27,8 @@ jobs:
     timeout-minutes: 30
     env:
       REGISTRY: docker.io
-      IMAGE_NAME: saulpatinojr/cna
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+      IMAGE_REPOSITORY: cna
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -39,12 +40,19 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
+
       # Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Docker Buildx for multi-platform + cache
@@ -59,8 +67,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:latest
+            ${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |

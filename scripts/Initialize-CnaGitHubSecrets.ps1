@@ -23,12 +23,6 @@ param(
 
     [switch]$ForceInteractive,
 
-    [string]$DockerHubUsername,
-
-    [System.Security.SecureString]$DockerHubPassword,
-
-    [string]$DockerHubTokenLabel = "cna-github-actions",
-
     [System.Security.SecureString]$DockerHubToken
 )
 
@@ -71,6 +65,32 @@ function ConvertFrom-SecureStringToPlainText {
         return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
     } finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+}
+
+function Read-MaskedSecretValue {
+    param(
+        [string]$Prompt,
+        [switch]$Required
+    )
+
+    while ($true) {
+        if ((Get-Command Read-Host).Parameters.ContainsKey("MaskInput")) {
+            $plain = Read-Host $Prompt -MaskInput
+            if (-not [string]::IsNullOrWhiteSpace($plain)) {
+                return ConvertTo-SecureString -String $plain -AsPlainText -Force
+            }
+        } else {
+            $secure = Read-Host $Prompt -AsSecureString
+            if ($secure -and $secure.Length -gt 0) {
+                return $secure
+            }
+        }
+
+        if (-not $Required) {
+            return $null
+        }
+        Write-Warn "$Prompt is required."
     }
 }
 
@@ -216,6 +236,27 @@ function Read-TextValue {
     }
 }
 
+function Read-YesNo {
+    param(
+        [string]$Prompt,
+        [bool]$DefaultYes = $false
+    )
+
+    $suffix = if ($DefaultYes) { " [Y/n]" } else { " [y/N]" }
+    while ($true) {
+        $answer = Read-Host "$Prompt$suffix"
+        if ([string]::IsNullOrWhiteSpace($answer)) {
+            return $DefaultYes
+        }
+
+        switch -Regex ($answer.Trim()) {
+            '^(y|yes)$' { return $true }
+            '^(n|no)$' { return $false }
+            default { Write-Warn "Enter yes or no." }
+        }
+    }
+}
+
 function Read-SecretValue {
     [CmdletBinding()]
     param(
@@ -265,168 +306,160 @@ function Start-GitHubWorkflow {
         [hashtable]$Inputs = @{}
     )
 
-    $args = @("workflow", "run", $Workflow, "--repo", $RepoName, "--ref", $Ref)
+    $workflowArgs = @("workflow", "run", $Workflow, "--repo", $RepoName, "--ref", $Ref)
     foreach ($entry in $Inputs.GetEnumerator()) {
-        $args += @("-f", "$($entry.Key)=$($entry.Value)")
+        $workflowArgs += @("-f", "$($entry.Key)=$($entry.Value)")
     }
 
     if ($PSCmdlet.ShouldProcess($RepoName, "dispatch workflow $Workflow")) {
-        Invoke-Gh -Arguments $args
+        Invoke-Gh -Arguments $workflowArgs
     }
+}
+
+function Get-GitHubWorkflowState {
+    param(
+        [string]$RepoName,
+        [string]$Workflow
+    )
+
+    $workflowId = & gh api "repos/$RepoName/actions/workflows/$Workflow" --jq .id 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($workflowId)) {
+        return ""
+    }
+
+    $listOutput = & gh workflow list --repo $RepoName --all 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($listOutput)) {
+        return ""
+    }
+
+    foreach ($line in @($listOutput -split "`r?`n")) {
+        $columns = @($line -split "`t")
+        if ($columns.Count -ge 3 -and $columns[2] -eq [string]$workflowId) {
+            return [string]$columns[1]
+        }
+    }
+
+    return ""
+}
+
+function Enable-GitHubWorkflowIfDisabled {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$RepoName,
+        [string]$Workflow
+    )
+
+    $state = Get-GitHubWorkflowState -RepoName $RepoName -Workflow $Workflow
+    if ($state -eq "active") {
+        Write-Ok "Workflow is active: $Workflow"
+        return $true
+    }
+
+    if ($state -ne "disabled_manually") {
+        Write-Warn "Workflow $Workflow state is '$state'; attempting enable before dispatch."
+    } else {
+        Write-Warn "Workflow $Workflow is disabled; enabling it so bootstrap can be dispatched."
+    }
+
+    if ($PSCmdlet.ShouldProcess($RepoName, "enable workflow $Workflow")) {
+        & gh workflow enable $Workflow --repo $RepoName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Failed to enable workflow $Workflow."
+            return $false
+        }
+    }
+
+    $state = Get-GitHubWorkflowState -RepoName $RepoName -Workflow $Workflow
+    if ($state -eq "active") {
+        Write-Ok "Enabled workflow: $Workflow"
+        return $true
+    }
+
+    Write-Warn "Workflow $Workflow is still not active; current state: '$state'."
+    return $false
 }
 
 function Test-DockerHubCredential {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Username,
+        [string]$Namespace,
 
         [Parameter(Mandatory = $true)]
         [string]$Token
     )
 
-    $body = @{
-        username = $Username
-        password = $Token
-    } | ConvertTo-Json -Compress
-
-    try {
-        $response = Invoke-RestMethod `
-            -Uri "https://hub.docker.com/v2/users/login" `
-            -Method Post `
-            -ContentType "application/json" `
-            -Body $body
-    } catch {
-        throw "Docker Hub credential validation failed for '$Username'. Use a Docker Hub access token, not the account password. $($_.Exception.Message)"
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Warn "Docker CLI not found; skipping local Docker Hub login validation. Workflow 100 will validate DOCKERHUB_NAMESPACE and DOCKERHUB_TOKEN."
+        return
     }
 
-    if (-not $response.token) {
-        throw "Docker Hub credential validation did not return an API token for '$Username'."
+    $Token | docker login docker.io --username $Namespace --password-stdin 1>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker Hub credential validation failed for namespace '$Namespace'. Provide an organization access token with repository read/write access."
     }
 
-    Write-Ok "Docker Hub credentials validated for $Username"
-}
-
-function Get-DockerHubSessionToken {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Username,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Password
-    )
-
-    $body = @{
-        username = $Username
-        password = $Password
-    } | ConvertTo-Json -Compress
-
-    try {
-        $response = Invoke-RestMethod `
-            -Uri "https://hub.docker.com/v2/users/login" `
-            -Method Post `
-            -ContentType "application/json" `
-            -Body $body
-    } catch {
-        throw "Docker Hub login failed for '$Username'. If the account uses MFA, create the access token in Docker Hub and pass it with -DockerHubToken. $($_.Exception.Message)"
-    }
-
-    if (-not $response.token) {
-        throw "Docker Hub login did not return a session token for '$Username'."
-    }
-
-    return [string]$response.token
-}
-
-function New-DockerHubAccessToken {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$SessionToken,
-
-        [Parameter(Mandatory = $true)]
-        [string]$TokenLabel
-    )
-
-    $body = @{
-        token_label = $TokenLabel
-        scopes      = @("repo:read", "repo:write")
-    } | ConvertTo-Json -Compress
-
-    try {
-        $response = Invoke-RestMethod `
-            -Uri "https://hub.docker.com/v2/access-tokens" `
-            -Method Post `
-            -ContentType "application/json" `
-            -Headers @{ Authorization = "Bearer $SessionToken" } `
-            -Body $body
-    } catch {
-        throw "Docker Hub access token creation failed. Create the token manually in Docker Hub and pass it with -DockerHubToken. $($_.Exception.Message)"
-    }
-
-    if (-not $response.token) {
-        throw "Docker Hub access token creation did not return the generated token."
-    }
-
-    Write-Ok "Created Docker Hub access token '$TokenLabel' with repo read/write scope"
-    return [string]$response.token
+    docker logout docker.io 1>$null 2>$null
+    Write-Ok "Docker Hub credentials validated for namespace $Namespace"
 }
 
 function Read-DockerHubSecretValues {
     [CmdletBinding()]
     param(
-        [bool]$UsernameExists,
+        [string]$Namespace,
         [bool]$TokenExists
     )
 
-    if ($UsernameExists -and $TokenExists -and -not $ForceInteractive) {
-        Write-Info "Keeping existing DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets"
+    if ($TokenExists -and -not $ForceInteractive) {
+        Write-Info "Keeping existing DOCKERHUB_TOKEN secret"
         return @{
-            Username = $null
-            Token    = $null
+            Token = $null
         }
     }
 
-    Write-Info "Docker Hub password is used locally only to create a read/write access token."
-    Write-Info "Only DOCKERHUB_USERNAME and the generated DOCKERHUB_TOKEN are saved to GitHub."
-
-    $usernameValue = $DockerHubUsername
-    if ([string]::IsNullOrWhiteSpace($usernameValue)) {
-        $usernameValue = Read-TextValue `
-            -Name "DOCKERHUB_USERNAME" `
-            -Prompt "Docker Hub username or namespace-authorized user" `
-            -Required
+    if ([string]::IsNullOrWhiteSpace($Namespace)) {
+        throw "DOCKERHUB_NAMESPACE is required before Docker Hub token setup."
     }
+
+    Write-Info "DOCKERHUB_NAMESPACE is used for Docker Hub authentication and image paths."
+    Write-Info "Only DOCKERHUB_TOKEN is saved to GitHub Secrets; DOCKERHUB_NAMESPACE is saved as a GitHub Variable."
+    Write-Info "Provide an organization access token with read/write access using -DockerHubToken or paste it when prompted."
 
     $tokenValue = ConvertFrom-SecureStringToPlainText -Value $DockerHubToken
     if ([string]::IsNullOrWhiteSpace($tokenValue)) {
-        $passwordValue = ConvertFrom-SecureStringToPlainText -Value $DockerHubPassword
-        if ([string]::IsNullOrWhiteSpace($passwordValue)) {
-            $securePassword = Read-Host "Paste Docker Hub password to create DOCKERHUB_TOKEN" -AsSecureString
-            $passwordValue = ConvertFrom-SecureStringToPlainText -Value $securePassword
+        $secureToken = Read-MaskedSecretValue -Prompt "Paste Docker Hub organization access token for DOCKERHUB_TOKEN" -Required
+
+        if ($null -eq $secureToken) {
+            throw "Docker Hub organization access token is required."
         }
 
-        if ([string]::IsNullOrWhiteSpace($passwordValue)) {
-            throw "Docker Hub password or -DockerHubToken is required to create DOCKERHUB_TOKEN."
-        }
-
-        $sessionToken = Get-DockerHubSessionToken -Username $usernameValue -Password $passwordValue
-        $tokenValue = New-DockerHubAccessToken -SessionToken $sessionToken -TokenLabel $DockerHubTokenLabel
+        $tokenValue = ConvertFrom-SecureStringToPlainText -Value $secureToken
     } else {
-        Write-Info "Using supplied Docker Hub access token for DOCKERHUB_TOKEN"
+        Write-Info "Using supplied Docker Hub token for DOCKERHUB_TOKEN"
     }
 
     if ([string]::IsNullOrWhiteSpace($tokenValue)) {
         throw "DOCKERHUB_TOKEN is required."
     }
 
-    Test-DockerHubCredential -Username $usernameValue -Token $tokenValue
+    Test-DockerHubCredential -Namespace $Namespace -Token $tokenValue
 
     return @{
-        Username = $usernameValue
-        Token    = $tokenValue
+        Token = $tokenValue
     }
+}
+
+function Read-DockerHubNamespace {
+    [CmdletBinding()]
+    param(
+        [string]$ExistingValue
+    )
+
+    return Get-DesiredTextValue `
+        -Name "DOCKERHUB_NAMESPACE" `
+        -ExistingValue $ExistingValue `
+        -DefaultValue "" `
+        -PromptIfMissing
 }
 
 function Get-DesiredTextValue {
@@ -476,6 +509,29 @@ function Set-GitHubSecret {
         $Value | gh secret set $Name --repo $RepoName | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Failed to set GitHub secret $Name." }
     }
+    return $true
+}
+
+function Remove-GitHubSecretIfExists {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$Name,
+        [string]$RepoName,
+        [hashtable]$ExistingSecrets
+    )
+
+    if (-not $ExistingSecrets.ContainsKey($Name)) {
+        return $false
+    }
+
+    if ($PSCmdlet.ShouldProcess($RepoName, "delete legacy GitHub secret $Name")) {
+        & gh secret delete $Name --repo $RepoName
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to delete legacy GitHub secret $Name."
+        }
+    }
+
+    Write-Ok "Deleted legacy GitHub secret: $Name"
     return $true
 }
 
@@ -675,19 +731,15 @@ function New-GitHubAppViaManifest {
     }
 
     Write-Step "Exchanging code for GitHub App credentials"
-    $ghToken = (& gh auth token 2>$null).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ghToken)) {
-        throw "Could not retrieve GitHub auth token. Ensure 'gh auth login' has been completed."
+    $responseJson = & gh api `
+        -X POST `
+        "app-manifests/$code/conversions" `
+        -H "Accept: application/vnd.github+json" `
+        -H "X-GitHub-Api-Version: 2022-11-28"
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($responseJson)) {
+        throw "GitHub App manifest conversion failed. Ensure 'gh auth login' has been completed for an account that can create GitHub Apps."
     }
-
-    $response = Invoke-RestMethod `
-        -Uri "https://api.github.com/app-manifests/$code/conversions" `
-        -Method Post `
-        -Headers @{
-            Authorization = "Bearer $ghToken"
-            Accept = "application/vnd.github+json"
-            "X-GitHub-Api-Version" = "2022-11-28"
-        }
+    $response = $responseJson | ConvertFrom-Json
 
     if (-not $response.id -or -not $response.pem) {
         throw "GitHub API did not return App ID or PEM key. Response: $($response | ConvertTo-Json -Depth 3)"
@@ -702,8 +754,47 @@ function New-GitHubAppViaManifest {
     }
 }
 
+function Get-GitHubAppInstallationByName {
+    param(
+        [string]$AppName,
+        [string]$AppSlug
+    )
+
+    $json = & gh api "user/installations" --paginate 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
+        return $null
+    }
+
+    $installations = @($json | ConvertFrom-Json)
+    foreach ($installation in $installations) {
+        foreach ($item in @($installation.installations)) {
+            $matchesName = -not [string]::IsNullOrWhiteSpace($AppName) -and $item.app_slug -eq ($AppName.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+            $matchesSlug = -not [string]::IsNullOrWhiteSpace($AppSlug) -and $item.app_slug -eq $AppSlug
+            if ($matchesName -or $matchesSlug) {
+                return [pscustomobject]@{
+                    AppId          = [string]$item.app_id
+                    AppSlug        = [string]$item.app_slug
+                    InstallationId = [string]$item.id
+                }
+            }
+        }
+    }
+
+    return $null
+}
+
 function Get-GitHubAppInstallationId {
-    param([string]$AppId)
+    param(
+        [string]$AppId,
+        [string]$RepoName
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RepoName)) {
+        $repoInstallId = & gh api "repos/$RepoName/installation" --jq "select(.app_id == $AppId) | .id" 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($repoInstallId)) {
+            return [string]$repoInstallId.Trim()
+        }
+    }
 
     $installId = & gh api "user/installations" --jq ".installations[] | select(.app_id == $AppId) | .id" 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installId)) {
@@ -713,27 +804,102 @@ function Get-GitHubAppInstallationId {
     return [string]$installId.Trim()
 }
 
+function ConvertTo-Base64Url {
+    param([byte[]]$Bytes)
+
+    return [Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
+function New-GitHubAppJwt {
+    param(
+        [string]$AppId,
+        [string]$PemText
+    )
+
+    $now = [DateTimeOffset]::UtcNow
+    $header = @{ alg = "RS256"; typ = "JWT" } | ConvertTo-Json -Compress
+    $payload = @{
+        iat = $now.AddSeconds(-60).ToUnixTimeSeconds()
+        exp = $now.AddMinutes(9).ToUnixTimeSeconds()
+        iss = $AppId
+    } | ConvertTo-Json -Compress
+
+    $encodedHeader = ConvertTo-Base64Url -Bytes ([System.Text.Encoding]::UTF8.GetBytes($header))
+    $encodedPayload = ConvertTo-Base64Url -Bytes ([System.Text.Encoding]::UTF8.GetBytes($payload))
+    $unsignedToken = "$encodedHeader.$encodedPayload"
+
+    $rsa = [System.Security.Cryptography.RSA]::Create()
+    try {
+        $rsa.ImportFromPem($PemText)
+        $signature = $rsa.SignData(
+            [System.Text.Encoding]::UTF8.GetBytes($unsignedToken),
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+        )
+    } finally {
+        $rsa.Dispose()
+    }
+
+    return "$unsignedToken.$(ConvertTo-Base64Url -Bytes $signature)"
+}
+
+function Get-GitHubAppRepositoryInstallationId {
+    param(
+        [string]$AppId,
+        [string]$PemText,
+        [string]$RepoName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PemText)) {
+        return $null
+    }
+
+    try {
+        $jwt = New-GitHubAppJwt -AppId $AppId -PemText $PemText
+        $response = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$RepoName/installation" `
+            -Method Get `
+            -Headers @{
+                Authorization = "Bearer $jwt"
+                Accept = "application/vnd.github+json"
+                "X-GitHub-Api-Version" = "2022-11-28"
+            }
+        if ($response.app_id -eq [int64]$AppId -and $response.id) {
+            return [string]$response.id
+        }
+    } catch {
+        return $null
+    }
+
+    return $null
+}
+
 function Wait-GitHubAppInstallation {
     [CmdletBinding()]
     param(
         [string]$AppId,
         [string]$AppSlug,
         [string]$RepoName,
+        [string]$PemText,
         [int]$TimeoutMinutes = 3
     )
 
-    $installUrl = "https://github.com/settings/apps/$AppSlug/installations"
+    $installUrl = "https://github.com/apps/$AppSlug/installations/new"
     Write-Step "Installing GitHub App on repository"
     Write-Host "  Opening browser for GitHub App installation." -ForegroundColor Cyan
     Write-Host "  Repo scope  : $RepoName" -ForegroundColor White
     Write-Host "  Install URL : $installUrl" -ForegroundColor White
     Write-Host "  Select 'Only select repositories' and choose this repo only." -ForegroundColor Yellow
+    Write-Host "  The script will confirm installation using the GitHub App private key captured during creation." -ForegroundColor DarkGray
     Write-Host ""
     Start-Process $installUrl
 
     $deadline = [DateTime]::UtcNow.AddMinutes($TimeoutMinutes)
     while ([DateTime]::UtcNow -lt $deadline) {
-        $installId = Get-GitHubAppInstallationId -AppId $AppId
+        $installId = Get-GitHubAppRepositoryInstallationId -AppId $AppId -PemText $PemText -RepoName $RepoName
+        if ([string]::IsNullOrWhiteSpace($installId)) {
+            $installId = Get-GitHubAppInstallationId -AppId $AppId -RepoName $RepoName
+        }
         if (-not [string]::IsNullOrWhiteSpace($installId)) {
             Write-Ok "GitHub App installation confirmed: $installId"
             return $installId
@@ -786,7 +952,7 @@ function Get-GitHubEnvironments {
     return @($json -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 }
 
-function Ensure-GitHubEnvironment {
+function Confirm-GitHubEnvironment {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$RepoName,
@@ -836,7 +1002,7 @@ function Write-BootstrapReport {
         [int]$SecretsKept,
         [int]$VariablesSet,
         [string[]]$CreatedGitHubEnvironments,
-        [string[]]$FederatedCredentials,
+        [string[]]$OidcSubjectClaims,
         [string]$BootstrapLocation,
         [string]$BootstrapRegionShort
     )
@@ -847,7 +1013,7 @@ function Write-BootstrapReport {
     }
 
     $createdEnvsText = if ($CreatedGitHubEnvironments.Count -gt 0) { ($CreatedGitHubEnvironments -join ", ") } else { "none" }
-    $credentialsText = if ($FederatedCredentials.Count -gt 0) { ($FederatedCredentials -join "`n") } else { "none" }
+    $credentialsText = if ($OidcSubjectClaims.Count -gt 0) { ($OidcSubjectClaims -join "`n") } else { "none" }
 
     $content = @"
 # CNA Bootstrap Report
@@ -874,7 +1040,7 @@ function Write-BootstrapReport {
 | --- | --- |
 | GitHub environments present | $(@($GitHubEnvironments) -join ", ") |
 | GitHub environments ensured | $createdEnvsText |
-| Federated credential subjects | `$(($FederatedCredentials.Count))` |
+| Federated credential subjects | $(($OidcSubjectClaims.Count)) |
 | GitHub App status | $GitHubAppStatus |
 | GitHub App installation | $GitHubAppInstallationId |
 | Secrets written | `$SecretsSet` |
@@ -893,7 +1059,7 @@ function Write-BootstrapReport {
 
 ## Federated Credentials
 
-`$credentialsText`
+$credentialsText
 
 ## CAF / Naming Notes
 
@@ -921,15 +1087,28 @@ function Add-GitHubFederatedCredential {
         [string]$Subject
     )
 
-    $existingCredential = & az ad app federated-credential list --id $AppId --query "[?name=='$Name'].id" -o tsv 2>$null
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingCredential)) {
-        Write-Ok "Federated credential exists: $Name"
-        return
+    $issuer = "https://token.actions.githubusercontent.com"
+    $existingJson = & az ad app federated-credential list --id $AppId -o json 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingJson)) {
+        $existingCredentials = @($existingJson | ConvertFrom-Json)
+        $existingByName = $existingCredentials | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+        if ($existingByName) {
+            Write-Ok "Federated credential exists: $Name"
+            return
+        }
+
+        $existingBySubject = $existingCredentials | Where-Object {
+            $_.issuer -eq $issuer -and $_.subject -eq $Subject
+        } | Select-Object -First 1
+        if ($existingBySubject) {
+            Write-Ok "Federated credential subject exists: $Subject ($($existingBySubject.name))"
+            return
+        }
     }
 
     $credential = @{
         name      = $Name
-        issuer    = "https://token.actions.githubusercontent.com"
+        issuer    = $issuer
         subject   = $Subject
         audiences = @("api://AzureADTokenExchange")
     } | ConvertTo-Json -Compress
@@ -982,7 +1161,7 @@ function Get-AvailableStorageAccountName {
     throw "Unable to find an available storage account name derived from '$BaseName'."
 }
 
-function Ensure-ResourceGroup {
+function Confirm-ResourceGroup {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$SubscriptionId,
@@ -1009,7 +1188,7 @@ function Ensure-ResourceGroup {
     }
 }
 
-function Ensure-TfstateBackendResources {
+function Confirm-TfstateBackendResources {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$SubscriptionId,
@@ -1021,7 +1200,7 @@ function Ensure-TfstateBackendResources {
     )
 
     Write-Step "Ensuring Terraform backend prerequisites"
-    $resourceGroupStatus = Ensure-ResourceGroup -SubscriptionId $SubscriptionId -Location $Location -ResourceGroupName $ResourceGroupName -PurposeLabel "tfstate"
+    $resourceGroupStatus = Confirm-ResourceGroup -SubscriptionId $SubscriptionId -Location $Location -ResourceGroupName $ResourceGroupName -PurposeLabel "tfstate"
 
     $storageId = & az storage account show --name $StorageAccountName --resource-group $ResourceGroupName --subscription $SubscriptionId --query id -o tsv 2>$null
     $storageAccountStatus = "existing"
@@ -1132,36 +1311,40 @@ if (-not $AppDisplayName) {
 Invoke-Gh -Arguments @("auth", "status")
 $existingSecrets = Get-ExistingGitHubSecretNames -RepoName $Repo
 $existingVariables = Get-ExistingGitHubVariableValues -RepoName $Repo
+$legacyDockerHubSecretName = "DOCKERHUB" + "_USERNAME"
+$hadLegacyDockerHubSecret = $existingSecrets.ContainsKey($legacyDockerHubSecretName)
+Remove-GitHubSecretIfExists -Name $legacyDockerHubSecretName -RepoName $Repo -ExistingSecrets $existingSecrets | Out-Null
+$existingSecrets.Remove($legacyDockerHubSecretName)
 $createdGitHubEnvironments = [System.Collections.Generic.List[string]]::new()
 foreach ($environmentName in @("dev", "prod")) {
-    if (Ensure-GitHubEnvironment -RepoName $Repo -EnvironmentName $environmentName) {
+    if (Confirm-GitHubEnvironment -RepoName $Repo -EnvironmentName $environmentName) {
         $createdGitHubEnvironments.Add($environmentName) | Out-Null
     }
 }
 $githubEnvironments = Get-GitHubEnvironments -RepoName $Repo
 
 $githubAppName = "CNA Assessment Tool"
+Write-Info "Using GitHub App name: $githubAppName"
 $githubAppId = ""
 $githubAppSlug = ""
 $githubAppInstallationId = ""
 $githubAppStatus = "not-configured"
+$githubAppPrivateKey = $null
 $hasGitHubAppId = $existingSecrets.ContainsKey("GH_APP_ID")
 $hasGitHubAppPrivateKey = $existingSecrets.ContainsKey("GH_APP_PRIVATE_KEY")
-if ($hasGitHubAppId -xor $hasGitHubAppPrivateKey) {
-    throw "GitHub App secrets are partially configured. Set both GH_APP_ID and GH_APP_PRIVATE_KEY, or neither."
+Write-Step "Creating GitHub App"
+if ($hasGitHubAppId -or $hasGitHubAppPrivateKey) {
+    Write-Warn "Existing GitHub App secrets were found. They will be replaced with credentials from a newly created app."
 }
-if (-not ($hasGitHubAppId -and $hasGitHubAppPrivateKey)) {
-    Write-Step "Creating GitHub App"
-    $repoUrl = "https://github.com/$Repo"
-    $githubApp = New-GitHubAppViaManifest -AppName $githubAppName -RepoName $Repo -HomepageUrl $repoUrl
-    $githubAppId = $githubApp.AppId
-    $githubAppSlug = $githubApp.Slug
-    $githubAppInstallationId = Wait-GitHubAppInstallation -AppId $githubAppId -AppSlug $githubAppSlug -RepoName $Repo
-    $githubAppStatus = "created"
-} else {
-    Write-Ok "GitHub App secrets already exist; skipping creation."
-    $githubAppStatus = "already-configured"
-}
+Write-Info "The script will create a new GitHub App named '$githubAppName'."
+Write-Info "If GitHub reports that the app name is taken, delete the existing app in GitHub Developer Settings and rerun this script."
+$repoUrl = "https://github.com/$Repo"
+$githubApp = New-GitHubAppViaManifest -AppName $githubAppName -RepoName $Repo -HomepageUrl $repoUrl
+$githubAppId = $githubApp.AppId
+$githubAppSlug = $githubApp.Slug
+$githubAppPrivateKey = $githubApp.PrivateKey
+$githubAppInstallationId = Wait-GitHubAppInstallation -AppId $githubAppId -AppSlug $githubAppSlug -RepoName $Repo -PemText $githubAppPrivateKey
+$githubAppStatus = "created"
 
 $tenantId = ""
 $resolvedSubscriptionId = ""
@@ -1289,7 +1472,7 @@ Write-Step "Collecting GitHub secret values"
 if ($githubAppStatus -eq "created") {
     $secretValues = [ordered]@{}
     $secretValues["GH_APP_ID"] = $githubAppId
-    $secretValues["GH_APP_PRIVATE_KEY"] = $githubApp.PrivateKey
+    $secretValues["GH_APP_PRIVATE_KEY"] = $githubAppPrivateKey
 } else {
     $secretValues = [ordered]@{}
 }
@@ -1316,11 +1499,6 @@ $secretValues["CNA_ENTRA_CLIENT_SECRET"] = $entraClientSecret
 $secretValues["CNA_POSTGRES_ADMIN_PASSWORD"] = Read-SecretValue -Name "CNA_POSTGRES_ADMIN_PASSWORD" -Description "PostgreSQL admin password" -Exists $existingSecrets.ContainsKey("CNA_POSTGRES_ADMIN_PASSWORD") -GenerateBytes 18 -Required
 $secretValues["CNA_NEXTAUTH_SECRET"] = Read-SecretValue -Name "CNA_NEXTAUTH_SECRET" -Description "Auth.js signing secret" -Exists $existingSecrets.ContainsKey("CNA_NEXTAUTH_SECRET") -GenerateBytes 32 -Required
 $secretValues["CNA_CREDENTIAL_ENCRYPTION_KEY"] = Read-SecretValue -Name "CNA_CREDENTIAL_ENCRYPTION_KEY" -Description "base64 32-byte AES key for stored cloud credentials" -Exists $existingSecrets.ContainsKey("CNA_CREDENTIAL_ENCRYPTION_KEY") -GenerateBytes 32 -Required
-$dockerHubSecretValues = Read-DockerHubSecretValues `
-    -UsernameExists $existingSecrets.ContainsKey("DOCKERHUB_USERNAME") `
-    -TokenExists $existingSecrets.ContainsKey("DOCKERHUB_TOKEN")
-$secretValues["DOCKERHUB_USERNAME"] = $dockerHubSecretValues.Username
-$secretValues["DOCKERHUB_TOKEN"] = $dockerHubSecretValues.Token
 $secretValues["FRONTDOOR_CERTIFICATE_PFX_PASSWORD"] = Read-SecretValue -Name "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" -Description "optional custom TLS certificate PFX password" -Exists $existingSecrets.ContainsKey("FRONTDOOR_CERTIFICATE_PFX_PASSWORD")
 $secretValues["CNA_AWS_ROLE_ARN"] = Read-SecretValue -Name "CNA_AWS_ROLE_ARN" -Description "optional AWS OIDC role ARN for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_AWS_ROLE_ARN")
 $secretValues["CNA_PUBLISH_BUCKET"] = Read-SecretValue -Name "CNA_PUBLISH_BUCKET" -Description "optional S3 bucket for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_PUBLISH_BUCKET")
@@ -1340,6 +1518,7 @@ $resolvedDrawioMcpUrl = if ([string]::IsNullOrWhiteSpace($nextAuthUrlForRedirect
 
 $variableDefaults = [ordered]@{
     AZURE_REGION_SHORT            = $BootstrapRegionShort
+    DOCKERHUB_NAMESPACE           = Read-DockerHubNamespace -ExistingValue $(if ($existingVariables.ContainsKey("DOCKERHUB_NAMESPACE")) { [string]$existingVariables["DOCKERHUB_NAMESPACE"] } else { "" })
     TFSTATE_RESOURCE_GROUP         = "rg-cna-$Environment-$BootstrapRegionShort-tfstate"
     TFSTATE_STORAGE_ACCOUNT        = $defaultTfstateStorage
     TFSTATE_CONTAINER              = "tfstate"
@@ -1366,6 +1545,11 @@ foreach ($entry in $variableDefaults.GetEnumerator()) {
     $existingValue = if ($exists) { [string]$existingVariables[$entry.Key] } else { "" }
     $variableValues[$entry.Key] = Get-DesiredTextValue -Name $entry.Key -ExistingValue $existingValue -DefaultValue ([string]$entry.Value)
 }
+
+$dockerHubSecretValues = Read-DockerHubSecretValues `
+    -Namespace ([string]$variableValues["DOCKERHUB_NAMESPACE"]) `
+    -TokenExists ($existingSecrets.ContainsKey("DOCKERHUB_TOKEN") -and -not $hadLegacyDockerHubSecret)
+$secretValues["DOCKERHUB_TOKEN"] = $dockerHubSecretValues.Token
 
 $bootstrapWorkloadResourceGroup = "rg-cna-$Environment-$BootstrapRegionShort"
 $bootstrapTfstateResourceGroup = [string]$variableValues["TFSTATE_RESOURCE_GROUP"]
@@ -1407,13 +1591,13 @@ foreach ($entry in $variableValues.GetEnumerator()) {
 
 if (-not $SkipAzureSetup) {
     Write-Step "Ensuring workload resource group"
-    $bootstrapWorkloadResourceGroupStatus = Ensure-ResourceGroup `
+    $bootstrapWorkloadResourceGroupStatus = Confirm-ResourceGroup `
         -SubscriptionId $resolvedSubscriptionId `
         -Location $BootstrapLocation `
         -ResourceGroupName $bootstrapWorkloadResourceGroup `
         -PurposeLabel "workload"
 
-    $bootstrapTfstateResourceStatus = Ensure-TfstateBackendResources `
+    $bootstrapTfstateResourceStatus = Confirm-TfstateBackendResources `
         -SubscriptionId $resolvedSubscriptionId `
         -Location $BootstrapLocation `
         -ResourceGroupName $bootstrapTfstateResourceGroup `
@@ -1423,8 +1607,9 @@ if (-not $SkipAzureSetup) {
 }
 
 if (-not $SkipBootstrapDispatch) {
-    Write-Step "Dispatching workflow 000 bootstrap"
-    Start-GitHubWorkflow -RepoName $Repo -Workflow "000-bootstrap-backend.yml" -Ref $Branch -Inputs @{
+    Write-Step "Step 1: Run workflow 000 bootstrap"
+    $bootstrapWorkflow = "000-bootstrap-backend.yml"
+    $bootstrapInputs = @{
         environment              = $Environment
         location                 = $BootstrapLocation
         region_short             = $BootstrapRegionShort
@@ -1432,7 +1617,24 @@ if (-not $SkipBootstrapDispatch) {
         tfstate_storage_account  = $bootstrapTfstateStorageAccount
         tfstate_container        = $bootstrapTfstateContainer
     }
-    Write-Ok "Dispatched 000-bootstrap-backend.yml for environment '$Environment'"
+
+    $shouldDispatchBootstrap = Read-YesNo -Prompt "Step 1: Run workflow 000-bootstrap-backend.yml for '$Environment' now?" -DefaultYes $false
+    if (-not $shouldDispatchBootstrap) {
+        Write-Warn "Step 1 skipped by user. Workflow 000 was not enabled or dispatched."
+        Write-Host "  gh workflow run $bootstrapWorkflow --repo $Repo --ref $Branch -f environment=$Environment -f location=$BootstrapLocation -f region_short=$BootstrapRegionShort -f tfstate_resource_group=$bootstrapTfstateResourceGroup -f tfstate_storage_account=$bootstrapTfstateStorageAccount -f tfstate_container=$bootstrapTfstateContainer" -ForegroundColor White
+    } elseif (Enable-GitHubWorkflowIfDisabled -RepoName $Repo -Workflow $bootstrapWorkflow) {
+        try {
+            Start-GitHubWorkflow -RepoName $Repo -Workflow $bootstrapWorkflow -Ref $Branch -Inputs $bootstrapInputs
+            Write-Ok "Dispatched 000-bootstrap-backend.yml for environment '$Environment'"
+        } catch {
+            Write-Warn $_.Exception.Message
+            Write-Warn "Bootstrap dispatch failed. Run manually after enabling the workflow:"
+            Write-Host "  gh workflow run $bootstrapWorkflow --repo $Repo --ref $Branch -f environment=$Environment -f location=$BootstrapLocation -f region_short=$BootstrapRegionShort -f tfstate_resource_group=$bootstrapTfstateResourceGroup -f tfstate_storage_account=$bootstrapTfstateStorageAccount -f tfstate_container=$bootstrapTfstateContainer" -ForegroundColor White
+        }
+    } else {
+        Write-Warn "Bootstrap workflow was not active, so dispatch was skipped."
+        Write-Host "  gh workflow enable $bootstrapWorkflow --repo $Repo" -ForegroundColor White
+    }
 }
 
 Write-BootstrapReport -Path (Join-Path $ReportDirectory "$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$Environment-bootstrap-report.md") `
@@ -1462,7 +1664,7 @@ Write-BootstrapReport -Path (Join-Path $ReportDirectory "$((Get-Date).ToString('
     -SecretsKept $keptSecretCount `
     -VariablesSet $setVariableCount `
     -CreatedGitHubEnvironments @($createdGitHubEnvironments) `
-    -FederatedCredentials @($federatedCredentialSubjects) `
+    -OidcSubjectClaims @($federatedCredentialSubjects) `
     -BootstrapLocation $BootstrapLocation `
     -BootstrapRegionShort $BootstrapRegionShort
 

@@ -1,19 +1,19 @@
 variable "api_image" {
-  description = "Container image for CNA API (docker.io/saulpatinojr/cna-api:<tag>)"
+  description = "Container image for CNA API (docker.io/example-namespace/cna-api:<tag>)"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-api:latest"
+  default     = "docker.io/example-namespace/cna-api:latest"
 }
 
 variable "worker_image" {
-  description = "Container image for CNA worker (docker.io/saulpatinojr/cna-worker:<tag>)"
+  description = "Container image for CNA worker (docker.io/example-namespace/cna-worker:<tag>)"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-worker:latest"
+  default     = "docker.io/example-namespace/cna-worker:latest"
 }
 
 variable "web_image" {
-  description = "Container image for CNA web (docker.io/saulpatinojr/cna-web:<tag>)"
+  description = "Container image for CNA web (docker.io/example-namespace/cna-web:<tag>)"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-web:latest"
+  default     = "docker.io/example-namespace/cna-web:latest"
 }
 
 variable "tenant_id" {

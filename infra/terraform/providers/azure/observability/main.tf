@@ -77,11 +77,11 @@ resource "azapi_resource" "virtual_network_flow_log" {
       targetResourceId = var.flow_log_target_resource_id
       flowAnalyticsConfiguration = {
         networkWatcherFlowAnalyticsConfiguration = {
-          enabled                 = true
+          enabled                  = true
           trafficAnalyticsInterval = var.flow_log_traffic_analytics_interval
-          workspaceId             = var.log_analytics_workspace_workspace_id
-          workspaceRegion         = var.log_analytics_workspace_location
-          workspaceResourceId     = var.log_analytics_workspace_id
+          workspaceId              = var.log_analytics_workspace_workspace_id
+          workspaceRegion          = var.log_analytics_workspace_location
+          workspaceResourceId      = var.log_analytics_workspace_id
         }
       }
     }

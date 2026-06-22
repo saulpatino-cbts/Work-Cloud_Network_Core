@@ -25,8 +25,8 @@ work is tracked here.
 
 ## Redeploy And Validation
 
-- [x] P1. Replace the previous image-pull authentication path with private Docker Hub credentials (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) for `cna-api`, `cna-worker`, `cna-web`, and `cna-migrator`.
-- [ ] P1. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in GitHub Secrets; workflow `100-validate-prereqs.yml` now fails fast on Docker Hub login and manifest checks.
+- [x] P1. Replace the previous image-pull authentication path with private Docker Hub credentials (`DOCKERHUB_NAMESPACE`, `DOCKERHUB_TOKEN`) for `cna-api`, `cna-worker`, `cna-web`, and `cna-migrator`.
+- [ ] P1. Set `DOCKERHUB_NAMESPACE` in GitHub Variables and `DOCKERHUB_TOKEN` in GitHub Secrets; workflow `100-validate-prereqs.yml` now fails fast on Docker Hub login and manifest checks.
 - [ ] P1. Run workflow `100-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
 - [x] P1. Run workflow `000-bootstrap-backend.yml` for `dev` to create the tfstate backend and import the workload resource group.
 - [x] P1. Register `Microsoft.AlertsManagement` in the Azure subscription so Application Insights smart-detection alert deployment does not fail.

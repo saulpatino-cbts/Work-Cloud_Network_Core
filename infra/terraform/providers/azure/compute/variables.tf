@@ -1,19 +1,19 @@
 variable "api_image" {
   description = "Container image for CNA API"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-api:latest"
+  default     = "docker.io/example-namespace/cna-api:latest"
 }
 
 variable "worker_image" {
   description = "Container image for CNA worker"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-worker:latest"
+  default     = "docker.io/example-namespace/cna-worker:latest"
 }
 
 variable "web_image" {
   description = "Container image for CNA Web (Next.js 15)"
   type        = string
-  default     = "docker.io/saulpatinojr/cna-web:latest"
+  default     = "docker.io/example-namespace/cna-web:latest"
 }
 
 variable "resource_group_name" {

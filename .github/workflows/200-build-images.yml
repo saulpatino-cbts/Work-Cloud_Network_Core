@@ -19,6 +19,8 @@ permissions:
 jobs:
   build-cli:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -30,14 +32,21 @@ jobs:
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
 
       - name: Extract metadata for CLI
         id: meta_cli
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: docker.io/saulpatinojr/cna
+          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna
           tags: |
             type=raw,value=latest
             type=sha
@@ -55,6 +64,8 @@ jobs:
 
   build-api:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -66,14 +77,21 @@ jobs:
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
 
       - name: Extract metadata for API
         id: meta_api
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: docker.io/saulpatinojr/cna-api
+          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna-api
           tags: |
             type=raw,value=latest
             type=sha
@@ -91,6 +109,8 @@ jobs:
 
   build-worker:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -102,14 +122,21 @@ jobs:
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
 
       - name: Extract metadata for Worker
         id: meta_worker
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: docker.io/saulpatinojr/cna-worker
+          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna-worker
           tags: |
             type=raw,value=latest
             type=sha
@@ -127,6 +154,8 @@ jobs:
 
   build-web:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -138,14 +167,21 @@ jobs:
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
 
       - name: Extract metadata for Web
         id: meta_web
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: docker.io/saulpatinojr/cna-web
+          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna-web
           tags: |
             type=raw,value=latest
             type=sha
@@ -154,7 +190,7 @@ jobs:
         id: meta_migrator
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: docker.io/saulpatinojr/cna-migrator
+          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna-migrator
           tags: |
             type=raw,value=latest
             type=sha
@@ -205,7 +241,7 @@ jobs:
             -e AZURE_AD_CLIENT_SECRET="ci-placeholder" \
             -e AZURE_AD_TENANT_ID="00000000-0000-0000-0000-000000000000" \
             -p 3000:3000 \
-            docker.io/saulpatinojr/cna-web:latest
+            docker.io/${DOCKERHUB_NAMESPACE}/cna-web:latest
           sleep 15
           # Always dump logs so we can diagnose crashes even on failure
           echo "--- container status ---"
@@ -226,6 +262,8 @@ jobs:
   publish-build-manifest:
     runs-on: ubuntu-latest
     needs: [build-cli, build-api, build-worker, build-web]
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -235,6 +273,10 @@ jobs:
 
       - name: Write build manifest
         run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
           SHA_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
           mkdir -p .deployment-catalog
           cat > .deployment-catalog/latest-build.json <<EOF
@@ -244,11 +286,11 @@ jobs:
             "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "run_id": "${{ github.run_id }}",
             "images": {
-              "cli":    "docker.io/saulpatinojr/cna:${SHA_TAG}",
-              "api":    "docker.io/saulpatinojr/cna-api:${SHA_TAG}",
-              "worker": "docker.io/saulpatinojr/cna-worker:${SHA_TAG}",
-              "web":    "docker.io/saulpatinojr/cna-web:${SHA_TAG}",
-              "migrator":"docker.io/saulpatinojr/cna-migrator:${SHA_TAG}"
+              "cli":    "docker.io/${DOCKERHUB_NAMESPACE}/cna:${SHA_TAG}",
+              "api":    "docker.io/${DOCKERHUB_NAMESPACE}/cna-api:${SHA_TAG}",
+              "worker": "docker.io/${DOCKERHUB_NAMESPACE}/cna-worker:${SHA_TAG}",
+              "web":    "docker.io/${DOCKERHUB_NAMESPACE}/cna-web:${SHA_TAG}",
+              "migrator":"docker.io/${DOCKERHUB_NAMESPACE}/cna-migrator:${SHA_TAG}"
             }
           }
           EOF

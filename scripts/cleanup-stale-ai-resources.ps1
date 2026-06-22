@@ -116,6 +116,7 @@ $workloadRg = "rg-$namePrefix"
 $tfstateRg = "${workloadRg}-tfstate"
 $managedRgPatterns = @(
     "ai_*$($namePrefix)*_*_managed",
+    "rg-$($namePrefix)-cae-managed",
     "ME_*_rg-$($namePrefix)_*"
 )
 

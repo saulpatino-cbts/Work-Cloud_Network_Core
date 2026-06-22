@@ -20,6 +20,6 @@ output "database_name" {
 
 output "connection_string" {
   description = "DATABASE_URL for Prisma / SQLAlchemy. Contains admin password — treat as sensitive."
-  value       = "postgresql://${var.admin_username}:${var.admin_password}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/${local.database_name}?sslmode=require"
+  value       = "postgresql://${var.admin_username}:${urlencode(var.admin_password)}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/${local.database_name}?sslmode=require"
   sensitive   = true
 }

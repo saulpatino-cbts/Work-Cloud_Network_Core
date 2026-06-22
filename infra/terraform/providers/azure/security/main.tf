@@ -30,13 +30,13 @@ resource "azurerm_private_dns_zone" "keyvault" {
   resource_group_name = var.resource_group_name
 }
 
-# PostgreSQL Flexible Server with VNet integration (delegated subnet) requires
-# the zone to match the server's FQDN suffix so Azure registers an A record as
-# "<server-name>.postgres.database.azure.com". The privatelink.* zone is for
-# private endpoints to Single Server — using it here creates a hash-named record
-# that never matches the FQDN, causing silent TCP hangs in the migrator.
+# PostgreSQL Flexible Server with VNet integration (delegated subnet).
+# Azure registers the server via a hash-named A record in this zone
+# (e.g. c2779f1c3041.privatelink.postgres.database.azure.com → private IP).
+# The server FQDN's public CNAME points directly to that hash name, so the
+# private zone resolves it correctly from within the VNet.
 resource "azurerm_private_dns_zone" "postgres" {
-  name                = "postgres.database.azure.com"
+  name                = "privatelink.postgres.database.azure.com"
   resource_group_name = var.resource_group_name
 }
 

@@ -534,6 +534,33 @@ jobs:
           RG="${{ steps.export_ids.outputs.resource_group_name }}"
           CAE_ID="${{ steps.export_ids.outputs.container_app_environment_id }}"
           CAE="${CAE_ID##*/}"
+
+          # Extract host from DB_URL for connectivity pre-check
+          DB_HOST=$(echo "$DB_URL" | sed 's|.*@||' | cut -d: -f1)
+          echo "Pre-flight: resolving $DB_HOST and checking port 5432..."
+          PROBE_JOB="job-probe-${{ github.run_id }}"
+          az containerapp job create \
+            --name "$PROBE_JOB" \
+            --resource-group "$RG" \
+            --environment "$CAE" \
+            --trigger-type Manual \
+            --replica-timeout 30 \
+            --replica-retry-limit 0 \
+            --replica-completion-count 1 \
+            --parallelism 1 \
+            --image "docker.io/alpine:3.19" \
+            --command "/bin/sh" \
+            --args "-c" "nslookup $DB_HOST && nc -zv $DB_HOST 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE" \
+            2>/dev/null || true
+          az containerapp job start --name "$PROBE_JOB" --resource-group "$RG" 2>/dev/null || true
+          sleep 35
+          PROBE_LOG=$(az monitor log-analytics query \
+            -w "$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null)" \
+            --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
+            -o tsv 2>/dev/null || echo "probe-log-unavailable")
+          echo "Probe output: $PROBE_LOG"
+          az containerapp job delete --name "$PROBE_JOB" --resource-group "$RG" --yes 2>/dev/null || true
+
           JOB="job-migrate-${{ github.run_id }}"
           echo "Creating migration job $JOB..."
           az containerapp job create \

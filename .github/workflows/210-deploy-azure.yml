@@ -730,46 +730,50 @@ jobs:
             exit 1
           fi
 
-      - name: Refresh container app secrets and wait for readiness
-        # Azure Container Apps does NOT roll a new revision when only a secret's
-        # VALUE changes (revisions roll on template changes — image/env refs).
-        # A changed DATABASE_URL therefore leaves running revisions holding the
-        # stale value, which crash-loops the app. Restart the latest revision of
-        # each secret-consuming app so it re-injects the freshly-applied secrets,
-        # then wait for the web replica to report Ready before downstream steps
-        # (Foundry exec validation) that require a live replica.
+      - name: Ensure warm web replica for exec-based validation
+        # Two things conspire to break the downstream Foundry exec validation:
+        #   1. Azure Container Apps does NOT roll a new revision when only a
+        #      secret's VALUE changes, so a freshly-applied DATABASE_URL leaves
+        #      running revisions on the stale value (crash-loop).
+        #   2. dev runs with enable_scale_to_zero (min_replicas=0), so the web
+        #      app idles to 0 replicas — and `az containerapp exec` cannot wake a
+        #      scaled-to-zero app, it requires an already-live replica.
+        # Forcing min-replicas=1 does both at once: it rolls a new revision
+        # (re-injecting current secrets) AND pins a warm replica for exec. The
+        # 'Restore web scale-to-zero' step below returns it to 0 so there is no
+        # Terraform drift. The api app only needs its secret refreshed, so a
+        # plain restart is enough (it may scale to zero afterward).
         run: |
           RG="${{ steps.export_ids.outputs.resource_group_name }}"
           WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
-          for APP in "$WEB_APP" "${WEB_APP/-ca-web/-ca-api}"; do
-            REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
-              --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
-            if [ -z "$REV" ]; then
-              REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
-                --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
-            fi
-            if [ -n "$REV" ]; then
-              echo "Restarting $APP revision $REV to pick up current secrets..."
-              az containerapp revision restart --name "$APP" --resource-group "$RG" --revision "$REV" 2>/dev/null || true
-            else
-              echo "::warning::No revision found for $APP — skipping restart."
-            fi
-          done
+          API_APP="${WEB_APP/-ca-web/-ca-api}"
+
+          API_REV=$(az containerapp show --name "$API_APP" --resource-group "$RG" \
+            --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
+          [ -z "$API_REV" ] && API_REV=$(az containerapp show --name "$API_APP" --resource-group "$RG" \
+            --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+          if [ -n "$API_REV" ]; then
+            echo "Restarting $API_APP revision $API_REV to pick up current secrets..."
+            az containerapp revision restart --name "$API_APP" --resource-group "$RG" --revision "$API_REV" 2>/dev/null || true
+          fi
+
+          echo "Pinning $WEB_APP to min-replicas=1 (rolls fresh revision + warm replica)..."
+          az containerapp update --name "$WEB_APP" --resource-group "$RG" --min-replicas 1 --output none
 
           echo "Waiting for $WEB_APP to report a Ready replica..."
-          WEB_REV=$(az containerapp show --name "$WEB_APP" --resource-group "$RG" \
-            --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
           READY=0
           for i in $(seq 1 30); do
+            WEB_REV=$(az containerapp show --name "$WEB_APP" --resource-group "$RG" \
+              --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
             R=$(az containerapp replica list --name "$WEB_APP" --resource-group "$RG" \
               --revision "$WEB_REV" \
               --query "[0].properties.containers[0].ready" -o tsv 2>/dev/null || echo "false")
-            echo "  [$i/30] web replica ready: $R"
+            echo "  [$i/30] web revision: ${WEB_REV:-none}  ready: $R"
             if [ "$R" = "true" ]; then READY=1; echo "Web app is Ready."; break; fi
             sleep 10
           done
           if [ "$READY" -ne 1 ]; then
-            echo "::error::Web app did not reach Ready after restart — check ContainerAppConsoleLogs_CL for $WEB_APP."
+            echo "::error::Web app did not reach Ready — check ContainerAppConsoleLogs_CL for $WEB_APP."
             LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
             if [ -n "$LAW_ID" ]; then
               az monitor log-analytics query -w "$LAW_ID" \
@@ -788,6 +792,17 @@ jobs:
           MAX_ATTEMPTS: "12"
           SLEEP_SECONDS: "20"
         run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
+
+      - name: Restore web scale-to-zero
+        # Return the web app to min-replicas=0 so it matches the Terraform-managed
+        # scale-to-zero config (no drift). Runs even if validation failed.
+        if: always()
+        run: |
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
+          echo "Restoring $WEB_APP to min-replicas=0..."
+          az containerapp update --name "$WEB_APP" --resource-group "$RG" --min-replicas 0 --output none 2>/dev/null \
+            || echo "::warning::Could not restore min-replicas=0 on $WEB_APP — next terraform apply will reconcile it."
 
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true

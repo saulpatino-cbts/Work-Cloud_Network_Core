@@ -43,7 +43,7 @@ variable "credential_encryption_key" {
 }
 
 variable "secret_expiration_date" {
-  description = "RFC3339 expiration timestamp applied to Terraform-managed Key Vault secrets"
+  description = "RFC3339 expiration timestamp applied to Terraform-managed Key Vault secrets. Must satisfy the 'Enforce-GR-KeyVault' policy (max 90 days from now). The 210 workflow computes this as 'date -u -d +90days'; this default is a local-run fallback."
   type        = string
-  default     = "2027-12-31T23:59:59Z"
+  default     = "2026-09-20T23:59:59Z"
 }

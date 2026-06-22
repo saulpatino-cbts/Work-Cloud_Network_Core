@@ -369,6 +369,7 @@ jobs:
           AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
           AWS_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AWS_MCP_TRANSPORT }}")
           DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
+          SECRET_EXPIRY=$(date -u -d "+90 days" "+%Y-%m-%dT%H:%M:%SZ")
 
           terraform plan -out=tfplan \
             -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
@@ -390,7 +391,8 @@ jobs:
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
             -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
-            -var="drawio_mcp_url=${DRAWIO_MCP_URL}"
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}" \
+            -var="secret_expiration_date=${SECRET_EXPIRY}"
 
       - name: Create deployment manifest
         run: |

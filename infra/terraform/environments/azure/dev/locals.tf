@@ -45,6 +45,8 @@ locals {
       split("/", var.api_image)[0],
       split("/", var.worker_image)[0],
       split("/", var.web_image)[0],
+      "registry-1.docker.io",
+      "auth.docker.io",
       "pkg-containers.githubusercontent.com",
       "${module.storage.storage_account_name}.blob.core.windows.net",
       local.key_vault_host,

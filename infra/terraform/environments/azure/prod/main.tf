@@ -255,9 +255,7 @@ module "observability" {
 
   diagnostic_targets = {
     frontdoor_profile          = module.security.frontdoor_profile_id
-    frontdoor_firewall_policy  = module.security.frontdoor_firewall_policy_id
     azure_firewall             = azurerm_firewall.egress.id
-    azure_firewall_policy      = azurerm_firewall_policy.egress.id
     container_apps_nsg         = azurerm_network_security_group.container_apps.id
     private_endpoints_nsg      = azurerm_network_security_group.private_endpoints.id
     database_nsg               = azurerm_network_security_group.database.id

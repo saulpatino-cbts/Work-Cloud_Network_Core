@@ -89,9 +89,11 @@ module "identity" {
   tenant_id           = var.tenant_id
   tags                = local.tags
 
-  # Dev: minimal soft-delete, but purge protection must be enabled per Azure Policy
+  # Dev: minimal soft-delete, no purge protection (prod-only requirement).
+  # Suffix incremented to avoid soft-delete name conflict after environment rebuild.
   key_vault_soft_delete_retention_days = 7
-  key_vault_purge_protection_enabled   = true
+  key_vault_purge_protection_enabled   = false
+  key_vault_name_suffix                = "2"
 }
 
 module "compute" {
@@ -273,9 +275,7 @@ module "observability" {
 
   diagnostic_targets = {
     frontdoor_profile          = module.security.frontdoor_profile_id
-    frontdoor_firewall_policy  = module.security.frontdoor_firewall_policy_id
     azure_firewall             = azurerm_firewall.egress.id
-    azure_firewall_policy      = azurerm_firewall_policy.egress.id
     container_apps_nsg         = azurerm_network_security_group.container_apps.id
     private_endpoints_nsg      = azurerm_network_security_group.private_endpoints.id
     database_nsg               = azurerm_network_security_group.database.id

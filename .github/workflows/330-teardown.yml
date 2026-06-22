@@ -1,4 +1,4 @@
-name: "220 · Teardown Azure Platform"
+name: "330 · Teardown Azure Platform"
 
 on:
   workflow_dispatch:

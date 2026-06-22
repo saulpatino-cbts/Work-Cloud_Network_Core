@@ -1,4 +1,4 @@
-name: "110 · Sync Local Keys"
+name: "340 · Sync Local Keys"
 # Pulls all CNA platform secrets from Azure Key Vault and generates a
 # populated .env file as a 1-day workflow artifact.
 # Run this after infrastructure deployment to validate secrets are present
@@ -51,7 +51,7 @@ jobs:
           done
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::error::Missing Key Vault secrets: ${MISSING[*]}"
-            echo "Run workflow 210 · Deploy Azure to create infrastructure and populate secrets."
+            echo "Run workflow 210 · Deploy Azure Platform to create infrastructure and populate secrets."
             exit 1
           fi
           echo "All required secrets are present in Key Vault: $VAULT"

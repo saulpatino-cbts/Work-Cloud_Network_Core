@@ -36,3 +36,9 @@ variable "key_vault_purge_protection_enabled" {
   type        = bool
   default     = false
 }
+
+variable "key_vault_name_suffix" {
+  description = "Optional suffix appended to the Key Vault name. Increment (e.g. '2', '3') after a full teardown to avoid soft-delete name conflicts."
+  type        = string
+  default     = ""
+}

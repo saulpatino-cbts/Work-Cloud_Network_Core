@@ -66,9 +66,8 @@ resource "azurerm_container_app" "api" {
   template {
     # FinOps: scale_to_zero overrides min_replicas to 0 for dev environments.
     # When idle, Container Apps cost $0. Cold-start is ~5-10s.
-    revision_suffix = local.api_revision_suffix
-    min_replicas    = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
-    max_replicas    = var.container_app_max_replicas
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
 
     container {
       name   = "cna-api"
@@ -161,9 +160,8 @@ resource "azurerm_container_app" "worker" {
   }
 
   template {
-    revision_suffix = local.worker_revision_suffix
-    min_replicas    = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
-    max_replicas    = var.container_app_max_replicas
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
 
     container {
       name   = "cna-worker"
@@ -228,9 +226,8 @@ resource "azurerm_container_app" "web" {
   }
 
   template {
-    revision_suffix = local.web_revision_suffix
-    min_replicas    = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
-    max_replicas    = var.container_app_max_replicas
+    min_replicas = var.enable_scale_to_zero ? 0 : var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
 
     container {
       name   = "cna-web"

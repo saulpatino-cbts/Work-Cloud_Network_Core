@@ -3,6 +3,8 @@ param(
     [ValidateSet("dev", "prod")]
     [string]$Environment = "dev",
 
+    [string]$RegionShort,
+
     [ValidateSet("StaleAi", "Environment", "AllCna")]
     [string]$Scope = "Environment",
 
@@ -104,18 +106,24 @@ if (-not $account) {
     throw "Azure CLI is not logged in. Run az login first."
 }
 
-$workloadRg = "rg-cna-$Environment-scus"
+$RegionShort = $RegionShort.Trim()
+if ([string]::IsNullOrWhiteSpace($RegionShort)) {
+    throw "RegionShort is required. Pass -RegionShort or set AZURE_REGION_SHORT in the calling workflow."
+}
+
+$namePrefix = "cna-$Environment-$RegionShort"
+$workloadRg = "rg-$namePrefix"
 $tfstateRg = "${workloadRg}-tfstate"
 $managedRgPatterns = @(
-    "ai_*cna-$Environment-scus*_*_managed",
-    "ME_*_rg-cna-$Environment-scus_*"
+    "ai_*$($namePrefix)*_*_managed",
+    "ME_*_rg-$($namePrefix)_*"
 )
 
-$staleOpenAiAccount = if ($Environment -eq "dev") { "aoaicnadevscus" } else { "aoaicnaprodscus" }
-$staleOpenAiPe = "pe-cna-$Environment-scus-openai"
+$staleOpenAiAccount = "aoaicna$Environment$RegionShort"
+$staleOpenAiPe = "pe-$namePrefix-openai"
 $staleOpenAiZone = "privatelink.openai.azure.com"
-$staleOpenAiDnsLink = "pdns-link-cna-$Environment-scus-openai"
-$keyVault = "cna-$Environment-scus-kv"
+$staleOpenAiDnsLink = "pdns-link-$namePrefix-openai"
+$keyVault = "$namePrefix-kv"
 $keyVaultSecret = "cna-azure-openai-endpoint"
 
 $allGroups = ConvertTo-FlatArray (Invoke-AzJson @("group", "list"))
@@ -137,8 +145,8 @@ switch ($Scope) {
         foreach ($match in @($allGroups | Where-Object {
             $_.name -eq $workloadRg -or
             $_.name -eq $tfstateRg -or
-            $_.name -like "ai_*cna-$Environment-*" -or
-            $_.name -like "ME_*_rg-cna-$Environment-scus_*"
+            $_.name -like "ai_*cna-$Environment-*_*_managed" -or
+            $_.name -like "ME_*_rg-$($namePrefix)_*"
         })) {
             Add-GroupName -Groups $groupNames -Name ([string]$match.name)
         }
@@ -156,6 +164,7 @@ $rows = [System.Collections.Generic.List[object]]::new()
 
 Write-Host "Subscription: $($account.name) ($($account.id))"
 Write-Host "Environment:  $Environment"
+Write-Host "RegionShort:  $RegionShort"
 Write-Host "Scope:        $Scope"
 Write-Host "Mode:         $(if ($Delete) { 'DELETE' } else { 'LIST ONLY' })"
 Write-Host ""

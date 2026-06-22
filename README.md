@@ -149,7 +149,7 @@ cp .env.example .env
 ```
 1. Run `.\scripts\Initialize-CnaGitHubSecrets.ps1` — seed GitHub secrets/variables, create the workload RG using the standard naming convention, prepare tfstate backend resources, and dispatch workflow 000 bootstrap
    → The script also creates and installs the GitHub App, then writes a bootstrap report to `.reports/bootstrap/` with the selected subscription, repo, Entra app, GitHub environments, GitHub App details, and CAF naming details
-   → For Docker Hub, create an access token in Docker Hub first; the script validates it and writes `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` to GitHub Secrets with the rest of the bootstrap values
+   → For Docker Hub, the script prompts for Docker Hub username/password, creates a read/write access token, and writes only `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` to GitHub Secrets with the rest of the bootstrap values
 2. Let workflow 000 complete — initialize Terraform remote state and import the existing workload RG into state (one-time per environment)
 3. Run workflow 100 — validate all secrets, variables, Azure OIDC
 4. Push to main   — workflow 200 auto-builds the CLI plus all three app container images

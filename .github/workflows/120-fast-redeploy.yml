@@ -69,13 +69,17 @@ jobs:
           INPUT_ENV: ${{ inputs.environment }}
           INPUT_RG: ${{ inputs.resource_group }}
           TFSTATE_RG: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
         run: |
           if [ -n "$INPUT_RG" ]; then
             WORKLOAD_RG="$INPUT_RG"
           elif [ -n "$TFSTATE_RG" ] && [[ "$TFSTATE_RG" == *-tfstate ]]; then
             WORKLOAD_RG="${TFSTATE_RG%-tfstate}"
+          elif [ -n "$REGION_SHORT" ]; then
+            WORKLOAD_RG="rg-cna-${INPUT_ENV}-${REGION_SHORT}"
           else
-            WORKLOAD_RG="rg-cna-${INPUT_ENV}-scus"
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
           fi
 
           PREFIX="${WORKLOAD_RG#rg-}"

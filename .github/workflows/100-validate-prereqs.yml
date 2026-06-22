@@ -91,6 +91,7 @@ jobs:
           TFSTATE_RESOURCE_GROUP:    ${{ vars.TFSTATE_RESOURCE_GROUP }}
           TFSTATE_STORAGE_ACCOUNT:   ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
           TFSTATE_CONTAINER:         ${{ vars.TFSTATE_CONTAINER }}
+          AZURE_REGION_SHORT:        ${{ vars.AZURE_REGION_SHORT }}
           CNA_ENTRA_CLIENT_ID:       ${{ vars.CNA_ENTRA_CLIENT_ID }}
           CNA_NEXTAUTH_URL:          ${{ vars.CNA_NEXTAUTH_URL }}
           AZURE_SUBSCRIPTION_ID:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -149,6 +150,7 @@ jobs:
           check_var "TFSTATE_RESOURCE_GROUP"  "$TFSTATE_RESOURCE_GROUP"
           check_var "TFSTATE_STORAGE_ACCOUNT" "$TFSTATE_STORAGE_ACCOUNT"
           check_var "TFSTATE_CONTAINER"       "$TFSTATE_CONTAINER"
+          check_var "AZURE_REGION_SHORT"      "$AZURE_REGION_SHORT"
           check_var "CNA_ENTRA_CLIENT_ID"     "$CNA_ENTRA_CLIENT_ID"
           check_var "CNA_NEXTAUTH_URL"        "$CNA_NEXTAUTH_URL"
           check_secret "AZURE_SUBSCRIPTION_ID" "$AZURE_SUBSCRIPTION_ID"

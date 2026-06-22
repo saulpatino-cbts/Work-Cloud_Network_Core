@@ -253,11 +253,16 @@ jobs:
             -backend-config="use_oidc=true"
 
       - name: Ensure Key Vault is reachable during Terraform
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
         run: |
           if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
             WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
           else
-            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
           fi
           WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
           KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
@@ -441,11 +446,16 @@ jobs:
             -backend-config="use_oidc=true"
 
       - name: Ensure Key Vault is reachable during Terraform
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
         run: |
           if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
             WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
           else
-            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
           fi
           WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
           KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
@@ -642,11 +652,16 @@ jobs:
           path: .deployment-catalog/${{ inputs.environment }}
 
       - name: Resolve workload naming
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
         run: |
           if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
             WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
           else
-            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
           fi
 
           echo "WORKLOAD_RG=$WORKLOAD_RG" >> "$GITHUB_ENV"

@@ -25,6 +25,10 @@ param(
 
     [string]$DockerHubUsername,
 
+    [System.Security.SecureString]$DockerHubPassword,
+
+    [string]$DockerHubTokenLabel = "cna-github-actions",
+
     [System.Security.SecureString]$DockerHubToken
 )
 
@@ -303,6 +307,72 @@ function Test-DockerHubCredential {
     Write-Ok "Docker Hub credentials validated for $Username"
 }
 
+function Get-DockerHubSessionToken {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Username,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Password
+    )
+
+    $body = @{
+        username = $Username
+        password = $Password
+    } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod `
+            -Uri "https://hub.docker.com/v2/users/login" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $body
+    } catch {
+        throw "Docker Hub login failed for '$Username'. If the account uses MFA, create the access token in Docker Hub and pass it with -DockerHubToken. $($_.Exception.Message)"
+    }
+
+    if (-not $response.token) {
+        throw "Docker Hub login did not return a session token for '$Username'."
+    }
+
+    return [string]$response.token
+}
+
+function New-DockerHubAccessToken {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SessionToken,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TokenLabel
+    )
+
+    $body = @{
+        token_label = $TokenLabel
+        scopes      = @("repo:read", "repo:write")
+    } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod `
+            -Uri "https://hub.docker.com/v2/access-tokens" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Headers @{ Authorization = "Bearer $SessionToken" } `
+            -Body $body
+    } catch {
+        throw "Docker Hub access token creation failed. Create the token manually in Docker Hub and pass it with -DockerHubToken. $($_.Exception.Message)"
+    }
+
+    if (-not $response.token) {
+        throw "Docker Hub access token creation did not return the generated token."
+    }
+
+    Write-Ok "Created Docker Hub access token '$TokenLabel' with repo read/write scope"
+    return [string]$response.token
+}
+
 function Read-DockerHubSecretValues {
     [CmdletBinding()]
     param(
@@ -318,8 +388,8 @@ function Read-DockerHubSecretValues {
         }
     }
 
-    Write-Info "Docker Hub access tokens are generated in Docker Hub and copied once."
-    Write-Info "Create a Docker Hub access token with read/write access for the private CNA repositories."
+    Write-Info "Docker Hub password is used locally only to create a read/write access token."
+    Write-Info "Only DOCKERHUB_USERNAME and the generated DOCKERHUB_TOKEN are saved to GitHub."
 
     $usernameValue = $DockerHubUsername
     if ([string]::IsNullOrWhiteSpace($usernameValue)) {
@@ -331,8 +401,20 @@ function Read-DockerHubSecretValues {
 
     $tokenValue = ConvertFrom-SecureStringToPlainText -Value $DockerHubToken
     if ([string]::IsNullOrWhiteSpace($tokenValue)) {
-        $secure = Read-Host "Paste Docker Hub access token for DOCKERHUB_TOKEN" -AsSecureString
-        $tokenValue = ConvertFrom-SecureStringToPlainText -Value $secure
+        $passwordValue = ConvertFrom-SecureStringToPlainText -Value $DockerHubPassword
+        if ([string]::IsNullOrWhiteSpace($passwordValue)) {
+            $securePassword = Read-Host "Paste Docker Hub password to create DOCKERHUB_TOKEN" -AsSecureString
+            $passwordValue = ConvertFrom-SecureStringToPlainText -Value $securePassword
+        }
+
+        if ([string]::IsNullOrWhiteSpace($passwordValue)) {
+            throw "Docker Hub password or -DockerHubToken is required to create DOCKERHUB_TOKEN."
+        }
+
+        $sessionToken = Get-DockerHubSessionToken -Username $usernameValue -Password $passwordValue
+        $tokenValue = New-DockerHubAccessToken -SessionToken $sessionToken -TokenLabel $DockerHubTokenLabel
+    } else {
+        Write-Info "Using supplied Docker Hub access token for DOCKERHUB_TOKEN"
     }
 
     if ([string]::IsNullOrWhiteSpace($tokenValue)) {
@@ -1257,7 +1339,8 @@ $resolvedDrawioMcpUrl = if ([string]::IsNullOrWhiteSpace($nextAuthUrlForRedirect
 }
 
 $variableDefaults = [ordered]@{
-    TFSTATE_RESOURCE_GROUP         = "rg-cna-$Environment-scus-tfstate"
+    AZURE_REGION_SHORT            = $BootstrapRegionShort
+    TFSTATE_RESOURCE_GROUP         = "rg-cna-$Environment-$BootstrapRegionShort-tfstate"
     TFSTATE_STORAGE_ACCOUNT        = $defaultTfstateStorage
     TFSTATE_CONTAINER              = "tfstate"
     AZURE_TARGET_SUBSCRIPTION_NAME = $(if ([string]::IsNullOrWhiteSpace($resolvedSubscriptionName)) { "none" } else { $resolvedSubscriptionName })

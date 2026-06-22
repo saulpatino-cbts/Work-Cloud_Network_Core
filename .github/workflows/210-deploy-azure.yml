@@ -526,6 +526,35 @@ jobs:
           SLEEP_SECONDS: "20"
         run: bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
 
+      - name: Resolve migrator image from deployment manifest
+        id: resolve_migrator
+        run: |
+          MANIFEST="$GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          mkdir -p "$(dirname "$MANIFEST")"
+
+      - name: Download deployment manifest for migrator image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Validate and export migrator image
+        id: migrator_image
+        run: |
+          MANIFEST="$GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          IMAGE=$(jq -r '.migrator_image // empty' "$MANIFEST" 2>/dev/null || echo "")
+          echo "Resolved migrator image from manifest: '${IMAGE}'"
+          if [[ -z "$IMAGE" ]]; then
+            echo "::error::migrator_image is empty in deployment manifest. The plan job must populate it."
+            exit 1
+          fi
+          if [[ "$IMAGE" == *"quickstart"* || "$IMAGE" == *"k8se"* ]]; then
+            echo "::error::migrator_image resolved to a placeholder image ('$IMAGE'). Check that latest-build.json has a migrator key."
+            exit 1
+          fi
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "MIGRATOR_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
       - name: Wait for PostgreSQL server to be Ready
         run: |
           DB_SERVER="${{ steps.export_ids.outputs.database_server_name }}"
@@ -551,11 +580,17 @@ jobs:
           CAE_ID="${{ steps.export_ids.outputs.container_app_environment_id }}"
           CAE="${CAE_ID##*/}"
           DB_HOST=$(echo "$DB_URL" | sed 's|.*@||' | cut -d: -f1)
+          MIGRATOR_IMAGE="${{ steps.migrator_image.outputs.image }}"
+
+          echo "Migrator image: $MIGRATOR_IMAGE"
+          if [[ -z "$MIGRATOR_IMAGE" || "$MIGRATOR_IMAGE" == *"quickstart"* || "$MIGRATOR_IMAGE" == *"k8se"* ]]; then
+            echo "::error::Refusing to run migration with image '$MIGRATOR_IMAGE' — resolve step must have failed."
+            exit 1
+          fi
 
           # Probe connectivity from inside the VNet before committing to the full 300s job.
-          # alpine's sh -c needs the command passed as a single comma-separated string to --command.
+          # --command accepts a comma-separated entrypoint list; args follow after the command list.
           PROBE_JOB="job-probe-${{ github.run_id }}"
-          PROBE_CMD="/bin/sh,-c,nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE"
           az containerapp job create \
             --name "$PROBE_JOB" \
             --resource-group "$RG" \
@@ -566,19 +601,23 @@ jobs:
             --replica-completion-count 1 \
             --parallelism 1 \
             --image "docker.io/alpine:3.19" \
-            --command "$PROBE_CMD" \
+            --command "/bin/sh,-c,nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE" \
             2>/dev/null || true
           az containerapp job start --name "$PROBE_JOB" --resource-group "$RG" 2>/dev/null || true
           sleep 40
-          PROBE_LOG=$(az monitor log-analytics query \
-            -w "$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null)" \
-            --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
-            -o tsv 2>/dev/null || echo "probe-log-unavailable")
+          LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
+          if [ -n "$LAW_ID" ]; then
+            PROBE_LOG=$(az monitor log-analytics query -w "$LAW_ID" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
+              -o tsv 2>/dev/null || echo "probe-log-unavailable")
+          else
+            PROBE_LOG="log-analytics-workspace-not-found"
+          fi
           echo "Probe output: $PROBE_LOG"
           az containerapp job delete --name "$PROBE_JOB" --resource-group "$RG" --yes 2>/dev/null || true
 
           JOB="job-migrate-${{ github.run_id }}"
-          echo "Creating migration job $JOB..."
+          echo "Creating migration job $JOB with image $MIGRATOR_IMAGE..."
           az containerapp job create \
             --name "$JOB" \
             --resource-group "$RG" \
@@ -588,7 +627,7 @@ jobs:
             --replica-retry-limit 1 \
             --replica-completion-count 1 \
             --parallelism 1 \
-            --image "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}" \
+            --image "$MIGRATOR_IMAGE" \
             --secrets "db-url=$DB_URL" \
             --env-vars "DATABASE_URL=secretref:db-url" \
             --registry-server "docker.io" \
@@ -598,17 +637,35 @@ jobs:
           az containerapp job start --name "$JOB" --resource-group "$RG"
           echo "Waiting for completion..."
           MIGRATION_STATUS="Running"
+          EXEC_NAME=""
           for i in $(seq 1 30); do
-            STATUS=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
-              --query "[-1].properties.status" -o tsv 2>/dev/null || echo "Running")
+            EXEC_JSON=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
+              --query "[-1]" -o json 2>/dev/null || echo "{}")
+            STATUS=$(echo "$EXEC_JSON" | jq -r '.properties.status // "Running"')
+            EXEC_NAME=$(echo "$EXEC_JSON" | jq -r '.name // ""')
             MIGRATION_STATUS="$STATUS"
             echo "  [$i/30] Status: $STATUS"
             case "$STATUS" in
               Succeeded) echo "Migrations succeeded."; break ;;
-              Failed|Stopped) echo "Migration failed!"; az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true; exit 1 ;;
+              Failed|Stopped)
+                echo "Migration failed — capturing logs before cleanup..."
+                if [ -n "$LAW_ID" ] && [ -n "$EXEC_NAME" ]; then
+                  az monitor log-analytics query -w "$LAW_ID" \
+                    --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
+                    -o table 2>/dev/null || echo "log-query-unavailable"
+                fi
+                az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
+                exit 1
+                ;;
             esac
             [ $i -lt 30 ] && sleep 10 || echo "Timed out waiting for migration"
           done
+          if [ -n "$LAW_ID" ] && [ "$MIGRATION_STATUS" != "Succeeded" ]; then
+            echo "Migration timed out — capturing logs..."
+            az monitor log-analytics query -w "$LAW_ID" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
+              -o table 2>/dev/null || echo "log-query-unavailable"
+          fi
           az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
           if [ "$MIGRATION_STATUS" != "Succeeded" ]; then
             echo "::error::Migration job did not complete successfully. Final status: $MIGRATION_STATUS"

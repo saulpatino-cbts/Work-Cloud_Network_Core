@@ -1,19 +1,19 @@
 variable "api_image" {
-  description = "Container image for CNA API (ghcr.io/saulpatinojr/cna-api:<tag>)"
+  description = "Container image for CNA API (docker.io/saulpatinojr/cna-api:<tag>)"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-api:latest"
+  default     = "docker.io/saulpatinojr/cna-api:latest"
 }
 
 variable "worker_image" {
-  description = "Container image for CNA worker (ghcr.io/saulpatinojr/cna-worker:<tag>)"
+  description = "Container image for CNA worker (docker.io/saulpatinojr/cna-worker:<tag>)"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-worker:latest"
+  default     = "docker.io/saulpatinojr/cna-worker:latest"
 }
 
 variable "web_image" {
-  description = "Container image for CNA web (ghcr.io/saulpatinojr/cna-web:<tag>)"
+  description = "Container image for CNA web (docker.io/saulpatinojr/cna-web:<tag>)"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-web:latest"
+  default     = "docker.io/saulpatinojr/cna-web:latest"
 }
 
 variable "tenant_id" {
@@ -71,15 +71,15 @@ variable "entra_client_secret" {
   sensitive   = true
 }
 
-# ─── GHCR ─────────────────────────────────────────────────────────────────────
-variable "ghcr_username" {
-  description = "GitHub username for GHCR image pulls (matches the package owner)"
+# ─── Container Registry ───────────────────────────────────────────────────────
+variable "container_registry_username" {
+  description = "Username for private container registry image pulls."
   type        = string
-  default     = "saulpatinojr"
+  default     = ""
 }
 
-variable "ghcr_pat" {
-  description = "GitHub PAT with read:packages scope — set from GitHub Secret GHCR_PAT"
+variable "container_registry_password" {
+  description = "Token or password for private container registry image pulls. Set from GitHub Secret DOCKERHUB_TOKEN for Docker Hub."
   type        = string
   sensitive   = true
 }

@@ -40,20 +40,18 @@ resource "azurerm_container_app" "api" {
     type = "SystemAssigned"
   }
 
-  # GHCR requires username + PAT — Azure Managed Identity only works with ACR.
   registry {
     server               = var.container_registry_server
-    username             = local.use_ghcr_auth ? var.ghcr_username : null
-    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
-    identity             = local.use_ghcr_auth ? null : "system"
+    username             = local.use_registry_credentials ? var.container_registry_username : null
+    password_secret_name = local.use_registry_credentials ? "container-registry-password" : null
+    identity             = local.use_registry_credentials ? null : "system"
   }
 
-  # Inject the GHCR PAT as a secret so the registry block can reference it.
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
+    for_each = local.use_registry_credentials ? [{ name = "container-registry-password" }] : []
     content {
       name  = secret.value.name
-      value = var.ghcr_pat
+      value = var.container_registry_password
     }
   }
 
@@ -140,16 +138,16 @@ resource "azurerm_container_app" "worker" {
 
   registry {
     server               = var.container_registry_server
-    username             = local.use_ghcr_auth ? var.ghcr_username : null
-    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
-    identity             = local.use_ghcr_auth ? null : "system"
+    username             = local.use_registry_credentials ? var.container_registry_username : null
+    password_secret_name = local.use_registry_credentials ? "container-registry-password" : null
+    identity             = local.use_registry_credentials ? null : "system"
   }
 
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
+    for_each = local.use_registry_credentials ? [{ name = "container-registry-password" }] : []
     content {
       name  = secret.value.name
-      value = var.ghcr_pat
+      value = var.container_registry_password
     }
   }
 
@@ -206,16 +204,16 @@ resource "azurerm_container_app" "web" {
 
   registry {
     server               = var.container_registry_server
-    username             = local.use_ghcr_auth ? var.ghcr_username : null
-    password_secret_name = local.use_ghcr_auth ? "ghcr-pat" : null
-    identity             = local.use_ghcr_auth ? null : "system"
+    username             = local.use_registry_credentials ? var.container_registry_username : null
+    password_secret_name = local.use_registry_credentials ? "container-registry-password" : null
+    identity             = local.use_registry_credentials ? null : "system"
   }
 
   dynamic "secret" {
-    for_each = local.use_ghcr_auth ? [{ name = "ghcr-pat" }] : []
+    for_each = local.use_registry_credentials ? [{ name = "container-registry-password" }] : []
     content {
       name  = secret.value.name
-      value = var.ghcr_pat
+      value = var.container_registry_password
     }
   }
 

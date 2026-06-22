@@ -118,7 +118,7 @@ infra/terraform/
 .github/workflows/            000–320 banded workflow sequence
 GitHub Wiki                   Documentation and ADRs migrated to https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki
 TODO.md                       Canonical open redeploy, validation, footprint, and enhancement tasks
-scripts/                      Remove-DriftedResources.ps1, operational runbooks
+scripts/                      bootstrap, validation, cleanup, and CI helper scripts
 ```
 
 ---
@@ -149,6 +149,7 @@ cp .env.example .env
 ```
 1. Run `.\scripts\Initialize-CnaGitHubSecrets.ps1` — seed GitHub secrets/variables, create the workload RG using the standard naming convention, prepare tfstate backend resources, and dispatch workflow 000 bootstrap
    → The script also creates and installs the GitHub App, then writes a bootstrap report to `.reports/bootstrap/` with the selected subscription, repo, Entra app, GitHub environments, GitHub App details, and CAF naming details
+   → For Docker Hub, create an access token in Docker Hub first; the script validates it and writes `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` to GitHub Secrets with the rest of the bootstrap values
 2. Let workflow 000 complete — initialize Terraform remote state and import the existing workload RG into state (one-time per environment)
 3. Run workflow 100 — validate all secrets, variables, Azure OIDC
 4. Push to main   — workflow 200 auto-builds the CLI plus all three app container images
@@ -180,11 +181,11 @@ To wipe an environment and redeploy clean:
 | `100-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
 | `110-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
 | `120-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update`, auto-targeting the workload RG from repo variables |
-| `200-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, and cna-web to GHCR |
+| `200-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, cna-web, and cna-migrator to Docker Hub |
 | `210-deploy-azure.yml` | Manual + nightly | Terraform plan → apply → health verification |
 | `220-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
 | `300-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
-| `310-release-version.yml` | `git tag v*.*.*` | Tags GHCR CLI image + creates GitHub Release |
+| `310-release-version.yml` | `git tag v*.*.*` | Tags Docker Hub CLI image + creates GitHub Release |
 | `320-publish-portal.yml` | Manual | Delivers reports to client portals from the CLI image, with artifact-backed engagement content and Azure/AWS storage support |
 
 ---
@@ -222,4 +223,4 @@ To wipe an environment and redeploy clean:
 - This managed RG is expected and separate from the workload RG. It contains Azure-managed infrastructure such as the Container Apps environment load balancer and public IP.
 - The Terraform state backend remains separate in `rg-cna-<environment>-<region_short>-tfstate` to avoid backend/self-destroy lifecycle problems.
 - The subscription must have `Microsoft.AlertsManagement` registered before `210` so Application Insights smart-detection alert deployment does not fail.
-- If you need to resync the enterprise app web link outside deployment, run `.\scripts\Sync-CnaEntraApp.ps1 -AppId <client-id> -ApplicationUrl https://<frontdoor-host>`.
+- Workflow `210-deploy-azure.yml` syncs the Entra app home page URL and redirect URI from the current Front Door hostname after Terraform apply.

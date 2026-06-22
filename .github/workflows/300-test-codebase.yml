@@ -137,10 +137,10 @@ jobs:
           PY
 
   # ------------------------------------------------------------------
-  # 4. Module dependency validation
+  # 4. Repository guardrails
   # ------------------------------------------------------------------
-  module-dependency-check:
-    name: Module Dependency Validation
+  repository-guardrails:
+    name: Repository Guardrails
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [test]
@@ -153,10 +153,12 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
-          key: moddep-${{ hashFiles('pyproject.toml') }}
+          key: guardrails-${{ hashFiles('pyproject.toml') }}
       - run: pip install pyyaml
       - name: Validate module.yaml dependency graph
         run: python scripts/validate_module_deps.py
+      - name: Validate draw.io shape catalog
+        run: python scripts/validate_shape_catalog.py
 
   # ------------------------------------------------------------------
   # 5. Docker build smoke test

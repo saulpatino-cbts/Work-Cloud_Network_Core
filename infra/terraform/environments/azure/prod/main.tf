@@ -111,8 +111,8 @@ module "compute" {
   }]
   infrastructure_subnet_id             = azurerm_subnet.container_apps_infra.id
   web_ingress_ip_security_restrictions = var.web_ingress_ip_security_restrictions
-  ghcr_username                        = var.ghcr_username
-  ghcr_pat                             = var.ghcr_pat
+  container_registry_username          = var.container_registry_username
+  container_registry_password          = var.container_registry_password
   tags                                 = local.tags
 
   # FinOps: do NOT scale to zero in prod — cold-start impacts SLA

@@ -14,17 +14,17 @@ on:
       api_image:
         description: API image reference
         required: true
-        default: ghcr.io/saulpatinojr/cna-api:latest
+        default: docker.io/saulpatinojr/cna-api:latest
         type: string
       worker_image:
         description: Worker image reference
         required: true
-        default: ghcr.io/saulpatinojr/cna-worker:latest
+        default: docker.io/saulpatinojr/cna-worker:latest
         type: string
       web_image:
         description: Web (Next.js) image reference
         required: true
-        default: ghcr.io/saulpatinojr/cna-web:latest
+        default: docker.io/saulpatinojr/cna-web:latest
         type: string
       previous_api_image:
         description: Previous API image reference for rollback operations
@@ -71,8 +71,8 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   EFFECTIVE_API_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_api_image || github.event.inputs.api_image }}
   EFFECTIVE_WORKER_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_worker_image || github.event.inputs.worker_image }}
-  EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_web_image || github.event.inputs.web_image || 'ghcr.io/saulpatinojr/cna-web:latest' }}
-  EFFECTIVE_MIGRATOR_IMAGE: ghcr.io/saulpatinojr/cna-migrator:latest
+  EFFECTIVE_WEB_IMAGE: ${{ github.event.inputs.deploy_mode == 'rollback' && github.event.inputs.previous_web_image || github.event.inputs.web_image || 'docker.io/saulpatinojr/cna-web:latest' }}
+  EFFECTIVE_MIGRATOR_IMAGE: docker.io/saulpatinojr/cna-migrator:latest
   AZURE_MONITOR_HEALTH_THRESHOLD: "95"
   APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
   CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
@@ -124,17 +124,18 @@ jobs:
             exit 1
           fi
 
-      - name: Validate GHCR image pull access
+      - name: Validate Docker Hub image pull access
         env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [[ -z "$GHCR_PAT" ]]; then
-            echo "::error::GHCR_PAT is required so Azure Container Apps can pull private GHCR images."
+          if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+            echo "::error::DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are required so Azure Container Apps can pull private Docker Hub images."
             exit 1
           fi
 
-          echo "$GHCR_PAT" | docker login ghcr.io \
-            --username "${{ github.repository_owner }}" \
+          echo "$DOCKERHUB_TOKEN" | docker login docker.io \
+            --username "$DOCKERHUB_USERNAME" \
             --password-stdin
 
           for image in \
@@ -335,7 +336,8 @@ jobs:
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="container_registry_username=${{ secrets.DOCKERHUB_USERNAME }}" \
+            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
             -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
@@ -507,9 +509,9 @@ jobs:
             --image "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}" \
             --secrets "db-url=$DB_URL" \
             --env-vars "DATABASE_URL=secretref:db-url" \
-            --registry-server "ghcr.io" \
-            --registry-username "${{ github.repository_owner }}" \
-            --registry-password "${{ secrets.GHCR_PAT }}"
+            --registry-server "docker.io" \
+            --registry-username "${{ secrets.DOCKERHUB_USERNAME }}" \
+            --registry-password "${{ secrets.DOCKERHUB_TOKEN }}"
           echo "Starting migration..."
           az containerapp job start --name "$JOB" --resource-group "$RG"
           echo "Waiting for completion..."
@@ -585,8 +587,6 @@ jobs:
       - name: Sync Entra app web URLs
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
           if [ -z "$FRONTDOOR_HOST" ]; then
@@ -595,9 +595,32 @@ jobs:
           fi
 
           NEXTAUTH_URL="https://$FRONTDOOR_HOST"
-          pwsh -File "$GITHUB_WORKSPACE/scripts/Sync-CnaEntraApp.ps1" \
-            -AppId "${AZURE_CLIENT_ID}" \
-            -ApplicationUrl "${NEXTAUTH_URL}"
+          REDIRECT_URI="${NEXTAUTH_URL}/api/auth/callback/microsoft-entra-id"
+          APP_JSON="$(az ad app show --id "$AZURE_CLIENT_ID" --output json)"
+          CURRENT_HOME_PAGE="$(jq -r '.web.homePageUrl // ""' <<<"$APP_JSON")"
+          REDIRECT_URIS_JSON="$(
+            jq --arg uri "$REDIRECT_URI" '
+              ((.web.redirectUris // []) + [$uri])
+              | unique
+            ' <<<"$APP_JSON"
+          )"
+
+          if [[ "$CURRENT_HOME_PAGE" == "$NEXTAUTH_URL" ]] \
+            && jq -e --arg uri "$REDIRECT_URI" '(.web.redirectUris // []) | index($uri)' <<<"$APP_JSON" >/dev/null; then
+            echo "Entra app already matches $NEXTAUTH_URL"
+            exit 0
+          fi
+
+          mapfile -t REDIRECT_URIS < <(jq -r '.[]' <<<"$REDIRECT_URIS_JSON")
+          az ad app update \
+            --id "$AZURE_CLIENT_ID" \
+            --web-home-page-url "$NEXTAUTH_URL" \
+            --web-redirect-uris "${REDIRECT_URIS[@]}" \
+            --output none
+
+          echo "Synced Entra app home page URL and redirect URI:"
+          echo "  Home page URL: $NEXTAUTH_URL"
+          echo "  Redirect URI : $REDIRECT_URI"
 
       - name: Export platform outputs
         id: export
@@ -873,16 +896,17 @@ jobs:
           DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -detailed-exitcode \
-            -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
-            -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest" \
-            -var="web_image=ghcr.io/saulpatinojr/cna-web:latest" \
+            -var="api_image=docker.io/saulpatinojr/cna-api:latest" \
+            -var="worker_image=docker.io/saulpatinojr/cna-worker:latest" \
+            -var="web_image=docker.io/saulpatinojr/cna-web:latest" \
             -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="container_registry_username=${{ secrets.DOCKERHUB_USERNAME }}" \
+            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
             -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \

@@ -1,19 +1,19 @@
 variable "api_image" {
   description = "Container image for CNA API"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-api:latest"
+  default     = "docker.io/saulpatinojr/cna-api:latest"
 }
 
 variable "worker_image" {
   description = "Container image for CNA worker"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-worker:latest"
+  default     = "docker.io/saulpatinojr/cna-worker:latest"
 }
 
 variable "web_image" {
   description = "Container image for CNA Web (Next.js 15)"
   type        = string
-  default     = "ghcr.io/saulpatinojr/cna-web:latest"
+  default     = "docker.io/saulpatinojr/cna-web:latest"
 }
 
 variable "resource_group_name" {
@@ -40,17 +40,17 @@ variable "tags" {
 variable "container_registry_server" {
   description = "Container registry server used by Container Apps"
   type        = string
-  default     = "ghcr.io"
+  default     = "docker.io"
 }
 
-variable "ghcr_username" {
-  description = "GitHub username (or org) for GHCR image pulls. Must match the package owner."
+variable "container_registry_username" {
+  description = "Username for private container registry pulls. Required for Docker Hub private repositories."
   type        = string
   default     = ""
 }
 
-variable "ghcr_pat" {
-  description = "GitHub PAT with read:packages scope for GHCR image pulls. Required for private GHCR packages."
+variable "container_registry_password" {
+  description = "Token or password for private container registry pulls. Required for Docker Hub private repositories."
   type        = string
   sensitive   = true
   default     = ""

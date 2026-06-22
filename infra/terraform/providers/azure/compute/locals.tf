@@ -8,9 +8,9 @@ locals {
   worker_app_name = "${var.name_prefix}-ca-worker"
   web_app_name    = "${var.name_prefix}-ca-web"
 
-  # GHCR requires PAT auth (Azure Managed Identity only works with Azure Container Registry).
-  # When ghcr_pat is non-empty the registry block uses username + password_secret_name.
-  use_ghcr_auth = nonsensitive(var.ghcr_pat != "")
+  # Private non-ACR registries such as Docker Hub use username + token auth.
+  # If credentials are omitted, the registry block falls back to managed identity for ACR.
+  use_registry_credentials = nonsensitive(var.container_registry_username != "" && var.container_registry_password != "")
 
   api_plain_env_vars = [
     for name, value in var.api_env_vars : {

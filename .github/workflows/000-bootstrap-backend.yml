@@ -278,7 +278,8 @@ jobs:
               -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
               -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
               -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-              -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+              -var="container_registry_username=${{ secrets.DOCKERHUB_USERNAME }}" \
+              -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
               -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
               azurerm_resource_group.this "$RG_ID"
           fi

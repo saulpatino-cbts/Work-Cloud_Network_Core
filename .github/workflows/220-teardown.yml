@@ -122,10 +122,11 @@ jobs:
           terraform destroy -auto-approve \
             -var="environment=${{ github.event.inputs.environment }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="api_image=ghcr.io/saulpatinojr/cna-api:latest" \
-            -var="worker_image=ghcr.io/saulpatinojr/cna-worker:latest" \
-            -var="web_image=ghcr.io/saulpatinojr/cna-web:latest" \
-            -var="ghcr_pat=${{ secrets.GHCR_PAT }}" \
+            -var="api_image=docker.io/saulpatinojr/cna-api:latest" \
+            -var="worker_image=docker.io/saulpatinojr/cna-worker:latest" \
+            -var="web_image=docker.io/saulpatinojr/cna-web:latest" \
+            -var="container_registry_username=${{ secrets.DOCKERHUB_USERNAME }}" \
+            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
             -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
             -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \

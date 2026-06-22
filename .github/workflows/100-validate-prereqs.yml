@@ -35,7 +35,8 @@ jobs:
           V_CNA_ENTRA_CLIENT_SECRET:     ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
           V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
           V_CNA_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
-          V_GHCR_PAT:                    ${{ secrets.GHCR_PAT }}
+          V_DOCKERHUB_USERNAME:          ${{ secrets.DOCKERHUB_USERNAME }}
+          V_DOCKERHUB_TOKEN:             ${{ secrets.DOCKERHUB_TOKEN }}
           # Optional — AWS publish / portal publish / customer TLS are not required for the base bootstrap path.
         run: |
           echo "## Secret Check" >> "$GITHUB_STEP_SUMMARY"
@@ -70,7 +71,8 @@ jobs:
           check_secret "CNA_ENTRA_CLIENT_SECRET"     "$V_CNA_ENTRA_CLIENT_SECRET"
           check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
           check_secret "CNA_CREDENTIAL_ENCRYPTION_KEY" "$V_CNA_CREDENTIAL_ENCRYPTION_KEY"
-          check_secret "GHCR_PAT"                    "$V_GHCR_PAT"
+          check_secret "DOCKERHUB_USERNAME"          "$V_DOCKERHUB_USERNAME"
+          check_secret "DOCKERHUB_TOKEN"             "$V_DOCKERHUB_TOKEN"
 
           # Optional — required only for specific workflows
           check_secret "CNA_AWS_ROLE_ARN"                   "$V_CNA_AWS_ROLE_ARN"            "workflow 06 (AWS publish)"
@@ -164,24 +166,25 @@ jobs:
           fi
           echo "All variables present ✅"
 
-      - name: Validate GHCR package pull access
+      - name: Validate Docker Hub image pull access
         env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [[ -z "$GHCR_PAT" ]]; then
-            echo "::error::GHCR_PAT is required so Azure Container Apps can pull private GHCR images."
+          if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+            echo "::error::DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are required so Azure Container Apps can pull private Docker Hub images."
             exit 1
           fi
 
-          echo "$GHCR_PAT" | docker login ghcr.io \
-            --username "${{ github.repository_owner }}" \
+          echo "$DOCKERHUB_TOKEN" | docker login docker.io \
+            --username "$DOCKERHUB_USERNAME" \
             --password-stdin
 
           for image in \
-            "ghcr.io/${{ github.repository_owner }}/cna-api:latest" \
-            "ghcr.io/${{ github.repository_owner }}/cna-worker:latest" \
-            "ghcr.io/${{ github.repository_owner }}/cna-web:latest" \
-            "ghcr.io/${{ github.repository_owner }}/cna-migrator:latest"; do
+            "docker.io/saulpatinojr/cna-api:latest" \
+            "docker.io/saulpatinojr/cna-worker:latest" \
+            "docker.io/saulpatinojr/cna-web:latest" \
+            "docker.io/saulpatinojr/cna-migrator:latest"; do
             echo "Checking $image"
             docker manifest inspect "$image" > /dev/null
           done

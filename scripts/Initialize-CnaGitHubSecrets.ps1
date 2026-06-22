@@ -21,7 +21,11 @@ param(
 
     [switch]$SkipBootstrapDispatch,
 
-    [switch]$ForceInteractive
+    [switch]$ForceInteractive,
+
+    [string]$DockerHubUsername,
+
+    [System.Security.SecureString]$DockerHubToken
 )
 
 $ErrorActionPreference = "Stop"
@@ -264,6 +268,82 @@ function Start-GitHubWorkflow {
 
     if ($PSCmdlet.ShouldProcess($RepoName, "dispatch workflow $Workflow")) {
         Invoke-Gh -Arguments $args
+    }
+}
+
+function Test-DockerHubCredential {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Username,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Token
+    )
+
+    $body = @{
+        username = $Username
+        password = $Token
+    } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod `
+            -Uri "https://hub.docker.com/v2/users/login" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $body
+    } catch {
+        throw "Docker Hub credential validation failed for '$Username'. Use a Docker Hub access token, not the account password. $($_.Exception.Message)"
+    }
+
+    if (-not $response.token) {
+        throw "Docker Hub credential validation did not return an API token for '$Username'."
+    }
+
+    Write-Ok "Docker Hub credentials validated for $Username"
+}
+
+function Read-DockerHubSecretValues {
+    [CmdletBinding()]
+    param(
+        [bool]$UsernameExists,
+        [bool]$TokenExists
+    )
+
+    if ($UsernameExists -and $TokenExists -and -not $ForceInteractive) {
+        Write-Info "Keeping existing DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets"
+        return @{
+            Username = $null
+            Token    = $null
+        }
+    }
+
+    Write-Info "Docker Hub access tokens are generated in Docker Hub and copied once."
+    Write-Info "Create a Docker Hub access token with read/write access for the private CNA repositories."
+
+    $usernameValue = $DockerHubUsername
+    if ([string]::IsNullOrWhiteSpace($usernameValue)) {
+        $usernameValue = Read-TextValue `
+            -Name "DOCKERHUB_USERNAME" `
+            -Prompt "Docker Hub username or namespace-authorized user" `
+            -Required
+    }
+
+    $tokenValue = ConvertFrom-SecureStringToPlainText -Value $DockerHubToken
+    if ([string]::IsNullOrWhiteSpace($tokenValue)) {
+        $secure = Read-Host "Paste Docker Hub access token for DOCKERHUB_TOKEN" -AsSecureString
+        $tokenValue = ConvertFrom-SecureStringToPlainText -Value $secure
+    }
+
+    if ([string]::IsNullOrWhiteSpace($tokenValue)) {
+        throw "DOCKERHUB_TOKEN is required."
+    }
+
+    Test-DockerHubCredential -Username $usernameValue -Token $tokenValue
+
+    return @{
+        Username = $usernameValue
+        Token    = $tokenValue
     }
 }
 
@@ -1154,7 +1234,11 @@ $secretValues["CNA_ENTRA_CLIENT_SECRET"] = $entraClientSecret
 $secretValues["CNA_POSTGRES_ADMIN_PASSWORD"] = Read-SecretValue -Name "CNA_POSTGRES_ADMIN_PASSWORD" -Description "PostgreSQL admin password" -Exists $existingSecrets.ContainsKey("CNA_POSTGRES_ADMIN_PASSWORD") -GenerateBytes 18 -Required
 $secretValues["CNA_NEXTAUTH_SECRET"] = Read-SecretValue -Name "CNA_NEXTAUTH_SECRET" -Description "Auth.js signing secret" -Exists $existingSecrets.ContainsKey("CNA_NEXTAUTH_SECRET") -GenerateBytes 32 -Required
 $secretValues["CNA_CREDENTIAL_ENCRYPTION_KEY"] = Read-SecretValue -Name "CNA_CREDENTIAL_ENCRYPTION_KEY" -Description "base64 32-byte AES key for stored cloud credentials" -Exists $existingSecrets.ContainsKey("CNA_CREDENTIAL_ENCRYPTION_KEY") -GenerateBytes 32 -Required
-$secretValues["GHCR_PAT"] = Read-SecretValue -Name "GHCR_PAT" -Description "GitHub PAT with read:packages for Container Apps image pulls" -Exists $existingSecrets.ContainsKey("GHCR_PAT") -Required
+$dockerHubSecretValues = Read-DockerHubSecretValues `
+    -UsernameExists $existingSecrets.ContainsKey("DOCKERHUB_USERNAME") `
+    -TokenExists $existingSecrets.ContainsKey("DOCKERHUB_TOKEN")
+$secretValues["DOCKERHUB_USERNAME"] = $dockerHubSecretValues.Username
+$secretValues["DOCKERHUB_TOKEN"] = $dockerHubSecretValues.Token
 $secretValues["FRONTDOOR_CERTIFICATE_PFX_PASSWORD"] = Read-SecretValue -Name "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" -Description "optional custom TLS certificate PFX password" -Exists $existingSecrets.ContainsKey("FRONTDOOR_CERTIFICATE_PFX_PASSWORD")
 $secretValues["CNA_AWS_ROLE_ARN"] = Read-SecretValue -Name "CNA_AWS_ROLE_ARN" -Description "optional AWS OIDC role ARN for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_AWS_ROLE_ARN")
 $secretValues["CNA_PUBLISH_BUCKET"] = Read-SecretValue -Name "CNA_PUBLISH_BUCKET" -Description "optional S3 bucket for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_PUBLISH_BUCKET")

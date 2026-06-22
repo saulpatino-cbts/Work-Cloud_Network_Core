@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   build-cli:
@@ -27,18 +26,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for CLI
         id: meta_cli
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cna
+          images: docker.io/saulpatinojr/cna
           tags: |
             type=raw,value=latest
             type=sha
@@ -63,18 +62,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for API
         id: meta_api
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cna-api
+          images: docker.io/saulpatinojr/cna-api
           tags: |
             type=raw,value=latest
             type=sha
@@ -99,18 +98,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Worker
         id: meta_worker
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cna-worker
+          images: docker.io/saulpatinojr/cna-worker
           tags: |
             type=raw,value=latest
             type=sha
@@ -135,18 +134,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Web
         id: meta_web
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cna-web
+          images: docker.io/saulpatinojr/cna-web
           tags: |
             type=raw,value=latest
             type=sha
@@ -155,7 +154,7 @@ jobs:
         id: meta_migrator
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cna-migrator
+          images: docker.io/saulpatinojr/cna-migrator
           tags: |
             type=raw,value=latest
             type=sha
@@ -206,7 +205,7 @@ jobs:
             -e AZURE_AD_CLIENT_SECRET="ci-placeholder" \
             -e AZURE_AD_TENANT_ID="00000000-0000-0000-0000-000000000000" \
             -p 3000:3000 \
-            ghcr.io/${{ github.repository_owner }}/cna-web:latest
+            docker.io/saulpatinojr/cna-web:latest
           sleep 15
           # Always dump logs so we can diagnose crashes even on failure
           echo "--- container status ---"
@@ -237,7 +236,6 @@ jobs:
       - name: Write build manifest
         run: |
           SHA_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
-          OWNER="${{ github.repository_owner }}"
           mkdir -p .deployment-catalog
           cat > .deployment-catalog/latest-build.json <<EOF
           {
@@ -246,11 +244,11 @@ jobs:
             "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "run_id": "${{ github.run_id }}",
             "images": {
-              "cli":    "ghcr.io/${OWNER}/cna:${SHA_TAG}",
-              "api":    "ghcr.io/${OWNER}/cna-api:${SHA_TAG}",
-              "worker": "ghcr.io/${OWNER}/cna-worker:${SHA_TAG}",
-              "web":    "ghcr.io/${OWNER}/cna-web:${SHA_TAG}",
-              "migrator":"ghcr.io/${OWNER}/cna-migrator:${SHA_TAG}"
+              "cli":    "docker.io/saulpatinojr/cna:${SHA_TAG}",
+              "api":    "docker.io/saulpatinojr/cna-api:${SHA_TAG}",
+              "worker": "docker.io/saulpatinojr/cna-worker:${SHA_TAG}",
+              "web":    "docker.io/saulpatinojr/cna-web:${SHA_TAG}",
+              "migrator":"docker.io/saulpatinojr/cna-migrator:${SHA_TAG}"
             }
           }
           EOF

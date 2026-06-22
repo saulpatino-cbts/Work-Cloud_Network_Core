@@ -150,6 +150,22 @@ jobs:
             exit 1
           fi
 
+      - name: Validate PostgreSQL password is URL-safe
+        env:
+          PG_PASSWORD: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$PG_PASSWORD" ]; then
+            echo "::error::CNA_POSTGRES_ADMIN_PASSWORD secret is not set."
+            exit 1
+          fi
+          if echo "$PG_PASSWORD" | grep -qP '[@:/?#%\[\]]'; then
+            echo "::error::CNA_POSTGRES_ADMIN_PASSWORD contains URL-special characters (@ : / ? # % [ ])."
+            echo "::error::These characters break postgresql:// URL parsing in Prisma and SQLAlchemy."
+            echo "::error::Use only letters, digits, and - _ . ! ~ for the PostgreSQL admin password."
+            exit 1
+          fi
+          echo "Password character set: OK"
+
       - name: Validate Docker Hub image pull access
         env:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}

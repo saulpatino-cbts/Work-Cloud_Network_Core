@@ -1,0 +1,101 @@
+name: "212 · Drift Detection · prod"
+
+# No schedule — enable once prod is deployed.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: true
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+
+jobs:
+  drift-detection:
+    runs-on: ubuntu-latest
+    environment: prod
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Azure login with OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve Terraform backend targets
+        run: |
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=prod.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+      - name: Terraform drift plan
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
+
+          optional_var() {
+            local VALUE="$1"
+            if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
+              echo ""
+            else
+              echo "$VALUE"
+            fi
+          }
+          AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          FOUNDRY_CLAUDE_MODEL=$(optional_var "${{ vars.FOUNDRY_CLAUDE_MODEL }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          AWS_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AWS_MCP_TRANSPORT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
+
+          terraform plan -detailed-exitcode \
+            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
+            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
+            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
+            -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
+            -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
+            -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
+            -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
+            -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
+            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
+            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
+            -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
+            -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
+            -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
+            -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}"

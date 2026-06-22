@@ -124,6 +124,28 @@ jobs:
             exit 1
           fi
 
+      - name: Validate GHCR image pull access
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          if [[ -z "$GHCR_PAT" ]]; then
+            echo "::error::GHCR_PAT is required so Azure Container Apps can pull private GHCR images."
+            exit 1
+          fi
+
+          echo "$GHCR_PAT" | docker login ghcr.io \
+            --username "${{ github.repository_owner }}" \
+            --password-stdin
+
+          for image in \
+            "${{ env.EFFECTIVE_API_IMAGE }}" \
+            "${{ env.EFFECTIVE_WORKER_IMAGE }}" \
+            "${{ env.EFFECTIVE_WEB_IMAGE }}" \
+            "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}"; do
+            echo "Checking $image"
+            docker manifest inspect "$image" > /dev/null
+          done
+
       - name: Resolve Terraform backend targets
         run: |
           echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
@@ -228,6 +250,28 @@ jobs:
             -backend-config="container_name=$TFSTATE_CONTAINER" \
             -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
             -backend-config="use_oidc=true"
+
+      - name: Ensure Key Vault is reachable during Terraform
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+          fi
+          WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
+          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+
+          if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
+            az keyvault update \
+              --name "$KEY_VAULT_NAME" \
+              --resource-group "$WORKLOAD_RG" \
+              --public-network-access Enabled \
+              --default-action Allow \
+              --bypass AzureServices \
+              --only-show-errors > /dev/null
+          else
+            echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
+          fi
 
       - name: Resolve image references from build manifest
         # When images are not explicitly provided (or still `:latest`), read the
@@ -394,6 +438,28 @@ jobs:
             -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
+      - name: Ensure Key Vault is reachable during Terraform
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-scus"
+          fi
+          WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
+          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+
+          if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
+            az keyvault update \
+              --name "$KEY_VAULT_NAME" \
+              --resource-group "$WORKLOAD_RG" \
+              --public-network-access Enabled \
+              --default-action Allow \
+              --bypass AzureServices \
+              --only-show-errors > /dev/null
+          else
+            echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
+          fi
+
       - name: Download plan artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
@@ -517,7 +583,6 @@ jobs:
           fi
 
       - name: Sync Entra app web URLs
-        if: ${{ always() }}
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}

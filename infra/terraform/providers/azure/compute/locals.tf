@@ -1,5 +1,16 @@
 locals {
   container_apps_env_name = "${var.name_prefix}-cae"
+
+  # Identity type for all Container Apps. When a user-assigned identity is provided
+  # (for Key Vault secret references), we combine it with the system-assigned identity
+  # so that existing RBAC assignments on the system identity continue to work.
+  identity_type = var.key_vault_reference_identity_id != null ? "SystemAssigned, UserAssigned" : "SystemAssigned"
+  uai_ids       = var.key_vault_reference_identity_id != null ? [var.key_vault_reference_identity_id] : []
+
+  # KV reference secrets flattened to a list for use in dynamic blocks.
+  kv_secrets_list = [
+    for name, uri in var.container_app_kv_secrets : { name = name, uri = uri }
+  ]
   container_apps_infra_resource_group_name = coalesce(
     var.container_app_environment_infrastructure_resource_group_name,
     "rg-${var.name_prefix}-cae-managed"

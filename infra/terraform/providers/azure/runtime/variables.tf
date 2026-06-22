@@ -36,6 +36,12 @@ variable "entra_client_secret" {
   sensitive   = true
 }
 
+variable "credential_encryption_key" {
+  description = "AES-256 key used to encrypt stored credentials — stored in Key Vault and referenced by Container Apps."
+  type        = string
+  sensitive   = true
+}
+
 variable "secret_expiration_date" {
   description = "RFC3339 expiration timestamp applied to Terraform-managed Key Vault secrets"
   type        = string

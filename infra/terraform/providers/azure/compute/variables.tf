@@ -192,3 +192,15 @@ variable "container_app_environment_infrastructure_resource_group_name" {
   type        = string
   default     = null
 }
+
+variable "key_vault_reference_identity_id" {
+  description = "Resource ID of the user-assigned managed identity used to read Key Vault secret references. Required when container_app_kv_secrets is non-empty."
+  type        = string
+  default     = null
+}
+
+variable "container_app_kv_secrets" {
+  description = "Key Vault secret references for Container Apps. Map key is secret name; value is a versionless KV secret URI (e.g. https://vault.vault.azure.net/secrets/mysecret). Azure auto-refreshes these within 30 min when the secret version changes."
+  type        = map(string)
+  default     = {}
+}

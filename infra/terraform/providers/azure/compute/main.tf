@@ -37,7 +37,8 @@ resource "azurerm_container_app" "api" {
   tags                         = var.tags
 
   identity {
-    type = "SystemAssigned"
+    type         = local.identity_type
+    identity_ids = local.uai_ids
   }
 
   registry {
@@ -60,6 +61,15 @@ resource "azurerm_container_app" "api" {
     content {
       name  = secret.value.name
       value = var.container_app_secrets[secret.value.name]
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.kv_secrets_list
+    content {
+      name                = secret.value.name
+      key_vault_secret_id = secret.value.uri
+      identity            = var.key_vault_reference_identity_id
     }
   }
 
@@ -133,7 +143,8 @@ resource "azurerm_container_app" "worker" {
   tags                         = var.tags
 
   identity {
-    type = "SystemAssigned"
+    type         = local.identity_type
+    identity_ids = local.uai_ids
   }
 
   registry {
@@ -156,6 +167,15 @@ resource "azurerm_container_app" "worker" {
     content {
       name  = secret.value.name
       value = var.container_app_secrets[secret.value.name]
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.kv_secrets_list
+    content {
+      name                = secret.value.name
+      key_vault_secret_id = secret.value.uri
+      identity            = var.key_vault_reference_identity_id
     }
   }
 
@@ -199,7 +219,8 @@ resource "azurerm_container_app" "web" {
   tags                         = var.tags
 
   identity {
-    type = "SystemAssigned"
+    type         = local.identity_type
+    identity_ids = local.uai_ids
   }
 
   registry {
@@ -222,6 +243,15 @@ resource "azurerm_container_app" "web" {
     content {
       name  = secret.value.name
       value = var.container_app_secrets[secret.value.name]
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.kv_secrets_list
+    content {
+      name                = secret.value.name
+      key_vault_secret_id = secret.value.uri
+      identity            = var.key_vault_reference_identity_id
     }
   }
 

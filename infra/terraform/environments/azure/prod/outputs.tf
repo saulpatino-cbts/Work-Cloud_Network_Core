@@ -22,6 +22,11 @@ output "managed_identity_client_id" {
   value = module.identity.managed_identity_client_id
 }
 
+output "managed_identity_id" {
+  description = "Resource ID of the user-assigned managed identity — used to attach to Container Apps Job for Foundry validation."
+  value       = module.identity.managed_identity_id
+}
+
 output "container_app_environment_id" {
   value = module.compute.container_app_environment_id
 }

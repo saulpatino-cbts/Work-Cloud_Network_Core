@@ -530,6 +530,7 @@ jobs:
           echo "database_server_name=$(terraform output -raw database_server_name)" >> "$GITHUB_OUTPUT"
           echo "database_server_fqdn=$(terraform output -raw database_server_fqdn)" >> "$GITHUB_OUTPUT"
           echo "database_subnet_prefix=$(terraform output -raw database_subnet_prefix)" >> "$GITHUB_OUTPUT"
+          echo "managed_identity_client_id=$(terraform output -raw managed_identity_client_id)" >> "$GITHUB_OUTPUT"
 
       - name: Approve Front Door private endpoint connections
         id: approve_private_link
@@ -730,94 +731,38 @@ jobs:
             exit 1
           fi
 
-      - name: Ensure warm web replica for exec-based validation
-        # Two things conspire to break the downstream Foundry exec validation:
-        #   1. Azure Container Apps does NOT roll a new revision when only a
-        #      secret's VALUE changes, so a freshly-applied DATABASE_URL leaves
-        #      running revisions on the stale value (crash-loop).
-        #   2. dev runs with enable_scale_to_zero (min_replicas=0), so the web
-        #      app idles to 0 replicas — and `az containerapp exec` cannot wake a
-        #      scaled-to-zero app, it requires an already-live replica.
-        # Forcing min-replicas=1 does both at once: it rolls a new revision
-        # (re-injecting current secrets) AND pins a warm replica for exec. The
-        # 'Restore web scale-to-zero' step below returns it to 0 so there is no
-        # Terraform drift. The api app only needs its secret refreshed, so a
-        # plain restart is enough (it may scale to zero afterward).
+      - name: Restart Container App revisions to pick up updated secrets
+        # Key Vault references auto-refresh within 30 minutes when a new secret
+        # version is created. This restart provides immediate pickup within the
+        # same CI run. No min-replicas manipulation needed — scale-to-zero is
+        # unaffected and there is no Terraform drift to restore.
         run: |
           RG="${{ steps.export_ids.outputs.resource_group_name }}"
           WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
           API_APP="${WEB_APP/-ca-web/-ca-api}"
 
-          API_REV=$(az containerapp show --name "$API_APP" --resource-group "$RG" \
-            --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
-          [ -z "$API_REV" ] && API_REV=$(az containerapp show --name "$API_APP" --resource-group "$RG" \
-            --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
-          if [ -n "$API_REV" ]; then
-            echo "Restarting $API_APP revision $API_REV to pick up current secrets..."
-            az containerapp revision restart --name "$API_APP" --resource-group "$RG" --revision "$API_REV" 2>/dev/null || true
-          fi
-
-          echo "Pinning $WEB_APP to min-replicas=1 (rolls fresh revision + warm replica)..."
-          az containerapp update --name "$WEB_APP" --resource-group "$RG" --min-replicas 1 --output none
-
-          # A replica reporting ready=true is necessary but NOT sufficient: while a
-          # freshly-rolled revision is still stabilizing, the `az containerapp exec`
-          # WebSocket proxy returns 'Handshake status 404' even though a replica is
-          # Running. The downstream Foundry validation uses the exact same exec
-          # transport, so gate on a real exec round-trip rather than the ready flag.
-          echo "Probing exec transport on $WEB_APP until it answers (revision must fully settle)..."
-          EXEC_OK=0
-          for i in $(seq 1 30); do
-            WEB_REV=$(az containerapp show --name "$WEB_APP" --resource-group "$RG" \
-              --query "properties.latestReadyRevisionName" -o tsv 2>/dev/null || echo "")
-            R=$(az containerapp replica list --name "$WEB_APP" --resource-group "$RG" \
-              --revision "$WEB_REV" \
-              --query "[0].properties.containers[0].ready" -o tsv 2>/dev/null || echo "false")
-            if [ "$R" = "true" ]; then
-              OUT=$(timeout 40 az containerapp exec --name "$WEB_APP" --resource-group "$RG" \
-                --revision "$WEB_REV" --command "echo EXEC_TRANSPORT_OK" 2>&1 || true)
-              if echo "$OUT" | grep -q "EXEC_TRANSPORT_OK"; then
-                EXEC_OK=1
-                echo "  [$i/30] revision ${WEB_REV} ready and exec transport confirmed."
-                break
-              fi
-              echo "  [$i/30] revision ${WEB_REV} ready but exec not answering yet (still settling)."
-            else
-              echo "  [$i/30] revision ${WEB_REV:-none} replica not ready yet."
+          for APP in "$WEB_APP" "$API_APP"; do
+            REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
+              --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            if [[ -n "$REV" ]]; then
+              echo "Restarting $APP revision $REV..."
+              az containerapp revision restart --name "$APP" --resource-group "$RG" --revision "$REV" 2>/dev/null \
+                || echo "::warning::Could not restart $APP $REV — KV auto-refresh will pick up changes within 30 min."
             fi
-            sleep 10
           done
-          if [ "$EXEC_OK" -ne 1 ]; then
-            echo "::error::Web app exec transport never became available — check ContainerAppConsoleLogs_CL for $WEB_APP."
-            LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
-            if [ -n "$LAW_ID" ]; then
-              az monitor log-analytics query -w "$LAW_ID" \
-                --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${WEB_APP}' | order by TimeGenerated desc | take 30 | project TimeGenerated, Log_s" \
-                -o table 2>/dev/null || echo "log-query-unavailable"
-            fi
-            exit 1
-          fi
 
       - name: Validate Foundry private DNS and managed identity inference
         id: validate_foundry_private_access
         env:
           RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
+          CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
           WEB_CONTAINER_APP_NAME: ${{ steps.export_ids.outputs.web_container_app_name }}
           PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
-          MAX_ATTEMPTS: "12"
-          SLEEP_SECONDS: "20"
+          MANAGED_IDENTITY_CLIENT_ID: ${{ steps.export_ids.outputs.managed_identity_client_id }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
         run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
-
-      - name: Restore web scale-to-zero
-        # Return the web app to min-replicas=0 so it matches the Terraform-managed
-        # scale-to-zero config (no drift). Runs even if validation failed.
-        if: always()
-        run: |
-          RG="${{ steps.export_ids.outputs.resource_group_name }}"
-          WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
-          echo "Restoring $WEB_APP to min-replicas=0..."
-          az containerapp update --name "$WEB_APP" --resource-group "$RG" --min-replicas 0 --output none 2>/dev/null \
-            || echo "::warning::Could not restore min-replicas=0 on $WEB_APP — next terraform apply will reconcile it."
 
       - name: Update GitHub Variables from Terraform outputs
         continue-on-error: true

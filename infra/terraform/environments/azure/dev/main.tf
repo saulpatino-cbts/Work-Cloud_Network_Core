@@ -165,15 +165,22 @@ module "compute" {
     DATABASE_URL = "database-url"
   }
 
-  # ── Container App secrets (encrypted values stored within Container Apps) ────
-  # These are referenced by the *_secret_env_vars above. The actual values
-  # come from Terraform variables set via GitHub Secrets in CI.
-  container_app_secrets = {
-    "database-url"              = module.database.connection_string
-    "nextauth-secret"           = var.nextauth_secret
-    "entra-client-secret"       = var.entra_client_secret
-    "credential-encryption-key" = var.credential_encryption_key
+  # ── Key Vault secret references ──────────────────────────────────────────────
+  # Versionless URIs — Azure auto-refreshes the injected value within 30 minutes
+  # when a new KV secret version is created (rotation, credential change, etc.).
+  # The user-assigned managed identity (key_vault_reference_identity_id) must have
+  # Key Vault Secrets User on the vault; Key Vault Secrets Officer covers this.
+  container_app_kv_secrets = {
+    "database-url"              = "${module.identity.key_vault_uri}secrets/cna-database-url"
+    "nextauth-secret"           = "${module.identity.key_vault_uri}secrets/cna-nextauth-secret"
+    "entra-client-secret"       = "${module.identity.key_vault_uri}secrets/cna-entra-client-secret"
+    "credential-encryption-key" = "${module.identity.key_vault_uri}secrets/cna-credential-encryption-key"
   }
+  key_vault_reference_identity_id = module.identity.managed_identity_id
+
+  # depends_on ensures KV secrets (created by module.runtime) exist before
+  # Container Apps reference them. Without this, a fresh deploy would race.
+  depends_on = [module.runtime]
 }
 
 module "ai" {
@@ -199,6 +206,7 @@ module "runtime" {
   database_url                  = module.database.connection_string
   nextauth_secret               = var.nextauth_secret
   entra_client_secret           = var.entra_client_secret
+  credential_encryption_key     = var.credential_encryption_key
 }
 
 # ─── Container App RBAC ───────────────────────────────────────────────────────
@@ -235,6 +243,12 @@ resource "azurerm_role_assignment" "api_foundry_user" {
   scope                = module.ai.foundry_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.compute.api_principal_id
+}
+
+resource "azurerm_role_assignment" "uai_foundry_user" {
+  scope                = module.ai.foundry_account_id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = module.identity.managed_identity_principal_id
 }
 
 

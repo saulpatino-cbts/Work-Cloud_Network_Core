@@ -22,11 +22,8 @@ resource "azurerm_key_vault_secret" "database_url" {
   key_vault_id    = var.key_vault_id
   content_type    = "PostgreSQL connection string"
   expiration_date = var.secret_expiration_date
-
-  lifecycle {
-    # Password rotation is handled outside Terraform via Key Vault rotation policy.
-    ignore_changes = [value]
-  }
+  # No ignore_changes: connection string is computed from live infrastructure (server FQDN
+  # + urlencode'd admin password) and must always match the deployed database module output.
 }
 
 resource "azurerm_key_vault_secret" "nextauth_secret" {
@@ -46,6 +43,18 @@ resource "azurerm_key_vault_secret" "entra_client_secret" {
   value           = var.entra_client_secret
   key_vault_id    = var.key_vault_id
   content_type    = "Entra ID OAuth client secret"
+  expiration_date = var.secret_expiration_date
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "azurerm_key_vault_secret" "credential_encryption_key" {
+  name            = "cna-credential-encryption-key"
+  value           = var.credential_encryption_key
+  key_vault_id    = var.key_vault_id
+  content_type    = "AES-256 key for encrypting stored credentials"
   expiration_date = var.secret_expiration_date
 
   lifecycle {

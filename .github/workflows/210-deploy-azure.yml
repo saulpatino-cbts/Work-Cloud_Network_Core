@@ -98,11 +98,11 @@ jobs:
 
           image_or_default() {
             local INPUT="$1"
-            local NAME="$2"
+            local DEFAULT="$2"
             if [ -n "$INPUT" ]; then
               echo "$INPUT"
             else
-              echo "docker.io/${DOCKERHUB_NAMESPACE}/${NAME}:latest"
+              echo "docker.io/${DOCKERHUB_NAMESPACE}/${DEFAULT}"
             fi
           }
 
@@ -115,11 +115,11 @@ jobs:
             echo "EFFECTIVE_WORKER_IMAGE=${{ inputs.previous_worker_image }}" >> "$GITHUB_ENV"
             echo "EFFECTIVE_WEB_IMAGE=${{ inputs.previous_web_image }}" >> "$GITHUB_ENV"
           else
-            echo "EFFECTIVE_API_IMAGE=$(image_or_default '${{ inputs.api_image }}' cna-api)" >> "$GITHUB_ENV"
-            echo "EFFECTIVE_WORKER_IMAGE=$(image_or_default '${{ inputs.worker_image }}' cna-worker)" >> "$GITHUB_ENV"
-            echo "EFFECTIVE_WEB_IMAGE=$(image_or_default '${{ inputs.web_image }}' cna-web)" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_API_IMAGE=$(image_or_default '${{ inputs.api_image }}' 'cna:api-latest')" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WORKER_IMAGE=$(image_or_default '${{ inputs.worker_image }}' 'cna:worker-latest')" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WEB_IMAGE=$(image_or_default '${{ inputs.web_image }}' 'cna:web-latest')" >> "$GITHUB_ENV"
           fi
-          echo "EFFECTIVE_MIGRATOR_IMAGE=docker.io/${DOCKERHUB_NAMESPACE}/cna-migrator:latest" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_MIGRATOR_IMAGE=docker.io/${DOCKERHUB_NAMESPACE}/cna:migrator-latest" >> "$GITHUB_ENV"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
@@ -945,9 +945,9 @@ jobs:
           DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
 
           terraform plan -detailed-exitcode \
-            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-api:latest" \
-            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-worker:latest" \
-            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-web:latest" \
+            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
+            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
+            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
             -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \

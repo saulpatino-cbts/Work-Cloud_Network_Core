@@ -183,10 +183,10 @@ jobs:
             --password-stdin
 
           for image in \
-            "docker.io/${DOCKERHUB_NAMESPACE}/cna-api:latest" \
-            "docker.io/${DOCKERHUB_NAMESPACE}/cna-worker:latest" \
-            "docker.io/${DOCKERHUB_NAMESPACE}/cna-web:latest" \
-            "docker.io/${DOCKERHUB_NAMESPACE}/cna-migrator:latest"; do
+            "docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
+            "docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
+            "docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
+            "docker.io/${DOCKERHUB_NAMESPACE}/cna:migrator-latest"; do
             echo "Checking $image"
             docker manifest inspect "$image" > /dev/null
           done

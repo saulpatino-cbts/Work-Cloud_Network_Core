@@ -132,9 +132,9 @@ jobs:
           terraform destroy -auto-approve \
             -var="environment=${{ github.event.inputs.environment }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-api:latest" \
-            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-worker:latest" \
-            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna-web:latest" \
+            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
+            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
+            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
             -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
             -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
             -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \

@@ -141,25 +141,25 @@ variable "foundry_claude_model" {
 variable "azure_mcp_endpoint" {
   description = "Azure MCP server endpoint surfaced in cna-web."
   type        = string
-  default     = ""
+  default     = "https://mcp.azure.com"
 }
 
 variable "azure_mcp_transport" {
   description = "Azure MCP server transport."
   type        = string
-  default     = "sse"
+  default     = "streamable-http"
 }
 
 variable "aws_mcp_endpoint" {
   description = "AWS MCP server endpoint surfaced in cna-web."
   type        = string
-  default     = ""
+  default     = "https://aws-mcp.us-east-1.api.aws/mcp"
 }
 
 variable "aws_mcp_transport" {
   description = "AWS MCP server transport."
   type        = string
-  default     = "stdio"
+  default     = "streamable-http"
 }
 
 variable "drawio_mcp_url" {

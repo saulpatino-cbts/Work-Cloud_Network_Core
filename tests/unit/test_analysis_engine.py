@@ -31,13 +31,16 @@ from cna.core.findings_schema import (
 )
 from cna.core.topology_schema import (
     VPC,
+    ApplicationGateway,
     AWSRegionTopology,
     AWSTopology,
+    AWSWAFWebACL,
     AzureFirewall,
     AzureSubnet,
     AzureSubscriptionTopology,
     AzureTopology,
     DirectConnectConnection,
+    FrontDoorWAFPolicy,
     SecurityGroup,
     SecurityGroupRule,
     TransitGateway,
@@ -197,6 +200,25 @@ class TestAWSNetFindingRules:
         report = engine.run(aws_topology=topo)
         assert report.total_count == 0
 
+    def test_waf_acl_without_association_maps_to_applications_and_workloads(self, engine):
+        acl = AWSWAFWebACL(
+            web_acl_id="waf-001",
+            web_acl_arn="arn:aws:wafv2:us-east-1:111111111111:regional/webacl/test/waf-001",
+            name="test-waf",
+            associated_resource_arns=[],
+        )
+        region = _make_region()
+        region.waf_web_acls = [acl]
+        topo = AWSTopology(engagement_id="test", regions=[region], accounts=[])
+
+        report = engine.run(aws_topology=topo)
+        finding = next(f for f in report.findings if f.rule_id == "AWS-NET-013")
+
+        assert any(
+            m.framework == "CISA ZTMM v2" and m.pillar == "Applications and Workloads"
+            for m in finding.framework_mappings
+        )
+
 
 class TestAzureNetFindingRules:
     def _make_sub(self, sub_id="sub-001") -> AzureSubscriptionTopology:
@@ -310,6 +332,50 @@ class TestAzureNetFindingRules:
         topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
         report = engine.run(azure_topology=topo)
         assert report.total_count == 0
+
+    def test_app_gateway_waf_disabled_maps_to_applications_and_workloads(self, engine):
+        sub = self._make_sub()
+        sub.application_gateways = [
+            ApplicationGateway(
+                id="/subs/sub-001/appgw-prod",
+                name="appgw-prod",
+                location="eastus",
+                resource_group="rg-edge",
+                sku_name="Standard_v2",
+                subnet_id="/subs/sub-001/vnet/subnets/appgw",
+                waf_enabled=False,
+            )
+        ]
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
+
+        report = engine.run(azure_topology=topo)
+        finding = next(f for f in report.findings if f.rule_id == "AZ-NET-007")
+
+        assert any(
+            m.framework == "CISA ZTMM v2" and m.pillar == "Applications and Workloads"
+            for m in finding.framework_mappings
+        )
+
+    def test_front_door_waf_detection_maps_to_applications_and_workloads(self, engine):
+        sub = self._make_sub()
+        sub.front_door_waf_policies = [
+            FrontDoorWAFPolicy(
+                id="/subs/sub-001/frontdoor-waf",
+                name="fd-waf",
+                resource_group="rg-edge",
+                location="global",
+                policy_mode="Detection",
+            )
+        ]
+        topo = AzureTopology(engagement_id="test", tenant_id="tenant-001", subscriptions=[sub])
+
+        report = engine.run(azure_topology=topo)
+        finding = next(f for f in report.findings if f.rule_id == "AZ-NET-018")
+
+        assert any(
+            m.framework == "CISA ZTMM v2" and m.pillar == "Applications and Workloads"
+            for m in finding.framework_mappings
+        )
 
 
 class TestDeduplication:

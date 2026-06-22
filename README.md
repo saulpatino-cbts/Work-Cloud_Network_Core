@@ -9,7 +9,7 @@ including an encyclopedia-grade network report. Clients receive deliverables thr
 time-limited authenticated portal. Deployed as three Azure Container Apps behind Azure Front Door,
 backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
-> **Current status — 0.8 beta, June 2026:** Code, Terraform, workflows, ADFs, TODO, changelog, and GitHub Wiki are aligned on `main`. GitHub has no open PRs or Issues. The remaining beta gate is live Azure execution: prerequisite validation, dev deploy, Entra redirect update, runtime validation, and customer-like beta acceptance.
+> **Current status — 0.8 beta, June 2026:** Code, Terraform, workflows, ADFs, changelog, and GitHub Wiki are aligned on `main`. The remaining beta gate is live Azure execution through the numbered GitHub Actions workflows: prerequisite validation, dev deploy, Entra redirect update, runtime validation, and customer-like beta acceptance.
 
 ---
 
@@ -117,7 +117,7 @@ infra/terraform/
                               security, storage, runtime
 .github/workflows/            000–320 banded workflow sequence
 GitHub Wiki                   Documentation and ADRs migrated to https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki
-TODO.md                       Canonical open redeploy, validation, footprint, and enhancement tasks
+CHANGELOG.md                  Release history and deployment-gated follow-up context
 scripts/                      bootstrap, validation, cleanup, and CI helper scripts
 ```
 

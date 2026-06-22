@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
+
+import httpx
 
 from cna.core.findings_schema import FindingRecommendation
 
@@ -44,10 +47,20 @@ class AWSMCPClient:
         self._try_init()
 
     def _try_init(self) -> None:
-        """Attempt MCP SDK import and connection.
+        """Mark the client available when a usable transport is configured.
 
-        Silently marks the client unavailable on failure.
+        Streamable HTTP endpoints do not require the optional MCP SDK. Other
+        transports keep the old SDK-gated behavior.
         """
+        if self._endpoint and self._transport.lower() in {"streamable-http", "http", "sse"}:
+            self._available = True
+            logger.info(
+                "AWS MCP client initialized (endpoint=%s, transport=%s)",
+                self._endpoint,
+                self._transport,
+            )
+            return
+
         try:
             import mcp  # noqa: F401 — optional dependency
 
@@ -106,18 +119,76 @@ class AWSMCPClient:
     def _call_mcp_tool(self, tool_name: str, params: dict) -> list[dict]:
         """Execute an MCP tool call. Returns parsed result list.
 
-        In production: delegates to mcp.ClientSession.call_tool().
+        Streamable HTTP endpoints use the MCP JSON-RPC `tools/call` method.
+        Non-HTTP transports still return [] so callers use offline fallback.
         Raises on transport error — caller handles gracefully.
         """
-        # Production implementation:
-        # async with mcp.ClientSession(...) as session:
-        #     result = await session.call_tool(tool_name, params)
-        #     return result.content
-        #
-        # Sync wrapper deferred until async CLI refactor (Phase F target).
-        # For now: returns [] to trigger offline fallback.
+        if self._endpoint and self._transport.lower() in {"streamable-http", "http", "sse"}:
+            response = httpx.post(
+                self._endpoint,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": tool_name,
+                        "arguments": params,
+                    },
+                },
+                headers={"Accept": "application/json"},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return _extract_recommendations(response.json())
+
         logger.debug(
-            "MCP tool call deferred (sync wrapper not yet implemented): %s",
+            "MCP tool call skipped for non-HTTP transport: %s",
             tool_name,
         )
         return []
+
+
+def _extract_recommendations(payload: dict[str, Any]) -> list[dict]:
+    """Normalize common MCP tool response shapes into recommendation dicts."""
+    result = payload.get("result", payload)
+    if isinstance(result, list):
+        return [item for item in result if isinstance(item, dict)]
+    if not isinstance(result, dict):
+        return []
+
+    for key in ("recommendations", "items", "data"):
+        value = result.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        for key in ("recommendations", "items", "data"):
+            value = structured.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        if structured.get("recommendation"):
+            return [structured]
+
+    content = result.get("content")
+    if isinstance(content, list):
+        parsed: list[dict] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("recommendation"):
+                parsed.append(item)
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                parsed.append(
+                    {
+                        "recommendation": text.strip(),
+                        "reference_url": item.get("uri") or item.get("url") or "",
+                    }
+                )
+        return parsed
+
+    if result.get("recommendation"):
+        return [result]
+    return []

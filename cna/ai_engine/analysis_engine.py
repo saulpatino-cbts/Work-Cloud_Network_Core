@@ -593,6 +593,14 @@ class AnalysisEngine:
                                 control_name="Traffic Management",
                                 alignment="WAF provides application-layer traffic filtering at the perimeter",
                             ),
+                            FrameworkMapping(
+                                framework="CISA ZTMM v2",
+                                version="v2",
+                                pillar="Applications and Workloads",
+                                control_id="4.0",
+                                control_name="Application and Workload Protection",
+                                alignment="A detached WAF leaves application endpoints without workload-layer inspection",
+                            ),
                         ],
                         status=FindingStatus.OPEN,
                     )
@@ -906,7 +914,15 @@ class AnalysisEngine:
                             control_name="Traffic Management",
                             alignment="WAF provides application-layer traffic filtering at the perimeter",
                         ),
-                    ],
+                        FrameworkMapping(
+                            framework="CISA ZTMM v2",
+                            version="v2",
+                            pillar="Applications and Workloads",
+                            control_id="4.0",
+                            control_name="Application and Workload Protection",
+                            alignment="Disabled WAF leaves application workloads without HTTP-layer attack inspection",
+                        ),
+                        ],
                     status=FindingStatus.OPEN,
                 )
             )
@@ -1264,6 +1280,14 @@ class AnalysisEngine:
                             control_id="3.2",
                             control_name="Traffic Management",
                             alignment="WAF in Detection mode does not block malicious traffic",
+                        ),
+                        FrameworkMapping(
+                            framework="CISA ZTMM v2",
+                            version="v2",
+                            pillar="Applications and Workloads",
+                            control_id="4.0",
+                            control_name="Application and Workload Protection",
+                            alignment="Detection-only WAF does not enforce blocking for application-layer attacks",
                         ),
                     ],
                     status=FindingStatus.OPEN,

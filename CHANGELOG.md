@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Wired live MCP endpoint defaults for Azure and AWS recommendation enrichment through Terraform variables, `.env.example`, and the existing GitHub variable bootstrap flow.
+- Added streamable HTTP JSON-RPC tool-call support for the Azure and AWS MCP clients while preserving offline recommendation fallback when endpoints are unavailable.
+- Extended CISA ZTMM v2 mappings for AWS WAF, Azure Application Gateway WAF, and Azure Front Door WAF findings into the `Applications and Workloads` pillar.
+- Added regression coverage for live MCP JSON-RPC request shaping and WAF `Applications and Workloads` framework mappings.
+
+### Changed
+- Consolidated the active task list into this changelog and deployment workflow validation. Live Azure prerequisite, image build, deploy, runtime, teardown, beta acceptance, and cost/footprint checks are now validated through the numbered GitHub Actions workflows and deployment evidence rather than a local TODO file.
+- Aligned MCP configuration defaults on `https://mcp.azure.com`, `https://aws-mcp.us-east-1.api.aws/mcp`, and `streamable-http` transport.
+
+### Removed
+- Removed `TODO.md` after migrating completed work and deployment-gated follow-up context into the changelog.
+
 ---
 
 ## [0.8.0-beta] - 2026-06-16
@@ -28,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Validation
 - `npm ci`, `npx prisma generate`, and `npm run build` passed after dependency updates.
 - Terraform validation passed for Azure `dev` and `prod` after network hardening changes.
-- Final live Azure beta validation remains tracked in `TODO.md`.
+- Live Azure beta validation is handled by the numbered GitHub Actions deployment workflows and deployment evidence artifacts.
 
 ---
 
@@ -39,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Terraform workload resource group naming and generic CNA tag defaults for customer deployments.
 - Aligned deployment, workflow, cleanup, and secrets documentation with GitHub Secrets/Variables as the source of truth.
 - Migrated the documentation content set to the GitHub Wiki with generated table-of-contents sections.
-- Migrated ADRs to the GitHub Wiki, consolidated remaining gap/footprint notes into `TODO.md`, and removed obsolete local audit artifacts.
+- Migrated ADRs to the GitHub Wiki, consolidated remaining gap/footprint notes into the release documentation, and removed obsolete local audit artifacts.
 
 ---
 

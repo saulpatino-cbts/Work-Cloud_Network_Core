@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import httpx
+
 from cna.ai_engine.mcp_client.aws_mcp_client import AWSMCPClient
 from cna.ai_engine.mcp_client.azure_mcp_client import AzureMCPClient
 from cna.ai_engine.mcp_client.mcp_router import MCPRouter
@@ -89,11 +91,50 @@ class TestAWSMCPClient:
             )
         assert result == []
 
-    def test_call_mcp_tool_returns_empty_list(self):
-        """Current stub implementation always returns [] to trigger offline fallback."""
+    def test_call_mcp_tool_returns_empty_for_non_http_transport(self):
         client = AWSMCPClient.__new__(AWSMCPClient)
+        client._endpoint = ""
+        client._transport = "stdio"
         result = client._call_mcp_tool("aws.well-architected.get-recommendation", {})
         assert result == []
+
+    def test_call_mcp_tool_posts_json_rpc_to_streamable_http_endpoint(self):
+        client = AWSMCPClient.__new__(AWSMCPClient)
+        client._endpoint = "https://aws-mcp.example.test/mcp"
+        client._transport = "streamable-http"
+        response = httpx.Response(
+            200,
+            request=httpx.Request("POST", "https://aws-mcp.example.test/mcp"),
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Associate the Web ACL with the public ALB.",
+                        }
+                    ]
+                },
+            },
+        )
+
+        with patch("cna.ai_engine.mcp_client.aws_mcp_client.httpx.post", return_value=response) as post:
+            result = client._call_mcp_tool(
+                "aws.well-architected.get-recommendation",
+                {"resource_type": "AWS::WAFv2::WebACL"},
+            )
+
+        post.assert_called_once()
+        payload = post.call_args.kwargs["json"]
+        assert payload["method"] == "tools/call"
+        assert payload["params"]["name"] == "aws.well-architected.get-recommendation"
+        assert result == [
+            {
+                "recommendation": "Associate the Web ACL with the public ALB.",
+                "reference_url": "",
+            }
+        ]
 
     def test_constructor_stores_endpoint_and_transport(self):
         client = AWSMCPClient.__new__(AWSMCPClient)
@@ -159,10 +200,43 @@ class TestAzureMCPClient:
             )
         assert result == []
 
-    def test_call_mcp_tool_returns_empty_list(self):
+    def test_call_mcp_tool_returns_empty_for_non_http_transport(self):
         client = AzureMCPClient.__new__(AzureMCPClient)
+        client._endpoint = ""
+        client._transport = "stdio"
         result = client._call_mcp_tool("azure.advisor.get-recommendation", {})
         assert result == []
+
+    def test_call_mcp_tool_posts_json_rpc_to_streamable_http_endpoint(self):
+        client = AzureMCPClient.__new__(AzureMCPClient)
+        client._endpoint = "https://azure-mcp.example.test"
+        client._transport = "streamable-http"
+        response = httpx.Response(
+            200,
+            request=httpx.Request("POST", "https://azure-mcp.example.test"),
+            json={
+                "result": {
+                    "structuredContent": {
+                        "recommendations": [
+                            {
+                                "recommendation": "Move the WAF policy to Prevention mode.",
+                                "reference_url": "https://learn.microsoft.com/azure/web-application-firewall/",
+                            }
+                        ]
+                    }
+                }
+            },
+        )
+
+        with patch("cna.ai_engine.mcp_client.azure_mcp_client.httpx.post", return_value=response) as post:
+            result = client._call_mcp_tool(
+                "azure.advisor.get-recommendation",
+                {"resource_type": "Microsoft.Network/frontDoorWebApplicationFirewallPolicies"},
+            )
+
+        post.assert_called_once()
+        assert post.call_args.kwargs["json"]["method"] == "tools/call"
+        assert result[0]["recommendation"] == "Move the WAF policy to Prevention mode."
 
 
 # ── MCPRouter ──────────────────────────────────────────────────────────────────

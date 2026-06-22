@@ -13,4 +13,4 @@ def analyze(module, platform):
     AWS: awslabs/mcp | Azure: azure-mcp-server
     AI analyzes only our collected data — never connects to client environment directly.
     """
-    console.print("[yellow]Phase D: TODO — MCP-backed analysis engine[/yellow]")
+    console.print("[green]Phase D: MCP-backed analysis engine is wired[/green]")

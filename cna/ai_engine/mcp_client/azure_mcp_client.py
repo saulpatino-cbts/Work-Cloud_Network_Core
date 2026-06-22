@@ -18,6 +18,9 @@ from __future__ import annotations
 import logging
 import os
 
+import httpx
+
+from cna.ai_engine.mcp_client.aws_mcp_client import _extract_recommendations
 from cna.core.findings_schema import FindingRecommendation
 
 logger = logging.getLogger("cna.mcp.azure")
@@ -43,6 +46,15 @@ class AzureMCPClient:
         self._try_init()
 
     def _try_init(self) -> None:
+        if self._endpoint and self._transport.lower() in {"streamable-http", "http", "sse"}:
+            self._available = True
+            logger.info(
+                "Azure MCP client initialized (endpoint=%s, transport=%s)",
+                self._endpoint,
+                self._transport,
+            )
+            return
+
         try:
             import mcp  # noqa: F401 — optional dependency
 
@@ -96,10 +108,29 @@ class AzureMCPClient:
     def _call_mcp_tool(self, tool_name: str, params: dict) -> list[dict]:
         """Execute an MCP tool call.
 
-        See AWSMCPClient._call_mcp_tool for implementation notes.
+        Streamable HTTP endpoints use the MCP JSON-RPC `tools/call` method.
+        Non-HTTP transports return [] so callers use offline fallback.
         """
+        if self._endpoint and self._transport.lower() in {"streamable-http", "http", "sse"}:
+            response = httpx.post(
+                self._endpoint,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": tool_name,
+                        "arguments": params,
+                    },
+                },
+                headers={"Accept": "application/json"},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return _extract_recommendations(response.json())
+
         logger.debug(
-            "MCP tool call deferred (sync wrapper not yet implemented): %s",
+            "MCP tool call skipped for non-HTTP transport: %s",
             tool_name,
         )
         return []

@@ -89,10 +89,12 @@ module "identity" {
   tenant_id           = var.tenant_id
   tags                = local.tags
 
-  # Dev: minimal soft-delete, no purge protection (prod-only requirement).
-  # Suffix incremented to avoid soft-delete name conflict after environment rebuild.
-  key_vault_soft_delete_retention_days = 7
-  key_vault_purge_protection_enabled   = false
+  # Tenant policy requires purge protection on all Key Vaults (new and prod).
+  # 90-day retention is paired with purge protection per Azure best practice.
+  # NOTE: once purge protection is on, vault name is reserved for 90 days after
+  # deletion — increment key_vault_name_suffix on next full teardown.
+  key_vault_soft_delete_retention_days = 90
+  key_vault_purge_protection_enabled   = true
   key_vault_name_suffix                = "2"
 }
 

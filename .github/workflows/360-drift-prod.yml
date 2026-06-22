@@ -1,9 +1,8 @@
-name: "211 · Drift Detection · dev"
+name: "360 · Drift Detection · prod"
 
+# No schedule — enable once prod is deployed.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 11 * * *'
 
 permissions:
   id-token: write
@@ -20,10 +19,10 @@ env:
 jobs:
   drift-detection:
     runs-on: ubuntu-latest
-    environment: dev
+    environment: prod
     defaults:
       run:
-        working-directory: infra/terraform/environments/azure/dev
+        working-directory: infra/terraform/environments/azure/prod
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -52,7 +51,7 @@ jobs:
             -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
             -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
             -backend-config="container_name=$TFSTATE_CONTAINER" \
-            -backend-config="key=dev.terraform.tfstate" \
+            -backend-config="key=prod.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
       - name: Terraform drift plan

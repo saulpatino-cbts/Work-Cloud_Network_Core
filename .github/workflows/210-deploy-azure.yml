@@ -514,6 +514,7 @@ jobs:
           echo "container_app_environment_id=$(terraform output -raw container_app_environment_id)" >> "$GITHUB_OUTPUT"
           echo "web_container_app_name=$(terraform output -raw web_name)" >> "$GITHUB_OUTPUT"
           echo "private_endpoint_subnet_prefix=$(terraform output -raw private_endpoint_subnet_prefix)" >> "$GITHUB_OUTPUT"
+          echo "database_server_name=$(terraform output -raw database_server_name)" >> "$GITHUB_OUTPUT"
 
       - name: Approve Front Door private endpoint connections
         id: approve_private_link
@@ -525,17 +526,36 @@ jobs:
           SLEEP_SECONDS: "20"
         run: bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
 
+      - name: Wait for PostgreSQL server to be Ready
+        run: |
+          DB_SERVER="${{ steps.export_ids.outputs.database_server_name }}"
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          echo "Waiting for $DB_SERVER to reach Ready state (DNS re-registration after zone update)..."
+          for i in $(seq 1 36); do
+            STATE=$(az postgres flexible-server show \
+              --name "$DB_SERVER" --resource-group "$RG" \
+              --query "state" -o tsv 2>/dev/null || echo "Unknown")
+            echo "  [$i/36] state: $STATE"
+            if [ "$STATE" = "Ready" ]; then
+              echo "Server is Ready — waiting 30s for DNS hash record to propagate..."
+              sleep 30
+              break
+            fi
+            [ $i -lt 36 ] && sleep 10 || { echo "::error::Timed out waiting for server Ready"; exit 1; }
+          done
+
       - name: Run database migrations
         run: |
           DB_URL=$(terraform output -raw database_connection_string)
           RG="${{ steps.export_ids.outputs.resource_group_name }}"
           CAE_ID="${{ steps.export_ids.outputs.container_app_environment_id }}"
           CAE="${CAE_ID##*/}"
-
-          # Extract host from DB_URL for connectivity pre-check
           DB_HOST=$(echo "$DB_URL" | sed 's|.*@||' | cut -d: -f1)
-          echo "Pre-flight: resolving $DB_HOST and checking port 5432..."
+
+          # Probe connectivity from inside the VNet before committing to the full 300s job.
+          # alpine's sh -c needs the command passed as a single comma-separated string to --command.
           PROBE_JOB="job-probe-${{ github.run_id }}"
+          PROBE_CMD="/bin/sh,-c,nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE"
           az containerapp job create \
             --name "$PROBE_JOB" \
             --resource-group "$RG" \
@@ -546,14 +566,13 @@ jobs:
             --replica-completion-count 1 \
             --parallelism 1 \
             --image "docker.io/alpine:3.19" \
-            --command "/bin/sh" \
-            --args "-c" "nslookup $DB_HOST && nc -zv $DB_HOST 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE" \
+            --command "$PROBE_CMD" \
             2>/dev/null || true
           az containerapp job start --name "$PROBE_JOB" --resource-group "$RG" 2>/dev/null || true
-          sleep 35
+          sleep 40
           PROBE_LOG=$(az monitor log-analytics query \
             -w "$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null)" \
-            --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
+            --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
             -o tsv 2>/dev/null || echo "probe-log-unavailable")
           echo "Probe output: $PROBE_LOG"
           az containerapp job delete --name "$PROBE_JOB" --resource-group "$RG" --yes 2>/dev/null || true

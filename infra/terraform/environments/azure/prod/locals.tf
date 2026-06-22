@@ -48,6 +48,7 @@ locals {
       "index.docker.io",
       "registry-1.docker.io",
       "auth.docker.io",
+      "production.cloudfront.docker.com",
       "pkg-containers.githubusercontent.com",
       "${module.storage.storage_account_name}.blob.core.windows.net",
       local.key_vault_host,

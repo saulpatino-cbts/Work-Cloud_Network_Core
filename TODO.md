@@ -1,6 +1,6 @@
 # CNA TODO
 
-> Last updated: 2026-06-16
+> Last updated: 2026-06-22
 
 This is the canonical open-task list. Historical gap analysis, footprint review
 notes, ADRs, and audit artifacts have been migrated or consolidated so active
@@ -25,7 +25,9 @@ work is tracked here.
 
 ## Redeploy And Validation
 
+- [ ] P1. Replace `GHCR_PAT` with a GitHub token that can authenticate to `ghcr.io` and pull private `cna-api`, `cna-worker`, `cna-web`, and `cna-migrator` images; workflow `100-validate-prereqs.yml` now fails fast on this check.
 - [ ] P1. Run workflow `100-validate-prereqs.yml` and resolve any missing GitHub Secrets, Variables, Azure OIDC, RBAC, or tfstate backend access.
+- [x] P1. Run workflow `000-bootstrap-backend.yml` for `dev` to create the tfstate backend and import the workload resource group.
 - [x] P1. Register `Microsoft.AlertsManagement` in the Azure subscription so Application Insights smart-detection alert deployment does not fail.
 - [x] P1. Validate `AZURE_SUBSCRIPTION_ID` and `AZURE_TARGET_SUBSCRIPTION_NAME` so preflight and deploy fail if the repo is pointed at the wrong subscription.
 - [x] P1. Run workflow `200-build-images.yml` to publish current immutable GHCR image tags.

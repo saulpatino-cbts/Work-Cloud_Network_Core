@@ -45,6 +45,7 @@ locals {
       split("/", var.api_image)[0],
       split("/", var.worker_image)[0],
       split("/", var.web_image)[0],
+      "index.docker.io",
       "registry-1.docker.io",
       "auth.docker.io",
       "pkg-containers.githubusercontent.com",

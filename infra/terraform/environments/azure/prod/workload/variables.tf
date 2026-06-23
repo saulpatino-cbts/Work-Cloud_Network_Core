@@ -92,7 +92,7 @@ variable "nextauth_secret" {
 }
 
 variable "nextauth_url" {
-  description = "Canonical URL of the cna-web deployment in prod (used by NextAuth for callbacks)"
+  description = "Canonical URL of the cna-web deployment (used by NextAuth for callbacks)"
   type        = string
   default     = "https://cna.example.com"
 }
@@ -108,6 +108,7 @@ variable "web_ingress_ip_security_restrictions" {
   default = []
 }
 
+# ─── Credential encryption ────────────────────────────────────────────────────
 variable "credential_encryption_key" {
   description = "Base64-encoded 32-byte AES-256 key for encrypting SP client secrets at rest. Generate with: openssl rand -base64 32"
   type        = string
@@ -172,4 +173,47 @@ variable "secret_expiration_date" {
   description = "RFC3339 expiry for Terraform-managed KV secrets. Must satisfy Enforce-GR-KeyVault (max 90 days from now). Computed dynamically in CI via 'date -u -d +90days'."
   type        = string
   default     = "2026-09-20T23:59:59Z"
+}
+variable "tfstate_resource_group" {
+  type    = string
+  default = "rg-cna-dev-scus-tfstate"
+}
+
+variable "tfstate_storage_account" {
+  type    = string
+  default = "stcna0512f9tfstate"
+}
+
+variable "tfstate_container" {
+  type    = string
+  default = "tfstate"
+}
+variable "frontdoor_certificate_pfx_path" {
+  description = "File path to the PFX certificate for Front Door"
+  type        = string
+  default     = null
+}
+
+variable "frontdoor_certificate_pfx_password" {
+  description = "Password for the PFX certificate"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+# ─── GitHub ───────────────────────────────────────────────────────────────────
+variable "github_owner" {
+  description = "GitHub organization or user owning the repository"
+  type        = string
+}
+
+variable "github_repository" {
+  description = "GitHub repository name (without owner)"
+  type        = string
+}
+
+variable "github_token" {
+  description = "GitHub PAT with permissions to manage repository variables"
+  type        = string
+  sensitive   = true
 }

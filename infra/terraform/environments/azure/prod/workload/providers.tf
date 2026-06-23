@@ -12,6 +12,10 @@ terraform {
       source  = "azure/azapi"
       version = "~> 2.0"
     }
+    github = {
+      source  = "integrations/github"
+      version = "~> 6.0"
+    }
   }
 }
 
@@ -30,4 +34,9 @@ data "azurerm_client_config" "current" {}
 
 provider "azapi" {
   use_oidc = true
+}
+
+provider "github" {
+  owner = var.github_owner
+  token = var.github_token
 }

@@ -75,9 +75,9 @@ module "compute" {
   container_registry_password          = var.container_registry_password
   tags                                 = local.tags
 
-  # FinOps: scale to zero when idle — no charge for idle Container Apps
-  enable_scale_to_zero            = true
-  log_analytics_retention_in_days = 30
+  # FinOps: do NOT scale to zero in prod — cold-start impacts SLA
+  enable_scale_to_zero            = false
+  log_analytics_retention_in_days = 90
 
   # ── Plain env vars injected at container start ──────────────────────────────
   api_env_vars = {
@@ -149,8 +149,8 @@ module "ai" {
 
   environment          = var.environment
   foundry_location     = "eastus2"
-  foundry_account_name = "cna-dev-eus2-aif"
-  foundry_project_name = "cna-dev-eus2-aif-proj"
+  foundry_account_name = "cna-prod-eus2-aif"
+  foundry_project_name = "cna-prod-eus2-aif-proj"
 }
 
 

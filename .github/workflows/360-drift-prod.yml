@@ -20,9 +20,6 @@ jobs:
   drift-detection:
     runs-on: ubuntu-latest
     environment: prod
-    defaults:
-      run:
-        working-directory: infra/terraform/environments/azure/prod
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -45,7 +42,9 @@ jobs:
           echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
           echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
 
-      - name: Terraform init
+      # ── Platform state drift ────────────────────────────────────────────────
+      - name: Terraform init (platform)
+        working-directory: infra/terraform/environments/azure/prod/platform
         run: |
           terraform init \
             -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
@@ -54,7 +53,27 @@ jobs:
             -backend-config="key=prod.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
-      - name: Terraform drift plan
+      - name: Terraform drift plan (platform)
+        working-directory: infra/terraform/environments/azure/prod/platform
+        run: |
+          terraform plan -detailed-exitcode || EXIT=$?
+          if [ "${EXIT:-0}" -eq 2 ]; then
+            echo "::warning::Drift detected in prod/platform state."
+          fi
+
+      # ── Workload state drift ────────────────────────────────────────────────
+      - name: Terraform init (workload)
+        working-directory: infra/terraform/environments/azure/prod/workload
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=prod.workload.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+      - name: Terraform drift plan (workload)
+        working-directory: infra/terraform/environments/azure/prod/workload
         run: |
           if [ -z "$DOCKERHUB_NAMESPACE" ]; then
             echo "::error::DOCKERHUB_NAMESPACE variable is required."
@@ -98,4 +117,11 @@ jobs:
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
             -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
-            -var="drawio_mcp_url=${DRAWIO_MCP_URL}"
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}" \
+            -var="github_owner=${{ github.repository_owner }}" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_token=" \
+            || EXIT=$?
+          if [ "${EXIT:-0}" -eq 2 ]; then
+            echo "::warning::Drift detected in prod/workload state."
+          fi

@@ -22,8 +22,14 @@ resource "azurerm_key_vault_secret" "database_url" {
   key_vault_id    = var.key_vault_id
   content_type    = "PostgreSQL connection string"
   expiration_date = var.secret_expiration_date
-  # No ignore_changes: connection string is computed from live infrastructure (server FQDN
-  # + urlencode'd admin password) and must always match the deployed database module output.
+
+  lifecycle {
+    # expiration_date: policy evaluates (expiry - version_created_date).
+    # A metadata-only expiry update (no value change) fails policy because the
+    # version's creation date is old. expiry is set correctly when value changes
+    # (new KV version resets the creation date). Leave it alone between value changes.
+    ignore_changes = [expiration_date]
+  }
 }
 
 resource "azurerm_key_vault_secret" "nextauth_secret" {

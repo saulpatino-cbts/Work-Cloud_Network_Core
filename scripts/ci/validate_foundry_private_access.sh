@@ -104,19 +104,36 @@ async function main() {
   if (!privateEndpointSubnetPrefix) throw new Error("PRIVATE_ENDPOINT_SUBNET_PREFIX was not supplied.");
 
   const host = new URL(endpoint).hostname;
-  const dnsResults = await dns.lookup(host, { all: true, verbatim: true });
-  const privateMatches = dnsResults.filter(r => r.family === 4 && inCidr(r.address, privateEndpointSubnetPrefix));
+  let dnsResults = [];
+  let privateMatches = [];
+  for (let i = 0; i < 12; i++) {
+    try {
+      dnsResults = await dns.lookup(host, { all: true, verbatim: true });
+      privateMatches = dnsResults.filter(r => r.family === 4 && inCidr(r.address, privateEndpointSubnetPrefix));
+      if (privateMatches.length > 0) break;
+      console.log(`[Attempt ${i+1}/12] DNS resolved ${host} to ${dnsResults.map(r => r.address).join(", ")} (not in ${privateEndpointSubnetPrefix}). Retrying in 10s...`);
+    } catch (e) {
+      console.log(`[Attempt ${i+1}/12] dns.lookup failed for ${host}: ${e.message}. Retrying in 10s...`);
+    }
+    await new Promise(res => setTimeout(res, 10000));
+  }
 
   if (privateMatches.length === 0) {
     throw new Error(
-      `Foundry host ${host} did not resolve into ${privateEndpointSubnetPrefix}. ` +
-      `Resolved: ${dnsResults.map(r => r.address).join(", ")}`
+      `Foundry host ${host} did not resolve into ${privateEndpointSubnetPrefix} after 120s. ` +
+      `Last resolved: ${dnsResults.map(r => r.address).join(", ")}`
     );
   }
 
+
   const token = await getManagedIdentityToken("https://cognitiveservices.azure.com");
 
-  const response = await fetch(endpoint, {
+  const fetchUrl = new URL(endpoint);
+  if (!fetchUrl.searchParams.has("api-version")) {
+    fetchUrl.searchParams.set("api-version", "2024-02-15-preview");
+  }
+
+  const response = await fetch(fetchUrl.toString(), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -144,7 +161,12 @@ async function main() {
   }, null, 2));
 }
 
-main().catch(err => { console.error(err.stack || err.message || String(err)); process.exit(1); });
+main().then(() => {
+  setTimeout(() => process.exit(0), 5000);
+}).catch(err => {
+  console.error(err.stack || err.message || String(err));
+  setTimeout(() => process.exit(1), 5000);
+});
 NODE
 
 NODE_SCRIPT_B64="$(printf '%s' "$NODE_SCRIPT" | base64 -w 0)"

@@ -106,21 +106,21 @@ async function main() {
   const host = new URL(endpoint).hostname;
   let dnsResults = [];
   let privateMatches = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 30; i++) {
     try {
       dnsResults = await dns.lookup(host, { all: true, verbatim: true });
       privateMatches = dnsResults.filter(r => r.family === 4 && inCidr(r.address, privateEndpointSubnetPrefix));
       if (privateMatches.length > 0) break;
-      console.log(`[Attempt ${i+1}/12] DNS resolved ${host} to ${dnsResults.map(r => r.address).join(", ")} (not in ${privateEndpointSubnetPrefix}). Retrying in 10s...`);
+      console.log(`[Attempt ${i+1}/30] DNS resolved ${host} to ${dnsResults.map(r => r.address).join(", ")} (not in ${privateEndpointSubnetPrefix}). Retrying in 10s...`);
     } catch (e) {
-      console.log(`[Attempt ${i+1}/12] dns.lookup failed for ${host}: ${e.message}. Retrying in 10s...`);
+      console.log(`[Attempt ${i+1}/30] dns.lookup failed for ${host}: ${e.message}. Retrying in 10s...`);
     }
     await new Promise(res => setTimeout(res, 10000));
   }
 
   if (privateMatches.length === 0) {
     throw new Error(
-      `Foundry host ${host} did not resolve into ${privateEndpointSubnetPrefix} after 120s. ` +
+      `Foundry host ${host} did not resolve into ${privateEndpointSubnetPrefix} after 300s. ` +
       `Last resolved: ${dnsResults.map(r => r.address).join(", ")}`
     );
   }
@@ -193,7 +193,7 @@ capture_logs() {
   for attempt in $(seq 1 9); do
     local rows
     rows=$(az monitor log-analytics query -w "$LAW_ID" \
-      --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(15m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project Log_s" \
+      --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(15m) | where ContainerJobName_s == '${JOB}' | order by TimeGenerated asc | project Log_s" \
       -o tsv 2>/dev/null || echo "")
     if [[ -n "$rows" ]]; then
       echo "----- ${JOB} container logs -----"

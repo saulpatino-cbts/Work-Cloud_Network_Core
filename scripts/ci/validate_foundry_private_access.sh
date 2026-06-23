@@ -214,56 +214,90 @@ capture_logs() {
 # argument parsing.
 # https://learn.microsoft.com/azure/container-apps/azure-resource-manager-api-spec#container-apps-job
 echo "Creating validation job $JOB..."
-cat > "$JOB_YAML" <<YAML
-identity:
-  type: UserAssigned
-  userAssignedIdentities:
-    "${UAI_ID}": {}
-properties:
-  environmentId: "${CONTAINER_APP_ENVIRONMENT_ID}"
-  configuration:
-    triggerType: Manual
-    replicaTimeout: 300
-    replicaRetryLimit: 0
-    manualTriggerConfig:
-      replicaCompletionCount: 1
-      parallelism: 1
-    secrets:
-    - name: dockerhub-password
-      value: "${DOCKERHUB_PASSWORD}"
-    registries:
-    - server: docker.io
-      username: "${DOCKERHUB_USERNAME}"
-      passwordSecretRef: dockerhub-password
-  template:
-    containers:
-    - image: "${WEB_IMAGE}"
-      name: "${JOB}"
-      command:
-      - "/bin/sh"
-      args:
-      - "-c"
-      - 'echo "\$VALIDATION_SCRIPT_B64" | base64 -d | node'
-      env:
-      - name: VALIDATION_SCRIPT_B64
-        value: "${NODE_SCRIPT_B64}"
-      - name: AZURE_CLIENT_ID
-        value: "${MANAGED_IDENTITY_CLIENT_ID}"
-      - name: FOUNDRY_CLAUDE_ENDPOINT
-        value: "${FOUNDRY_ENDPOINT}"
-      - name: FOUNDRY_CLAUDE_MODEL
-        value: "${FOUNDRY_MODEL:-claude-sonnet-4-6}"
-      - name: PRIVATE_ENDPOINT_SUBNET_PREFIX
-        value: "${PRIVATE_ENDPOINT_SUBNET_PREFIX}"
-      resources:
-        cpu: 0.5
-        memory: 1Gi
-YAML
+LOCATION=$(az group show --name "$RG" --query location -o tsv)
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-az containerapp job create \
-  --name "$JOB" \
-  --resource-group "$RG" \
-  --yaml "$JOB_YAML"
+cat > "$JOB_YAML" <<JSON
+{
+  "location": "${LOCATION}",
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": {
+      "${UAI_ID}": {}
+    }
+  },
+  "properties": {
+    "environmentId": "${CONTAINER_APP_ENVIRONMENT_ID}",
+    "configuration": {
+      "triggerType": "Manual",
+      "replicaTimeout": 300,
+      "replicaRetryLimit": 0,
+      "manualTriggerConfig": {
+        "replicaCompletionCount": 1,
+        "parallelism": 1
+      },
+      "secrets": [
+        {
+          "name": "dockerhub-password",
+          "value": "${DOCKERHUB_PASSWORD}"
+        }
+      ],
+      "registries": [
+        {
+          "server": "docker.io",
+          "username": "${DOCKERHUB_USERNAME}",
+          "passwordSecretRef": "dockerhub-password"
+        }
+      ]
+    },
+    "template": {
+      "containers": [
+        {
+          "image": "${WEB_IMAGE}",
+          "name": "${JOB}",
+          "command": [
+            "/bin/sh"
+          ],
+          "args": [
+            "-c",
+            "echo \\"\\$VALIDATION_SCRIPT_B64\\" | base64 -d | node"
+          ],
+          "env": [
+            {
+              "name": "VALIDATION_SCRIPT_B64",
+              "value": "${NODE_SCRIPT_B64}"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "${MANAGED_IDENTITY_CLIENT_ID}"
+            },
+            {
+              "name": "FOUNDRY_CLAUDE_ENDPOINT",
+              "value": "${FOUNDRY_ENDPOINT}"
+            },
+            {
+              "name": "FOUNDRY_CLAUDE_MODEL",
+              "value": "${FOUNDRY_MODEL:-claude-sonnet-4-6}"
+            },
+            {
+              "name": "PRIVATE_ENDPOINT_SUBNET_PREFIX",
+              "value": "${PRIVATE_ENDPOINT_SUBNET_PREFIX}"
+            }
+          ],
+          "resources": {
+            "cpu": 0.5,
+            "memory": "1Gi"
+          }
+        }
+      ]
+    }
+  }
+}
+JSON
+
+az rest --method put \
+  --uri "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.App/jobs/${JOB}?api-version=2024-03-01" \
+  --body @"$JOB_YAML"
 
 echo "Starting validation job..."
 az containerapp job start --name "$JOB" --resource-group "$RG"

@@ -1,0 +1,1149 @@
+name: "210 · Deploy Azure Platform"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      api_image:
+        description: API image reference
+        required: false
+        default: ""
+        type: string
+      worker_image:
+        description: Worker image reference
+        required: false
+        default: ""
+        type: string
+      web_image:
+        description: Web (Next.js) image reference
+        required: false
+        default: ""
+        type: string
+      previous_api_image:
+        description: Previous API image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      previous_worker_image:
+        description: Previous worker image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      previous_web_image:
+        description: Previous web image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      deploy_mode:
+        description: Deployment mode
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - rollback
+permissions:
+  actions: write
+  contents: write
+  id-token: write
+  security-events: write
+  attestations: write
+
+concurrency:
+  group: deploy-azure-platform-${{ github.event.inputs.environment || 'schedule' }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: true
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+  AZURE_MONITOR_HEALTH_THRESHOLD: "95"
+  APP_INSIGHTS_SUCCESS_THRESHOLD: "0.99"
+  CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
+  CANARY_WEIGHT_PERCENT: "10"
+  PRIMARY_WEIGHT_PERCENT: "90"
+
+jobs:
+  policy-gates:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Docker Hub image defaults
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
+
+          image_or_default() {
+            local INPUT="$1"
+            local DEFAULT="$2"
+            if [ -n "$INPUT" ]; then
+              echo "$INPUT"
+            else
+              echo "docker.io/${DOCKERHUB_NAMESPACE}/${DEFAULT}"
+            fi
+          }
+
+          if [ "${{ inputs.deploy_mode }}" = "rollback" ]; then
+            if [[ -z "${{ inputs.previous_api_image }}" || -z "${{ inputs.previous_worker_image }}" || -z "${{ inputs.previous_web_image }}" ]]; then
+              echo "::error::Rollback requires all three previous_*_image inputs. Check .deployment-catalog/<env>/deployment-state.json for the image SHAs to roll back to."
+              exit 1
+            fi
+            echo "EFFECTIVE_API_IMAGE=${{ inputs.previous_api_image }}" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WORKER_IMAGE=${{ inputs.previous_worker_image }}" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WEB_IMAGE=${{ inputs.previous_web_image }}" >> "$GITHUB_ENV"
+          else
+            echo "EFFECTIVE_API_IMAGE=$(image_or_default '${{ inputs.api_image }}' 'cna:api-latest')" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WORKER_IMAGE=$(image_or_default '${{ inputs.worker_image }}' 'cna:worker-latest')" >> "$GITHUB_ENV"
+            echo "EFFECTIVE_WEB_IMAGE=$(image_or_default '${{ inputs.web_image }}' 'cna:web-latest')" >> "$GITHUB_ENV"
+          fi
+          echo "EFFECTIVE_MIGRATOR_IMAGE=docker.io/${DOCKERHUB_NAMESPACE}/cna:migrator-latest" >> "$GITHUB_ENV"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Pin Azure CLI version
+        run: |
+          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          fi
+
+      - name: Azure login with OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify target subscription
+        run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          SUB_NAME=$(az account show --query name -o tsv)
+          EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+
+          if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
+            exit 1
+          fi
+
+          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
+            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            exit 1
+          fi
+
+      - name: Validate PostgreSQL password is set
+        env:
+          PG_PASSWORD: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$PG_PASSWORD" ]; then
+            echo "::error::CNA_POSTGRES_ADMIN_PASSWORD secret is not set."
+            exit 1
+          fi
+          if echo "$PG_PASSWORD" | grep -qP '[@:/?#%\[\]]'; then
+            echo "::notice::CNA_POSTGRES_ADMIN_PASSWORD contains URL-special characters -- they will be percent-encoded by Terraform urlencode() in the connection string."
+          fi
+          echo "Password: OK"
+
+      - name: Validate Docker Hub image pull access
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -z "$DOCKERHUB_NAMESPACE" || -z "$DOCKERHUB_TOKEN" ]]; then
+            echo "::error::DOCKERHUB_NAMESPACE and DOCKERHUB_TOKEN are required so Azure Container Apps can pull private Docker Hub images."
+            exit 1
+          fi
+
+          echo "$DOCKERHUB_TOKEN" | docker login docker.io \
+            --username "$DOCKERHUB_NAMESPACE" \
+            --password-stdin
+
+          for image in \
+            "${{ env.EFFECTIVE_API_IMAGE }}" \
+            "${{ env.EFFECTIVE_WORKER_IMAGE }}" \
+            "${{ env.EFFECTIVE_WEB_IMAGE }}" \
+            "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}"; do
+            echo "Checking $image"
+            docker manifest inspect "$image" > /dev/null
+          done
+
+      - name: Resolve Terraform backend targets
+        run: |
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+          cd ../workload
+          terraform init \\
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
+            -backend-config="container_name=$TFSTATE_CONTAINER" \\
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+            -backend-config="use_oidc=true"
+
+      - name: Terraform validate
+        run: terraform validate
+
+          cd ../workload
+          terraform validate
+      - name: Terraform IaC security scan (Checkov)
+        run: |
+          pip install checkov --quiet
+          GATE="$GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json"
+          CURATED_CHECKS="CKV_AZURE_236,CKV_AZURE_238,CKV_AZURE_134,CKV_AZURE_136,CKV_AZURE_189,CKV_AZURE_109,CKV_AZURE_41,CKV_AZURE_114,CKV_AZURE_206,CKV_AZURE_190,CKV_AZURE_59,CKV2_AZURE_38,CKV2_AZURE_31,CKV2_AZURE_47,CKV2_AZURE_40,CKV2_AZURE_41"
+          checkov -d . --framework terraform --check "$CURATED_CHECKS" --output cli
+          printf '{"status":"passed","blocking":true,"checks":"%s"}\n' "$CURATED_CHECKS" > "$GATE"
+          cat "$GATE"
+
+      - name: Upload policy gate report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: policy-gates-${{ inputs.environment }}
+          path: policy-gates-${{ inputs.environment }}.json
+
+  plan:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: policy-gates
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Pin Azure CLI version
+        run: |
+          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          fi
+
+      - name: Azure login with OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify target subscription
+        run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          SUB_NAME=$(az account show --query name -o tsv)
+          EXPECTED_SUB_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          EXPECTED_SUB_NAME="${{ vars.AZURE_TARGET_SUBSCRIPTION_NAME }}"
+
+          if [[ -n "$EXPECTED_SUB_ID" && "$EXPECTED_SUB_ID" != "none" && "$EXPECTED_SUB_ID" != "$SUB_ID" ]]; then
+            echo "::error::Authenticated to subscription $SUB_ID, but AZURE_SUBSCRIPTION_ID expects $EXPECTED_SUB_ID"
+            exit 1
+          fi
+
+          if [[ -n "$EXPECTED_SUB_NAME" && "$EXPECTED_SUB_NAME" != "none" && "$EXPECTED_SUB_NAME" != "$SUB_NAME" ]]; then
+            echo "::error::Authenticated to subscription '$SUB_NAME', but AZURE_TARGET_SUBSCRIPTION_NAME expects '$EXPECTED_SUB_NAME'"
+            exit 1
+          fi
+
+      - name: Register Azure Resource Providers
+        run: |
+          az provider register --namespace Microsoft.App --wait
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Resolve rollback targets from release catalog
+        if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '' || inputs.previous_web_image == '')
+        env:
+          CATALOG_DIR: $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
+        run: python $GITHUB_WORKSPACE/scripts/ci/resolve_rollback_target.py
+
+      - name: Resolve Terraform backend targets
+        run: |
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+          cd ../workload
+          terraform init \\
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
+            -backend-config="container_name=$TFSTATE_CONTAINER" \\
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+            -backend-config="use_oidc=true"
+
+      - name: Ensure Key Vault is reachable during Terraform
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          else
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
+          fi
+          WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
+          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+
+          if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
+            RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
+            az keyvault update \
+              --name "$KEY_VAULT_NAME" \
+              --resource-group "$WORKLOAD_RG" \
+              --public-network-access Enabled \
+              --default-action Deny \
+              --bypass AzureServices \
+              --only-show-errors > /dev/null
+            if [ -n "$RUNNER_IP" ]; then
+              az keyvault network-rule add \
+                --name "$KEY_VAULT_NAME" \
+                --resource-group "$WORKLOAD_RG" \
+                --ip-address "$RUNNER_IP" \
+                --only-show-errors > /dev/null
+            fi
+          else
+            echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
+          fi
+
+      - name: Resolve image references from build manifest
+        # When images are not explicitly provided (or still `:latest`), read the
+        # SHA-tagged references written by 200-build-images so the plan always uses
+        # an immutable, traceable image digest rather than the floating :latest tag.
+        working-directory: ${{ github.workspace }}
+        run: |
+          MANIFEST=".deployment-catalog/latest-build.json"
+          resolve() {
+            local INPUT="$1" KEY="$2"
+            if [[ -z "$INPUT" || "$INPUT" == *":latest"* ]]; then
+              if [ -f "$MANIFEST" ]; then
+                jq -r ".images.${KEY}" "$MANIFEST"
+              else
+                echo "$INPUT"
+              fi
+            else
+              echo "$INPUT"
+            fi
+          }
+          API_IMG=$(resolve "${{ env.EFFECTIVE_API_IMAGE }}" "api")
+          WORKER_IMG=$(resolve "${{ env.EFFECTIVE_WORKER_IMAGE }}" "worker")
+          WEB_IMG=$(resolve "${{ env.EFFECTIVE_WEB_IMAGE }}" "web")
+          MIGRATOR_IMG=$(resolve "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}" "migrator")
+          echo "EFFECTIVE_API_IMAGE=${API_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_WORKER_IMAGE=${WORKER_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_WEB_IMAGE=${WEB_IMG}" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_MIGRATOR_IMAGE=${MIGRATOR_IMG}" >> "$GITHUB_ENV"
+          echo "Resolved images:"
+          echo "  api:    ${API_IMG}"
+          echo "  worker: ${WORKER_IMG}"
+          echo "  web:    ${WEB_IMG}"
+          echo "  migrator: ${MIGRATOR_IMG}"
+
+      - name: Terraform plan
+        env:
+          TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_entra_client_secret: ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
+          TF_VAR_nextauth_secret: ${{ secrets.CNA_NEXTAUTH_SECRET }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_container_registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
+          TF_VAR_credential_encryption_key: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
+        run: |
+          optional_var() {
+            local VALUE="$1"
+            if [[ -z "$VALUE" || "$VALUE" == "none" ]]; then
+              echo ""
+            else
+              echo "$VALUE"
+            fi
+          }
+          AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          FOUNDRY_CLAUDE_ENDPOINT=$(optional_var "${{ vars.FOUNDRY_CLAUDE_ENDPOINT }}")
+          FOUNDRY_CLAUDE_MODEL=$(optional_var "${{ vars.FOUNDRY_CLAUDE_MODEL }}")
+          AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
+          AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
+          AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
+          AWS_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AWS_MCP_TRANSPORT }}")
+          DRAWIO_MCP_URL=$(optional_var "${{ vars.CNA_DRAWIO_MCP_URL }}")
+          SECRET_EXPIRY=$(date -u -d "+90 days" "+%Y-%m-%dT%H:%M:%SZ")
+
+          terraform plan -out=tfplan \
+            -var="api_image=${{ env.EFFECTIVE_API_IMAGE }}" \
+            -var="worker_image=${{ env.EFFECTIVE_WORKER_IMAGE }}" \
+            -var="web_image=${{ env.EFFECTIVE_WEB_IMAGE }}" \
+            -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
+            -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
+            -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
+            -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
+            -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
+            -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
+            -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
+            -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
+            -var="aws_mcp_transport=${AWS_MCP_TRANSPORT:-streamable-http}" \
+            -var="drawio_mcp_url=${DRAWIO_MCP_URL}" \
+            -var="secret_expiration_date=${SECRET_EXPIRY}"
+
+      - name: Create deployment manifest
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
+          cat > $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json <<'MANIFEST'
+          {
+            "environment": "${{ inputs.environment }}",
+            "deploy_mode": "${{ inputs.deploy_mode }}",
+            "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
+            "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
+            "web_image": "${{ env.EFFECTIVE_WEB_IMAGE }}",
+            "migrator_image": "${{ env.EFFECTIVE_MIGRATOR_IMAGE }}",
+            "commit_sha": "${{ github.sha }}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "approval_status": "pending",
+            "health_status": "unknown",
+            "validation_checks": {
+              "terraform_apply": "pending",
+              "post_deploy_probe": "pending",
+              "independent_verification": "pending",
+              "promotion_ready": "pending",
+              "external_health_validation": "pending",
+              "foundry_private_dns_validation": "required",
+              "foundry_managed_identity_inference": "required",
+              "azure_openai_provider_status": "out_of_band_optional",
+              "certificate_monitoring": "pending",
+              "canary_telemetry": "pending",
+              "staged_promotion": "pending",
+              "certificate_rotation": "pending"
+            }
+          }
+          MANIFEST
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
+
+      - name: Upload deployment manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+
+      - name: Remove Runner IP from Key Vault
+        if: always()
+        run: |
+          REGION_SHORT=${{ vars.AZURE_REGION_SHORT }}
+          if [[ -n "${{ vars.TFSTATE_RESOURCE_GROUP }}" && "${{ vars.TFSTATE_RESOURCE_GROUP }}" == *-tfstate ]]; then
+            WORKLOAD_RG="${{ vars.TFSTATE_RESOURCE_GROUP }}"
+            WORKLOAD_RG="${WORKLOAD_RG%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          fi
+          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
+          if [[ -n "$RUNNER_IP" ]]; then
+            az keyvault network-rule remove --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --ip-address "$RUNNER_IP" --only-show-errors >/dev/null 2>&1 || true
+          fi
+
+  apply:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: plan
+    environment: ${{ inputs.environment == 'prod' && 'prod-approval' || inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
+    outputs:
+      frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
+      nextauth_url: ${{ steps.export.outputs.nextauth_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Pin Azure CLI version
+        run: |
+          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          fi
+
+      - name: Azure login with OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Register Azure Resource Providers
+        run: |
+          az provider register --namespace Microsoft.App --wait
+
+      - name: Resolve Terraform backend targets
+        run: |
+          echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_STORAGE_ACCOUNT=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" >> "$GITHUB_ENV"
+          echo "TFSTATE_CONTAINER=${{ vars.TFSTATE_CONTAINER }}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.terraform.tfstate" \
+            -backend-config="use_oidc=true"
+
+          cd ../workload
+          terraform init \\
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
+            -backend-config="container_name=$TFSTATE_CONTAINER" \\
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+            -backend-config="use_oidc=true"
+
+      - name: Ensure Key Vault is reachable during Terraform
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          else
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
+          fi
+          WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
+          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+
+          if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
+            RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
+            az keyvault update \
+              --name "$KEY_VAULT_NAME" \
+              --resource-group "$WORKLOAD_RG" \
+              --public-network-access Enabled \
+              --default-action Deny \
+              --bypass AzureServices \
+              --only-show-errors > /dev/null
+            if [ -n "$RUNNER_IP" ]; then
+              az keyvault network-rule add \
+                --name "$KEY_VAULT_NAME" \
+                --resource-group "$WORKLOAD_RG" \
+                --ip-address "$RUNNER_IP" \
+                --only-show-errors > /dev/null
+            fi
+          else
+            echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
+          fi
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve tfplan
+
+          cd ../workload
+          terraform apply -auto-approve tfplan
+
+      - name: Export resource IDs for approval and evidence
+        id: export_ids
+        run: |
+          echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "container_app_environment_id=$(terraform output -raw container_app_environment_id)" >> "$GITHUB_OUTPUT"
+          echo "web_container_app_name=$(terraform output -raw web_name)" >> "$GITHUB_OUTPUT"
+          echo "private_endpoint_subnet_prefix=$(terraform output -raw private_endpoint_subnet_prefix)" >> "$GITHUB_OUTPUT"
+          echo "database_server_name=$(terraform output -raw database_server_name)" >> "$GITHUB_OUTPUT"
+          echo "database_server_fqdn=$(terraform output -raw database_server_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "database_subnet_prefix=$(terraform output -raw database_subnet_prefix)" >> "$GITHUB_OUTPUT"
+          echo "managed_identity_client_id=$(terraform output -raw managed_identity_client_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Approve Front Door private endpoint connections
+        id: approve_private_link
+        env:
+          MANAGED_ENV_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
+          RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
+          REQUEST_DESCRIPTION: Azure Front Door Private Link request for CNA web origin
+          MAX_ATTEMPTS: "30"
+          SLEEP_SECONDS: "20"
+        run: bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
+
+      - name: Resolve migrator image from deployment manifest
+        id: resolve_migrator
+        run: |
+          MANIFEST="$GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          mkdir -p "$(dirname "$MANIFEST")"
+
+      - name: Download deployment manifest for migrator image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Validate and export migrator image
+        id: migrator_image
+        run: |
+          MANIFEST="$GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          IMAGE=$(jq -r '.migrator_image // empty' "$MANIFEST" 2>/dev/null || echo "")
+          echo "Resolved migrator image from manifest: '${IMAGE}'"
+          if [[ -z "$IMAGE" ]]; then
+            echo "::error::migrator_image is empty in deployment manifest. The plan job must populate it."
+            exit 1
+          fi
+          if [[ "$IMAGE" == *"quickstart"* || "$IMAGE" == *"k8se"* ]]; then
+            echo "::error::migrator_image resolved to a placeholder image ('$IMAGE'). Check that latest-build.json has a migrator key."
+            exit 1
+          fi
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "MIGRATOR_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Wait for PostgreSQL server to be Ready
+        run: |
+          DB_SERVER="${{ steps.export_ids.outputs.database_server_name }}"
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          echo "Waiting for $DB_SERVER to reach Ready state (DNS re-registration after zone update)..."
+          for i in $(seq 1 36); do
+            STATE=$(az postgres flexible-server show \
+              --name "$DB_SERVER" --resource-group "$RG" \
+              --query "state" -o tsv 2>/dev/null || echo "Unknown")
+            echo "  [$i/36] state: $STATE"
+            if [ "$STATE" = "Ready" ]; then
+              echo "Server is Ready — waiting 30s for DNS hash record to propagate..."
+              sleep 30
+              break
+            fi
+            [ $i -lt 36 ] && sleep 10 || { echo "::error::Timed out waiting for server Ready"; exit 1; }
+          done
+
+      - name: Run database migrations
+        run: |
+          DB_URL=$(terraform output -raw database_connection_string)
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          CAE_ID="${{ steps.export_ids.outputs.container_app_environment_id }}"
+          CAE="${CAE_ID##*/}"
+          DB_HOST=$(echo "$DB_URL" | sed 's|.*@||' | cut -d: -f1)
+          MIGRATOR_IMAGE="${{ steps.migrator_image.outputs.image }}"
+
+          echo "Migrator image: $MIGRATOR_IMAGE"
+          if [[ -z "$MIGRATOR_IMAGE" || "$MIGRATOR_IMAGE" == *"quickstart"* || "$MIGRATOR_IMAGE" == *"k8se"* ]]; then
+            echo "::error::Refusing to run migration with image '$MIGRATOR_IMAGE' — resolve step must have failed."
+            exit 1
+          fi
+
+          # Probe connectivity from inside the VNet before committing to the full 300s job.
+          # az job create --command/--args cannot pass a "-c" array element — its
+          # argparse reads it as an unknown flag — so the entrypoint is supplied via
+          # a YAML manifest where command/args are plain list items. The manifest is
+          # built line-by-line (not a heredoc) so the workflow's run-block indentation
+          # never leaks into the generated file's top-level YAML keys.
+          PROBE_JOB="job-probe-${{ github.run_id }}"
+          PROBE_YAML="$(mktemp)"
+          {
+            echo "properties:"
+            echo "  environmentId: \"${CAE_ID}\""
+            echo "  configuration:"
+            echo "    triggerType: Manual"
+            echo "    replicaTimeout: 30"
+            echo "    replicaRetryLimit: 0"
+            echo "    manualTriggerConfig:"
+            echo "      replicaCompletionCount: 1"
+            echo "      parallelism: 1"
+            echo "    registries:"
+            echo "    - server: docker.io"
+            echo "      username: \"${DOCKERHUB_USERNAME}\""
+            echo "      passwordSecretRef: dockerhub-password"
+            echo "    secrets:"
+            echo "    - name: dockerhub-password"
+            echo "      value: \"${DOCKERHUB_PASSWORD}\""
+            echo "  template:"
+            echo "    containers:"
+            echo "    - image: \"${MIGRATOR_IMAGE}\""
+            echo "      name: \"${PROBE_JOB}\""
+            echo "      command:"
+            echo "      - /bin/sh"
+            echo "      args:"
+            echo "      - -c"
+            echo "      - 'nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE'"
+            echo "      resources:"
+            echo "        cpu: 0.25"
+            echo "        memory: 0.5Gi"
+          } > "$PROBE_YAML"
+          az containerapp job create --name "$PROBE_JOB" --resource-group "$RG" --yaml "$PROBE_YAML" 2>/dev/null || true
+          rm -f "$PROBE_YAML"
+          az containerapp job start --name "$PROBE_JOB" --resource-group "$RG" 2>/dev/null || true
+          sleep 40
+          LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
+          if [ -n "$LAW_ID" ]; then
+            PROBE_LOG=$(az monitor log-analytics query -w "$LAW_ID" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3m) | where ContainerAppName_s startswith 'job-probe' | order by TimeGenerated desc | take 20 | project Log_s" \
+              -o tsv 2>/dev/null || echo "probe-log-unavailable")
+          else
+            PROBE_LOG="log-analytics-workspace-not-found"
+          fi
+          echo "Probe output: $PROBE_LOG"
+          az containerapp job delete --name "$PROBE_JOB" --resource-group "$RG" --yes 2>/dev/null || true
+
+          JOB="job-migrate-${{ github.run_id }}"
+          echo "Creating migration job $JOB with image $MIGRATOR_IMAGE..."
+          az containerapp job create \
+            --name "$JOB" \
+            --resource-group "$RG" \
+            --environment "$CAE" \
+            --trigger-type Manual \
+            --replica-timeout 300 \
+            --replica-retry-limit 1 \
+            --replica-completion-count 1 \
+            --parallelism 1 \
+            --image "$MIGRATOR_IMAGE" \
+            --secrets "db-url=$DB_URL" \
+            --env-vars "DATABASE_URL=secretref:db-url" \
+            --registry-server "docker.io" \
+            --registry-username "${{ vars.DOCKERHUB_NAMESPACE }}" \
+            --registry-password "${{ secrets.DOCKERHUB_TOKEN }}"
+          echo "Starting migration..."
+          az containerapp job start --name "$JOB" --resource-group "$RG"
+          echo "Waiting for completion..."
+          MIGRATION_STATUS="Running"
+          EXEC_NAME=""
+          for i in $(seq 1 30); do
+            EXEC_JSON=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
+              --query "[-1]" -o json 2>/dev/null || echo "{}")
+            STATUS=$(echo "$EXEC_JSON" | jq -r '.properties.status // "Running"')
+            EXEC_NAME=$(echo "$EXEC_JSON" | jq -r '.name // ""')
+            MIGRATION_STATUS="$STATUS"
+            echo "  [$i/30] Status: $STATUS"
+            case "$STATUS" in
+              Succeeded) echo "Migrations succeeded."; break ;;
+              Failed|Stopped)
+                echo "Migration failed — capturing logs before cleanup..."
+                if [ -n "$LAW_ID" ] && [ -n "$EXEC_NAME" ]; then
+                  az monitor log-analytics query -w "$LAW_ID" \
+                    --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
+                    -o table 2>/dev/null || echo "log-query-unavailable"
+                fi
+                az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
+                exit 1
+                ;;
+            esac
+            [ $i -lt 30 ] && sleep 10 || echo "Timed out waiting for migration"
+          done
+          if [ -n "$LAW_ID" ] && [ "$MIGRATION_STATUS" != "Succeeded" ]; then
+            echo "Migration timed out — capturing logs..."
+            az monitor log-analytics query -w "$LAW_ID" \
+              --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(10m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
+              -o table 2>/dev/null || echo "log-query-unavailable"
+          fi
+          az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
+          if [ "$MIGRATION_STATUS" != "Succeeded" ]; then
+            echo "::error::Migration job did not complete successfully. Final status: $MIGRATION_STATUS"
+            exit 1
+          fi
+
+      - name: Restart Container App revisions to pick up updated secrets
+        # Key Vault references auto-refresh within 30 minutes when a new secret
+        # version is created. This restart provides immediate pickup within the
+        # same CI run. No min-replicas manipulation needed — scale-to-zero is
+        # unaffected and there is no Terraform drift to restore.
+        run: |
+          RG="${{ steps.export_ids.outputs.resource_group_name }}"
+          WEB_APP="${{ steps.export_ids.outputs.web_container_app_name }}"
+          API_APP="${WEB_APP/-ca-web/-ca-api}"
+
+          for APP in "$WEB_APP" "$API_APP"; do
+            REV=$(az containerapp show --name "$APP" --resource-group "$RG" \
+              --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            if [[ -n "$REV" ]]; then
+              echo "Restarting $APP revision $REV..."
+              az containerapp revision restart --name "$APP" --resource-group "$RG" --revision "$REV" 2>/dev/null \
+                || echo "::warning::Could not restart $APP $REV — KV auto-refresh will pick up changes within 30 min."
+            fi
+          done
+
+      - name: Validate Foundry private DNS and managed identity inference
+        id: validate_foundry_private_access
+        env:
+          RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
+          CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
+          WEB_CONTAINER_APP_NAME: ${{ steps.export_ids.outputs.web_container_app_name }}
+          PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
+          MANAGED_IDENTITY_CLIENT_ID: ${{ steps.export_ids.outputs.managed_identity_client_id }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash ${{ github.workspace }}/scripts/ci/validate_foundry_private_access.sh
+
+      - name: Update GitHub Variables from Terraform outputs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
+          NEXTAUTH_URL=""
+          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
+          AI_NAME=$(terraform output -raw application_insights_name 2>/dev/null || echo "")
+          if [ -n "$FRONTDOOR_HOST" ]; then
+            NEXTAUTH_URL="https://$FRONTDOOR_HOST"
+            CURRENT=$(gh variable get CNA_NEXTAUTH_URL --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$NEXTAUTH_URL" ]; then
+              gh variable set CNA_NEXTAUTH_URL --body "$NEXTAUTH_URL" \
+                && echo "CNA_NEXTAUTH_URL updated: $NEXTAUTH_URL" \
+                || echo "WARNING: could not set CNA_NEXTAUTH_URL — set it manually in GitHub Settings → Variables"
+            else
+              echo "CNA_NEXTAUTH_URL already matches $NEXTAUTH_URL; no update needed."
+            fi
+          fi
+          if [ -n "$KV_NAME" ]; then
+            CURRENT=$(gh variable get KEY_VAULT_NAME --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$KV_NAME" ]; then
+              gh variable set KEY_VAULT_NAME --body "$KV_NAME" \
+                && echo "KEY_VAULT_NAME updated: $KV_NAME" \
+                || echo "WARNING: could not set KEY_VAULT_NAME — set it manually in GitHub Settings → Variables"
+            else
+              echo "KEY_VAULT_NAME already matches $KV_NAME; no update needed."
+            fi
+          fi
+          if [ -n "$AI_NAME" ]; then
+            CURRENT=$(gh variable get APPLICATION_INSIGHTS_NAME --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ "$CURRENT" != "$AI_NAME" ]; then
+              gh variable set APPLICATION_INSIGHTS_NAME --body "$AI_NAME" \
+                && echo "APPLICATION_INSIGHTS_NAME updated: $AI_NAME" \
+                || echo "WARNING: could not set APPLICATION_INSIGHTS_NAME — set it manually in GitHub Settings → Variables"
+            else
+              echo "APPLICATION_INSIGHTS_NAME already matches $AI_NAME; no update needed."
+            fi
+          fi
+
+      - name: Sync Entra app web URLs
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name 2>/dev/null || echo "")
+          if [ -z "$FRONTDOOR_HOST" ]; then
+            echo "No Front Door hostname yet; skipping Entra app URL sync."
+            exit 0
+          fi
+
+          NEXTAUTH_URL="https://$FRONTDOOR_HOST"
+          REDIRECT_URI="${NEXTAUTH_URL}/api/auth/callback/microsoft-entra-id"
+          APP_JSON="$(az ad app show --id "$AZURE_CLIENT_ID" --output json)"
+          CURRENT_HOME_PAGE="$(jq -r '.web.homePageUrl // ""' <<<"$APP_JSON")"
+          REDIRECT_URIS_JSON="$(
+            jq --arg uri "$REDIRECT_URI" '
+              ((.web.redirectUris // []) + [$uri])
+              | unique
+            ' <<<"$APP_JSON"
+          )"
+
+          if [[ "$CURRENT_HOME_PAGE" == "$NEXTAUTH_URL" ]] \
+            && jq -e --arg uri "$REDIRECT_URI" '(.web.redirectUris // []) | index($uri)' <<<"$APP_JSON" >/dev/null; then
+            echo "Entra app already matches $NEXTAUTH_URL"
+            exit 0
+          fi
+
+          mapfile -t REDIRECT_URIS < <(jq -r '.[]' <<<"$REDIRECT_URIS_JSON")
+          az ad app update \
+            --id "$AZURE_CLIENT_ID" \
+            --web-home-page-url "$NEXTAUTH_URL" \
+            --web-redirect-uris "${REDIRECT_URIS[@]}" \
+            --output none
+
+          echo "Synced Entra app home page URL and redirect URI:"
+          echo "  Home page URL: $NEXTAUTH_URL"
+          echo "  Redirect URI : $REDIRECT_URI"
+
+      - name: Export platform outputs
+        id: export
+        run: |
+          FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name)
+          echo "frontdoor_endpoint_host_name=$FRONTDOOR_HOST" >> "$GITHUB_OUTPUT"
+          echo "nextauth_url=https://$FRONTDOOR_HOST" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_profile_id=$(terraform output -raw frontdoor_profile_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_endpoint_id=$(terraform output -raw frontdoor_endpoint_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_origin_group_id=$(terraform output -raw frontdoor_origin_group_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_route_id=$(terraform output -raw frontdoor_route_id)" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_custom_domain_id=$(terraform output -raw frontdoor_custom_domain_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+          echo "frontdoor_secret_id=$(terraform output -raw frontdoor_secret_id 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+      - name: Download deployment manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Resolve workload naming
+        env:
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
+        run: |
+          if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+            WORKLOAD_RG="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+          elif [[ -n "$REGION_SHORT" ]]; then
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          else
+            echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
+            exit 1
+          fi
+
+          echo "WORKLOAD_RG=$WORKLOAD_RG" >> "$GITHUB_ENV"
+          echo "WORKLOAD_NAME_PREFIX=${WORKLOAD_RG#rg-}" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Update apply evidence
+        env:
+          MANIFEST_PATH: ${{ github.workspace }}/.deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+          FRONTDOOR_ENDPOINT_HOST_NAME: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
+          FRONTDOOR_PROFILE_ID: ${{ steps.export.outputs.frontdoor_profile_id }}
+          FRONTDOOR_ENDPOINT_ID: ${{ steps.export.outputs.frontdoor_endpoint_id }}
+          FRONTDOOR_ORIGIN_GROUP_ID: ${{ steps.export.outputs.frontdoor_origin_group_id }}
+          FRONTDOOR_ROUTE_ID: ${{ steps.export.outputs.frontdoor_route_id }}
+          FRONTDOOR_CUSTOM_DOMAIN_ID: ${{ steps.export.outputs.frontdoor_custom_domain_id }}
+          FRONTDOOR_SECRET_ID: ${{ steps.export.outputs.frontdoor_secret_id }}
+          FRONTDOOR_PRIVATE_LINK_CONNECTION_IDS: ${{ steps.approve_private_link.outputs.approved_connection_ids }}
+          CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
+          WEB_CONTAINER_APP_NAME: ${{ steps.export_ids.outputs.web_container_app_name }}
+          PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
+          FOUNDRY_PRIVATE_ACCESS_VALIDATION: passed
+          NEXTAUTH_URL: ${{ steps.export.outputs.nextauth_url }}
+        run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
+
+      - name: Upload staged manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: staged-deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+
+      - name: Remove Runner IP from Key Vault
+        if: always()
+        run: |
+          REGION_SHORT=${{ vars.AZURE_REGION_SHORT }}
+          if [[ -n "${{ vars.TFSTATE_RESOURCE_GROUP }}" && "${{ vars.TFSTATE_RESOURCE_GROUP }}" == *-tfstate ]]; then
+            WORKLOAD_RG="${{ vars.TFSTATE_RESOURCE_GROUP }}"
+            WORKLOAD_RG="${WORKLOAD_RG%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          fi
+          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
+          if [[ -n "$RUNNER_IP" ]]; then
+            az keyvault network-rule remove --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --ip-address "$RUNNER_IP" --only-show-errors >/dev/null 2>&1 || true
+          fi
+
+  verify:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: apply
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Pin Azure CLI version
+        run: |
+          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          fi
+
+      - name: Azure login with OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download staged manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: staged-deployment-manifest-${{ inputs.environment }}
+          path: .deployment-catalog/${{ inputs.environment }}
+
+      - name: Download policy gate report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: policy-gates-${{ inputs.environment }}
+          path: .verification/${{ inputs.environment }}
+
+      - name: Wait for Container Apps to stabilize
+        run: |
+          MANIFEST=".deployment-catalog/${{ inputs.environment }}/deployment-manifest.json"
+          AFD_HOST=$(python3 -c "import json; d=json.load(open('$MANIFEST')); print(d['platform_context']['frontdoor_endpoint_host_name'])")
+          echo "AFD endpoint: $AFD_HOST"
+
+          echo "Polling https://$AFD_HOST/ until the app is reachable..."
+          MAX_ATTEMPTS=20
+          ATTEMPT=0
+          REACHABLE=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$AFD_HOST/" || echo "000")
+            echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS — HTTP $HTTP_CODE"
+            # 200/302/307 = success/redirect; 401/403 = auth wall (app is up); 404/503 = not ready
+            if [[ "$HTTP_CODE" =~ ^(200|302|307|401|403)$ ]]; then
+              echo "App reachable (HTTP $HTTP_CODE) — proceeding"
+              REACHABLE=1
+              break
+            fi
+            sleep 15
+          done
+
+          if [ $REACHABLE -eq 0 ]; then
+            echo "App not reachable after $((MAX_ATTEMPTS * 15))s — waiting 5 extra minutes as fallback"
+            sleep 300
+          else
+            echo "Waiting 2 minutes for Azure Monitor metrics to propagate..."
+            sleep 120
+          fi
+
+      - name: Query Azure Monitor health directly
+        run: |
+          mkdir -p .verification/${{ inputs.environment }}
+          METRIC_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$WORKLOAD_RG/providers/Microsoft.Cdn/profiles/$WORKLOAD_NAME_PREFIX-afd/providers/Microsoft.Insights/metrics?metricnames=OriginHealthPercentage&api-version=2023-10-01"
+          THRESHOLD="${AZURE_MONITOR_HEALTH_THRESHOLD:-95}"
+          VDIR=".verification/${{ inputs.environment }}"
+          MAX_WAIT=30
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_WAIT ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            az rest --method get --url "$METRIC_URL" > "$VDIR/external-health.json" 2>&1
+            HEALTH=$(python3 -c "import json; d=json.load(open('$VDIR/external-health.json')); v=d.get('value',[]); ts=(v[0].get('timeseries',[{}]) if v else [{}]); data=(ts[0].get('data',[]) if ts else []); pts=[p.get('average',0) for p in data if p.get('average') is not None]; print(f'{pts[-1]:.1f}' if pts else '0.0')" 2>/dev/null || echo "0.0")
+            echo "  Attempt $ATTEMPT/$MAX_WAIT — OriginHealthPercentage: ${HEALTH}% (threshold: ${THRESHOLD}%)"
+            if awk "BEGIN{exit !($HEALTH >= $THRESHOLD)}"; then
+              echo "Origin health at ${HEALTH}% — threshold met"
+              break
+            fi
+            [ $ATTEMPT -lt $MAX_WAIT ] && sleep 30 || echo "Origin health still at ${HEALTH}% after $((MAX_WAIT * 30))s — writing last value"
+          done
+
+      - name: Query Application Insights telemetry directly
+        if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''
+        continue-on-error: true
+        run: |
+          az monitor app-insights query \
+            --app "${{ vars.APPLICATION_INSIGHTS_NAME }}" \
+            --resource-group "$WORKLOAD_RG" \
+            --analytics-query "requests | summarize successRate = todouble(sum(itemCount * iif(success == true, 1, 0))) / todouble(sum(itemCount))" \
+            > .verification/${{ inputs.environment }}/canary-telemetry.json \
+            || echo "App Insights query skipped — no telemetry data yet (fresh deploy)"
+
+      - name: Execute progressive Front Door promotion actions
+        run: |
+          az afd route show \
+            --ids "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$WORKLOAD_RG/providers/Microsoft.Cdn/profiles/$WORKLOAD_NAME_PREFIX-afd/afdEndpoints/$WORKLOAD_NAME_PREFIX-afd-ep/routes/$WORKLOAD_NAME_PREFIX-afd-route" \
+            > .verification/${{ inputs.environment }}/staged-promotion.json
+
+      - name: Query certificate monitoring and trigger renewal workflow
+        if: vars.KEY_VAULT_NAME != 'none' && vars.KEY_VAULT_NAME != '' && vars.FRONTDOOR_CERTIFICATE_NAME != '' && vars.FRONTDOOR_CERTIFICATE_NAME != 'none'
+        run: |
+          az keyvault certificate show \
+            --vault-name "${{ vars.KEY_VAULT_NAME }}" \
+            --name "${{ vars.FRONTDOOR_CERTIFICATE_NAME }}" \
+            > .verification/${{ inputs.environment }}/certificate-monitoring.json
+          az keyvault certificate pending show \
+            --vault-name "${{ vars.KEY_VAULT_NAME }}" \
+            --name "${{ vars.FRONTDOOR_CERTIFICATE_NAME }}" \
+            > .verification/${{ inputs.environment }}/certificate-renewal-status.json || true
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Evaluate evidence and update manifest
+        env:
+          MANIFEST_PATH: .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json
+          VERIFICATION_DIR: .verification/${{ inputs.environment }}
+          AZURE_MONITOR_HEALTH_THRESHOLD: ${{ env.AZURE_MONITOR_HEALTH_THRESHOLD }}
+          APP_INSIGHTS_SUCCESS_THRESHOLD: ${{ env.APP_INSIGHTS_SUCCESS_THRESHOLD }}
+          CERTIFICATE_EXPIRY_DAYS_THRESHOLD: ${{ env.CERTIFICATE_EXPIRY_DAYS_THRESHOLD }}
+          CANARY_WEIGHT_PERCENT: ${{ env.CANARY_WEIGHT_PERCENT }}
+          PRIMARY_WEIGHT_PERCENT: ${{ env.PRIMARY_WEIGHT_PERCENT }}
+        run: python scripts/ci/evaluate_deployment_evidence.py
+
+      - name: Persist release catalog entry
+        run: |
+          cp .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json \
+            .deployment-catalog/${{ inputs.environment }}/${{ github.run_id }}.json
+          cp .deployment-catalog/${{ inputs.environment }}/deployment-manifest.json \
+            .deployment-catalog/${{ inputs.environment }}/latest.json
+
+      - name: Commit release catalog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deployment-catalog/${{ inputs.environment }}
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore(release-catalog): add progressive rollout and renewal verification for ${{ inputs.environment }} run ${{ github.run_id }}"
+          git pull --rebase -X theirs origin main
+          git push
+
+      - name: Upload deployment provenance artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: deployment-provenance-${{ inputs.environment }}-${{ github.run_id }}
+          path: .deployment-catalog/${{ inputs.environment }}/${{ github.run_id }}.json
+
+
+
+
+

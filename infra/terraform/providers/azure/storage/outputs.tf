@@ -17,3 +17,6 @@ output "primary_web_endpoint" {
 output "container_names" {
   value = keys(azurerm_storage_container.containers)
 }
+output "container_resource_ids" {
+  value = { for k, v in azurerm_storage_container.containers : k => v.resource_manager_id }
+}

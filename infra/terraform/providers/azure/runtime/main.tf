@@ -1,6 +1,7 @@
 # RBAC: managed identity needs Storage Blob Data Contributor to read/write engagements/ container.
 resource "azurerm_role_assignment" "storage_blob_data_contributor" {
-  scope                = var.storage_account_id
+  for_each             = toset(var.storage_container_ids)
+  scope                = each.value
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.managed_identity_principal_id
 }

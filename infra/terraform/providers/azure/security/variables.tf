@@ -151,3 +151,15 @@ variable "secret_expiration_date" {
   type        = string
   default     = "2027-12-31T23:59:59Z"
 }
+variable "frontdoor_certificate_pfx_path" {
+  description = "File path to the PFX certificate for Front Door"
+  type        = string
+  default     = null
+}
+
+variable "frontdoor_certificate_pfx_password" {
+  description = "Password for the PFX certificate"
+  type        = string
+  sensitive   = true
+  default     = null
+}

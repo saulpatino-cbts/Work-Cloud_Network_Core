@@ -1,5 +1,5 @@
 output "storage_role_assignment_id" {
-  value = azurerm_role_assignment.storage_blob_data_contributor.id
+  value = [for r in azurerm_role_assignment.storage_blob_data_contributor : r.id]
 }
 
 output "database_url_secret_name" {

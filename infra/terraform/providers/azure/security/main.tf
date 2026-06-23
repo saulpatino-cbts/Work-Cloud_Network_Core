@@ -171,7 +171,7 @@ resource "azurerm_cdn_frontdoor_secret" "platform" {
 
   secret {
     customer_certificate {
-      key_vault_certificate_id = var.frontdoor_secret_versionless_id
+      key_vault_certificate_id = var.frontdoor_certificate_pfx_path != null ? azurerm_key_vault_certificate.frontdoor[0].versionless_secret_id : var.frontdoor_secret_versionless_id
     }
   }
 }
@@ -363,4 +363,29 @@ resource "azurerm_role_assignment" "api_managed_identity_key_vault_user" {
   scope                = var.key_vault_id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = var.managed_identity_principal_id
+}
+resource "azurerm_key_vault_certificate" "frontdoor" {
+  count        = var.frontdoor_certificate_pfx_path != null ? 1 : 0
+  name         = "afd-cert"
+  key_vault_id = var.key_vault_id
+
+  certificate {
+    contents = filebase64(var.frontdoor_certificate_pfx_path)
+    password = var.frontdoor_certificate_pfx_password
+  }
+
+  certificate_policy {
+    issuer_parameters {
+      name = "Unknown"
+    }
+    key_properties {
+      exportable = true
+      key_size   = 2048
+      key_type   = "RSA"
+      reuse_key  = true
+    }
+    secret_properties {
+      content_type = "application/x-pkcs12"
+    }
+  }
 }

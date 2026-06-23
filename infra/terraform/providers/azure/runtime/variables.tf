@@ -47,3 +47,8 @@ variable "secret_expiration_date" {
   type        = string
   default     = "2026-09-20T23:59:59Z"
 }
+variable "storage_container_ids" {
+  description = "List of Storage Container resource IDs for granular role assignment"
+  type        = list(string)
+  default     = []
+}

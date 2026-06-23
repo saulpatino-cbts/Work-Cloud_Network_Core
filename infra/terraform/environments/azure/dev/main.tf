@@ -207,6 +207,7 @@ module "runtime" {
   nextauth_secret               = var.nextauth_secret
   entra_client_secret           = var.entra_client_secret
   credential_encryption_key     = var.credential_encryption_key
+  secret_expiration_date        = var.secret_expiration_date
 }
 
 # ─── Container App RBAC ───────────────────────────────────────────────────────

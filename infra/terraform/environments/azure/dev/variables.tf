@@ -168,3 +168,9 @@ variable "drawio_mcp_url" {
   type        = string
   default     = ""
 }
+
+variable "secret_expiration_date" {
+  description = "RFC3339 expiry for Terraform-managed KV secrets. Must satisfy Enforce-GR-KeyVault (max 90 days from now). Computed dynamically in CI via 'date -u -d +90days'."
+  type        = string
+  default     = "2026-09-20T23:59:59Z"
+}

@@ -34,7 +34,11 @@ resource "azurerm_key_vault_secret" "nextauth_secret" {
   expiration_date = var.secret_expiration_date
 
   lifecycle {
-    ignore_changes = [value]
+    # value: manually rotated in KV — don't overwrite with tfvar on every apply.
+    # expiration_date: policy evaluates (expiry - original_created) not (expiry - now);
+    # updating expiry on an existing version fails policy even with a short window.
+    # Rotation resets the created date; expiry is managed at that point.
+    ignore_changes = [value, expiration_date]
   }
 }
 
@@ -46,7 +50,7 @@ resource "azurerm_key_vault_secret" "entra_client_secret" {
   expiration_date = var.secret_expiration_date
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [value, expiration_date]
   }
 }
 
@@ -58,6 +62,6 @@ resource "azurerm_key_vault_secret" "credential_encryption_key" {
   expiration_date = var.secret_expiration_date
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [value, expiration_date]
   }
 }

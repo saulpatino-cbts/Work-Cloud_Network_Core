@@ -143,7 +143,7 @@ az containerapp job create \
   --replica-completion-count 1 \
   --parallelism 1 \
   --image "$WEB_IMAGE" \
-  --identity "$UAI_ID" \
+  --mi-user-assigned "$UAI_ID" \
   --command '/bin/sh,-c,echo "$VALIDATION_SCRIPT_B64" | base64 -d | node' \
   --env-vars \
     "VALIDATION_SCRIPT_B64=${NODE_SCRIPT_B64}" \

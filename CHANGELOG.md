@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extended CISA ZTMM v2 mappings for AWS WAF, Azure Application Gateway WAF, and Azure Front Door WAF findings into the `Applications and Workloads` pillar.
 - Added regression coverage for live MCP JSON-RPC request shaping and WAF `Applications and Workloads` framework mappings.
 
+### Fixed
+- Fixed Key Vault Firewall Circumvention in `210-deploy-azure.yml` by dynamically adding/removing the GitHub runner's public IP.
+- Fixed Missing Azure CLI Version Pinning in `210-deploy-azure.yml` by injecting an installation step.
+- Removed fragile Private IP guessing script since Terraform now natively manages the PostgreSQL private DNS zone.
+- Replaced pipeline `gh variable set` mutation with the Terraform GitHub Provider for managing repository variables.
+- Removed out-of-band Key Vault certificate import workflow step since certificates are now rotated natively in Terraform.
+
 ### Changed
 - Consolidated the active task list into this changelog and deployment workflow validation. Live Azure prerequisite, image build, deploy, runtime, teardown, beta acceptance, and cost/footprint checks are now validated through the numbered GitHub Actions workflows and deployment evidence rather than a local TODO file.
 - Aligned MCP configuration defaults on `https://mcp.azure.com`, `https://aws-mcp.us-east-1.api.aws/mcp`, and `streamable-http` transport.

@@ -1,12 +1,4 @@
-data "terraform_remote_state" "platform" {
-  backend = "azurerm"
-  config = {
-    resource_group_name  = var.tfstate_resource_group
-    storage_account_name = var.tfstate_storage_account
-    container_name       = var.tfstate_container
-    key                  = "dev.terraform.tfstate"
-  }
-}
+
 
 data "azurerm_resource_group" "this" {
   name = "rg-${local.name_prefix}"
@@ -299,4 +291,26 @@ module "database" {
   storage_mb                   = 65536
   backup_retention_days        = 30
   geo_redundant_backup_enabled = true
+}
+
+# ─── GitHub Repository Variables ──────────────────────────────────────────────
+# Pushing Terraform outputs back to the repository via the GitHub provider
+# eliminates the need for the CI/CD pipeline to mutate repository state.
+
+resource "github_actions_variable" "cna_nextauth_url" {
+  repository    = var.github_repository
+  variable_name = "CNA_NEXTAUTH_URL"
+  value         = "https://${module.security.frontdoor_endpoint_host_name}"
+}
+
+resource "github_actions_variable" "key_vault_name" {
+  repository    = var.github_repository
+  variable_name = "KEY_VAULT_NAME"
+  value         = module.identity.key_vault_name
+}
+
+resource "github_actions_variable" "application_insights_name" {
+  repository    = var.github_repository
+  variable_name = "APPLICATION_INSIGHTS_NAME"
+  value         = module.ai.application_insights_name
 }

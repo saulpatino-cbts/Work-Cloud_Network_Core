@@ -200,3 +200,20 @@ variable "frontdoor_certificate_pfx_password" {
   sensitive   = true
   default     = null
 }
+
+# ─── GitHub ───────────────────────────────────────────────────────────────────
+variable "github_owner" {
+  description = "GitHub organization or user owning the repository"
+  type        = string
+}
+
+variable "github_repository" {
+  description = "GitHub repository name (without owner)"
+  type        = string
+}
+
+variable "github_token" {
+  description = "GitHub PAT with permissions to manage repository variables"
+  type        = string
+  sensitive   = true
+}

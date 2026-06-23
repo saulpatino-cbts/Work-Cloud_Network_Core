@@ -45,6 +45,16 @@ resource "azurerm_private_dns_zone" "cognitiveservices" {
   resource_group_name = var.resource_group_name
 }
 
+resource "azurerm_private_dns_zone" "openai" {
+  name                = "privatelink.openai.azure.com"
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_private_dns_zone" "services_ai" {
+  name                = "privatelink.services.ai.azure.com"
+  resource_group_name = var.resource_group_name
+}
+
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "${var.name_prefix}-pdns-blob"
   resource_group_name   = var.resource_group_name
@@ -70,6 +80,20 @@ resource "azurerm_private_dns_zone_virtual_network_link" "cognitiveservices" {
   name                  = "${var.name_prefix}-pdns-cog"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.cognitiveservices.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "openai" {
+  name                  = "${var.name_prefix}-pdns-oai"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.openai.name
+  virtual_network_id    = var.virtual_network_id
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "services_ai" {
+  name                  = "${var.name_prefix}-pdns-sai"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.services_ai.name
   virtual_network_id    = var.virtual_network_id
 }
 
@@ -126,7 +150,11 @@ resource "azurerm_private_endpoint" "foundry" {
 
   private_dns_zone_group {
     name                 = "pdzg-cognitiveservices"
-    private_dns_zone_ids = [azurerm_private_dns_zone.cognitiveservices.id]
+    private_dns_zone_ids = [
+      azurerm_private_dns_zone.cognitiveservices.id,
+      azurerm_private_dns_zone.openai.id,
+      azurerm_private_dns_zone.services_ai.id
+    ]
   }
 }
 

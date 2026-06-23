@@ -297,7 +297,16 @@ JSON
 
 az rest --method put \
   --uri "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.App/jobs/${JOB}?api-version=2024-03-01" \
-  --body @"$JOB_YAML"
+  --body @"$JOB_YAML" > /dev/null
+
+echo "Waiting for job to provision..."
+for i in $(seq 1 12); do
+  PROV_STATE=$(az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
+  if [[ "$PROV_STATE" == "Succeeded" ]]; then
+    break
+  fi
+  sleep 5
+done
 
 echo "Starting validation job..."
 az containerapp job start --name "$JOB" --resource-group "$RG"

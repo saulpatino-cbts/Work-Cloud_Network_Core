@@ -1,5 +1,3 @@
-
-
 data "azurerm_resource_group" "this" {
   name = "rg-${local.name_prefix}"
 }

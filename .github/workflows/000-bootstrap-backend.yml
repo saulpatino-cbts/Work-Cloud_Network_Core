@@ -254,7 +254,7 @@ jobs:
           fi
 
       - name: Terraform init for bootstrap state
-        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
         run: |
           az account set \
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
@@ -278,23 +278,14 @@ jobs:
           done
 
       - name: Import workload resource group into Terraform state
-        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
         run: |
           SUB_ID=$(az account show --query id -o tsv)
           RG_ID="/subscriptions/$SUB_ID/resourceGroups/$WORKLOAD_RG"
-          if terraform state show azurerm_resource_group.this >/dev/null 2>&1; then
+          if terraform state show azurerm_resource_group.this > /dev/null 2>&1; then
             echo "Terraform state already tracks azurerm_resource_group.this; skipping import."
           else
-            terraform import -input=false \
-              -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
-              -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
-              -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
-              -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
-              -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-              -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-              -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
-              -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
-              azurerm_resource_group.this "$RG_ID"
+            terraform import -input=false azurerm_resource_group.this "$RG_ID"
           fi
 
       - name: Summary

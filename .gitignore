@@ -49,6 +49,9 @@ payload*.json
 *.tfplan
 tfplan
 
+# Terraform security scan output — generated artifact, not source
+checkov_results.txt
+
 # Local pip junk from broken system Python (used as local test env)
 /Lib/
 apps/cna-web/lib/site-packages/

@@ -223,7 +223,7 @@ properties:
   environmentId: "${CONTAINER_APP_ENVIRONMENT_ID}"
   configuration:
     triggerType: Manual
-    replicaTimeout: 120
+    replicaTimeout: 300
     replicaRetryLimit: 0
     manualTriggerConfig:
       replicaCompletionCount: 1
@@ -268,14 +268,14 @@ az containerapp job create \
 echo "Starting validation job..."
 az containerapp job start --name "$JOB" --resource-group "$RG"
 
-echo "Polling for completion (up to 3 minutes)..."
+echo "Polling for completion (up to 6 minutes)..."
 VALIDATION_STATUS="Running"
-for i in $(seq 1 18); do
+for i in $(seq 1 36); do
   EXEC_JSON=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
     --query "[-1]" -o json 2>/dev/null || echo "{}")
   STATUS=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('properties',{}).get('status','Running'))" <<< "$EXEC_JSON" 2>/dev/null || echo "Running")
   VALIDATION_STATUS="$STATUS"
-  echo "  [$i/18] Status: $STATUS"
+  echo "  [$i/36] Status: $STATUS"
 
   case "$STATUS" in
     Succeeded)
@@ -288,9 +288,9 @@ for i in $(seq 1 18); do
       exit 1
       ;;
   esac
-  [[ $i -lt 18 ]] && sleep 10
+  [[ $i -lt 36 ]] && sleep 10
 done
 
-echo "::error::Foundry validation job timed out after 3 minutes."
+echo "::error::Foundry validation job timed out after 6 minutes."
 capture_logs
 exit 1

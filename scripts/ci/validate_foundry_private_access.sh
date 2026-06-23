@@ -145,7 +145,7 @@ az containerapp job create \
   --image "$WEB_IMAGE" \
   --mi-user-assigned "$UAI_ID" \
   --command "/bin/sh" \
-  --args "-c" 'echo "$VALIDATION_SCRIPT_B64" | base64 -d | node' \
+  --args="-c" 'echo "$VALIDATION_SCRIPT_B64" | base64 -d | node' \
   --env-vars \
     "VALIDATION_SCRIPT_B64=${NODE_SCRIPT_B64}" \
     "AZURE_CLIENT_ID=${MANAGED_IDENTITY_CLIENT_ID}" \

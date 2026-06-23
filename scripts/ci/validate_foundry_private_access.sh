@@ -14,7 +14,6 @@ set -euo pipefail
 : "${RUN_ID:?RUN_ID is required}"
 
 RG="$RESOURCE_GROUP_NAME"
-CAE="${CONTAINER_APP_ENVIRONMENT_ID##*/}"
 JOB="job-validate-foundry-${RUN_ID}"
 
 # Resolve UAI resource ID from client ID.
@@ -127,34 +126,70 @@ NODE_SCRIPT_B64="$(printf '%s' "$NODE_SCRIPT" | base64 -w 0)"
 # Log Analytics workspace ID for log capture (best-effort).
 LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
 
+JOB_YAML="$(mktemp)"
 cleanup() {
+  rm -f "$JOB_YAML"
   az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
 }
 trap cleanup EXIT
 
+# az containerapp job create's --command/--args flags cannot express a value
+# that starts with "-" (the "-c" for /bin/sh): the CLI's argparse always reads
+# it as an unknown flag, never as a list element. The documented, robust path
+# is a YAML manifest, where command/args are plain list items immune to CLI
+# argument parsing.
+# https://learn.microsoft.com/azure/container-apps/azure-resource-manager-api-spec#container-apps-job
 echo "Creating validation job $JOB..."
+cat > "$JOB_YAML" <<YAML
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    "${UAI_ID}": {}
+properties:
+  environmentId: "${CONTAINER_APP_ENVIRONMENT_ID}"
+  configuration:
+    triggerType: Manual
+    replicaTimeout: 120
+    replicaRetryLimit: 0
+    manualTriggerConfig:
+      replicaCompletionCount: 1
+      parallelism: 1
+    secrets:
+    - name: dockerhub-password
+      value: "${DOCKERHUB_PASSWORD}"
+    registries:
+    - server: docker.io
+      username: "${DOCKERHUB_USERNAME}"
+      passwordSecretRef: dockerhub-password
+  template:
+    containers:
+    - image: "${WEB_IMAGE}"
+      name: "${JOB}"
+      command:
+      - "/bin/sh"
+      args:
+      - "-c"
+      - 'echo "\$VALIDATION_SCRIPT_B64" | base64 -d | node'
+      env:
+      - name: VALIDATION_SCRIPT_B64
+        value: "${NODE_SCRIPT_B64}"
+      - name: AZURE_CLIENT_ID
+        value: "${MANAGED_IDENTITY_CLIENT_ID}"
+      - name: FOUNDRY_CLAUDE_ENDPOINT
+        value: "${FOUNDRY_ENDPOINT}"
+      - name: FOUNDRY_CLAUDE_MODEL
+        value: "${FOUNDRY_MODEL:-claude-sonnet-4-6}"
+      - name: PRIVATE_ENDPOINT_SUBNET_PREFIX
+        value: "${PRIVATE_ENDPOINT_SUBNET_PREFIX}"
+      resources:
+        cpu: 0.5
+        memory: 1Gi
+YAML
+
 az containerapp job create \
   --name "$JOB" \
   --resource-group "$RG" \
-  --environment "$CAE" \
-  --trigger-type Manual \
-  --replica-timeout 120 \
-  --replica-retry-limit 0 \
-  --replica-completion-count 1 \
-  --parallelism 1 \
-  --image "$WEB_IMAGE" \
-  --mi-user-assigned "$UAI_ID" \
-  --command "/bin/sh" \
-  --args="-c" 'echo "$VALIDATION_SCRIPT_B64" | base64 -d | node' \
-  --env-vars \
-    "VALIDATION_SCRIPT_B64=${NODE_SCRIPT_B64}" \
-    "AZURE_CLIENT_ID=${MANAGED_IDENTITY_CLIENT_ID}" \
-    "FOUNDRY_CLAUDE_ENDPOINT=${FOUNDRY_ENDPOINT}" \
-    "FOUNDRY_CLAUDE_MODEL=${FOUNDRY_MODEL:-claude-sonnet-4-6}" \
-    "PRIVATE_ENDPOINT_SUBNET_PREFIX=${PRIVATE_ENDPOINT_SUBNET_PREFIX}" \
-  --registry-server "docker.io" \
-  --registry-username "$DOCKERHUB_USERNAME" \
-  --registry-password "$DOCKERHUB_PASSWORD"
+  --yaml "$JOB_YAML"
 
 echo "Starting validation job..."
 az containerapp job start --name "$JOB" --resource-group "$RG"

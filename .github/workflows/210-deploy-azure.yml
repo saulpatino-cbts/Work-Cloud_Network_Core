@@ -650,20 +650,38 @@ jobs:
           fi
 
           # Probe connectivity from inside the VNet before committing to the full 300s job.
-          # --command accepts a comma-separated entrypoint list; args follow after the command list.
+          # az job create --command/--args cannot pass a "-c" array element — its
+          # argparse reads it as an unknown flag — so the entrypoint is supplied via
+          # a YAML manifest where command/args are plain list items. The manifest is
+          # built line-by-line (not a heredoc) so the workflow's run-block indentation
+          # never leaks into the generated file's top-level YAML keys.
           PROBE_JOB="job-probe-${{ github.run_id }}"
-          az containerapp job create \
-            --name "$PROBE_JOB" \
-            --resource-group "$RG" \
-            --environment "$CAE" \
-            --trigger-type Manual \
-            --replica-timeout 30 \
-            --replica-retry-limit 0 \
-            --replica-completion-count 1 \
-            --parallelism 1 \
-            --image "docker.io/alpine:3.19" \
-            --command "/bin/sh,-c,nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE" \
-            2>/dev/null || true
+          PROBE_YAML="$(mktemp)"
+          {
+            echo "properties:"
+            echo "  environmentId: \"${CAE_ID}\""
+            echo "  configuration:"
+            echo "    triggerType: Manual"
+            echo "    replicaTimeout: 30"
+            echo "    replicaRetryLimit: 0"
+            echo "    manualTriggerConfig:"
+            echo "      replicaCompletionCount: 1"
+            echo "      parallelism: 1"
+            echo "  template:"
+            echo "    containers:"
+            echo "    - image: docker.io/alpine:3.19"
+            echo "      name: \"${PROBE_JOB}\""
+            echo "      command:"
+            echo "      - /bin/sh"
+            echo "      args:"
+            echo "      - -c"
+            echo "      - 'nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE'"
+            echo "      resources:"
+            echo "        cpu: 0.25"
+            echo "        memory: 0.5Gi"
+          } > "$PROBE_YAML"
+          az containerapp job create --name "$PROBE_JOB" --resource-group "$RG" --yaml "$PROBE_YAML" 2>/dev/null || true
+          rm -f "$PROBE_YAML"
           az containerapp job start --name "$PROBE_JOB" --resource-group "$RG" 2>/dev/null || true
           sleep 40
           LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")

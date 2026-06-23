@@ -43,12 +43,16 @@ echo "  Foundry endpoint: $FOUNDRY_ENDPOINT"
 echo "  Private subnet:   $PRIVATE_ENDPOINT_SUBNET_PREFIX"
 echo "  UAI client_id:    $MANAGED_IDENTITY_CLIENT_ID"
 
-# The Node.js validation script. AZURE_CLIENT_ID env var is set in the job
-# container so DefaultAzureCredential uses the user-assigned managed identity.
+# The Node.js validation script. It depends on Node built-ins only (node:dns
+# and the global fetch) — NO npm packages. The web image is a Next.js standalone
+# build whose traced node_modules does not include @azure/identity, so requiring
+# it crashes the container instantly. Instead the managed-identity token is
+# fetched directly from the Container Apps identity REST endpoint
+# (IDENTITY_ENDPOINT / IDENTITY_HEADER); AZURE_CLIENT_ID selects the UAI.
+# https://learn.microsoft.com/azure/container-apps/managed-identity#rest-endpoint-reference
 read -r -d '' NODE_SCRIPT <<'NODE' || true
 const dns = require("node:dns").promises;
 const { URL } = require("node:url");
-const { DefaultAzureCredential } = require("@azure/identity");
 
 function ipToInt(ip) {
   const parts = ip.split(".").map(Number);
@@ -64,6 +68,31 @@ function inCidr(ip, cidr) {
     throw new Error(`Invalid CIDR prefix: ${cidr}`);
   const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
   return (ipToInt(ip) & mask) === (ipToInt(network) & mask);
+}
+
+// Acquire a managed-identity token from the Container Apps identity REST
+// endpoint. For a user-assigned identity, client_id is required so the platform
+// issues a token for the right UAI rather than a (possibly absent) system one.
+async function getManagedIdentityToken(resource) {
+  const identityEndpoint = process.env.IDENTITY_ENDPOINT;
+  const identityHeader = process.env.IDENTITY_HEADER;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  if (!identityEndpoint || !identityHeader)
+    throw new Error("IDENTITY_ENDPOINT/IDENTITY_HEADER are not set — managed identity is not available to this container.");
+
+  const url = new URL(identityEndpoint);
+  url.searchParams.set("resource", resource);
+  url.searchParams.set("api-version", "2019-08-01");
+  if (clientId) url.searchParams.set("client_id", clientId);
+
+  const res = await fetch(url, { headers: { "X-IDENTITY-HEADER": identityHeader } });
+  const text = await res.text();
+  if (!res.ok)
+    throw new Error(`Managed identity token request failed: HTTP ${res.status}: ${text.slice(0, 500)}`);
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw new Error(`Token endpoint returned non-JSON: ${text.slice(0, 200)}`); }
+  if (!parsed.access_token) throw new Error("Token endpoint response did not contain access_token.");
+  return parsed.access_token;
 }
 
 async function main() {
@@ -85,10 +114,7 @@ async function main() {
     );
   }
 
-  // AZURE_CLIENT_ID env var tells DefaultAzureCredential which UAI to use.
-  const credential = new DefaultAzureCredential();
-  const token = await credential.getToken("https://cognitiveservices.azure.com/.default");
-  if (!token?.token) throw new Error("Managed identity did not return a Cognitive Services token.");
+  const token = await getManagedIdentityToken("https://cognitiveservices.azure.com");
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -96,7 +122,7 @@ async function main() {
       "Content-Type": "application/json",
       Accept: "application/json",
       "anthropic-version": "2023-06-01",
-      Authorization: `Bearer ${token.token}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       model,
@@ -132,6 +158,32 @@ cleanup() {
   az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
 }
 trap cleanup EXIT
+
+# Container Apps console logs land in Log Analytics with 1-3 min of ingestion
+# lag, so a single immediate query almost always returns nothing — which is why
+# earlier failures were undiagnosable. Poll until the rows appear (or give up).
+capture_logs() {
+  if [[ -z "$LAW_ID" ]]; then
+    echo "(no Log Analytics workspace found; cannot capture container logs)"
+    return
+  fi
+  echo "Capturing container logs (Log Analytics ingestion can lag a few minutes)..."
+  for attempt in $(seq 1 9); do
+    local rows
+    rows=$(az monitor log-analytics query -w "$LAW_ID" \
+      --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(15m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project Log_s" \
+      -o tsv 2>/dev/null || echo "")
+    if [[ -n "$rows" ]]; then
+      echo "----- ${JOB} container logs -----"
+      echo "$rows"
+      echo "---------------------------------"
+      return
+    fi
+    echo "  [logs $attempt/9] not yet ingested, waiting 20s..."
+    sleep 20
+  done
+  echo "::warning::Container logs did not appear in Log Analytics within the ingestion window (~3 min)."
+}
 
 # az containerapp job create's --command/--args flags cannot express a value
 # that starts with "-" (the "-c" for /bin/sh): the CLI's argparse always reads
@@ -200,27 +252,17 @@ for i in $(seq 1 18); do
   EXEC_JSON=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
     --query "[-1]" -o json 2>/dev/null || echo "{}")
   STATUS=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('properties',{}).get('status','Running'))" <<< "$EXEC_JSON" 2>/dev/null || echo "Running")
-  EXEC_NAME=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('name',''))" <<< "$EXEC_JSON" 2>/dev/null || echo "")
   VALIDATION_STATUS="$STATUS"
   echo "  [$i/18] Status: $STATUS"
 
   case "$STATUS" in
     Succeeded)
       echo "Foundry private access validation passed."
-      if [[ -n "$LAW_ID" && -n "$EXEC_NAME" ]]; then
-        az monitor log-analytics query -w "$LAW_ID" \
-          --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(5m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
-          -o table 2>/dev/null || true
-      fi
       exit 0
       ;;
     Failed|Stopped)
       echo "::error::Foundry validation job failed. Capturing logs..."
-      if [[ -n "$LAW_ID" ]]; then
-        az monitor log-analytics query -w "$LAW_ID" \
-          --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(5m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
-          -o table 2>/dev/null || echo "log-query-unavailable"
-      fi
+      capture_logs
       exit 1
       ;;
   esac
@@ -228,9 +270,5 @@ for i in $(seq 1 18); do
 done
 
 echo "::error::Foundry validation job timed out after 3 minutes."
-if [[ -n "$LAW_ID" ]]; then
-  az monitor log-analytics query -w "$LAW_ID" \
-    --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(5m) | where ContainerAppName_s == '${JOB}' | order by TimeGenerated asc | project TimeGenerated, Log_s" \
-    -o table 2>/dev/null || echo "log-query-unavailable"
-fi
+capture_logs
 exit 1

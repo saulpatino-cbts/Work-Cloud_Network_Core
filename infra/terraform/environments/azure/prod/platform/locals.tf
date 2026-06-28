@@ -9,8 +9,7 @@ locals {
   }
 
   # Log Analytics retention (days). 30 is the PerGB2018 SKU floor.
-  # [REVIEW REQUIRED] Prod was 90 before the FinOps pass; confirm 30 satisfies
-  # any audit/compliance retention obligation.
+  # Reduced from 90 in the FinOps pass; 30-day retention reviewed and approved.
   log_analytics_retention_in_days = 30
 
   firewall_application_rule_fqdns = [

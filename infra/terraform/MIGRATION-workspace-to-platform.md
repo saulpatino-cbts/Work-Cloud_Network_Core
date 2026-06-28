@@ -111,9 +111,8 @@ the existing deploy order in `211-deploy-azure-split.yml`.
 - The dedicated flow-logs storage account (`<name_prefix>flowlog`) and the
   firewall/NSG/flow-log diagnostic settings are **new** resources created by
   platform — no migration needed, they just appear on first platform apply.
-- Retention is set to 30 days in `platform/locals.tf` for both envs.
-  **[REVIEW REQUIRED]** prod was 90 before the FinOps pass — confirm 30 meets
-  any audit/compliance obligation before applying prod.
+- Retention is set to 30 days in `platform/locals.tf` for both envs (reduced
+  from prod's previous 90 in the FinOps pass; reviewed and approved).
 - If you would rather not do state surgery, the alternative is to accept the
   one-time workspace recreation (log-history loss) and just apply — not
   recommended for prod.

@@ -74,6 +74,16 @@ jobs:
 
       - name: Terraform drift plan (workload)
         working-directory: infra/terraform/environments/azure/prod/workload
+        # Secrets passed via TF_VAR_* env so they never appear in the process
+        # listing / logs (unlike -var= on the command line).
+        env:
+          TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_entra_client_secret: ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
+          TF_VAR_nextauth_secret: ${{ secrets.CNA_NEXTAUTH_SECRET }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_container_registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
+          TF_VAR_credential_encryption_key: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
+          TF_VAR_github_token: ""
         run: |
           if [ -z "$DOCKERHUB_NAMESPACE" ]; then
             echo "::error::DOCKERHUB_NAMESPACE variable is required."
@@ -101,15 +111,9 @@ jobs:
             -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
             -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
             -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
-            -var="postgres_admin_password=${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
-            -var="entra_client_secret=${{ secrets.CNA_ENTRA_CLIENT_SECRET }}" \
-            -var="nextauth_secret=${{ secrets.CNA_NEXTAUTH_SECRET }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
-            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-            -var="container_registry_password=${{ secrets.DOCKERHUB_TOKEN }}" \
-            -var="credential_encryption_key=${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}" \
             -var="ai_engine_default=${AI_ENGINE_DEFAULT:-foundry-claude}" \
             -var="foundry_claude_endpoint=${FOUNDRY_CLAUDE_ENDPOINT}" \
             -var="foundry_claude_model=${FOUNDRY_CLAUDE_MODEL:-claude-sonnet-4-6}" \
@@ -120,7 +124,6 @@ jobs:
             -var="drawio_mcp_url=${DRAWIO_MCP_URL}" \
             -var="github_owner=${{ github.repository_owner }}" \
             -var="github_repository=${{ github.repository }}" \
-            -var="github_token=" \
             || EXIT=$?
           if [ "${EXIT:-0}" -eq 2 ]; then
             echo "::warning::Drift detected in prod/workload state."

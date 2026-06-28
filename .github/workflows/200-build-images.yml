@@ -17,23 +17,35 @@ permissions:
   contents: write
 
 jobs:
-  build-cli:
+  # CLI, API, and Worker share an identical build shape (single-stage, root
+  # context, no extra validation) so they run as one matrix. Web is separate
+  # below because it adds npm audit, a second (migrator) target, and a smoke test.
+  build-images:
     runs-on: ubuntu-latest
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CLI
+            file: Dockerfile
+            raw_tag: latest
+            sha_prefix: ""
+          - name: API
+            file: apps/cna-api/Dockerfile
+            raw_tag: api-latest
+            sha_prefix: api-sha-
+          - name: Worker
+            file: apps/cna-worker/Dockerfile
+            raw_tag: worker-latest
+            sha_prefix: worker-sha-
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
-        with:
-          registry: docker.io
-          username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Validate Docker Hub namespace
         run: |
@@ -42,37 +54,6 @@ jobs:
             exit 1
           fi
 
-      - name: Extract metadata for CLI
-        id: meta_cli
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
-        with:
-          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna
-          tags: |
-            type=raw,value=latest
-            type=sha
-
-      - name: Build and push CLI image
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.meta_cli.outputs.tags }}
-          labels: ${{ steps.meta_cli.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-api:
-    runs-on: ubuntu-latest
-    env:
-      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
-
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
@@ -80,75 +61,23 @@ jobs:
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Validate Docker Hub namespace
-        run: |
-          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
-            echo "::error::DOCKERHUB_NAMESPACE variable is required."
-            exit 1
-          fi
-
-      - name: Extract metadata for API
-        id: meta_api
+      - name: Extract metadata for ${{ matrix.name }}
+        id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
           images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna
           tags: |
-            type=raw,value=api-latest
-            type=sha,prefix=api-sha-
+            type=raw,value=${{ matrix.raw_tag }}
+            type=sha,prefix=${{ matrix.sha_prefix }}
 
-      - name: Build and push API image
+      - name: Build and push ${{ matrix.name }} image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
-          file: apps/cna-api/Dockerfile
+          file: ${{ matrix.file }}
           push: true
-          tags: ${{ steps.meta_api.outputs.tags }}
-          labels: ${{ steps.meta_api.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-worker:
-    runs-on: ubuntu-latest
-    env:
-      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
-        with:
-          registry: docker.io
-          username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Validate Docker Hub namespace
-        run: |
-          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
-            echo "::error::DOCKERHUB_NAMESPACE variable is required."
-            exit 1
-          fi
-
-      - name: Extract metadata for Worker
-        id: meta_worker
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
-        with:
-          images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna
-          tags: |
-            type=raw,value=worker-latest
-            type=sha,prefix=worker-sha-
-
-      - name: Build and push Worker image
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
-        with:
-          context: .
-          file: apps/cna-worker/Dockerfile
-          push: true
-          tags: ${{ steps.meta_worker.outputs.tags }}
-          labels: ${{ steps.meta_worker.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -261,7 +190,7 @@ jobs:
 
   publish-build-manifest:
     runs-on: ubuntu-latest
-    needs: [build-cli, build-api, build-worker, build-web]
+    needs: [build-images, build-web]
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:

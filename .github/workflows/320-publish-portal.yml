@@ -151,5 +151,5 @@ jobs:
             -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
             -e AZURE_CLIENT_ID -e AZURE_TENANT_ID -e AZURE_SUBSCRIPTION_ID \
             -v "${{ github.workspace }}/engagements:/app/engagements:ro" \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG" \
+            "${{ env.REGISTRY }}/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:$IMAGE_TAG" \
             "${ARGS[@]}"

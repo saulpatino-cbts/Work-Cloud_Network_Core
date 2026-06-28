@@ -1,4 +1,4 @@
-name: "210 · Deploy Azure Platform"
+name: "211 · Deploy Azure Platform (Split)"
 
 on:
   workflow_dispatch:
@@ -72,6 +72,10 @@ env:
   CERTIFICATE_EXPIRY_DAYS_THRESHOLD: "30"
   CANARY_WEIGHT_PERCENT: "10"
   PRIMARY_WEIGHT_PERCENT: "90"
+  EFFECTIVE_API_IMAGE: ""
+  EFFECTIVE_WORKER_IMAGE: ""
+  EFFECTIVE_WEB_IMAGE: ""
+  EFFECTIVE_MIGRATOR_IMAGE: ""
 
 jobs:
   policy-gates:
@@ -208,18 +212,19 @@ jobs:
             -backend-config="use_oidc=true"
 
           cd ../workload
-          terraform init \\
-            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
-            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
-            -backend-config="container_name=$TFSTATE_CONTAINER" \\
-            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
       - name: Terraform validate
-        run: terraform validate
-
+        run: |
+          terraform validate
           cd ../workload
           terraform validate
+
       - name: Terraform IaC security scan (Checkov)
         run: |
           pip install checkov --quiet
@@ -315,11 +320,11 @@ jobs:
             -backend-config="use_oidc=true"
 
           cd ../workload
-          terraform init \\
-            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
-            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
-            -backend-config="container_name=$TFSTATE_CONTAINER" \\
-            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
       - name: Ensure Key Vault is reachable during Terraform
@@ -398,7 +403,17 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - name: Terraform plan
+      # Platform = networking only (vnet, subnets, firewall). It declares no app
+      # variables, so plan with defaults — passing app vars here would error with
+      # "an argument named X is not expected here".
+      - name: Terraform plan (platform)
+        run: terraform plan -out=tfplan
+
+      # Workload = compute, database, identity, AI, Front Door. It owns every app
+      # variable and secret. Secrets are passed via TF_VAR_* env (never -var on the
+      # command line, which would leak into process listings / logs).
+      - name: Terraform plan (workload)
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         env:
           TF_VAR_postgres_admin_password: ${{ secrets.CNA_POSTGRES_ADMIN_PASSWORD }}
           TF_VAR_entra_client_secret: ${{ secrets.CNA_ENTRA_CLIENT_SECRET }}
@@ -477,11 +492,17 @@ jobs:
           }
           MANIFEST
 
-      - name: Upload plan artifact
+      - name: Upload platform plan artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: tfplan-${{ inputs.environment }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}/tfplan
+          name: tfplan-platform-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/platform/tfplan
+
+      - name: Upload workload plan artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: tfplan-workload-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/workload/tfplan
 
       - name: Upload deployment manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -560,11 +581,11 @@ jobs:
             -backend-config="use_oidc=true"
 
           cd ../workload
-          terraform init \\
-            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \\
-            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \\
-            -backend-config="container_name=$TFSTATE_CONTAINER" \\
-            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \\
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TFSTATE_CONTAINER" \
+            -backend-config="key=${{ inputs.environment }}.workload.terraform.tfstate" \
             -backend-config="use_oidc=true"
 
       - name: Ensure Key Vault is reachable during Terraform
@@ -602,31 +623,31 @@ jobs:
             echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
           fi
 
-      - name: Download plan artifact
+      - name: Download platform plan artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
-          name: tfplan-${{ inputs.environment }}
-          path: infra/terraform/environments/azure/${{ inputs.environment }}
+          name: tfplan-platform-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/platform
 
-      - name: Generate GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v1
+      - name: Download workload plan artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          name: tfplan-workload-${{ inputs.environment }}
+          path: infra/terraform/environments/azure/${{ inputs.environment }}/workload
 
-      - name: Terraform apply
-        env:
-          TF_VAR_github_token: ${{ steps.app-token.outputs.token }}
-        run: |
-          terraform apply -auto-approve tfplan
+      # Applying a saved plan file (-out=tfplan) re-uses the variable values captured
+      # at plan time, so no -var / TF_VAR_* are passed here — Terraform rejects vars
+      # when applying a saved plan. Platform first (networking), then workload.
+      - name: Terraform apply (platform)
+        run: terraform apply -auto-approve tfplan
 
-          cd ../workload
-          terraform apply -auto-approve tfplan
+      - name: Terraform apply (workload)
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
+        run: terraform apply -auto-approve tfplan
 
       - name: Export resource IDs for approval and evidence
         id: export_ids
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         run: |
           echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
           echo "container_app_environment_id=$(terraform output -raw container_app_environment_id)" >> "$GITHUB_OUTPUT"
@@ -695,6 +716,7 @@ jobs:
           done
 
       - name: Run database migrations
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         run: |
           DB_URL=$(terraform output -raw database_connection_string)
           RG="${{ steps.export_ids.outputs.resource_group_name }}"
@@ -853,6 +875,7 @@ jobs:
 
 
       - name: Sync Entra app web URLs
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
@@ -892,6 +915,7 @@ jobs:
 
       - name: Export platform outputs
         id: export
+        working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         run: |
           FRONTDOOR_HOST=$(terraform output -raw frontdoor_endpoint_host_name)
           echo "frontdoor_endpoint_host_name=$FRONTDOOR_HOST" >> "$GITHUB_OUTPUT"

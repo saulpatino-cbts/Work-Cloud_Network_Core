@@ -4,7 +4,7 @@ name: "220 · Fast Redeploy"
 # one or more Container Apps — no infrastructure changes.
 # ~2 minutes vs ~10+ minutes for a full Terraform deploy.
 # Prerequisite:
-#   Azure infrastructure must already be deployed by workflow 210.
+#   Azure infrastructure must already be deployed by workflow 211.
 
 on:
   workflow_dispatch:

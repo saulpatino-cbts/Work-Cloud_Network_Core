@@ -36,7 +36,12 @@ jobs:
           V_CNA_NEXTAUTH_SECRET:         ${{ secrets.CNA_NEXTAUTH_SECRET }}
           V_CNA_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CNA_CREDENTIAL_ENCRYPTION_KEY }}
           V_DOCKERHUB_TOKEN:             ${{ secrets.DOCKERHUB_TOKEN }}
-          # Optional — AWS publish / portal publish / customer TLS are not required for the base bootstrap path.
+          V_GH_APP_ID:                   ${{ secrets.GH_APP_ID }}
+          V_GH_APP_PRIVATE_KEY:          ${{ secrets.GH_APP_PRIVATE_KEY }}
+          # Optional secrets — mapped so the empty-string check can see them.
+          V_CNA_AWS_ROLE_ARN:            ${{ secrets.CNA_AWS_ROLE_ARN }}
+          V_CNA_PUBLISH_BUCKET:          ${{ secrets.CNA_PUBLISH_BUCKET }}
+          V_FRONTDOOR_CERT_PFX_PASSWORD: ${{ secrets.FRONTDOOR_CERTIFICATE_PFX_PASSWORD }}
         run: |
           echo "## Secret Check" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -71,11 +76,13 @@ jobs:
           check_secret "CNA_NEXTAUTH_SECRET"         "$V_CNA_NEXTAUTH_SECRET"
           check_secret "CNA_CREDENTIAL_ENCRYPTION_KEY" "$V_CNA_CREDENTIAL_ENCRYPTION_KEY"
           check_secret "DOCKERHUB_TOKEN"             "$V_DOCKERHUB_TOKEN"
+          check_secret "GH_APP_ID"                   "$V_GH_APP_ID"
+          check_secret "GH_APP_PRIVATE_KEY"          "$V_GH_APP_PRIVATE_KEY"
 
           # Optional — required only for specific workflows
-          check_secret "CNA_AWS_ROLE_ARN"                   "$V_CNA_AWS_ROLE_ARN"            "workflow 06 (AWS publish)"
-          check_secret "CNA_PUBLISH_BUCKET"                 "$V_CNA_PUBLISH_BUCKET"          "workflow 06 (publish portal)"
-          check_secret "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" "$V_FRONTDOOR_CERT_PFX_PASSWORD" "workflow 210 verify (customer TLS)"
+          check_secret "CNA_AWS_ROLE_ARN"                   "$V_CNA_AWS_ROLE_ARN"            "workflow 320 (AWS publish)"
+          check_secret "CNA_PUBLISH_BUCKET"                 "$V_CNA_PUBLISH_BUCKET"          "workflow 320 (publish portal)"
+          check_secret "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" "$V_FRONTDOOR_CERT_PFX_PASSWORD" "workflow 211 verify (customer TLS)"
 
           if [[ "$FAILED" -eq 1 ]]; then
             echo ""
@@ -276,12 +283,23 @@ jobs:
             fi
           fi
 
-          ALERTS_STATE=$(az provider show --namespace Microsoft.AlertsManagement --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
-          if [[ "$ALERTS_STATE" == "Registered" ]]; then
-            echo "| Microsoft.AlertsManagement | Registered | ✅ |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Microsoft.AlertsManagement | $ALERTS_STATE | ❌ Register before deploy |" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Microsoft.AlertsManagement is not registered in this subscription. Run: az provider register --namespace Microsoft.AlertsManagement"
+          # Required resource providers for the split infra:
+          #   Microsoft.App      — Container Apps (compute)
+          #   Microsoft.Insights — diagnostic settings / Application Insights
+          # (Microsoft.AlertsManagement is no longer needed — the refactor dropped
+          #  metric alerts; only diagnostic settings remain.)
+          PROVIDER_FAILED=0
+          for ns in Microsoft.App Microsoft.Insights; do
+            STATE=$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+            if [[ "$STATE" == "Registered" ]]; then
+              echo "| $ns | Registered | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| $ns | $STATE | ❌ Register before deploy |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::$ns is not registered in this subscription. Run: az provider register --namespace $ns"
+              PROVIDER_FAILED=1
+            fi
+          done
+          if [[ "$PROVIDER_FAILED" -eq 1 ]]; then
             exit 1
           fi
 
@@ -294,6 +312,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Next step:** If all checks are green, run workflow \`200 · Build Container Images\`, then workflow \`210 · Deploy Azure Platform\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "**Next step:** If all checks are green, run workflow \`200 · Build Container Images\`, then workflow \`211 · Deploy Azure Platform (Split)\`." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 210)." >> "$GITHUB_STEP_SUMMARY"
+          echo "If any checks show ⚠️ placeholder values, those variables will be updated after the first Terraform deploy (workflow 211)." >> "$GITHUB_STEP_SUMMARY"

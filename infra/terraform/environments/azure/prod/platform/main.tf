@@ -313,3 +313,57 @@ resource "azurerm_network_security_rule" "container_apps_deny_other_vnet_inbound
   resource_group_name         = azurerm_resource_group.this.name
   network_security_group_name = azurerm_network_security_group.container_apps.name
 }
+
+# ─── Platform observability ───────────────────────────────────────────────────
+# The Log Analytics workspace lives in the platform landing zone so that
+# platform-owned resources (firewall, NSGs, VNet flow logs) are monitored in the
+# same state that creates them — no cross-state dependency. The workload reads
+# this workspace via data source for its Container App / app diagnostics.
+resource "azurerm_log_analytics_workspace" "platform" {
+  name                = "${local.name_prefix}-log"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "PerGB2018"
+  retention_in_days   = local.log_analytics_retention_in_days
+  tags                = local.tags
+}
+
+# Dedicated storage account for VNet flow logs. LRS is appropriate (and the
+# Network Watcher flow-log requirement is exempt from the GZRS curated gate);
+# logs are short-lived diagnostic data, not durable artifacts.
+resource "azurerm_storage_account" "flow_logs" {
+  name                            = replace("${local.name_prefix}flowlog", "-", "")
+  resource_group_name             = azurerm_resource_group.this.name
+  location                        = azurerm_resource_group.this.location
+  account_tier                    = "Standard"
+  account_replication_type        = "LRS"
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  tags                            = local.tags
+
+  #checkov:skip=CKV_AZURE_206:Flow-log storage is short-lived diagnostic data; LRS is acceptable and Network Watcher does not require geo-replication.
+}
+
+module "observability" {
+  source                               = "../../../../providers/azure/observability"
+  log_analytics_workspace_id           = azurerm_log_analytics_workspace.platform.id
+  log_analytics_workspace_workspace_id = azurerm_log_analytics_workspace.platform.workspace_id
+  log_analytics_workspace_location     = azurerm_log_analytics_workspace.platform.location
+  diagnostic_setting_name_prefix       = local.name_prefix
+  resource_group_name                  = azurerm_resource_group.this.name
+  location                             = azurerm_resource_group.this.location
+  tags                                 = local.tags
+
+  # VNet flow logs — platform owns the storage account and the VNet.
+  enable_virtual_network_flow_logs = true
+  flow_log_target_resource_id      = azurerm_virtual_network.platform.id
+  flow_log_storage_account_id      = azurerm_storage_account.flow_logs.id
+
+  # Firewall + NSG diagnostics (the resources that moved here in the split).
+  diagnostic_targets = {
+    azure_firewall        = azurerm_firewall.egress.id
+    container_apps_nsg    = azurerm_network_security_group.container_apps.id
+    private_endpoints_nsg = azurerm_network_security_group.private_endpoints.id
+    database_nsg          = azurerm_network_security_group.database.id
+  }
+}

@@ -1,4 +1,4 @@
-﻿locals {
+locals {
   name_prefix = "${var.project_name}-${var.environment}-${var.region_short}"
   tags = {
     Environment = title(var.environment)
@@ -7,6 +7,9 @@
     Project     = var.project_name
     ManagedBy   = "terraform"
   }
+
+  # Log Analytics retention (days). 30 is the PerGB2018 SKU floor.
+  log_analytics_retention_in_days = 30
 
   firewall_application_rule_fqdns = [
     "index.docker.io",

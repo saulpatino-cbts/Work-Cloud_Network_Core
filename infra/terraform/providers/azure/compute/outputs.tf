@@ -37,17 +37,8 @@ output "web_fqdn" {
   value       = azurerm_container_app.web.ingress[0].fqdn
 }
 
-output "log_analytics_workspace_id" {
-  value = azurerm_log_analytics_workspace.compute.id
-}
-
-output "log_analytics_workspace_workspace_id" {
-  value = azurerm_log_analytics_workspace.compute.workspace_id
-}
-
-output "log_analytics_workspace_location" {
-  value = azurerm_log_analytics_workspace.compute.location
-}
+# Log Analytics workspace outputs removed — the workspace now lives in the
+# platform landing zone. Consume platform's outputs instead.
 
 output "web_principal_id" {
   description = "System-assigned managed identity principal ID of the CNA Web Container App — used for RBAC assignments (e.g. Storage Blob Data Contributor)."

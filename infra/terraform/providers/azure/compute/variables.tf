@@ -74,10 +74,9 @@ variable "container_app_revision_mode" {
   default     = "Single"
 }
 
-variable "log_analytics_retention_in_days" {
-  description = "Retention period for Log Analytics workspace. Use 30 for dev, 90 for prod (compliance)."
-  type        = number
-  default     = 30
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of the Log Analytics workspace (created in the platform landing zone) that the Container App Environment and app diagnostics send to."
+  type        = string
 }
 
 # FinOps: scale-to-zero for idle environments

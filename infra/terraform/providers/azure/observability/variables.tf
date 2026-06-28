@@ -41,13 +41,15 @@ variable "diagnostic_setting_name_prefix" {
 }
 
 variable "flow_log_target_resource_id" {
-  description = "Resource ID of the virtual network whose traffic should be captured by flow logs."
+  description = "Resource ID of the virtual network whose traffic should be captured by flow logs. Required only when enable_virtual_network_flow_logs is true."
   type        = string
+  default     = null
 }
 
 variable "flow_log_storage_account_id" {
-  description = "Storage account used by Azure Network Watcher flow logs."
+  description = "Storage account used by Azure Network Watcher flow logs. Required only when enable_virtual_network_flow_logs is true."
   type        = string
+  default     = null
 }
 
 variable "enable_virtual_network_flow_logs" {

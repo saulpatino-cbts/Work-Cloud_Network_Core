@@ -149,7 +149,7 @@ resource "azurerm_private_endpoint" "foundry" {
   }
 
   private_dns_zone_group {
-    name                 = "pdzg-cognitiveservices"
+    name = "pdzg-cognitiveservices"
     private_dns_zone_ids = [
       azurerm_private_dns_zone.cognitiveservices.id,
       azurerm_private_dns_zone.openai.id,

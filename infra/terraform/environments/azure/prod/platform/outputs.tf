@@ -1,4 +1,4 @@
-﻿output "resource_group_name" {
+output "resource_group_name" {
   value = azurerm_resource_group.this.name
 }
 
@@ -14,4 +14,19 @@ output "private_endpoint_subnet_prefix" {
 output "database_subnet_prefix" {
   description = "CIDR prefix for the PostgreSQL Flexible Server delegated subnet (used to derive the server's private IP)"
   value       = azurerm_subnet.database.address_prefixes[0]
+}
+
+output "log_analytics_workspace_id" {
+  description = "Resource ID of the platform Log Analytics workspace, consumed by the workload for Container App / app diagnostics."
+  value       = azurerm_log_analytics_workspace.platform.id
+}
+
+output "log_analytics_workspace_workspace_id" {
+  description = "Workspace GUID of the platform Log Analytics workspace."
+  value       = azurerm_log_analytics_workspace.platform.workspace_id
+}
+
+output "log_analytics_workspace_location" {
+  description = "Azure region of the platform Log Analytics workspace."
+  value       = azurerm_log_analytics_workspace.platform.location
 }

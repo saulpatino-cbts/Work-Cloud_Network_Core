@@ -20,6 +20,8 @@ output/diagrams/
 .idea/
 .DS_Store
 .terraform/
+# terraform init module cache (written to <root>/modules/ outside .terraform/)
+**/modules/modules.json
 *.tfstate
 *.tfstate.backup
 *.tfvars

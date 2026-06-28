@@ -25,6 +25,14 @@ data "azurerm_subnet" "database" {
   resource_group_name  = data.azurerm_resource_group.this.name
 }
 
+# Log Analytics workspace lives in the platform landing zone (created there so
+# firewall/NSG/flow-log diagnostics stay in the same state as their resources).
+# The workload reads it for Container App + app-level diagnostics.
+data "azurerm_log_analytics_workspace" "platform" {
+  name                = "${local.name_prefix}-log"
+  resource_group_name = data.azurerm_resource_group.this.name
+}
+
 module "storage" {
   source              = "../../../../providers/azure/storage"
   resource_group_name = data.azurerm_resource_group.this.name
@@ -76,10 +84,8 @@ module "compute" {
   tags                                 = local.tags
 
   # FinOps: do NOT scale to zero in prod — cold-start impacts SLA
-  enable_scale_to_zero = false
-  # FinOps: 30-day retention (was 90). [REVIEW REQUIRED] Prod impact — some
-  # audit/compliance regimes require 90-day retention; confirm 30 is acceptable.
-  log_analytics_retention_in_days = 30
+  enable_scale_to_zero       = false
+  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.platform.id
 
   # ── Plain env vars injected at container start ──────────────────────────────
   api_env_vars = {
@@ -239,24 +245,20 @@ module "security" {
   foundry_account_id                     = module.ai.foundry_account_id
 }
 
+# App-level diagnostics only. Firewall/NSG diagnostics and VNet flow logs are
+# owned by the platform landing zone (where those resources live).
 module "observability" {
   source                               = "../../../../providers/azure/observability"
-  log_analytics_workspace_id           = module.compute.log_analytics_workspace_id
-  log_analytics_workspace_workspace_id = module.compute.log_analytics_workspace_workspace_id
-  log_analytics_workspace_location     = module.compute.log_analytics_workspace_location
+  log_analytics_workspace_id           = data.azurerm_log_analytics_workspace.platform.id
+  log_analytics_workspace_workspace_id = data.azurerm_log_analytics_workspace.platform.workspace_id
+  log_analytics_workspace_location     = data.azurerm_log_analytics_workspace.platform.location
   diagnostic_setting_name_prefix       = local.name_prefix
   resource_group_name                  = data.azurerm_resource_group.this.name
   location                             = data.azurerm_resource_group.this.location
   tags                                 = local.tags
-  flow_log_target_resource_id          = data.azurerm_virtual_network.platform.id
-  flow_log_storage_account_id          = module.storage.storage_account_id
 
   diagnostic_targets = {
-    frontdoor_profile = module.security.frontdoor_profile_id
-
-
-
-
+    frontdoor_profile          = module.security.frontdoor_profile_id
     container_apps_environment = module.compute.container_app_environment_id
     container_app_web          = module.compute.web_id
     container_app_api          = module.compute.api_id

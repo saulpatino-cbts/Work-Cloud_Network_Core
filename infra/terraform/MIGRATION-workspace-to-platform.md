@@ -1,5 +1,13 @@
 # Migration runbook — move Log Analytics workspace from workload → platform state
 
+> **Only needed for an ALREADY-DEPLOYED environment.** For a fresh/first
+> deployment (no existing Terraform state, no existing workspace), skip this
+> entire runbook — the platform root creates the workspace in the correct state
+> from the start and there is nothing to migrate. As of the last check, no
+> environment was deployed, so this is a no-op for the initial rollout. Keep
+> this doc for any future environment that already has the workspace in
+> workload state.
+
 ## Why
 
 The Log Analytics workspace (`<name_prefix>-log`) used to be created by the

@@ -32,7 +32,7 @@ module "storage" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  # Strict parity with prod: GZRS satisfies the curated geo-replication gate.
+  # GZRS satisfies the curated Checkov geo-replication gate (CKV_AZURE_206).
   replication_type            = "GZRS"
   raw_artifact_retention_days = 30 # move to Cool after 30 days, auto-delete after 365
   deliverable_retention_days  = 90
@@ -250,11 +250,11 @@ module "observability" {
   flow_log_storage_account_id          = module.storage.storage_account_id
 
   diagnostic_targets = {
-    frontdoor_profile          = module.security.frontdoor_profile_id
-    
-    
-    
-    
+    frontdoor_profile = module.security.frontdoor_profile_id
+
+
+
+
     container_apps_environment = module.compute.container_app_environment_id
     container_app_web          = module.compute.web_id
     container_app_api          = module.compute.api_id

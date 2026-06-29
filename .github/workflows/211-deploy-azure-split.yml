@@ -552,7 +552,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     needs: plan
-    environment: ${{ inputs.environment == 'prod' && 'prod-approval' || inputs.environment }}
+    # Prod apply runs under the 'orch' environment, which has a required-reviewer
+    # protection rule (manual approval gate) and a federated credential trusting
+    # subject environment:orch on the Prod deploy SP. Dev applies under 'dev'.
+    environment: ${{ inputs.environment == 'prod' && 'orch' || inputs.environment }}
     defaults:
       run:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform

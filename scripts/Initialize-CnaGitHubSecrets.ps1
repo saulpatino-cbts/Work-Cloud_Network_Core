@@ -502,12 +502,21 @@ function Set-GitHubSecret {
     param(
         [string]$Name,
         [string]$Value,
-        [string]$RepoName
+        [string]$RepoName,
+        # When set, writes an environment-scoped secret (gh secret set --env <name>)
+        # instead of a repository-level secret. Used so per-environment deploy SPs
+        # supply a different AZURE_CLIENT_ID in the dev/prod/orch GitHub environments.
+        [string]$EnvironmentName = ""
     )
     if ($null -eq $Value) { return $false }
-    if ($PSCmdlet.ShouldProcess($RepoName, "set GitHub secret $Name")) {
-        $Value | gh secret set $Name --repo $RepoName | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Failed to set GitHub secret $Name." }
+    $scopeLabel = if ([string]::IsNullOrWhiteSpace($EnvironmentName)) { "repo" } else { "env:$EnvironmentName" }
+    if ($PSCmdlet.ShouldProcess("$RepoName ($scopeLabel)", "set GitHub secret $Name")) {
+        if ([string]::IsNullOrWhiteSpace($EnvironmentName)) {
+            $Value | gh secret set $Name --repo $RepoName | Out-Null
+        } else {
+            $Value | gh secret set $Name --repo $RepoName --env $EnvironmentName | Out-Null
+        }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to set GitHub secret $Name ($scopeLabel)." }
     }
     return $true
 }
@@ -958,11 +967,50 @@ function Confirm-GitHubEnvironment {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$RepoName,
-        [string]$EnvironmentName
+        [string]$EnvironmentName,
+        # When set, configure the environment with a required-reviewer protection
+        # rule (manual approval gate). Used for the 'orch' environment that gates
+        # the prod apply job in workflow 211. Reviewers are GitHub login names
+        # (users); they are resolved to numeric IDs via the API.
+        [string[]]$RequiredReviewers = @()
     )
 
     $existingEnvironments = Get-GitHubEnvironments -RepoName $RepoName
-    if ($existingEnvironments -contains $EnvironmentName) {
+    $alreadyExists = $existingEnvironments -contains $EnvironmentName
+
+    # Build the PUT body. A bare PUT (no body) creates an unprotected environment;
+    # supplying reviewers adds a required-reviewer gate. PUT is idempotent, so we
+    # re-apply the protection even if the environment already exists.
+    if ($RequiredReviewers.Count -gt 0) {
+        $reviewerObjects = @()
+        foreach ($login in $RequiredReviewers) {
+            $userId = (& gh api "users/$login" --jq '.id' 2>$null)
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($userId)) {
+                Write-Warn "Could not resolve reviewer '$login' to a user id; skipping that reviewer."
+                continue
+            }
+            $reviewerObjects += @{ type = "User"; id = [int]$userId }
+        }
+        if ($reviewerObjects.Count -eq 0) {
+            throw "No required reviewers could be resolved for environment '$EnvironmentName'. Provide valid GitHub logins."
+        }
+        $body = @{ reviewers = $reviewerObjects } | ConvertTo-Json -Depth 5 -Compress
+
+        if ($PSCmdlet.ShouldProcess($RepoName, "configure GitHub environment $EnvironmentName with required reviewers")) {
+            $bodyFile = [System.IO.Path]::GetTempFileName()
+            try {
+                Set-Content -Path $bodyFile -Value $body -Encoding UTF8
+                Invoke-Gh -Arguments @("api", "-X", "PUT", "repos/$RepoName/environments/$EnvironmentName", "--input", $bodyFile) | Out-Null
+            }
+            finally {
+                Remove-Item -Path $bodyFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Write-Ok "Configured GitHub environment with required reviewers: $EnvironmentName"
+        return (-not $alreadyExists)
+    }
+
+    if ($alreadyExists) {
         Write-Ok "GitHub environment exists: $EnvironmentName"
         return $false
     }
@@ -1125,6 +1173,79 @@ function Add-GitHubFederatedCredential {
     }
     finally {
         Remove-Item -Path $credentialFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function New-DeployServicePrincipal {
+    # Ensures (idempotently, by display name) an Entra app registration + service
+    # principal used purely as a GitHub OIDC DEPLOY identity, and assigns the given
+    # roles at the given scope. Returns the app (client) id. Separate from the
+    # NextAuth OAuth app — these never hold a client secret.
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$DisplayName,
+        [string[]]$Roles,
+        [string]$Scope
+    )
+
+    $existingApp = & az ad app list --display-name $DisplayName --query "[0].appId" -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingApp)) {
+        $deployAppId = $existingApp.Trim()
+        Write-Ok "Using existing deploy app: $DisplayName ($deployAppId)"
+    } else {
+        if ($PSCmdlet.ShouldProcess($DisplayName, "create deploy app registration")) {
+            $deployAppId = (& az ad app create --display-name $DisplayName --query appId -o tsv).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($deployAppId)) {
+                throw "Failed to create deploy app registration: $DisplayName."
+            }
+        }
+        Write-Ok "Created deploy app: $DisplayName ($deployAppId)"
+    }
+
+    $sp = & az ad sp list --filter "appId eq '$deployAppId'" --query "[0].id" -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sp)) {
+        if ($PSCmdlet.ShouldProcess($deployAppId, "create service principal")) {
+            & az ad sp create --id $deployAppId --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create service principal for $DisplayName." }
+            Start-Sleep -Seconds 10
+        }
+        Write-Ok "Created service principal: $DisplayName"
+    } else {
+        Write-Ok "Service principal exists: $DisplayName"
+    }
+
+    foreach ($role in $Roles) {
+        $assignment = & az role assignment list --assignee $deployAppId --role $role --scope $Scope --query "[0].id" -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($assignment)) {
+            Write-Ok "Role already assigned to ${DisplayName}: $role"
+            continue
+        }
+        if ($PSCmdlet.ShouldProcess($Scope, "assign $role to $DisplayName ($deployAppId)")) {
+            & az role assignment create --role $role --assignee $deployAppId --scope $Scope --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to assign $role to $DisplayName." }
+        }
+        Write-Ok "Assigned role to ${DisplayName}: $role"
+    }
+
+    return $deployAppId
+}
+
+function Add-DeployFederatedCredentials {
+    # Creates federated credentials on a deploy SP from an EXPLICIT allow-list of
+    # OIDC subjects (never enumerates GitHub environments, so a stray 'copilot'
+    # environment is never credentialed). Each entry is @{ Label = "..."; Subject = "..." }.
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$AppId,
+        [string]$RepoName,
+        [object[]]$SubjectMap
+    )
+
+    foreach ($cred in $SubjectMap) {
+        $credentialName = Get-SafeFederatedCredentialName -RepoName $RepoName -Label $cred.Label
+        if ($PSCmdlet.ShouldProcess($AppId, "ensure GitHub OIDC federated credential for $($cred.Subject)")) {
+            Add-GitHubFederatedCredential -AppId $AppId -Name $credentialName -Subject $cred.Subject
+        }
     }
 }
 
@@ -1323,6 +1444,19 @@ foreach ($environmentName in @("dev", "prod")) {
         $createdGitHubEnvironments.Add($environmentName) | Out-Null
     }
 }
+
+# 'orch' is the approval gate for the prod apply job in workflow 211. It must
+# require a manual reviewer so prod never deploys unattended. Default the reviewer
+# to the repository owner; override by setting CNA_ORCH_REVIEWERS (comma-separated
+# GitHub logins) in the environment before running this script.
+$orchReviewers = if (-not [string]::IsNullOrWhiteSpace($env:CNA_ORCH_REVIEWERS)) {
+    @($env:CNA_ORCH_REVIEWERS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+} else {
+    @(($Repo -split '/')[0])
+}
+if (Confirm-GitHubEnvironment -RepoName $Repo -EnvironmentName "orch" -RequiredReviewers $orchReviewers) {
+    $createdGitHubEnvironments.Add("orch") | Out-Null
+}
 $githubEnvironments = Get-GitHubEnvironments -RepoName $Repo
 
 $githubAppName = "CNA Assessment Tool"
@@ -1386,53 +1520,48 @@ if (-not $SkipAzureSetup) {
         Write-Ok "Created app registration: $AppDisplayName ($appId)"
     }
 
-    $sp = & az ad sp list --filter "appId eq '$appId'" --query "[0].id" -o tsv 2>$null
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sp)) {
-        if ($PSCmdlet.ShouldProcess($appId, "create service principal")) {
-            & az ad sp create --id $appId --output none
-            if ($LASTEXITCODE -ne 0) { throw "Failed to create service principal." }
-            Start-Sleep -Seconds 10
-        }
-        Write-Ok "Created service principal"
-    } else {
-        Write-Ok "Service principal exists"
-    }
+    # The app above ($appId / $AppDisplayName, default "CNA Assessment Tool") is the
+    # NextAuth OAuth app for end-user sign-in only — it keeps the redirect URI and
+    # client secret below. It is NOT a deploy identity and gets no federated
+    # credentials or subscription roles.
+    #
+    # Deploy OIDC uses THREE separate, least-privilege service principals:
+    #   - Main: repo-level jobs on main (policy-gates/000/100/320) — ref:refs/heads/main
+    #   - Dev : 211 plan/apply for dev, plus drift/sync — environment:dev
+    #   - Prod: 211 plan/apply for prod + the orch approval gate — environment:prod + environment:orch
+    # Subjects are an explicit allow-list (never enumerated from GitHub environments),
+    # so a stray auto-created 'copilot' environment is never credentialed.
+    $subscriptionScope = "/subscriptions/$resolvedSubscriptionId"
 
-    $scope = "/subscriptions/$resolvedSubscriptionId"
-    foreach ($role in @("Contributor", "User Access Administrator")) {
-        $assignment = & az role assignment list --assignee $appId --role $role --scope $scope --query "[0].id" -o tsv 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($assignment)) {
-            Write-Ok "Role already assigned: $role"
-            continue
-        }
-        if ($PSCmdlet.ShouldProcess($scope, "assign $role to $appId")) {
-            & az role assignment create --role $role --assignee $appId --scope $scope --output none
-            if ($LASTEXITCODE -ne 0) { throw "Failed to assign $role." }
-        }
-        Write-Ok "Assigned role: $role"
-    }
+    Write-Step "Creating deploy service principals (Main / Dev / Prod)"
 
-    $subjects = @(
-        "repo:$Repo`:ref:refs/heads/$Branch"
+    # Main (shared) — repo-level jobs validate/scan and need to create the tfstate
+    # backend (000). Contributor at subscription scope covers backend creation;
+    # User Access Administrator is not needed for the shared identity.
+    $mainAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Main" `
+        -Roles @("Contributor") -Scope $subscriptionScope
+    Add-DeployFederatedCredentials -AppId $mainAppId -RepoName $Repo -SubjectMap @(
+        @{ Label = "cna-oidc-main"; Subject = "repo:$Repo`:ref:refs/heads/$Branch" }
     )
+    $federatedCredentialSubjects.Add("repo:$Repo`:ref:refs/heads/$Branch") | Out-Null
 
-    $environmentNames = Get-GitHubEnvironments -RepoName $Repo
-    foreach ($environmentName in $environmentNames) {
-        $subjects += "repo:$Repo`:environment:$environmentName"
-    }
+    # Dev — full deploy rights for the dev environment.
+    $devAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Dev" `
+        -Roles @("Contributor", "User Access Administrator") -Scope $subscriptionScope
+    Add-DeployFederatedCredentials -AppId $devAppId -RepoName $Repo -SubjectMap @(
+        @{ Label = "cna-oidc-dev"; Subject = "repo:$Repo`:environment:dev" }
+    )
+    $federatedCredentialSubjects.Add("repo:$Repo`:environment:dev") | Out-Null
 
-    foreach ($subject in ($subjects | Sort-Object -Unique)) {
-        $federatedCredentialSubjects.Add($subject) | Out-Null
-        $subjectLabel = if ($subject -match ':environment:(.+)$') {
-            "env-$($Matches[1])"
-        } else {
-            "ref-$Branch"
-        }
-        $credentialName = Get-SafeFederatedCredentialName -RepoName $Repo -Label $subjectLabel
-        if ($PSCmdlet.ShouldProcess($appId, "ensure GitHub OIDC federated credential for $subject")) {
-            Add-GitHubFederatedCredential -AppId $appId -Name $credentialName -Subject $subject
-        }
-    }
+    # Prod — full deploy rights for the prod environment and the orch approval gate.
+    $prodAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Prod" `
+        -Roles @("Contributor", "User Access Administrator") -Scope $subscriptionScope
+    Add-DeployFederatedCredentials -AppId $prodAppId -RepoName $Repo -SubjectMap @(
+        @{ Label = "cna-oidc-prod"; Subject = "repo:$Repo`:environment:prod" },
+        @{ Label = "cna-oidc-orch"; Subject = "repo:$Repo`:environment:orch" }
+    )
+    $federatedCredentialSubjects.Add("repo:$Repo`:environment:prod") | Out-Null
+    $federatedCredentialSubjects.Add("repo:$Repo`:environment:orch") | Out-Null
 
     $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) {
         [string]$existingVariables["CNA_NEXTAUTH_URL"]
@@ -1467,6 +1596,11 @@ if (-not $SkipAzureSetup) {
     $resolvedSubscriptionId = Read-TextValue -Name "AZURE_SUBSCRIPTION_ID" -Prompt "Azure subscription ID" -Required
     $resolvedSubscriptionName = Read-TextValue -Name "AZURE_TARGET_SUBSCRIPTION_NAME" -Prompt "Azure subscription name (optional, for human-readable validation)" -Default "none"
     $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) { [string]$existingVariables["CNA_NEXTAUTH_URL"] } else { "none" }
+    # Without Azure setup we cannot create the three deploy SPs; fall back to the
+    # single prompted client id for all scopes (degenerate single-SP behaviour).
+    $mainAppId = $appId
+    $devAppId = $appId
+    $prodAppId = $appId
 }
 
 Write-Step "Collecting GitHub secret values"
@@ -1494,7 +1628,12 @@ if ($null -eq $entraClientSecret) {
     $entraClientSecret = Read-SecretValue -Name "CNA_ENTRA_CLIENT_SECRET" -Description "Entra OAuth client secret used by NextAuth" -Exists $existingSecrets.ContainsKey("CNA_ENTRA_CLIENT_SECRET") -Required
 }
 
-$secretValues["AZURE_CLIENT_ID"] = $appId
+# Repo-level AZURE_CLIENT_ID = the Main deploy SP. Jobs without a GitHub
+# `environment:` key (211 policy-gates, 000, 100, 320) can only read repo-level
+# secrets and authenticate via the ref:refs/heads/main subject, which only the
+# Main SP trusts. The Dev/Prod SP client ids are written as ENVIRONMENT-scoped
+# secrets below so plan/apply pick up the right identity per environment.
+$secretValues["AZURE_CLIENT_ID"] = $mainAppId
 $secretValues["AZURE_TENANT_ID"] = $tenantId
 $secretValues["AZURE_SUBSCRIPTION_ID"] = $resolvedSubscriptionId
 $secretValues["CNA_ENTRA_CLIENT_SECRET"] = $entraClientSecret
@@ -1579,6 +1718,24 @@ foreach ($entry in $secretValues.GetEnumerator()) {
     if (Set-GitHubSecret -Name $entry.Key -Value $entry.Value -RepoName $Repo) {
         $setSecretCount++
         Write-Ok "Set secret: $($entry.Key)"
+    }
+}
+
+# Environment-scoped AZURE_CLIENT_ID per deploy SP. A job with a GitHub
+# `environment:` key reads the environment-scoped secret in preference to the
+# repo-level one, so 211 plan/apply authenticate as the Dev or Prod SP while the
+# repo-level value (Main SP) still serves the no-environment jobs. The orch gate
+# (prod apply) authenticates as the Prod SP, so orch gets the Prod client id.
+$envClientIds = [ordered]@{
+    dev  = $devAppId
+    prod = $prodAppId
+    orch = $prodAppId
+}
+foreach ($envEntry in $envClientIds.GetEnumerator()) {
+    if ([string]::IsNullOrWhiteSpace($envEntry.Value)) { continue }
+    if (Set-GitHubSecret -Name "AZURE_CLIENT_ID" -Value $envEntry.Value -RepoName $Repo -EnvironmentName $envEntry.Key) {
+        $setSecretCount++
+        Write-Ok "Set env secret: AZURE_CLIENT_ID (env:$($envEntry.Key))"
     }
 }
 

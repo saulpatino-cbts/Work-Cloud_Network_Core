@@ -43,13 +43,17 @@ resource "azurerm_monitor_diagnostic_setting" "target" {
   }
 }
 
-resource "azurerm_network_watcher" "this" {
+# Azure auto-provisions exactly one Network Watcher per region per subscription
+# (named NetworkWatcher_<region> in the NetworkWatcherRG resource group) and
+# enforces a hard limit of one. Creating or updating a virtual network triggers
+# this automatic enablement. Managing our own instance collides with that
+# singleton ("NetworkWatcherCountLimitReached"), so we reference the existing one
+# instead of creating it. The flow log is parented to this pre-existing watcher.
+data "azurerm_network_watcher" "this" {
   count = var.enable_virtual_network_flow_logs ? 1 : 0
 
   name                = "NetworkWatcher_${replace(lower(var.location), " ", "")}"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  tags                = var.tags
+  resource_group_name = "NetworkWatcherRG"
 }
 
 resource "azapi_resource" "virtual_network_flow_log" {
@@ -57,7 +61,7 @@ resource "azapi_resource" "virtual_network_flow_log" {
 
   type      = "Microsoft.Network/networkWatchers/flowLogs@2025-05-01"
   name      = "${var.diagnostic_setting_name_prefix}-vnet-flow"
-  parent_id = azurerm_network_watcher.this[0].id
+  parent_id = data.azurerm_network_watcher.this[0].id
   location  = var.location
   tags      = var.tags
 

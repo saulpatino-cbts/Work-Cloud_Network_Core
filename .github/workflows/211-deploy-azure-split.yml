@@ -980,9 +980,11 @@ jobs:
 
       - name: Validate Foundry private DNS and managed identity inference
         id: validate_foundry_private_access
-        # Post-deploy SMOKE TEST — the infrastructure has already applied by this
-        # point. A validation failure (e.g. the managed-identity token path or the
-        # in-flux inference target) must NOT fail the deploy. See issues #98/#99.
+        # NON-BLOCKING (temporary) — see docs/non-blocking-ci-steps.md #4, issues #98/#99.
+        # Post-deploy SMOKE TEST: the infrastructure has already applied by this point, so
+        # a validation failure (managed-identity token path #99, or the in-flux inference
+        # target #98) must NOT fail the deploy. Remove this flag when #99 is fixed and #98
+        # repoints validation to Azure OpenAI.
         continue-on-error: true
         env:
           RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
@@ -997,6 +999,12 @@ jobs:
 
 
       - name: Sync Entra app web URLs
+        # NON-BLOCKING (temporary) — see docs/non-blocking-ci-steps.md #6, issue #101.
+        # The deploy SP lacks Microsoft Graph permission to run `az ad app update`, so
+        # this fails with "Insufficient privileges". The Front Door host is stable per
+        # environment, so the redirect URI can be set once out-of-band (or moved to the
+        # Graph-capable bootstrap script). Remove this flag when #101 is resolved.
+        continue-on-error: true
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -1198,6 +1206,9 @@ jobs:
           done
 
       - name: Query Application Insights telemetry directly
+        # NON-BLOCKING (temporary) — see docs/non-blocking-ci-steps.md #5, issue #100.
+        # App Insights was removed; the `if` guard already skips this when the var is
+        # unset, so it is effectively a no-op. Delete this step entirely as part of #100.
         if: vars.APPLICATION_INSIGHTS_NAME != 'none' && vars.APPLICATION_INSIGHTS_NAME != ''
         continue-on-error: true
         run: |

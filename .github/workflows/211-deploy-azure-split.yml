@@ -250,7 +250,7 @@ jobs:
         id: alz_diag
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ALZ_DIAGNOSTICS_STANDDOWN: ${{ vars.ALZ_DIAGNOSTICS_STANDDOWN }}
+          ALZ_DIAGNOSTICS_MANAGE: ${{ vars.ALZ_DIAGNOSTICS_MANAGE }}
         run: bash "$GITHUB_WORKSPACE/scripts/ci/detect_alz_diagnostic_policies.sh"
 
       - name: Upload policy gate report
@@ -421,9 +421,12 @@ jobs:
       # "an argument named X is not expected here". The one exception is
       # manage_diagnostic_settings, fed from the ALZ governance pre-flight: false
       # stands our diagnostic settings down entirely (policy-only diagnostics).
+      # Fail SAFE: manage only when the pre-flight explicitly says 'true'. A
+      # missing/empty output (step skipped or errored) defaults to false so we
+      # never re-create the diagnostic settings the ALZ policy already owns.
       - name: Terraform plan (platform)
         env:
-          TF_VAR_manage_diagnostic_settings: ${{ needs.policy-gates.outputs.manage_diagnostic_settings != 'false' }}
+          TF_VAR_manage_diagnostic_settings: ${{ needs.policy-gates.outputs.manage_diagnostic_settings == 'true' }}
         run: terraform plan -out=tfplan
 
       # Workload = compute, database, identity, AI, Front Door. It owns every app

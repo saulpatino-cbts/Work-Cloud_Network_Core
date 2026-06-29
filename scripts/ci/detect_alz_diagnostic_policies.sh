@@ -116,26 +116,30 @@ for scope in "${SCOPES[@]}"; do
   fi
 done
 
-# Detection is INFORMATIONAL by default. We dual-ship: our uniquely-named
-# settings coexist with the policy's "setByPolicy-*" settings (Azure allows up
-# to 5 per resource), and a stabilization delay in the Terraform module avoids
-# the create-race. So the decision stays `true` (Terraform manages its own
-# settings) even when a policy is detected — we just surface what's happening.
+# When an ALZ DeployIfNotExists policy is detected, Terraform STANDS DOWN by
+# default: the policy owns diagnostic settings, so we emit `false` and the module
+# skips its own settings entirely (policy-only diagnostics, logs still flow to the
+# centrally governed workspace). This is the correct behaviour on a governed ALZ —
+# trying to "dual-ship" a second, uniquely-named setting races the policy's
+# remediation and the azurerm provider surfaces it as a false "already exists /
+# needs import" error mid-apply (no stabilization delay reliably avoids this,
+# e.g. when the firewall itself takes 10+ minutes to create).
 #
-# An operator can still force a full stand-down by setting the repo/environment
-# variable ALZ_DIAGNOSTICS_STANDDOWN=true, in which case we emit `false` and the
-# module skips its settings entirely (policy-only diagnostics).
-STANDDOWN="${ALZ_DIAGNOSTICS_STANDDOWN:-false}"
+# An operator can opt Terraform BACK IN (manage its own settings alongside the
+# policy) by setting the repo/environment variable ALZ_DIAGNOSTICS_MANAGE=true —
+# only do this when shipping to a different workspace than the policy targets and
+# you have accepted the create-race risk.
+MANAGE_OVERRIDE="${ALZ_DIAGNOSTICS_MANAGE:-false}"
 
 if [[ "$DETECTED" == "true" ]]; then
-  if [[ "$STANDDOWN" == "true" ]]; then
-    echo "::warning::ALZ diagnostic-settings policy '${DETECTED_NAME}' detected at ${DETECTED_WHERE}; ALZ_DIAGNOSTICS_STANDDOWN=true -> Terraform diagnostic settings DISABLED (policy-only diagnostics)."
-    DECISION="false"
-    TF_STATE="disabled (stand-down requested)"
-  else
-    echo "::warning::ALZ diagnostic-settings policy '${DETECTED_NAME}' detected at ${DETECTED_WHERE}. Terraform dual-ships its own uniquely-named settings alongside the policy's 'setByPolicy-*' settings (a stabilization delay avoids the azurerm create-race). Set ALZ_DIAGNOSTICS_STANDDOWN=true to disable Terraform settings entirely."
+  if [[ "$MANAGE_OVERRIDE" == "true" ]]; then
+    echo "::warning::ALZ diagnostic-settings policy '${DETECTED_NAME}' detected at ${DETECTED_WHERE}; ALZ_DIAGNOSTICS_MANAGE=true -> Terraform will manage its own settings alongside the policy (create-race risk accepted)."
     DECISION="true"
-    TF_STATE="enabled (dual-ship with policy)"
+    TF_STATE="enabled (operator opt-in alongside policy)"
+  else
+    echo "::warning::ALZ diagnostic-settings policy '${DETECTED_NAME}' detected at ${DETECTED_WHERE}. Terraform diagnostic settings DISABLED by default (policy owns diagnostics). Set ALZ_DIAGNOSTICS_MANAGE=true to manage them in Terraform anyway."
+    DECISION="false"
+    TF_STATE="disabled (policy owns diagnostics)"
   fi
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     {
@@ -148,8 +152,8 @@ if [[ "$DETECTED" == "true" ]]; then
       echo "| Terraform-managed diagnostics | **${TF_STATE}** |"
       echo "| Detected assignment | \`${DETECTED_NAME}\` |"
       echo "| Scope | \`${DETECTED_WHERE}\` |"
-      echo "| Behaviour | Our settings are uniquely named and created after a stabilization delay, so they coexist with the policy's \`setByPolicy-*\` settings (Azure allows 5 per resource). |"
-      echo "| Override | Set \`ALZ_DIAGNOSTICS_STANDDOWN=true\` to disable Terraform settings entirely. |"
+      echo "| Behaviour | Terraform stands down by default; the policy's \`setByPolicy-*\` settings own diagnostics (logs flow to the centrally governed workspace). |"
+      echo "| Override | Set \`ALZ_DIAGNOSTICS_MANAGE=true\` to have Terraform manage its own settings alongside the policy (create-race risk). |"
     } >> "$GITHUB_STEP_SUMMARY"
   fi
   emit_decision "$DECISION"

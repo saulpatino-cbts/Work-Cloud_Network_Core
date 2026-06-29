@@ -1142,6 +1142,22 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # $GITHUB_ENV does not cross jobs. WORKLOAD_RG / WORKLOAD_NAME_PREFIX are set in
+      # the apply job but are NOT available here in verify, so the health-query step
+      # below built a malformed metric URL and failed under `set -e`. Re-derive them
+      # for this job using the same logic the other jobs use.
+      - name: Derive workload names
+        run: |
+          REGION_SHORT="${{ vars.AZURE_REGION_SHORT }}"
+          if [[ -n "${{ vars.TFSTATE_RESOURCE_GROUP }}" && "${{ vars.TFSTATE_RESOURCE_GROUP }}" == *-tfstate ]]; then
+            WORKLOAD_RG="${{ vars.TFSTATE_RESOURCE_GROUP }}"
+            WORKLOAD_RG="${WORKLOAD_RG%-tfstate}"
+          else
+            WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+          fi
+          echo "WORKLOAD_RG=$WORKLOAD_RG" >> "$GITHUB_ENV"
+          echo "WORKLOAD_NAME_PREFIX=${WORKLOAD_RG#rg-}" >> "$GITHUB_ENV"
+
       - name: Download staged manifest
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
@@ -1195,7 +1211,11 @@ jobs:
           ATTEMPT=0
           while [ $ATTEMPT -lt $MAX_WAIT ]; do
             ATTEMPT=$((ATTEMPT + 1))
-            az rest --method get --url "$METRIC_URL" > "$VDIR/external-health.json" 2>&1
+            # `|| true`: under `set -e`, a non-zero az rest (transient error, or the
+            # metric not yet emitted) would otherwise kill the step on attempt 1 and
+            # defeat the retry loop. Let the loop retry; the python parse tolerates a
+            # non-JSON/error body by yielding 0.0.
+            az rest --method get --url "$METRIC_URL" > "$VDIR/external-health.json" 2>&1 || true
             HEALTH=$(python3 -c "import json; d=json.load(open('$VDIR/external-health.json')); v=d.get('value',[]); ts=(v[0].get('timeseries',[{}]) if v else [{}]); data=(ts[0].get('data',[]) if ts else []); pts=[p.get('average',0) for p in data if p.get('average') is not None]; print(f'{pts[-1]:.1f}' if pts else '0.0')" 2>/dev/null || echo "0.0")
             echo "  Attempt $ATTEMPT/$MAX_WAIT — OriginHealthPercentage: ${HEALTH}% (threshold: ${THRESHOLD}%)"
             if awk "BEGIN{exit !($HEALTH >= $THRESHOLD)}"; then

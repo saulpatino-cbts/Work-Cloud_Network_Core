@@ -220,13 +220,22 @@ jobs:
           terraform validate
 
       - name: Terraform IaC security scan (Checkov)
-        env:
-          PATH: "${{ env.HOME }}/.local/bin:${{ env.PATH }}"
         run: |
-          pipx install checkov --quiet
+          # Resolve the checkov entrypoint from its pipx venv directly, independent
+          # of PATH. pipx installs into $PIPX_HOME (default ~/.local/share/pipx) and
+          # symlinks to $PIPX_BIN_DIR (default ~/.local/bin) which is not on the
+          # self-hosted runner's non-login-shell PATH. Querying pipx for the venv
+          # path avoids hardcoding $HOME and works no matter who the runner user is.
+          pipx install checkov --force --quiet
+          PIPX_BIN_DIR="$(pipx environment --value PIPX_BIN_DIR 2>/dev/null || echo "$HOME/.local/bin")"
+          CHECKOV="$PIPX_BIN_DIR/checkov"
+          if [ ! -x "$CHECKOV" ]; then
+            echo "::error::checkov not found at $CHECKOV after pipx install"
+            exit 1
+          fi
           GATE="$GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json"
           CURATED_CHECKS="CKV_AZURE_236,CKV_AZURE_238,CKV_AZURE_134,CKV_AZURE_136,CKV_AZURE_189,CKV_AZURE_109,CKV_AZURE_41,CKV_AZURE_114,CKV_AZURE_206,CKV_AZURE_190,CKV_AZURE_59,CKV2_AZURE_38,CKV2_AZURE_31,CKV2_AZURE_47,CKV2_AZURE_40,CKV2_AZURE_41"
-          checkov -d . --framework terraform --check "$CURATED_CHECKS" --output cli
+          "$CHECKOV" -d . --framework terraform --check "$CURATED_CHECKS" --output cli
           printf '{"status":"passed","blocking":true,"checks":"%s"}\n' "$CURATED_CHECKS" > "$GATE"
           cat "$GATE"
 
@@ -292,7 +301,7 @@ jobs:
         if: inputs.deploy_mode == 'rollback' && (inputs.previous_api_image == '' || inputs.previous_worker_image == '' || inputs.previous_web_image == '')
         env:
           CATALOG_DIR: $GITHUB_WORKSPACE/.deployment-catalog/${{ inputs.environment }}
-        run: python $GITHUB_WORKSPACE/scripts/ci/resolve_rollback_target.py
+        run: python3 $GITHUB_WORKSPACE/scripts/ci/resolve_rollback_target.py
 
       - name: Resolve Terraform backend targets
         run: |
@@ -954,7 +963,7 @@ jobs:
           PRIVATE_ENDPOINT_SUBNET_PREFIX: ${{ steps.export_ids.outputs.private_endpoint_subnet_prefix }}
           FOUNDRY_PRIVATE_ACCESS_VALIDATION: passed
           NEXTAUTH_URL: ${{ steps.export.outputs.nextauth_url }}
-        run: python ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
+        run: python3 ${{ github.workspace }}/scripts/ci/update_apply_evidence.py
 
       - name: Upload staged manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -1102,7 +1111,7 @@ jobs:
           CERTIFICATE_EXPIRY_DAYS_THRESHOLD: ${{ env.CERTIFICATE_EXPIRY_DAYS_THRESHOLD }}
           CANARY_WEIGHT_PERCENT: ${{ env.CANARY_WEIGHT_PERCENT }}
           PRIMARY_WEIGHT_PERCENT: ${{ env.PRIMARY_WEIGHT_PERCENT }}
-        run: python scripts/ci/evaluate_deployment_evidence.py
+        run: python3 scripts/ci/evaluate_deployment_evidence.py
 
       - name: Persist release catalog entry
         run: |

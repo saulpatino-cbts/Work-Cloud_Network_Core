@@ -156,9 +156,9 @@ jobs:
           key: guardrails-${{ hashFiles('pyproject.toml') }}
       - run: pip install pyyaml
       - name: Validate module.yaml dependency graph
-        run: python scripts/validate_module_deps.py
+        run: python3 scripts/validate_module_deps.py
       - name: Validate draw.io shape catalog
-        run: python scripts/validate_shape_catalog.py
+        run: python3 scripts/validate_shape_catalog.py
 
   # ------------------------------------------------------------------
   # 5. Docker build smoke test

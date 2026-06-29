@@ -26,6 +26,16 @@
 #   curl        — downloading binaries, connectivity checks, azure API calls
 #   nodejs/npm  — npm audit, npm install for Next.js web app builds
 #   pipx        — Install Python tools (checkov, etc.) without system conflicts
+#
+# GOTCHAS for self-hosted runners (vs. ubuntu-latest which has these handled):
+#   - Workflows must call `python3`, never bare `python` — Ubuntu ships no `python`.
+#   - Ubuntu 24.04+ enforces PEP 668: `pip install` system-wide fails with
+#     "externally-managed-environment". Use pipx for standalone CLI tools.
+#   - pipx installs CLIs to ~/.local/bin, which is NOT on the runner service's
+#     (non-login shell) PATH. Workflows resolve the tool via
+#     `pipx environment --value PIPX_BIN_DIR` rather than assuming PATH.
+#   - The runner user must be in the `docker` group AND the service restarted
+#     for group membership to take effect.
 
 set -euo pipefail
 

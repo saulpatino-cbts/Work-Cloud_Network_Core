@@ -159,7 +159,7 @@ jobs:
   # ── Clean up drifted resources not in Terraform state ────────────────────────
   cleanup-drift:
     name: "Remove drifted resources (${{ github.event.inputs.environment }})"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: terraform-destroy
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -204,7 +204,7 @@ jobs:
   # ── Optional: wipe TF state backend ─────────────────────────────────────────
   destroy-backend:
     name: "Destroy TF state backend RG"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: cleanup-drift
     if: github.event.inputs.destroy_tfstate_backend == 'true'
     steps:

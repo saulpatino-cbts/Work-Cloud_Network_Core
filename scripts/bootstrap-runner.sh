@@ -28,6 +28,8 @@
 #   pipx        — Install Python tools (checkov, etc.) without system conflicts
 #   az ext: containerapp — 211 runs `az containerapp job ...` for DB migration +
 #                          revision restarts; core az CLI does NOT include it
+#   powershell (pwsh) — 330 teardown runs cleanup-stale-ai-resources.ps1 via pwsh;
+#                       not an apt default, installed from Microsoft's package repo
 #
 # GOTCHAS for self-hosted runners (vs. ubuntu-latest which has these handled):
 #   - Workflows must call `python3`, never bare `python` — Ubuntu ships no `python`.
@@ -96,6 +98,23 @@ apt-get install -y \
 
 ok "Python3 installed ($(python3 --version))"
 ok "pipx installed ($(pipx --version))"
+
+# PowerShell Core (pwsh) — workflow 330 teardown runs cleanup-stale-ai-resources.ps1
+# via `pwsh`. Core `apt` has no powershell package; install from Microsoft's repo.
+step "Installing PowerShell (pwsh)"
+if ! command -v pwsh &>/dev/null; then
+    UBUNTU_VERSION="$(lsb_release -rs 2>/dev/null || echo '24.04')"
+    curl -fsSL -o /tmp/packages-microsoft-prod.deb \
+        "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb" \
+        || curl -fsSL -o /tmp/packages-microsoft-prod.deb "https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb"
+    dpkg -i /tmp/packages-microsoft-prod.deb
+    rm -f /tmp/packages-microsoft-prod.deb
+    apt-get update -qq
+    apt-get install -y powershell
+    ok "PowerShell installed ($(pwsh --version))"
+else
+    ok "PowerShell already installed ($(pwsh --version))"
+fi
 
 # Azure CLI
 step "Installing Azure CLI"

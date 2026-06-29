@@ -155,10 +155,15 @@ module "ai" {
   name_prefix         = local.name_prefix
   tags                = local.tags
 
-  environment          = var.environment
-  foundry_location     = "eastus2"
-  foundry_account_name = "cna-dev-eus2-aif"
-  foundry_project_name = "cna-dev-eus2-aif-proj"
+  environment      = var.environment
+  foundry_location = "eastus2"
+  # DEV-ONLY suffix bump (-aif -> -aif2): the prior cna-dev-eus2-aif account is
+  # soft-deleted and its name is reserved, which 409s on recreate. Bumping the
+  # name sidesteps the soft-delete graveyard without a manual purge. See
+  # docs/dev-deploy-workarounds.md — REVERT to "cna-dev-eus2-aif" once the ghost
+  # is purged or its retention lapses. Prod (cna-prod-eus2-aif) is NOT bumped.
+  foundry_account_name = "cna-dev-eus2-aif2"
+  foundry_project_name = "cna-dev-eus2-aif2-proj"
 }
 
 

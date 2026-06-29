@@ -116,7 +116,7 @@ infra/terraform/
 └── providers/azure/          Reusable modules: ai, compute, database, identity,
                               security, storage, runtime
 .github/workflows/            000–320 banded workflow sequence
-GitHub Wiki                   Documentation and ADRs migrated to https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki
+GitHub Wiki                   All documentation, runbooks, blogs, and ADRs live in https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki (no in-repo docs/ directory)
 CHANGELOG.md                  Release history and deployment-gated follow-up context
 scripts/                      bootstrap, validation, cleanup, and CI helper scripts
 ```

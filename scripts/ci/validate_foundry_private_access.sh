@@ -260,7 +260,7 @@ cat > "$JOB_YAML" <<JSON
           ],
           "args": [
             "-c",
-            "echo \\\"\$VALIDATION_SCRIPT_B64\\\" | base64 -d | node"
+            "echo \$VALIDATION_SCRIPT_B64 | base64 -d | node"
           ],
           "env": [
             {

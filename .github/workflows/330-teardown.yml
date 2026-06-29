@@ -137,15 +137,24 @@ jobs:
           echo "Deletion initiated. Monitor progress in the Azure Portal or with:"
           echo "  az group show --name $RG --query properties.provisioningState -o tsv"
 
-      - name: Clear Terraform state blob
+      - name: Clear Terraform state blobs (platform + workload)
         run: |
-          az storage blob delete \
-            --account-name "${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
-            --container-name "${{ vars.TFSTATE_CONTAINER }}" \
-            --name "${{ github.event.inputs.environment }}.terraform.tfstate" \
-            --auth-mode login \
-            --only-show-errors || true
-          echo "State file cleared — next deploy starts from a blank slate."
+          # The split deploy keeps TWO state keys: <env>.terraform.tfstate
+          # (platform) and <env>.workload.terraform.tfstate (workload). Both must
+          # be cleared or the next deploy trips on "already exists" for resources
+          # the surviving state still references.
+          for KEY in \
+            "${{ github.event.inputs.environment }}.terraform.tfstate" \
+            "${{ github.event.inputs.environment }}.workload.terraform.tfstate"; do
+            echo "Clearing state blob: $KEY"
+            az storage blob delete \
+              --account-name "${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+              --container-name "${{ vars.TFSTATE_CONTAINER }}" \
+              --name "$KEY" \
+              --auth-mode login \
+              --only-show-errors || true
+          done
+          echo "State files cleared — next deploy starts from a blank slate."
 
   # ── Clean up drifted resources not in Terraform state ────────────────────────
   cleanup-drift:

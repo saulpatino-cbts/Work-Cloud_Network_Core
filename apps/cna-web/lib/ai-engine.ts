@@ -64,7 +64,10 @@ export function normalizeAiEngine(value: string | null | undefined): AiEngineId 
 }
 
 export function getConfiguredDefaultAiEngine(): AiEngineId {
-  return normalizeAiEngine(process.env.CNA_AI_ENGINE_DEFAULT) ?? "foundry-claude";
+  // Default to azure-openai: it is the only provider with a deployed model
+  // (gpt-chat-latest). Anthropic/Claude on Foundry is unavailable in this tenant
+  // and pending removal.
+  return normalizeAiEngine(process.env.CNA_AI_ENGINE_DEFAULT) ?? "azure-openai";
 }
 
 export function getMcpServerStatuses(): McpServerStatus[] {

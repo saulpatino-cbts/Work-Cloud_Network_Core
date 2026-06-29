@@ -105,6 +105,9 @@ module "compute" {
     AZURE_STORAGE_ACCOUNT_NAME          = module.storage.storage_account_name
     AZURE_STORAGE_CONTAINER_ENGAGEMENTS = "raw-artifacts"
     CNA_AI_ENGINE_DEFAULT               = var.ai_engine_default
+    AZURE_OPENAI_ENDPOINT               = var.azure_openai_endpoint
+    AZURE_OPENAI_DEPLOYMENT             = var.azure_openai_deployment
+    AZURE_OPENAI_API_VERSION            = var.azure_openai_api_version
     FOUNDRY_CLAUDE_ENDPOINT             = var.foundry_claude_endpoint != "" ? var.foundry_claude_endpoint : module.ai.foundry_claude_messages_endpoint
     FOUNDRY_CLAUDE_MODEL                = var.foundry_claude_model
     CNA_AZURE_MCP_ENDPOINT              = var.azure_mcp_endpoint

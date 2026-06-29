@@ -87,7 +87,8 @@ def resolve_engine(stored_engine: str | None = None) -> str:
 
     Mirrors getActiveAiEngine() in lib/ai-engine.ts: a valid stored
     AppSetting 'ai.activeEngine' value wins, then CNA_AI_ENGINE_DEFAULT,
-    then foundry-claude.
+    then azure-openai (the only provider with a deployed model;
+    Anthropic/Claude on Foundry is unavailable in this tenant, pending removal).
     """
     stored = _clean(stored_engine)
     if stored in VALID_ENGINES:
@@ -95,7 +96,7 @@ def resolve_engine(stored_engine: str | None = None) -> str:
     env_default = _clean(os.environ.get("CNA_AI_ENGINE_DEFAULT"))
     if env_default in VALID_ENGINES:
         return env_default
-    return ENGINE_FOUNDRY_CLAUDE
+    return ENGINE_AZURE_OPENAI
 
 
 def engine_configured(engine: str) -> bool:

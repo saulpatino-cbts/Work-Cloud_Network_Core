@@ -117,9 +117,9 @@ variable "credential_encryption_key" {
 
 # ─── AI Engine + MCP configuration ────────────────────────────────────────────
 variable "ai_engine_default" {
-  description = "Default global GenAI engine when no database setting exists."
+  description = "Default global GenAI engine when no database setting exists. Azure OpenAI is the default (Anthropic/Claude on Foundry is not available in this tenant and is pending removal)."
   type        = string
-  default     = "foundry-claude"
+  default     = "azure-openai"
 
   validation {
     condition     = contains(["azure-openai", "foundry-claude"], var.ai_engine_default)
@@ -127,14 +127,36 @@ variable "ai_engine_default" {
   }
 }
 
+# ─── Azure OpenAI (default engine) ────────────────────────────────────────────
+# Auth is AAD/managed-identity only. NOTE: prod needs its own model deployment on
+# cna-prod-eus2-aif before this engine works — dev's gpt-chat-latest deployment is
+# not shared. Verify the deployment exists (and the name matches) before prod cutover.
+variable "azure_openai_endpoint" {
+  description = "Azure OpenAI base endpoint host for the web app (no /openai/v1 suffix; the SDK appends it)."
+  type        = string
+  default     = "https://cna-prod-eus2-aif.services.ai.azure.com"
+}
+
+variable "azure_openai_deployment" {
+  description = "Azure OpenAI deployment name (must exist on the prod Foundry account)."
+  type        = string
+  default     = "gpt-chat-latest"
+}
+
+variable "azure_openai_api_version" {
+  description = "Azure OpenAI API version."
+  type        = string
+  default     = "2024-12-01-preview"
+}
+
 variable "foundry_claude_endpoint" {
-  description = "Foundry Claude Messages API endpoint for the web app."
+  description = "Foundry Claude Messages API endpoint for the web app. UNUSED — Anthropic on Foundry is not available in this tenant; pending removal."
   type        = string
   default     = ""
 }
 
 variable "foundry_claude_model" {
-  description = "Foundry Claude model identifier."
+  description = "Foundry Claude model identifier. UNUSED — pending removal."
   type        = string
   default     = "claude-sonnet-4-6"
 }

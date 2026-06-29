@@ -316,3 +316,27 @@ resource "github_actions_variable" "application_insights_name" {
   variable_name = "APPLICATION_INSIGHTS_NAME"
   value         = module.ai.application_insights_name
 }
+
+# Adopt the placeholder variables seeded by Initialize-CnaGitHubSecrets.ps1, which
+# runs before any Terraform. Without these imports Terraform's CREATE hits a 409
+# ("Variable already exists") because the repository-scoped github_actions_variable
+# does not upsert on create (unlike the env-scoped sibling fixed in provider
+# PR #2758). On apply Terraform imports the existing variable, then the same apply
+# updates it to its real post-deploy value. ID format is "repository:NAME" per the
+# provider's buildID/parseID2 (colon separator). var.github_repository is the bare
+# repo name (211 passes ${GITHUB_REPOSITORY#*/}). The targets always pre-exist
+# because the bootstrap script seeds them first, so there is no import-missing risk.
+import {
+  to = github_actions_variable.cna_nextauth_url
+  id = "${var.github_repository}:CNA_NEXTAUTH_URL"
+}
+
+import {
+  to = github_actions_variable.key_vault_name
+  id = "${var.github_repository}:KEY_VAULT_NAME"
+}
+
+import {
+  to = github_actions_variable.application_insights_name
+  id = "${var.github_repository}:APPLICATION_INSIGHTS_NAME"
+}

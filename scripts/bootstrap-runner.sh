@@ -26,9 +26,14 @@
 #   curl        — downloading binaries, connectivity checks, azure API calls
 #   nodejs/npm  — npm audit, npm install for Next.js web app builds
 #   pipx        — Install Python tools (checkov, etc.) without system conflicts
+#   az ext: containerapp — 211 runs `az containerapp job ...` for DB migration +
+#                          revision restarts; core az CLI does NOT include it
 #
 # GOTCHAS for self-hosted runners (vs. ubuntu-latest which has these handled):
 #   - Workflows must call `python3`, never bare `python` — Ubuntu ships no `python`.
+#   - Core `az` does NOT include the `containerapp` command group; it lives in an
+#     extension that must be installed (`az extension add --name containerapp`).
+#     211 also adds it defensively at runtime, but pre-install avoids a slow first run.
 #   - Ubuntu 24.04+ enforces PEP 668: `pip install` system-wide fails with
 #     "externally-managed-environment". Use pipx for standalone CLI tools.
 #   - pipx installs CLIs to ~/.local/bin, which is NOT on the runner service's
@@ -92,16 +97,23 @@ apt-get install -y \
 ok "Python3 installed ($(python3 --version))"
 ok "pipx installed ($(pipx --version))"
 
-# Azure CLI (workflow 211 requires exactly 2.61.0)
-step "Installing Azure CLI 2.61.0"
-CURRENT_AZ_VERSION=$(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo "")
-if [[ "${CURRENT_AZ_VERSION}" != "2.61.0" ]]; then
-    apt-get remove -y azure-cli 2>/dev/null || true
+# Azure CLI
+step "Installing Azure CLI"
+if ! command -v az &>/dev/null; then
     curl -sL https://aka.ms/InstallAzureCLIDeb | bash
     ok "Azure CLI installed ($(az --version | head -1))"
 else
-    ok "Azure CLI 2.61.0 already installed"
+    ok "Azure CLI already installed ($(az --version | head -1))"
 fi
+
+# Azure CLI extensions used by workflow 211. The `containerapp` extension is
+# REQUIRED — 211 runs `az containerapp job ...` for the DB migration and revision
+# restarts; without it those commands fail with "unrecognized arguments: job".
+step "Installing Azure CLI extensions"
+az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors 2>/dev/null || true
+az extension add --name containerapp --upgrade --only-show-errors 2>/dev/null \
+    && ok "Azure CLI extension installed: containerapp" \
+    || warn "Could not pre-install the containerapp extension; 211 installs it defensively at runtime"
 
 # Docker
 step "Installing Docker"

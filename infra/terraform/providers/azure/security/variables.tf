@@ -3,6 +3,12 @@ variable "resource_group_name" {
   type        = string
 }
 
+variable "private_endpoint_settle_duration" {
+  description = "Stabilization delay before creating private endpoints, allowing their target resources (Cognitive Services/Foundry account, storage, Key Vault) to reach a terminal provisioning state. Prevents 'RequestConflict: provisioning state is not terminal' on private endpoint creation."
+  type        = string
+  default     = "45s"
+}
+
 variable "location" {
   description = "Azure location"
   type        = string

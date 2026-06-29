@@ -581,6 +581,15 @@ jobs:
         run: |
           az provider register --namespace Microsoft.App --wait
 
+      # The DB-migration and revision-restart steps below use `az containerapp job`,
+      # which lives in the containerapp CLI extension (NOT in core az). The runner
+      # bootstrap pre-installs it, but add it here defensively so the deploy never
+      # dies mid-apply with "unrecognized arguments: job" if the runner drifts.
+      - name: Ensure az containerapp extension
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          az extension add --name containerapp --upgrade --only-show-errors
+
       - name: Resolve Terraform backend targets
         run: |
           echo "TFSTATE_RESOURCE_GROUP=${{ vars.TFSTATE_RESOURCE_GROUP }}" >> "$GITHUB_ENV"
@@ -835,7 +844,12 @@ jobs:
             echo "      - /bin/sh"
             echo "      args:"
             echo "      - -c"
-            echo "      - 'nslookup ${DB_HOST} && nc -zv ${DB_HOST} 5432 && echo DB_REACHABLE || echo DB_UNREACHABLE'"
+            # Probe the DB port without depending on nc/nslookup, which are absent
+            # from minimal (Alpine/distroless) migrator images. Use Python (present
+            # in the migrator image, which runs Alembic) to open a TCP socket — no
+            # external probe tools required. Best-effort/informational; the migrate
+            # job itself is the real gate, so this never blocks the deploy.
+            echo "      - 'python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(5); sys.exit(s.connect_ex((\\\"${DB_HOST}\\\",5432)))\" && echo DB_REACHABLE || echo DB_UNREACHABLE'"
             echo "      resources:"
             echo "        cpu: 0.25"
             echo "        memory: 0.5Gi"
@@ -1200,13 +1214,29 @@ jobs:
 
       - name: Commit release catalog
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deployment-catalog/${{ inputs.environment }}
-          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
           git commit -m "chore(release-catalog): add progressive rollout and renewal verification for ${{ inputs.environment }} run ${{ github.run_id }}"
-          git pull --rebase -X theirs origin main
-          git push
+          # Another run may push to main concurrently; rebase-and-push with retries
+          # so a transient non-fast-forward doesn't drop the release-catalog entry
+          # (which future rollbacks depend on). Fail loudly if it never lands.
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase -X theirs origin main && git push; then
+              echo "Release catalog pushed (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::push attempt $attempt failed (likely concurrent update); retrying"
+            git rebase --abort 2>/dev/null || true
+            sleep $(( attempt * 5 ))
+          done
+          echo "::error::Failed to push release catalog after 5 attempts. The deploy succeeded but the rollback manifest was not persisted to main."
+          exit 1
 
       - name: Upload deployment provenance artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

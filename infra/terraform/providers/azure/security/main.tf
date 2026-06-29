@@ -97,6 +97,25 @@ resource "azurerm_private_dns_zone_virtual_network_link" "services_ai" {
   virtual_network_id    = var.virtual_network_id
 }
 
+# Private endpoints attach to resources (Cognitive Services/Foundry account,
+# storage, Key Vault) created in other modules. Terraform's implicit dependency
+# via the *_id inputs only guarantees the resource exists — not that it has
+# reached a terminal provisioning state. Azure rejects a private-endpoint
+# connection against a still-provisioning Cognitive Services account with
+# "RequestConflict: provisioning state is not terminal". This delay lets the
+# targets settle before any PE is created.
+resource "time_sleep" "private_endpoint_settle" {
+  create_duration = var.private_endpoint_settle_duration
+
+  triggers = {
+    targets = join(",", [
+      var.storage_account_id,
+      var.key_vault_id,
+      var.foundry_account_id,
+    ])
+  }
+}
+
 resource "azurerm_private_endpoint" "storage_blob" {
   name                = "${var.name_prefix}-pep-blob"
   location            = var.location
@@ -114,6 +133,8 @@ resource "azurerm_private_endpoint" "storage_blob" {
     name                 = "pdzg-storage-blob"
     private_dns_zone_ids = [azurerm_private_dns_zone.blob.id]
   }
+
+  depends_on = [time_sleep.private_endpoint_settle]
 }
 
 resource "azurerm_private_endpoint" "keyvault" {
@@ -133,6 +154,8 @@ resource "azurerm_private_endpoint" "keyvault" {
     name                 = "pdzg-keyvault"
     private_dns_zone_ids = [azurerm_private_dns_zone.keyvault.id]
   }
+
+  depends_on = [time_sleep.private_endpoint_settle]
 }
 
 resource "azurerm_private_endpoint" "foundry" {
@@ -156,6 +179,8 @@ resource "azurerm_private_endpoint" "foundry" {
       azurerm_private_dns_zone.services_ai.id
     ]
   }
+
+  depends_on = [time_sleep.private_endpoint_settle]
 }
 
 resource "azurerm_cdn_frontdoor_profile" "platform" {

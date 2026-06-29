@@ -41,9 +41,9 @@ variable "manage_diagnostic_settings" {
 }
 
 variable "diagnostic_settings_settle_duration" {
-  description = "Stabilization delay before creating diagnostic settings, allowing target resources to finish provisioning and any ALZ DeployIfNotExists diagnostic-settings remediation to settle. Prevents the azurerm create-race 'already exists' error on policy-governed subscriptions."
+  description = "Stabilization delay before creating diagnostic settings, allowing target resources to finish provisioning and any ALZ DeployIfNotExists diagnostic-settings remediation to settle. Prevents the azurerm create-race 'already exists' error on policy-governed subscriptions. 90s gives ALZ policy remediation ample time on busy subscriptions."
   type        = string
-  default     = "60s"
+  default     = "90s"
 }
 
 variable "diagnostic_setting_name_prefix" {

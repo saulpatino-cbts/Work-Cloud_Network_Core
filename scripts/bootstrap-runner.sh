@@ -25,6 +25,7 @@
 #   git         — actions/checkout requires git
 #   curl        — downloading binaries, connectivity checks, azure API calls
 #   nodejs/npm  — npm audit, npm install for Next.js web app builds
+#   pipx        — Install Python tools (checkov, etc.) without system conflicts
 
 set -euo pipefail
 
@@ -75,9 +76,11 @@ ok "Core utilities installed (npm: $(npm --version))"
 apt-get install -y \
     python3 \
     python3-pip \
-    python3-venv
+    python3-venv \
+    pipx
 
 ok "Python3 installed ($(python3 --version))"
+ok "pipx installed ($(pipx --version))"
 
 # Azure CLI (workflow 211 requires exactly 2.61.0)
 step "Installing Azure CLI 2.61.0"

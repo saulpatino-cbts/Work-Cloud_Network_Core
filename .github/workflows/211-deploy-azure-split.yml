@@ -221,7 +221,7 @@ jobs:
 
       - name: Terraform IaC security scan (Checkov)
         run: |
-          pip install checkov --quiet
+          pipx install checkov --quiet
           GATE="$GITHUB_WORKSPACE/policy-gates-${{ inputs.environment }}.json"
           CURATED_CHECKS="CKV_AZURE_236,CKV_AZURE_238,CKV_AZURE_134,CKV_AZURE_136,CKV_AZURE_189,CKV_AZURE_109,CKV_AZURE_41,CKV_AZURE_114,CKV_AZURE_206,CKV_AZURE_190,CKV_AZURE_59,CKV2_AZURE_38,CKV2_AZURE_31,CKV2_AZURE_47,CKV2_AZURE_40,CKV2_AZURE_41"
           checkov -d . --framework terraform --check "$CURATED_CHECKS" --output cli

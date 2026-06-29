@@ -44,7 +44,7 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: ${{ inputs.environment }}
     steps:
       - name: Validate — at least one image must be specified

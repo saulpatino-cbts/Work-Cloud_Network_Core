@@ -23,7 +23,7 @@ jobs:
 
   release:
     name: Build, Push, Release
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30
     env:
       REGISTRY: docker.io

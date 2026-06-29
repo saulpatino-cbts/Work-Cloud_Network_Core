@@ -21,7 +21,7 @@ jobs:
   # context, no extra validation) so they run as one matrix. Web is separate
   # below because it adds npm audit, a second (migrator) target, and a smoke test.
   build-images:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     strategy:
@@ -82,7 +82,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   build-web:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
@@ -189,7 +189,7 @@ jobs:
           echo "Smoke test passed (status=$STATUS)"
 
   publish-build-manifest:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build-images, build-web]
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}

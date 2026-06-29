@@ -49,7 +49,7 @@ permissions:
 
 jobs:
   bootstrap:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       TF_IN_AUTOMATION: true
       ARM_USE_OIDC: true

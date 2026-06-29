@@ -587,7 +587,7 @@ function New-GitHubAppViaManifest {
             contents = "read"
             metadata = "read"
             actions = "write"
-            variables = "write"
+            actions_variables = "write"
         }
         default_events = @()
     }
@@ -631,6 +631,7 @@ function New-GitHubAppViaManifest {
     Write-Host "  Opening browser for GitHub App creation." -ForegroundColor Cyan
     Write-Host "  App name    : $AppName" -ForegroundColor White
     Write-Host "  Permissions : Contents(read) · Metadata(read) · Actions(write) · Variables(write)" -ForegroundColor White
+    # NOTE: "Variables" maps to the GitHub App manifest permission key 'actions_variables', not 'variables'.
     Write-Host "  Repo scope  : $RepoName" -ForegroundColor White
     Write-Host ""
     Write-Host "  What you will see in the browser:" -ForegroundColor White

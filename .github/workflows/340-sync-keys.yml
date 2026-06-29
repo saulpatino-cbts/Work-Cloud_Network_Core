@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   sync-env:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: ${{ inputs.environment }}
     steps:
       - name: Azure login with OIDC

@@ -47,7 +47,7 @@ jobs:
         if: always()
         run: |
           echo "## Secret Scanning summary" >> "$GITHUB_STEP_SUMMARY"
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           from pathlib import Path
           import json
 
@@ -122,7 +122,7 @@ jobs:
         if: matrix.python-version == '3.14'
         run: |
           echo "## Coverage report" >> "$GITHUB_STEP_SUMMARY"
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           from pathlib import Path
           import xml.etree.ElementTree as ET
 

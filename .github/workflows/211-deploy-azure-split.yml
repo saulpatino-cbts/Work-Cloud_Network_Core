@@ -418,15 +418,18 @@ jobs:
 
       # Platform = networking only (vnet, subnets, firewall). It declares no app
       # variables, so plan with defaults — passing app vars here would error with
-      # "an argument named X is not expected here". The one exception is
-      # manage_diagnostic_settings, fed from the ALZ governance pre-flight: false
-      # stands our diagnostic settings down entirely (policy-only diagnostics).
-      # Fail SAFE: manage only when the pre-flight explicitly says 'true'. A
-      # missing/empty output (step skipped or errored) defaults to false so we
-      # never re-create the diagnostic settings the ALZ policy already owns.
+      # "an argument named X is not expected here".
+      #
+      # Diagnostic settings: this subscription is a governed Azure Landing Zone, so
+      # a DeployIfNotExists policy ('setByPolicy-*') owns diagnostics. Terraform
+      # does NOT manage its own (module default manage_diagnostic_settings=false),
+      # which avoids the azurerm create-race ("already exists / needs import") seen
+      # on the firewall. We deliberately do NOT wire this to the policy-gates
+      # pre-flight: that detection runs as the deploy SP, which cannot read the
+      # management-group-scoped ALZ policy assignment, so it false-negatives and
+      # would re-enable management. To manage diagnostics on a non-governed
+      # subscription, set TF_VAR_manage_diagnostic_settings=true here explicitly.
       - name: Terraform plan (platform)
-        env:
-          TF_VAR_manage_diagnostic_settings: ${{ needs.policy-gates.outputs.manage_diagnostic_settings == 'true' }}
         run: terraform plan -out=tfplan
 
       # Workload = compute, database, identity, AI, Front Door. It owns every app

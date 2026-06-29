@@ -54,7 +54,7 @@ variable "subnet_firewall_prefixes" {
 }
 
 variable "manage_diagnostic_settings" {
-  description = "Whether Terraform manages per-resource diagnostic settings. Set false when an Azure Landing Zone DeployIfNotExists policy already governs diagnostics on the target scope (detected by the policy-gates pre-flight check), to avoid a create race with the policy-managed 'setByPolicy-*' setting."
+  description = "Whether Terraform manages per-resource diagnostic settings. Defaults FALSE: on an Azure Landing Zone the DeployIfNotExists policy ('setByPolicy-*') already owns diagnostics, and managing our own races the policy's remediation (azurerm 'already exists / needs import'). Set true (TF_VAR_manage_diagnostic_settings / ALZ_DIAGNOSTICS_MANAGE) only on a non-governed subscription, or to dual-ship to a different workspace and accept the create-race."
   type        = bool
-  default     = true
+  default     = false
 }

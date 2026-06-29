@@ -35,9 +35,9 @@ variable "diagnostic_targets" {
 }
 
 variable "manage_diagnostic_settings" {
-  description = "Whether Terraform manages per-resource diagnostic settings. Default true (dual-ship: logs go to both our workspace and any ALZ-governed central workspace). Set false to stand down entirely and let an ALZ DeployIfNotExists policy own diagnostics."
+  description = "Whether Terraform manages per-resource diagnostic settings. Defaults FALSE: let an ALZ DeployIfNotExists policy own diagnostics (avoids the azurerm create-race with the policy's 'setByPolicy-*' setting). Set true only on a non-governed subscription, or to dual-ship to a separate workspace."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "diagnostic_settings_settle_duration" {

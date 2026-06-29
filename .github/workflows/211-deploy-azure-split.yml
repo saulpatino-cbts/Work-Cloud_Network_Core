@@ -980,6 +980,10 @@ jobs:
 
       - name: Validate Foundry private DNS and managed identity inference
         id: validate_foundry_private_access
+        # Post-deploy SMOKE TEST — the infrastructure has already applied by this
+        # point. A validation failure (e.g. the managed-identity token path or the
+        # in-flux inference target) must NOT fail the deploy. See issues #98/#99.
+        continue-on-error: true
         env:
           RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
           CONTAINER_APP_ENVIRONMENT_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}

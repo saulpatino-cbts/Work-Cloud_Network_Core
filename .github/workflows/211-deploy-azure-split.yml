@@ -267,6 +267,14 @@ jobs:
     defaults:
       run:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
+    # Expose the resolved (SHA-pinned) image references so the apply job can reuse
+    # them. $GITHUB_ENV does not cross jobs, so without these outputs the apply
+    # job's re-plan would see empty image vars and fail container-app validation.
+    outputs:
+      api_image: ${{ steps.resolve_images.outputs.api_image }}
+      worker_image: ${{ steps.resolve_images.outputs.worker_image }}
+      web_image: ${{ steps.resolve_images.outputs.web_image }}
+      migrator_image: ${{ steps.resolve_images.outputs.migrator_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -376,6 +384,7 @@ jobs:
           fi
 
       - name: Resolve image references from build manifest
+        id: resolve_images
         # When images are not explicitly provided (or still `:latest`), read the
         # SHA-tagged references written by 200-build-images so the plan always uses
         # an immutable, traceable image digest rather than the floating :latest tag.
@@ -402,6 +411,12 @@ jobs:
           echo "EFFECTIVE_WORKER_IMAGE=${WORKER_IMG}" >> "$GITHUB_ENV"
           echo "EFFECTIVE_WEB_IMAGE=${WEB_IMG}" >> "$GITHUB_ENV"
           echo "EFFECTIVE_MIGRATOR_IMAGE=${MIGRATOR_IMG}" >> "$GITHUB_ENV"
+          # Also publish as job outputs so the apply job (separate job, separate
+          # $GITHUB_ENV) can reuse the same resolved, SHA-pinned references.
+          echo "api_image=${API_IMG}" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${WORKER_IMG}" >> "$GITHUB_OUTPUT"
+          echo "web_image=${WEB_IMG}" >> "$GITHUB_OUTPUT"
+          echo "migrator_image=${MIGRATOR_IMG}" >> "$GITHUB_OUTPUT"
           echo "Resolved images:"
           echo "  api:    ${API_IMG}"
           echo "  worker: ${WORKER_IMG}"
@@ -565,6 +580,15 @@ jobs:
     defaults:
       run:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
+    # $GITHUB_ENV does not cross jobs, so re-hydrate the resolved image references
+    # from the plan job's outputs. Without this the post-platform re-plan below
+    # passes empty image vars and container-app creation fails validation
+    # ("template.0.container.0.image to not be an empty string").
+    env:
+      EFFECTIVE_API_IMAGE: ${{ needs.plan.outputs.api_image }}
+      EFFECTIVE_WORKER_IMAGE: ${{ needs.plan.outputs.worker_image }}
+      EFFECTIVE_WEB_IMAGE: ${{ needs.plan.outputs.web_image }}
+      EFFECTIVE_MIGRATOR_IMAGE: ${{ needs.plan.outputs.migrator_image }}
     outputs:
       frontdoor_endpoint_host_name: ${{ steps.export.outputs.frontdoor_endpoint_host_name }}
       nextauth_url: ${{ steps.export.outputs.nextauth_url }}

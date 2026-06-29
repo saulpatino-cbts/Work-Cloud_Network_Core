@@ -24,6 +24,7 @@
 #   jq          — JSON parsing in shell workflow steps
 #   git         — actions/checkout requires git
 #   curl        — downloading binaries, connectivity checks, azure API calls
+#   nodejs/npm  — npm audit, npm install for Next.js web app builds
 
 set -euo pipefail
 
@@ -64,9 +65,11 @@ apt-get install -y \
     gnupg \
     lsb-release \
     apt-transport-https \
-    software-properties-common
+    software-properties-common \
+    nodejs \
+    npm
 
-ok "Core utilities installed"
+ok "Core utilities installed (npm: $(npm --version))"
 
 # Python (workflows use python3 — NOT bare 'python')
 apt-get install -y \

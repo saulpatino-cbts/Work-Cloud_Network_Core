@@ -505,7 +505,7 @@ function Set-GitHubSecret {
         [string]$RepoName,
         # When set, writes an environment-scoped secret (gh secret set --env <name>)
         # instead of a repository-level secret. Used so per-environment deploy SPs
-        # supply a different AZURE_CLIENT_ID in the dev/prod/orch GitHub environments.
+        # supply a different AZURE_CLIENT_ID in the dev/prod/hub GitHub environments.
         [string]$EnvironmentName = ""
     )
     if ($null -eq $Value) { return $false }
@@ -969,7 +969,7 @@ function Confirm-GitHubEnvironment {
         [string]$RepoName,
         [string]$EnvironmentName,
         # When set, configure the environment with a required-reviewer protection
-        # rule (manual approval gate). Used for the 'orch' environment that gates
+        # rule (manual approval gate). Used for the 'hub' environment that gates
         # the prod apply job in workflow 211. Reviewers are GitHub login names
         # (users); they are resolved to numeric IDs via the API.
         [string[]]$RequiredReviewers = @()
@@ -1000,10 +1000,31 @@ function Confirm-GitHubEnvironment {
             $bodyFile = [System.IO.Path]::GetTempFileName()
             try {
                 Set-Content -Path $bodyFile -Value $body -Encoding UTF8
-                Invoke-Gh -Arguments @("api", "-X", "PUT", "repos/$RepoName/environments/$EnvironmentName", "--input", $bodyFile) | Out-Null
+                # Don't use Invoke-Gh here: required-reviewer protection rules are a
+                # plan/repo-type-gated feature. On a private user-owned repo (even
+                # GitHub Pro), GitHub rejects the rule with HTTP 422. Capture the
+                # call instead of throwing so we can degrade to an unprotected
+                # environment rather than aborting the whole bootstrap.
+                $putOutput = & gh api -X PUT "repos/$RepoName/environments/$EnvironmentName" --input $bodyFile 2>&1
+                $putExit = $LASTEXITCODE
             }
             finally {
                 Remove-Item -Path $bodyFile -Force -ErrorAction SilentlyContinue
+            }
+
+            if ($putExit -ne 0) {
+                $putText = ($putOutput | Out-String)
+                if ($putText -match '422' -or $putText -match 'billing plan' -or $putText -match 'protection rule') {
+                    Write-Warn "GitHub refused the required-reviewer protection rule for '$EnvironmentName' (HTTP 422)."
+                    Write-Warn "Required reviewers need GitHub Team/Enterprise or a public repo; GitHub Pro does not enable them on a private personal repo."
+                    Write-Warn "Falling back to creating '$EnvironmentName' WITHOUT an approval gate. The prod apply job will NOT pause for manual approval until the repo is moved to a Team org or made public."
+                    if ($PSCmdlet.ShouldProcess($RepoName, "create GitHub environment $EnvironmentName (unprotected fallback)")) {
+                        Invoke-Gh -Arguments @("api", "-X", "PUT", "repos/$RepoName/environments/$EnvironmentName") | Out-Null
+                    }
+                    Write-Ok "Created GitHub environment (unprotected): $EnvironmentName"
+                    return (-not $alreadyExists)
+                }
+                throw "Failed to configure environment '$EnvironmentName' with required reviewers: $putText"
             }
         }
         Write-Ok "Configured GitHub environment with required reviewers: $EnvironmentName"
@@ -1445,17 +1466,17 @@ foreach ($environmentName in @("dev", "prod")) {
     }
 }
 
-# 'orch' is the approval gate for the prod apply job in workflow 211. It must
+# 'hub' is the approval gate for the prod apply job in workflow 211. It must
 # require a manual reviewer so prod never deploys unattended. Default the reviewer
-# to the repository owner; override by setting CNA_ORCH_REVIEWERS (comma-separated
+# to the repository owner; override by setting CNA_HUB_REVIEWERS (comma-separated
 # GitHub logins) in the environment before running this script.
-$orchReviewers = if (-not [string]::IsNullOrWhiteSpace($env:CNA_ORCH_REVIEWERS)) {
-    @($env:CNA_ORCH_REVIEWERS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$hubReviewers = if (-not [string]::IsNullOrWhiteSpace($env:CNA_HUB_REVIEWERS)) {
+    @($env:CNA_HUB_REVIEWERS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 } else {
     @(($Repo -split '/')[0])
 }
-if (Confirm-GitHubEnvironment -RepoName $Repo -EnvironmentName "orch" -RequiredReviewers $orchReviewers) {
-    $createdGitHubEnvironments.Add("orch") | Out-Null
+if (Confirm-GitHubEnvironment -RepoName $Repo -EnvironmentName "hub" -RequiredReviewers $hubReviewers) {
+    $createdGitHubEnvironments.Add("hub") | Out-Null
 }
 $githubEnvironments = Get-GitHubEnvironments -RepoName $Repo
 
@@ -1528,7 +1549,7 @@ if (-not $SkipAzureSetup) {
     # Deploy OIDC uses THREE separate, least-privilege service principals:
     #   - Main: repo-level jobs on main (policy-gates/000/100/320) — ref:refs/heads/main
     #   - Dev : 211 plan/apply for dev, plus drift/sync — environment:dev
-    #   - Prod: 211 plan/apply for prod + the orch approval gate — environment:prod + environment:orch
+    #   - Prod: 211 plan/apply for prod + the hub approval gate — environment:prod + environment:hub
     # Subjects are an explicit allow-list (never enumerated from GitHub environments),
     # so a stray auto-created 'copilot' environment is never credentialed.
     $subscriptionScope = "/subscriptions/$resolvedSubscriptionId"
@@ -1553,15 +1574,15 @@ if (-not $SkipAzureSetup) {
     )
     $federatedCredentialSubjects.Add("repo:$Repo`:environment:dev") | Out-Null
 
-    # Prod — full deploy rights for the prod environment and the orch approval gate.
+    # Prod — full deploy rights for the prod environment and the hub approval gate.
     $prodAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Prod" `
         -Roles @("Contributor", "User Access Administrator") -Scope $subscriptionScope
     Add-DeployFederatedCredentials -AppId $prodAppId -RepoName $Repo -SubjectMap @(
         @{ Label = "cna-oidc-prod"; Subject = "repo:$Repo`:environment:prod" },
-        @{ Label = "cna-oidc-orch"; Subject = "repo:$Repo`:environment:orch" }
+        @{ Label = "cna-oidc-hub"; Subject = "repo:$Repo`:environment:hub" }
     )
     $federatedCredentialSubjects.Add("repo:$Repo`:environment:prod") | Out-Null
-    $federatedCredentialSubjects.Add("repo:$Repo`:environment:orch") | Out-Null
+    $federatedCredentialSubjects.Add("repo:$Repo`:environment:hub") | Out-Null
 
     $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) {
         [string]$existingVariables["CNA_NEXTAUTH_URL"]
@@ -1724,12 +1745,12 @@ foreach ($entry in $secretValues.GetEnumerator()) {
 # Environment-scoped AZURE_CLIENT_ID per deploy SP. A job with a GitHub
 # `environment:` key reads the environment-scoped secret in preference to the
 # repo-level one, so 211 plan/apply authenticate as the Dev or Prod SP while the
-# repo-level value (Main SP) still serves the no-environment jobs. The orch gate
-# (prod apply) authenticates as the Prod SP, so orch gets the Prod client id.
+# repo-level value (Main SP) still serves the no-environment jobs. The hub gate
+# (prod apply) authenticates as the Prod SP, so hub gets the Prod client id.
 $envClientIds = [ordered]@{
     dev  = $devAppId
     prod = $prodAppId
-    orch = $prodAppId
+    hub  = $prodAppId
 }
 foreach ($envEntry in $envClientIds.GetEnumerator()) {
     if ([string]::IsNullOrWhiteSpace($envEntry.Value)) { continue }
@@ -1756,13 +1777,19 @@ if (-not $SkipAzureSetup) {
         -ResourceGroupName $bootstrapWorkloadResourceGroup `
         -PurposeLabel "workload"
 
+    # Assign tfstate-blob RBAC to the MAIN deploy SP, not $appId. $appId is the
+    # NextAuth OAuth app (end-user sign-in) — an app registration with no service
+    # principal and no subscription roles, so `az ad sp show --id $appId` can't
+    # resolve an object id and the role assignment is skipped. Workflow 000 runs
+    # repo-level (no environment:), so it authenticates as the repo AZURE_CLIENT_ID
+    # secret = $mainAppId. That is the identity that reads/writes the tfstate blob.
     $bootstrapTfstateResourceStatus = Confirm-TfstateBackendResources `
         -SubscriptionId $resolvedSubscriptionId `
         -Location $BootstrapLocation `
         -ResourceGroupName $bootstrapTfstateResourceGroup `
         -StorageAccountName $bootstrapTfstateStorageAccount `
         -ContainerName $bootstrapTfstateContainer `
-        -ClientId $appId
+        -ClientId $mainAppId
 }
 
 if (-not $SkipBootstrapDispatch) {

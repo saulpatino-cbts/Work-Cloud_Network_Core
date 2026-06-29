@@ -81,6 +81,8 @@ jobs:
   policy-gates:
     if: github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
+    outputs:
+      manage_diagnostic_settings: ${{ steps.alz_diag.outputs.manage_diagnostic_settings }}
     defaults:
       run:
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/platform
@@ -238,6 +240,18 @@ jobs:
           "$CHECKOV" -d . --framework terraform --check "$CURATED_CHECKS" --output cli
           printf '{"status":"passed","blocking":true,"checks":"%s"}\n' "$CURATED_CHECKS" > "$GATE"
           cat "$GATE"
+
+      # Pre-flight: detect an Azure Landing Zone DeployIfNotExists diagnostic-
+      # settings policy governing this subscription. On a governed ALZ the policy
+      # ships diagnostics centrally; our module dual-ships uniquely-named settings
+      # with a stabilization delay. This step records the decision so a future
+      # environment can stand our settings down entirely if ever required.
+      - name: Detect ALZ diagnostic-settings governance
+        id: alz_diag
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ALZ_DIAGNOSTICS_STANDDOWN: ${{ vars.ALZ_DIAGNOSTICS_STANDDOWN }}
+        run: bash "$GITHUB_WORKSPACE/scripts/ci/detect_alz_diagnostic_policies.sh"
 
       - name: Upload policy gate report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -404,8 +418,12 @@ jobs:
 
       # Platform = networking only (vnet, subnets, firewall). It declares no app
       # variables, so plan with defaults — passing app vars here would error with
-      # "an argument named X is not expected here".
+      # "an argument named X is not expected here". The one exception is
+      # manage_diagnostic_settings, fed from the ALZ governance pre-flight: false
+      # stands our diagnostic settings down entirely (policy-only diagnostics).
       - name: Terraform plan (platform)
+        env:
+          TF_VAR_manage_diagnostic_settings: ${{ needs.policy-gates.outputs.manage_diagnostic_settings != 'false' }}
         run: terraform plan -out=tfplan
 
       # Workload = compute, database, identity, AI, Front Door. It owns every app

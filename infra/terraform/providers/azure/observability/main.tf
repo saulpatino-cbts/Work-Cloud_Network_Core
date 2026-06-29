@@ -1,11 +1,44 @@
+locals {
+  # On an Azure Landing Zone, a "deploy diagnostic settings at scale" initiative
+  # (DeployIfNotExists, e.g. Deploy-Diag-Logs) assigned at a management-group
+  # scope auto-creates a "setByPolicy-*" diagnostic setting on every resource the
+  # moment it is created. Azure permits up to FIVE diagnostic settings per
+  # resource, so our uniquely-named setting and the policy's setting coexist
+  # (dual-ship: logs land in BOTH our local workspace and the central one).
+  #
+  # The hazard is timing, not naming: the policy's DINE remediation writes a
+  # diagnostic setting on the firewall concurrently with our apply, and the
+  # azurerm provider's create-time existence pre-check can misfire during that
+  # window ("already exists / needs import"). We serialize our settings behind a
+  # short stabilization delay (see time_sleep below) so they are created after
+  # the target resources provision and the policy remediation settles.
+  #
+  # var.manage_diagnostic_settings remains a safety valve: set it false to stand
+  # down entirely (policy-only diagnostics) if an environment ever needs that.
+  managed_diagnostic_targets = var.manage_diagnostic_settings ? var.diagnostic_targets : {}
+}
+
 data "azurerm_monitor_diagnostic_categories" "target" {
-  for_each    = var.diagnostic_targets
+  for_each    = local.managed_diagnostic_targets
   resource_id = each.value
+}
+
+# Stabilization delay: lets the target resources finish provisioning and any ALZ
+# DeployIfNotExists diagnostic-settings remediation settle before we create our
+# own (uniquely named) settings, eliminating the azurerm create-race false
+# "already exists" error on policy-governed subscriptions.
+resource "time_sleep" "diagnostic_settle" {
+  count           = length(local.managed_diagnostic_targets) > 0 ? 1 : 0
+  create_duration = var.diagnostic_settings_settle_duration
+
+  triggers = {
+    targets = join(",", values(local.managed_diagnostic_targets))
+  }
 }
 
 locals {
   diagnostic_targets = {
-    for name, resource_id in var.diagnostic_targets : name => {
+    for name, resource_id in local.managed_diagnostic_targets : name => {
       resource_id         = resource_id
       log_category_groups = data.azurerm_monitor_diagnostic_categories.target[name].log_category_groups
       log_category_types  = data.azurerm_monitor_diagnostic_categories.target[name].log_category_types
@@ -20,6 +53,8 @@ resource "azurerm_monitor_diagnostic_setting" "target" {
   name                       = substr("${var.diagnostic_setting_name_prefix}-${replace(each.key, "_", "-")}", 0, 63)
   target_resource_id         = each.value.resource_id
   log_analytics_workspace_id = var.log_analytics_workspace_id
+
+  depends_on = [time_sleep.diagnostic_settle]
 
   dynamic "enabled_log" {
     for_each = length(each.value.log_category_groups) > 0 ? each.value.log_category_groups : []

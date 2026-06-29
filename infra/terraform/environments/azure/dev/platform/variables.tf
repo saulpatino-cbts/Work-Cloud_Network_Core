@@ -52,3 +52,9 @@ variable "subnet_firewall_prefixes" {
   type    = list(string)
   default = ["10.40.4.0/26"]
 }
+
+variable "manage_diagnostic_settings" {
+  description = "Whether Terraform manages per-resource diagnostic settings. Set false when an Azure Landing Zone DeployIfNotExists policy already governs diagnostics on the target scope (detected by the policy-gates pre-flight check), to avoid a create race with the policy-managed 'setByPolicy-*' setting."
+  type        = bool
+  default     = true
+}

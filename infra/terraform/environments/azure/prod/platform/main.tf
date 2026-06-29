@@ -388,4 +388,8 @@ module "observability" {
     private_endpoints_nsg = azurerm_network_security_group.private_endpoints.id
     database_nsg          = azurerm_network_security_group.database.id
   }
+
+  # Stand down when an ALZ DeployIfNotExists policy already governs diagnostics
+  # (the policy-gates pre-flight sets this false via TF_VAR_manage_diagnostic_settings).
+  manage_diagnostic_settings = var.manage_diagnostic_settings
 }

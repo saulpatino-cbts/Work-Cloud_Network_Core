@@ -6,5 +6,8 @@ terraform {
     azapi = {
       source = "azure/azapi"
     }
+    time = {
+      source = "hashicorp/time"
+    }
   }
 }

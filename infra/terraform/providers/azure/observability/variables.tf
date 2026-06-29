@@ -34,6 +34,18 @@ variable "diagnostic_targets" {
   type        = map(string)
 }
 
+variable "manage_diagnostic_settings" {
+  description = "Whether Terraform manages per-resource diagnostic settings. Default true (dual-ship: logs go to both our workspace and any ALZ-governed central workspace). Set false to stand down entirely and let an ALZ DeployIfNotExists policy own diagnostics."
+  type        = bool
+  default     = true
+}
+
+variable "diagnostic_settings_settle_duration" {
+  description = "Stabilization delay before creating diagnostic settings, allowing target resources to finish provisioning and any ALZ DeployIfNotExists diagnostic-settings remediation to settle. Prevents the azurerm create-race 'already exists' error on policy-governed subscriptions."
+  type        = string
+  default     = "60s"
+}
+
 variable "diagnostic_setting_name_prefix" {
   description = "Prefix used when naming diagnostic settings."
   type        = string

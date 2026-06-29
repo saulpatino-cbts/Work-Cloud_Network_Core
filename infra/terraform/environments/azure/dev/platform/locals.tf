@@ -19,9 +19,5 @@ locals {
     "pkg-containers.githubusercontent.com",
     "login.microsoftonline.com",
     "management.azure.com",
-    "dc.applicationinsights.azure.com",
-    "live.applicationinsights.azure.com",
-    "*.in.applicationinsights.azure.com",
-    "*.livediagnostics.monitor.azure.com",
   ]
 }

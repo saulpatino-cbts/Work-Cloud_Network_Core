@@ -74,11 +74,6 @@ variable "worker_container_app_id" {
   type        = string
 }
 
-variable "application_insights_connection_string" {
-  description = "Application Insights connection string"
-  type        = string
-}
-
 variable "frontdoor_custom_domain_host_name" {
   description = "Optional custom domain hostname for Azure Front Door"
   type        = string

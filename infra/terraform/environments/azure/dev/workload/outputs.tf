@@ -50,10 +50,6 @@ output "worker_name" {
   value = module.compute.worker_name
 }
 
-output "application_insights_name" {
-  value = module.ai.application_insights_name
-}
-
 output "foundry_resource_group_name" {
   value = module.ai.foundry_resource_group_name
 }

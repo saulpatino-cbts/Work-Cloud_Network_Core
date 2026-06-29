@@ -24,12 +24,6 @@ variable "tags" {
   default     = {}
 }
 
-variable "application_type" {
-  description = "Application Insights application type."
-  type        = string
-  default     = "web"
-}
-
 variable "foundry_location" {
   description = "Azure region for Microsoft Foundry resources."
   type        = string

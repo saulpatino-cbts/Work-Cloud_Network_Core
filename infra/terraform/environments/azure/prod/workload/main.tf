@@ -89,32 +89,29 @@ module "compute" {
 
   # ── Plain env vars injected at container start ──────────────────────────────
   api_env_vars = {
-    CNA_STORAGE_ACCOUNT_NAME              = module.storage.storage_account_name
-    APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
+    CNA_STORAGE_ACCOUNT_NAME = module.storage.storage_account_name
   }
 
   worker_env_vars = {
-    CNA_STORAGE_ACCOUNT_NAME              = module.storage.storage_account_name
-    APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
+    CNA_STORAGE_ACCOUNT_NAME = module.storage.storage_account_name
   }
 
   web_env_vars = {
-    NEXTAUTH_URL                          = var.nextauth_url
-    AUTH_TRUST_HOST                       = "true"
-    AZURE_AD_TENANT_ID                    = var.tenant_id
-    AZURE_AD_CLIENT_ID                    = var.entra_client_id
-    CNA_API_INTERNAL_URL                  = "http://${local.name_prefix}-ca-api"
-    APPLICATIONINSIGHTS_CONNECTION_STRING = module.ai.application_insights_connection_string
-    AZURE_STORAGE_ACCOUNT_NAME            = module.storage.storage_account_name
-    AZURE_STORAGE_CONTAINER_ENGAGEMENTS   = "raw-artifacts"
-    CNA_AI_ENGINE_DEFAULT                 = var.ai_engine_default
-    FOUNDRY_CLAUDE_ENDPOINT               = var.foundry_claude_endpoint != "" ? var.foundry_claude_endpoint : module.ai.foundry_claude_messages_endpoint
-    FOUNDRY_CLAUDE_MODEL                  = var.foundry_claude_model
-    CNA_AZURE_MCP_ENDPOINT                = var.azure_mcp_endpoint
-    CNA_AZURE_MCP_TRANSPORT               = var.azure_mcp_transport
-    CNA_AWS_MCP_ENDPOINT                  = var.aws_mcp_endpoint
-    CNA_AWS_MCP_TRANSPORT                 = var.aws_mcp_transport
-    CNA_DRAWIO_MCP_URL                    = var.drawio_mcp_url
+    NEXTAUTH_URL                        = var.nextauth_url
+    AUTH_TRUST_HOST                     = "true"
+    AZURE_AD_TENANT_ID                  = var.tenant_id
+    AZURE_AD_CLIENT_ID                  = var.entra_client_id
+    CNA_API_INTERNAL_URL                = "http://${local.name_prefix}-ca-api"
+    AZURE_STORAGE_ACCOUNT_NAME          = module.storage.storage_account_name
+    AZURE_STORAGE_CONTAINER_ENGAGEMENTS = "raw-artifacts"
+    CNA_AI_ENGINE_DEFAULT               = var.ai_engine_default
+    FOUNDRY_CLAUDE_ENDPOINT             = var.foundry_claude_endpoint != "" ? var.foundry_claude_endpoint : module.ai.foundry_claude_messages_endpoint
+    FOUNDRY_CLAUDE_MODEL                = var.foundry_claude_model
+    CNA_AZURE_MCP_ENDPOINT              = var.azure_mcp_endpoint
+    CNA_AZURE_MCP_TRANSPORT             = var.azure_mcp_transport
+    CNA_AWS_MCP_ENDPOINT                = var.aws_mcp_endpoint
+    CNA_AWS_MCP_TRANSPORT               = var.aws_mcp_transport
+    CNA_DRAWIO_MCP_URL                  = var.drawio_mcp_url
   }
 
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
@@ -219,30 +216,29 @@ resource "azurerm_role_assignment" "uai_foundry_user" {
 
 
 module "security" {
-  frontdoor_certificate_pfx_path         = var.frontdoor_certificate_pfx_path
-  frontdoor_certificate_pfx_password     = var.frontdoor_certificate_pfx_password
-  source                                 = "../../../../providers/azure/security"
-  resource_group_name                    = data.azurerm_resource_group.this.name
-  location                               = data.azurerm_resource_group.this.location
-  name_prefix                            = local.name_prefix
-  key_vault_id                           = module.identity.key_vault_id
-  key_vault_name                         = module.identity.key_vault_name
-  managed_identity_principal_id          = module.identity.managed_identity_principal_id
-  managed_identity_id                    = module.identity.managed_identity_id
-  managed_identity_client_id             = module.identity.managed_identity_client_id
-  api_container_app_id                   = module.compute.api_id
-  api_container_app_fqdn                 = module.compute.api_fqdn
-  web_container_app_id                   = module.compute.web_id
-  web_container_app_fqdn                 = module.compute.web_fqdn
-  container_app_environment_id           = module.compute.container_app_environment_id
-  worker_container_app_id                = module.compute.worker_id
-  application_insights_connection_string = module.ai.application_insights_connection_string
-  frontdoor_private_link_enabled         = true
-  virtual_network_id                     = data.azurerm_virtual_network.platform.id
-  private_endpoint_subnet_id             = data.azurerm_subnet.private_endpoints.id
-  storage_account_id                     = module.storage.storage_account_id
-  storage_account_name                   = module.storage.storage_account_name
-  foundry_account_id                     = module.ai.foundry_account_id
+  frontdoor_certificate_pfx_path     = var.frontdoor_certificate_pfx_path
+  frontdoor_certificate_pfx_password = var.frontdoor_certificate_pfx_password
+  source                             = "../../../../providers/azure/security"
+  resource_group_name                = data.azurerm_resource_group.this.name
+  location                           = data.azurerm_resource_group.this.location
+  name_prefix                        = local.name_prefix
+  key_vault_id                       = module.identity.key_vault_id
+  key_vault_name                     = module.identity.key_vault_name
+  managed_identity_principal_id      = module.identity.managed_identity_principal_id
+  managed_identity_id                = module.identity.managed_identity_id
+  managed_identity_client_id         = module.identity.managed_identity_client_id
+  api_container_app_id               = module.compute.api_id
+  api_container_app_fqdn             = module.compute.api_fqdn
+  web_container_app_id               = module.compute.web_id
+  web_container_app_fqdn             = module.compute.web_fqdn
+  container_app_environment_id       = module.compute.container_app_environment_id
+  worker_container_app_id            = module.compute.worker_id
+  frontdoor_private_link_enabled     = true
+  virtual_network_id                 = data.azurerm_virtual_network.platform.id
+  private_endpoint_subnet_id         = data.azurerm_subnet.private_endpoints.id
+  storage_account_id                 = module.storage.storage_account_id
+  storage_account_name               = module.storage.storage_account_name
+  foundry_account_id                 = module.ai.foundry_account_id
 }
 
 # App-level diagnostics only. Firewall/NSG diagnostics and VNet flow logs are
@@ -266,7 +262,6 @@ module "observability" {
     key_vault                  = module.identity.key_vault_id
     storage_account            = module.storage.storage_account_id
     postgres_server            = module.database.server_id
-    app_insights               = module.ai.application_insights_id
     foundry_account            = module.ai.foundry_account_id
   }
 }
@@ -311,12 +306,6 @@ resource "github_actions_variable" "key_vault_name" {
   value         = module.identity.key_vault_name
 }
 
-resource "github_actions_variable" "application_insights_name" {
-  repository    = var.github_repository
-  variable_name = "APPLICATION_INSIGHTS_NAME"
-  value         = module.ai.application_insights_name
-}
-
 # Adopt the placeholder variables seeded by Initialize-CnaGitHubSecrets.ps1, which
 # runs before any Terraform. Without these imports Terraform's CREATE hits a 409
 # ("Variable already exists") because the repository-scoped github_actions_variable
@@ -334,9 +323,4 @@ import {
 import {
   to = github_actions_variable.key_vault_name
   id = "${var.github_repository}:KEY_VAULT_NAME"
-}
-
-import {
-  to = github_actions_variable.application_insights_name
-  id = "${var.github_repository}:APPLICATION_INSIGHTS_NAME"
 }

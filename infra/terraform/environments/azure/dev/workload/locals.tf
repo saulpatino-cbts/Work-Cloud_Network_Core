@@ -33,13 +33,6 @@ locals {
 
   key_vault_host = split("/", trimprefix(module.identity.key_vault_uri, "https://"))[0]
 
-  application_insights_fqdns = [
-    "dc.applicationinsights.azure.com",
-    "live.applicationinsights.azure.com",
-    "*.in.applicationinsights.azure.com",
-    "*.livediagnostics.monitor.azure.com",
-  ]
-
   firewall_application_rule_fqdns = sort(distinct(concat(
     [
       split("/", var.api_image)[0],
@@ -56,7 +49,6 @@ locals {
       "login.microsoftonline.com",
       "management.azure.com",
     ],
-    local.application_insights_fqdns,
     local.optional_outbound_fqdns,
   )))
 }

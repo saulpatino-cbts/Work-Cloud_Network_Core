@@ -6,14 +6,6 @@ locals {
   use_customer_managed_tls   = var.frontdoor_secret_versionless_id != null && var.frontdoor_certificate_type == "CustomerCertificate"
 }
 
-resource "azurerm_key_vault_secret" "appinsights_connection_string" {
-  name            = "cna-applicationinsights-connection-string"
-  value           = var.application_insights_connection_string
-  key_vault_id    = var.key_vault_id
-  content_type    = "Application Insights connection string"
-  expiration_date = var.secret_expiration_date
-}
-
 resource "azurerm_role_assignment" "key_vault_secrets_officer" {
   scope                = var.key_vault_id
   role_definition_name = "Key Vault Secrets Officer"

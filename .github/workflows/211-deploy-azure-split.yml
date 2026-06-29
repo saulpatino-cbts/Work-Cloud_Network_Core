@@ -130,10 +130,12 @@ jobs:
       - name: Terraform fmt check
         run: terraform fmt -check -recursive
 
-      - name: Pin Azure CLI version
+      - name: Verify Azure CLI version
         run: |
-          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
-            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          AZ_VERSION=$(az --version | head -n 1 | awk '{print $2}')
+          echo "Azure CLI version: $AZ_VERSION"
+          if [ "$AZ_VERSION" != "2.61.0" ]; then
+            echo "::warning::Azure CLI is version $AZ_VERSION, but 2.61.0 is expected. Bootstrap script should have pinned it."
           fi
 
       - name: Azure login with OIDC
@@ -259,10 +261,12 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Pin Azure CLI version
+      - name: Verify Azure CLI version
         run: |
-          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
-            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          AZ_VERSION=$(az --version | head -n 1 | awk '{print $2}')
+          echo "Azure CLI version: $AZ_VERSION"
+          if [ "$AZ_VERSION" != "2.61.0" ]; then
+            echo "::warning::Azure CLI is version $AZ_VERSION, but 2.61.0 is expected. Bootstrap script should have pinned it."
           fi
 
       - name: Azure login with OIDC
@@ -548,10 +552,12 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Pin Azure CLI version
+      - name: Verify Azure CLI version
         run: |
-          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
-            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          AZ_VERSION=$(az --version | head -n 1 | awk '{print $2}')
+          echo "Azure CLI version: $AZ_VERSION"
+          if [ "$AZ_VERSION" != "2.61.0" ]; then
+            echo "::warning::Azure CLI is version $AZ_VERSION, but 2.61.0 is expected. Bootstrap script should have pinned it."
           fi
 
       - name: Azure login with OIDC
@@ -1005,10 +1011,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Pin Azure CLI version
+      - name: Verify Azure CLI version
         run: |
-          if [ "$(az --version | head -n 1 | awk '{print $2}')" != "2.61.0" ]; then
-            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- --version 2.61.0 >/dev/null 2>&1
+          AZ_VERSION=$(az --version | head -n 1 | awk '{print $2}')
+          echo "Azure CLI version: $AZ_VERSION"
+          if [ "$AZ_VERSION" != "2.61.0" ]; then
+            echo "::warning::Azure CLI is version $AZ_VERSION, but 2.61.0 is expected. Bootstrap script should have pinned it."
           fi
 
       - name: Azure login with OIDC

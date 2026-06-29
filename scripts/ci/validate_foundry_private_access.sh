@@ -199,7 +199,9 @@ NODE_SCRIPT_B64="$(printf '%s' "$NODE_SCRIPT" | base64 -w 0)"
 # Log Analytics workspace ID for log capture (best-effort).
 LAW_ID=$(az monitor log-analytics workspace list -g "$RG" --query '[0].customerId' -o tsv 2>/dev/null || echo "")
 
+JOB_YAML="$(mktemp)"
 cleanup() {
+  rm -f "$JOB_YAML"
   az containerapp job delete --name "$JOB" --resource-group "$RG" --yes 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -230,42 +232,69 @@ capture_logs() {
   echo "::warning::Container logs did not appear in Log Analytics within the ingestion window (~3 min)."
 }
 
-# Create the job with `az containerapp job create`, NOT a raw `az rest` PUT.
-# The raw PUT set the identity only at the resource level, which on a Consumption
-# environment left the user-assigned identity assigned to the job definition but
-# NOT surfaced to the running container — the managed-identity token endpoint then
-# returned HTTP 500 ("unexpected error fetching AAD token") for every request.
-# `--mi-user-assigned` makes the CLI configure identity availability correctly for
-# the environment. (The earlier worry that --args cannot express "-c" is wrong:
-# the CLI accepts "-c" as a plain list element — see az containerapp job create
-# docs. This also removes the 415 / JSON-escaping pitfalls of the manual manifest.)
+# Create the job via `az containerapp job create --yaml`, for two reasons:
+#  1. Identity: the previous raw `az rest` PUT set the user-assigned identity only
+#     at the resource level, which on a Consumption environment left it bound to the
+#     job definition but NOT surfaced to the running container — the managed-identity
+#     token endpoint then 500'd on every request. Letting the containerapp CLI create
+#     the job (here via --yaml) configures identity availability correctly.
+#  2. The "-c" argument: az containerapp job's --args flag CANNOT express a value
+#     starting with "-" ("-c" is parsed as an unknown CLI flag -> "unrecognized
+#     arguments: -c ..."). The YAML manifest carries command/args as plain list
+#     items, immune to CLI arg parsing. (--yaml ignores all other create flags, so
+#     identity/registry/env all live in the file.)
 echo "Creating validation job $JOB..."
+
+cat > "$JOB_YAML" <<YAML
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    "${UAI_ID}": {}
+properties:
+  environmentId: "${CONTAINER_APP_ENVIRONMENT_ID}"
+  configuration:
+    triggerType: Manual
+    replicaTimeout: 600
+    replicaRetryLimit: 0
+    manualTriggerConfig:
+      replicaCompletionCount: 1
+      parallelism: 1
+    secrets:
+      - name: dockerhub-password
+        value: "${DOCKERHUB_PASSWORD}"
+    registries:
+      - server: docker.io
+        username: "${DOCKERHUB_USERNAME}"
+        passwordSecretRef: dockerhub-password
+  template:
+    containers:
+      - image: "${WEB_IMAGE}"
+        name: "${JOB}"
+        command:
+          - /bin/sh
+        args:
+          - "-c"
+          - "echo \$VALIDATION_SCRIPT_B64 | base64 -d | node"
+        env:
+          - name: VALIDATION_SCRIPT_B64
+            value: "${NODE_SCRIPT_B64}"
+          - name: AZURE_CLIENT_ID
+            value: "${MANAGED_IDENTITY_CLIENT_ID}"
+          - name: FOUNDRY_CLAUDE_ENDPOINT
+            value: "${FOUNDRY_ENDPOINT}"
+          - name: FOUNDRY_CLAUDE_MODEL
+            value: "${FOUNDRY_MODEL:-claude-sonnet-4-6}"
+          - name: PRIVATE_ENDPOINT_SUBNET_PREFIX
+            value: "${PRIVATE_ENDPOINT_SUBNET_PREFIX}"
+        resources:
+          cpu: 0.5
+          memory: 1.0Gi
+YAML
 
 az containerapp job create \
   --name "$JOB" \
   --resource-group "$RG" \
-  --environment "$CONTAINER_APP_ENVIRONMENT_ID" \
-  --mi-user-assigned "$UAI_ID" \
-  --trigger-type Manual \
-  --replica-timeout 600 \
-  --replica-retry-limit 0 \
-  --replica-completion-count 1 \
-  --parallelism 1 \
-  --image "$WEB_IMAGE" \
-  --cpu 0.5 \
-  --memory 1.0Gi \
-  --registry-server docker.io \
-  --registry-username "$DOCKERHUB_USERNAME" \
-  --registry-password "$DOCKERHUB_PASSWORD" \
-  --secrets "dockerhub-password=$DOCKERHUB_PASSWORD" \
-  --command "/bin/sh" \
-  --args "-c" "echo \$VALIDATION_SCRIPT_B64 | base64 -d | node" \
-  --env-vars \
-    "VALIDATION_SCRIPT_B64=$NODE_SCRIPT_B64" \
-    "AZURE_CLIENT_ID=$MANAGED_IDENTITY_CLIENT_ID" \
-    "FOUNDRY_CLAUDE_ENDPOINT=$FOUNDRY_ENDPOINT" \
-    "FOUNDRY_CLAUDE_MODEL=${FOUNDRY_MODEL:-claude-sonnet-4-6}" \
-    "PRIVATE_ENDPOINT_SUBNET_PREFIX=$PRIVATE_ENDPOINT_SUBNET_PREFIX" \
+  --yaml "$JOB_YAML" \
   --output none
 
 echo "Waiting for job to provision..."

@@ -79,13 +79,15 @@ apt-get install -y \
 
 ok "Python3 installed ($(python3 --version))"
 
-# Azure CLI
-step "Installing Azure CLI"
-if ! command -v az &>/dev/null; then
+# Azure CLI (workflow 211 requires exactly 2.61.0)
+step "Installing Azure CLI 2.61.0"
+CURRENT_AZ_VERSION=$(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo "")
+if [[ "${CURRENT_AZ_VERSION}" != "2.61.0" ]]; then
+    apt-get remove -y azure-cli 2>/dev/null || true
     curl -sL https://aka.ms/InstallAzureCLIDeb | bash
     ok "Azure CLI installed ($(az --version | head -1))"
 else
-    ok "Azure CLI already installed ($(az --version | head -1))"
+    ok "Azure CLI 2.61.0 already installed"
 fi
 
 # Docker

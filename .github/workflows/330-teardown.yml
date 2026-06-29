@@ -161,6 +161,11 @@ jobs:
     name: "Remove drifted resources (${{ github.event.inputs.environment }})"
     runs-on: self-hosted
     needs: terraform-destroy
+    # Non-blocking: the StaleAi targets all live inside the workload RG, which the
+    # terraform-destroy job already deletes, so this job is a best-effort sweep for
+    # any out-of-RG drift. A failure here (e.g. pwsh absent, nothing to clean) must
+    # not fail the teardown — the real destruction already happened upstream.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 

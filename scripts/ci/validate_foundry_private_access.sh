@@ -295,8 +295,13 @@ cat > "$JOB_YAML" <<JSON
 }
 JSON
 
+# NOTE: az rest only auto-defaults Content-Type to application/json when --body
+# is an inline JSON *string*. With --body @file it does NOT, so ARM receives a
+# <null> media type and returns 415 UnsupportedMediaType. Set the header
+# explicitly. https://learn.microsoft.com/cli/azure/reference-index (az rest)
 az rest --method put \
   --uri "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.App/jobs/${JOB}?api-version=2024-03-01" \
+  --headers "Content-Type=application/json" \
   --body @"$JOB_YAML" > /dev/null
 
 echo "Waiting for job to provision..."

@@ -85,14 +85,39 @@ async function getManagedIdentityToken(resource) {
   url.searchParams.set("api-version", "2019-08-01");
   if (clientId) url.searchParams.set("client_id", clientId);
 
-  const res = await fetch(url, { headers: { "X-IDENTITY-HEADER": identityHeader } });
-  const text = await res.text();
-  if (!res.ok)
-    throw new Error(`Managed identity token request failed: HTTP ${res.status}: ${text.slice(0, 500)}`);
-  let parsed;
-  try { parsed = JSON.parse(text); } catch { throw new Error(`Token endpoint returned non-JSON: ${text.slice(0, 200)}`); }
-  if (!parsed.access_token) throw new Error("Token endpoint response did not contain access_token.");
-  return parsed.access_token;
+  // A freshly-created Container Apps Job's identity sidecar often returns a
+  // transient HTTP 500 ("unexpected error fetching AAD token") for the first
+  // minute or two while the user-assigned identity warms up. The original
+  // single-shot call failed the whole validation on that race. Retry with
+  // backoff (same resilience the DNS lookup already uses) on 5xx / network
+  // errors; surface 4xx (a real misconfig) immediately.
+  let lastErr = "";
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    let res, text;
+    try {
+      res = await fetch(url, { headers: { "X-IDENTITY-HEADER": identityHeader } });
+      text = await res.text();
+    } catch (e) {
+      lastErr = `network error: ${e.message}`;
+      console.log(`[token ${attempt}/12] ${lastErr}. Retrying in 10s...`);
+      await new Promise(r => setTimeout(r, 10000));
+      continue;
+    }
+    if (res.ok) {
+      let parsed;
+      try { parsed = JSON.parse(text); } catch { throw new Error(`Token endpoint returned non-JSON: ${text.slice(0, 200)}`); }
+      if (!parsed.access_token) throw new Error("Token endpoint response did not contain access_token.");
+      return parsed.access_token;
+    }
+    lastErr = `HTTP ${res.status}: ${text.slice(0, 500)}`;
+    // 4xx is a real misconfiguration (wrong client_id, identity not assigned) —
+    // retrying won't help, so fail fast. Only retry 5xx / 429 (warmup/throttle).
+    if (res.status < 500 && res.status !== 429)
+      throw new Error(`Managed identity token request failed: ${lastErr}`);
+    console.log(`[token ${attempt}/12] ${lastErr}. Retrying in 10s...`);
+    await new Promise(r => setTimeout(r, 10000));
+  }
+  throw new Error(`Managed identity token request failed after retries: ${lastErr}`);
 }
 
 async function main() {
@@ -230,7 +255,7 @@ cat > "$JOB_YAML" <<JSON
     "environmentId": "${CONTAINER_APP_ENVIRONMENT_ID}",
     "configuration": {
       "triggerType": "Manual",
-      "replicaTimeout": 300,
+      "replicaTimeout": 600,
       "replicaRetryLimit": 0,
       "manualTriggerConfig": {
         "replicaCompletionCount": 1,
@@ -316,9 +341,9 @@ done
 echo "Starting validation job..."
 az containerapp job start --name "$JOB" --resource-group "$RG"
 
-echo "Polling for completion (up to 6 minutes)..."
+echo "Polling for completion (up to 10 minutes)..."
 VALIDATION_STATUS="Running"
-for i in $(seq 1 36); do
+for i in $(seq 1 60); do
   EXEC_JSON=$(az containerapp job execution list --name "$JOB" --resource-group "$RG" \
     --query "[-1]" -o json 2>/dev/null || echo "{}")
   STATUS=$(python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('properties',{}).get('status','Running'))" <<< "$EXEC_JSON" 2>/dev/null || echo "Running")
@@ -336,9 +361,9 @@ for i in $(seq 1 36); do
       exit 1
       ;;
   esac
-  [[ $i -lt 36 ]] && sleep 10
+  [[ $i -lt 60 ]] && sleep 10
 done
 
-echo "::error::Foundry validation job timed out after 6 minutes."
+echo "::error::Foundry validation job timed out after 10 minutes."
 capture_logs
 exit 1

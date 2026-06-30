@@ -1,13 +1,13 @@
 {
-  "sha_tag": "sha-1aa6cf6",
-  "commit": "1aa6cf6c501bae05e497189f4ae87ebf92f7f604",
-  "built_at": "2026-06-30T06:55:24Z",
-  "run_id": "28417145050",
+  "sha_tag": "sha-6fade9a",
+  "commit": "6fade9a91d70689a2e0ba1aa9f6585ebc8f5ae27",
+  "built_at": "2026-06-30T06:55:30Z",
+  "run_id": "28417146622",
   "images": {
-    "cli":      "docker.io/hybridcloudworks/cna:sha-1aa6cf6",
-    "api":      "docker.io/hybridcloudworks/cna:api-sha-1aa6cf6",
-    "worker":   "docker.io/hybridcloudworks/cna:worker-sha-1aa6cf6",
-    "web":      "docker.io/hybridcloudworks/cna:web-sha-1aa6cf6",
-    "migrator": "docker.io/hybridcloudworks/cna:migrator-sha-1aa6cf6"
+    "cli":      "docker.io/hybridcloudworks/cna:sha-6fade9a",
+    "api":      "docker.io/hybridcloudworks/cna:api-sha-6fade9a",
+    "worker":   "docker.io/hybridcloudworks/cna:worker-sha-6fade9a",
+    "web":      "docker.io/hybridcloudworks/cna:web-sha-6fade9a",
+    "migrator": "docker.io/hybridcloudworks/cna:migrator-sha-6fade9a"
   }
 }

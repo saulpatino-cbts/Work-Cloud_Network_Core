@@ -388,6 +388,20 @@ jobs:
                 --resource-group "$WORKLOAD_RG" \
                 --ip-address "$RUNNER_IP" \
                 --only-show-errors > /dev/null
+              # Firewall rule propagation is not immediate — without this wait
+              # Terraform's first data-plane secret read still 403s
+              # (ForbiddenByFirewall) from the IP the rule was just added for.
+              for i in $(seq 1 18); do
+                if az keyvault secret list --vault-name "$KEY_VAULT_NAME" --maxresults 1 --only-show-errors -o none 2>/dev/null; then
+                  echo "Key Vault data plane reachable from runner."
+                  break
+                fi
+                if [ "$i" = "18" ]; then
+                  echo "::warning::Key Vault $KEY_VAULT_NAME data plane still unreachable after ~3 minutes; Terraform may fail with ForbiddenByFirewall."
+                else
+                  sleep 10
+                fi
+              done
             fi
           else
             echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."
@@ -703,6 +717,20 @@ jobs:
                 --resource-group "$WORKLOAD_RG" \
                 --ip-address "$RUNNER_IP" \
                 --only-show-errors > /dev/null
+              # Firewall rule propagation is not immediate — without this wait
+              # Terraform's first data-plane secret read still 403s
+              # (ForbiddenByFirewall) from the IP the rule was just added for.
+              for i in $(seq 1 18); do
+                if az keyvault secret list --vault-name "$KEY_VAULT_NAME" --maxresults 1 --only-show-errors -o none 2>/dev/null; then
+                  echo "Key Vault data plane reachable from runner."
+                  break
+                fi
+                if [ "$i" = "18" ]; then
+                  echo "::warning::Key Vault $KEY_VAULT_NAME data plane still unreachable after ~3 minutes; Terraform may fail with ForbiddenByFirewall."
+                else
+                  sleep 10
+                fi
+              done
             fi
           else
             echo "Key Vault $KEY_VAULT_NAME does not exist yet; Terraform will create it."

@@ -35,6 +35,7 @@ variable "tags" {
   description = "Tags applied to compute resources"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "container_registry_server" {
@@ -102,43 +103,59 @@ variable "api_env_vars" {
   description = "Plain environment variables for the API container app"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "worker_env_vars" {
   description = "Plain environment variables for the worker container app"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "web_env_vars" {
   description = "Plain environment variables for the web container app"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "api_secret_env_vars" {
   description = "Secret-backed env vars for the API Container App. Map key is env var name, value is secret name."
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "worker_secret_env_vars" {
   description = "Secret-backed env vars for the worker Container App. Map key is env var name, value is secret name."
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "web_secret_env_vars" {
   description = "Secret-backed env vars for the web Container App. Map key is env var name, value is secret name."
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "container_app_secrets" {
   description = "Secrets injected into all Container Apps. Map key is secret name, value is secret value."
   type        = map(string)
   default     = {}
+  nullable    = false
   sensitive   = true
+
+  validation {
+    # Secret names are unique per Container App across all sources (registry
+    # password, plain secrets, KV references). A collision fails at the
+    # Container Apps API during apply, not at `terraform plan` — catching it
+    # here surfaces the error immediately instead of mid-apply.
+    condition     = length(setintersection(nonsensitive(keys(var.container_app_secrets)), keys(var.container_app_kv_secrets))) == 0
+    error_message = "container_app_secrets and container_app_kv_secrets must not share secret names — each Container App secret name must be unique across all sources."
+  }
 }
 
 variable "container_apps_internal_only" {
@@ -166,7 +183,8 @@ variable "container_app_environment_workload_profiles" {
     minimum_count         = optional(number)
     maximum_count         = optional(number)
   }))
-  default = []
+  default  = []
+  nullable = false
 }
 
 variable "web_ingress_ip_security_restrictions" {
@@ -177,7 +195,8 @@ variable "web_ingress_ip_security_restrictions" {
     ip_address_range = string
     description      = optional(string)
   }))
-  default = []
+  default  = []
+  nullable = false
 }
 
 variable "infrastructure_subnet_id" {
@@ -202,4 +221,5 @@ variable "container_app_kv_secrets" {
   description = "Key Vault secret references for Container Apps. Map key is secret name; value is a versionless KV secret URI (e.g. https://vault.vault.azure.net/secrets/mysecret). Azure auto-refreshes these within 30 min when the secret version changes."
   type        = map(string)
   default     = {}
+  nullable    = false
 }

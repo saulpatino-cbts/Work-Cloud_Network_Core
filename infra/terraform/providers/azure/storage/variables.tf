@@ -17,6 +17,7 @@ variable "tags" {
   description = "Tags applied to storage resources"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 # FinOps — replication and lifecycle

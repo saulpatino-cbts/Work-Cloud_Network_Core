@@ -105,7 +105,8 @@ variable "web_ingress_ip_security_restrictions" {
     ip_address_range = string
     description      = optional(string)
   }))
-  default = []
+  default  = []
+  nullable = false
 }
 
 # ─── Credential encryption ────────────────────────────────────────────────────
@@ -199,23 +200,25 @@ variable "drawio_mcp_url" {
 }
 
 variable "secret_expiration_date" {
-  description = "RFC3339 expiry for Terraform-managed KV secrets. Must satisfy Enforce-GR-KeyVault (max 90 days from now). Computed dynamically in CI via 'date -u -d +90days'."
+  description = "RFC3339 expiry for Terraform-managed KV secrets. Must satisfy Enforce-GR-KeyVault (max 90 days from now). Computed dynamically in CI via 'date -u -d +90days'. No default: a stale hardcoded fallback silently becomes policy-violating once it ages past the 90-day window, so every apply (CI or manual) must pass a freshly computed value."
   type        = string
-  default     = "2026-09-20T23:59:59Z"
 }
 variable "tfstate_resource_group" {
-  type    = string
-  default = "rg-cna-dev-scus-tfstate"
+  description = "Resource group hosting the Terraform remote state backend (kept separate from the workload RG to avoid backend/self-destroy lifecycle problems)."
+  type        = string
+  default     = "rg-cna-dev-scus-tfstate"
 }
 
 variable "tfstate_storage_account" {
-  type    = string
-  default = "stcna0512f9tfstate"
+  description = "Storage account hosting the Terraform remote state container."
+  type        = string
+  default     = "stcna0512f9tfstate"
 }
 
 variable "tfstate_container" {
-  type    = string
-  default = "tfstate"
+  description = "Blob container name within the tfstate storage account."
+  type        = string
+  default     = "tfstate"
 }
 variable "frontdoor_certificate_pfx_path" {
   description = "File path to the PFX certificate for Front Door"

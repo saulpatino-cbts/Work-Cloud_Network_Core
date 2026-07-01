@@ -47,8 +47,31 @@ resource "azurerm_role_assignment" "terraform_key_vault_officer" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+# Grants for the app's own user-assigned managed identity. These live here
+# (not in the security module) because they depend only on this module's own
+# resources — keeping them in security would force module.compute to depend on
+# module.security for RBAC while module.security already depends on
+# module.compute for Container App IDs, a circular dependency. Placing them in
+# identity lets every downstream module (compute, security, runtime) safely
+# depend on identity's RBAC-gated outputs without any cycle.
+resource "azurerm_role_assignment" "managed_identity_key_vault_officer" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_user_assigned_identity.this.principal_id
+}
+
+resource "azurerm_role_assignment" "managed_identity_key_vault_secrets_user" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.this.principal_id
+}
+
 resource "time_sleep" "wait_for_rbac_propagation" {
-  depends_on = [azurerm_role_assignment.terraform_key_vault_officer]
+  depends_on = [
+    azurerm_role_assignment.terraform_key_vault_officer,
+    azurerm_role_assignment.managed_identity_key_vault_officer,
+    azurerm_role_assignment.managed_identity_key_vault_secrets_user,
+  ]
 
   create_duration = "60s"
 }

@@ -29,28 +29,38 @@ variable "project_name" {
 }
 
 variable "vnet_address_space" {
-  type    = list(string)
-  default = ["10.50.0.0/16"]
+  description = "Address space for the platform virtual network."
+  type        = list(string)
+  default     = ["10.50.0.0/16"]
+  nullable    = false
 }
 
 variable "subnet_container_apps_infra_prefixes" {
-  type    = list(string)
-  default = ["10.50.0.0/23"]
+  description = "Address prefixes for the Container Apps infrastructure subnet."
+  type        = list(string)
+  default     = ["10.50.0.0/23"]
+  nullable    = false
 }
 
 variable "subnet_private_endpoints_prefixes" {
-  type    = list(string)
-  default = ["10.50.2.0/24"]
+  description = "Address prefixes for the private endpoints subnet."
+  type        = list(string)
+  default     = ["10.50.2.0/24"]
+  nullable    = false
 }
 
 variable "subnet_database_prefixes" {
-  type    = list(string)
-  default = ["10.50.3.0/24"]
+  description = "Address prefixes for the database (PostgreSQL delegated) subnet."
+  type        = list(string)
+  default     = ["10.50.3.0/24"]
+  nullable    = false
 }
 
 variable "subnet_firewall_prefixes" {
-  type    = list(string)
-  default = ["10.50.4.0/26"]
+  description = "Address prefixes for the Azure Firewall subnet."
+  type        = list(string)
+  default     = ["10.50.4.0/26"]
+  nullable    = false
 }
 
 variable "manage_diagnostic_settings" {

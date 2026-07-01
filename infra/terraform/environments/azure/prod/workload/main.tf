@@ -253,9 +253,6 @@ module "security" {
   name_prefix                        = local.name_prefix
   key_vault_id                       = module.identity.key_vault_id
   key_vault_name                     = module.identity.key_vault_name
-  managed_identity_principal_id      = module.identity.managed_identity_principal_id
-  managed_identity_id                = module.identity.managed_identity_id
-  managed_identity_client_id         = module.identity.managed_identity_client_id
   api_container_app_id               = module.compute.api_id
   api_container_app_fqdn             = module.compute.api_fqdn
   web_container_app_id               = module.compute.web_id
@@ -312,11 +309,11 @@ module "database" {
   admin_password               = var.postgres_admin_password
   tags                         = local.tags
 
-  # Strict parity with prod: dev accepts higher cost so the deployment gate is uniform.
   sku_name                     = "GP_Standard_D2s_v3"
   storage_mb                   = 65536
   backup_retention_days        = 30
   geo_redundant_backup_enabled = true
+  high_availability_enabled    = true
 }
 
 # ─── GitHub Repository Variables ──────────────────────────────────────────────

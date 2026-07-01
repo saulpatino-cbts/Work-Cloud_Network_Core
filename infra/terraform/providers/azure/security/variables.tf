@@ -29,21 +29,6 @@ variable "key_vault_name" {
   type        = string
 }
 
-variable "managed_identity_principal_id" {
-  description = "Managed identity principal ID used for Key Vault access"
-  type        = string
-}
-
-variable "managed_identity_id" {
-  description = "Managed identity resource ID"
-  type        = string
-}
-
-variable "managed_identity_client_id" {
-  description = "Managed identity client ID"
-  type        = string
-}
-
 variable "api_container_app_id" {
   description = "API Container App resource ID"
   type        = string

@@ -17,6 +17,7 @@ variable "tags" {
   description = "Tags applied to database resources"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "admin_username" {
@@ -63,6 +64,13 @@ variable "geo_redundant_backup_enabled" {
   description = "Enable geo-redundant backups. Recommended true for prod — protects against regional failure."
   type        = bool
   default     = false
+}
+
+variable "high_availability_enabled" {
+  description = "Enable zone-redundant high availability (standby replica in a different zone). Recommended true for prod — without it, a zone failure has no automatic failover despite geo-redundant backups being enabled."
+  type        = bool
+  default     = false
+  nullable    = false
 }
 
 variable "postgres_version" {

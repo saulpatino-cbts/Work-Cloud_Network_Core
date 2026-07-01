@@ -258,9 +258,6 @@ module "security" {
   name_prefix                        = local.name_prefix
   key_vault_id                       = module.identity.key_vault_id
   key_vault_name                     = module.identity.key_vault_name
-  managed_identity_principal_id      = module.identity.managed_identity_principal_id
-  managed_identity_id                = module.identity.managed_identity_id
-  managed_identity_client_id         = module.identity.managed_identity_client_id
   api_container_app_id               = module.compute.api_id
   api_container_app_fqdn             = module.compute.api_fqdn
   web_container_app_id               = module.compute.web_id

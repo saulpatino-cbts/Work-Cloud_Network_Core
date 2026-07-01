@@ -364,6 +364,15 @@ resource "azurerm_storage_account" "flow_logs" {
       days = 7
     }
   }
+
+  # Public network access can't be disabled outright (Network Watcher writes
+  # flow logs over the data plane), but it shouldn't be open to every source
+  # IP either. AzureServices bypass keeps Network Watcher's writes working
+  # while Deny blocks arbitrary internet access to the account.
+  network_rules {
+    bypass         = ["AzureServices"]
+    default_action = "Deny"
+  }
 }
 
 module "observability" {

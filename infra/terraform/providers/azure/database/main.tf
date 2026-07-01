@@ -21,6 +21,13 @@ resource "azurerm_postgresql_flexible_server" "this" {
   backup_retention_days        = var.backup_retention_days
   geo_redundant_backup_enabled = var.geo_redundant_backup_enabled
 
+  dynamic "high_availability" {
+    for_each = var.high_availability_enabled ? [1] : []
+    content {
+      mode = "ZoneRedundant"
+    }
+  }
+
   tags = var.tags
 
   lifecycle {
@@ -29,6 +36,9 @@ resource "azurerm_postgresql_flexible_server" "this" {
       administrator_password,
       # Zone is auto-assigned by Azure on create.
       zone,
+      # high_availability.mode is set once at create time via var.high_availability_enabled
+      # above; Azure may reassign the standby zone independently afterward, so drift on
+      # the block itself is ignored post-creation rather than fought on every apply.
       high_availability
     ]
   }

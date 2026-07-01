@@ -22,6 +22,7 @@ variable "tags" {
   description = "Tags applied to AI resources."
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "foundry_location" {

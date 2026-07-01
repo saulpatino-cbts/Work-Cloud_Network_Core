@@ -27,11 +27,13 @@ variable "tags" {
   description = "Tags applied to observability helper resources."
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 variable "diagnostic_targets" {
   description = "Map of diagnostic target names to Azure resource IDs."
   type        = map(string)
+  nullable    = false
 }
 
 variable "manage_diagnostic_settings" {

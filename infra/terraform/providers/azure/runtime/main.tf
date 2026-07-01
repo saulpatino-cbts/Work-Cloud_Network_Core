@@ -6,10 +6,11 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor" {
   principal_id         = var.managed_identity_principal_id
 }
 
-# NOTE: Key Vault Secrets Officer is already assigned in the security module.
-# Do NOT add Key Vault Secrets User here — that would be a duplicate assignment
-# on the same principal + scope, which Azure silently ignores but Terraform tracks
-# as a separate resource, causing state drift.
+# NOTE: Key Vault Secrets Officer + Secrets User are already assigned in the
+# identity module (on the managed identity itself). Do NOT add a Key Vault
+# role assignment here — that would be a duplicate assignment on the same
+# principal + scope, which Azure silently ignores but Terraform tracks as a
+# separate resource, causing state drift.
 
 # Sensitive platform secrets stored in Key Vault for the sync-env workflow to pull.
 # These are the secrets that live ONLY in KV (not in security module):
@@ -25,11 +26,15 @@ resource "azurerm_key_vault_secret" "database_url" {
   expiration_date = var.secret_expiration_date
 
   lifecycle {
+    # value: derived from module.database's connection string, which is stable
+    # across applies unless the database module itself changes — ignoring it
+    # avoids an unrelated apply (e.g. touching the database module) silently
+    # rewriting this secret's value and expiration_date clock.
     # expiration_date: policy evaluates (expiry - version_created_date).
     # A metadata-only expiry update (no value change) fails policy because the
     # version's creation date is old. expiry is set correctly when value changes
     # (new KV version resets the creation date). Leave it alone between value changes.
-    ignore_changes = [expiration_date]
+    ignore_changes = [value, expiration_date]
   }
 }
 

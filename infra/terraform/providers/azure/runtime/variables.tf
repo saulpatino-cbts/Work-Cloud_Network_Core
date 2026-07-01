@@ -51,4 +51,5 @@ variable "storage_container_ids" {
   description = "List of Storage Container resource IDs for granular role assignment"
   type        = list(string)
   default     = []
+  nullable    = false
 }

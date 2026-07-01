@@ -22,6 +22,7 @@ variable "tags" {
   description = "Tags applied to identity resources"
   type        = map(string)
   default     = {}
+  nullable    = false
 }
 
 # FinOps / Zero Trust — Key Vault hardening
@@ -32,9 +33,10 @@ variable "key_vault_soft_delete_retention_days" {
 }
 
 variable "key_vault_purge_protection_enabled" {
-  description = "Enable purge protection on Key Vault. Required for prod — prevents accidental permanent deletion of secrets."
+  description = "Enable purge protection on Key Vault. Required for prod — prevents accidental permanent deletion of secrets. Defaults to true: purge protection cannot be disabled once enabled, so a false default would let any caller who omits this variable silently end up with weaker protection than every environment that explicitly sets it, with no way to reconcile after the fact."
   type        = bool
-  default     = false
+  default     = true
+  nullable    = false
 }
 
 variable "key_vault_name_suffix" {

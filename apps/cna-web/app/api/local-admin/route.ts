@@ -17,12 +17,14 @@ const RATE_LIMIT_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 function getClientIp(req: NextRequest): string {
-  // Azure Front Door / Container Apps set X-Forwarded-For; fall back to a
-  // constant key so a missing header still gets *some* rate limiting rather
-  // than none. Known limitation: this is per-container-instance, not global
-  // across replicas — acceptable for a first pass on a single shared secret.
-  const forwarded = req.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() ?? "unknown";
+  // Azure Front Door sets X-Azure-ClientIP itself from the TCP connection,
+  // overwriting any client-supplied value — unlike X-Forwarded-For, whose
+  // *first* hop is whatever the client sent and is trivially spoofable to
+  // get a fresh rate-limit bucket per request. Fall back to a constant key
+  // so a missing header still gets *some* rate limiting rather than none.
+  // Known limitation: this is per-container-instance, not global across
+  // replicas — acceptable for a first pass on a single shared secret.
+  return req.headers.get("x-azure-clientip")?.trim() ?? "unknown";
 }
 
 export async function POST(req: NextRequest) {

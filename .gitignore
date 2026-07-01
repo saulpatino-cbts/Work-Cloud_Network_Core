@@ -16,6 +16,7 @@ engagements/*/raw/
 engagements/*/discovery/
 output/reports/
 output/diagrams/
+.reports/
 .vscode/
 .idea/
 .DS_Store

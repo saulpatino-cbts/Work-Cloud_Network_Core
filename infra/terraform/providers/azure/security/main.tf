@@ -255,15 +255,12 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   resource_group_name = var.resource_group_name
   sku_name            = "Premium_AzureFrontDoor"
 
-  # [REVIEW REQUIRED — tracked in GitHub issue #111] Starts in "Detection" mode
-  # (var.frontdoor_waf_mode default): the WAF logs what it would have blocked
-  # but lets every request through, so nothing can lock out the Entra ID SSO
-  # sign-in flow (the only way into this app) during rollout. Per Microsoft's
-  # own guidance, this is the recommended way to tune a new/changed policy —
-  # leave it in Detection, exercise real sign-ins, then review
-  # FrontDoorWebApplicationFirewallLog for any would-be Block on /auth/* or
-  # /api/auth/*. Only flip var.frontdoor_waf_mode to "Prevention" once that
-  # comes back clean.
+  # Signed off per GitHub issue #111 — the narrow, field-specific exclusion
+  # set below (rather than a blanket path-based Allow) is the approved
+  # mitigation for the two known Auth.js/DefaultRuleSet 1.0 false-positive
+  # sources on the sign-in path. var.frontdoor_waf_mode defaults to
+  # "Prevention"; keep monitoring FrontDoorWebApplicationFirewallLog for any
+  # Block on /auth/* or /api/auth/* after each deploy.
   mode = var.frontdoor_waf_mode
 
   # Auth.js v5 Server Actions POST to /auth/signin with a Next-Action header
@@ -283,11 +280,11 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   # firewall/afds/waf-front-door-exclusion#body-contents-inspection), the raw
   # text/plain Server Action body itself cannot be excluded via an exclusion
   # list — unparsed body content surfaces in WAF logs as InitialBodyContents /
-  # DecodedInitialBodyContents, which exclusions don't support. This is exactly
-  # what Detection mode above is for: if the sign-in POST body still trips a
-  # rule, the log will show it, and the fix is a narrowly-scoped
-  # managed_rule.override on the specific rule_id that fires — not a
-  # reintroduction of the broad path-based Allow rule.
+  # DecodedInitialBodyContents, which exclusions don't support. Signed off in
+  # issue #111 as an accepted residual risk covered by log monitoring: if the
+  # sign-in POST body ever trips a rule in Prevention mode, the fix is a
+  # narrowly-scoped managed_rule.override on the specific rule_id that fires —
+  # not a reintroduction of the broad path-based Allow rule.
   managed_rule {
     type    = "DefaultRuleSet"
     version = "1.0"

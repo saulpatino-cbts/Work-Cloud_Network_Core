@@ -20,9 +20,9 @@ variable "name_prefix" {
 }
 
 variable "frontdoor_waf_mode" {
-  description = "Azure Front Door WAF policy mode. Use 'Detection' during rollout/tuning of the /auth/* exclusion set (see GitHub issue #111) so nothing can be blocked while WAF logs are reviewed for the Entra ID SSO sign-in flow; switch to 'Prevention' once logs confirm no false positives on the auth path."
+  description = "Azure Front Door WAF policy mode. Signed off as 'Prevention' per GitHub issue #111 — the /auth/* exclusion set (QueryStringArgNames for OAuth callback params, RequestHeaderNames for the Auth.js Next-Action header) is the approved mitigation for the DefaultRuleSet 1.0 false positives on the sign-in path."
   type        = string
-  default     = "Detection"
+  default     = "Prevention"
 
   validation {
     condition     = contains(["Detection", "Prevention"], var.frontdoor_waf_mode)

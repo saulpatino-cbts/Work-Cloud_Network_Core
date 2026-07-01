@@ -274,10 +274,11 @@ module "security" {
   container_app_environment_id       = module.compute.container_app_environment_id
   worker_container_app_id            = module.compute.worker_id
   frontdoor_private_link_enabled     = true
-  # Detection mode while the /auth/* WAF exclusion set is validated against
-  # real Entra ID SSO sign-ins — see GitHub issue #111. Flip to "Prevention"
-  # once WAF logs confirm no false positives on the auth path.
-  frontdoor_waf_mode         = "Detection"
+  # Prevention mode — signed off per GitHub issue #111. The /auth/* exclusion
+  # set (QueryStringArgNames + RequestHeaderNames) is the approved mitigation;
+  # any residual false positive on the sign-in POST body surfaces as a Block
+  # on InitialBodyContents/DecodedInitialBodyContents in FrontDoorWebApplicationFirewallLog.
+  frontdoor_waf_mode         = "Prevention"
   virtual_network_id         = data.azurerm_virtual_network.platform.id
   private_endpoint_subnet_id = data.azurerm_subnet.private_endpoints.id
   storage_account_id         = module.storage.storage_account_id

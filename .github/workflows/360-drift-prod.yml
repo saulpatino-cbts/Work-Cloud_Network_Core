@@ -87,7 +87,14 @@ jobs:
             echo "::error::AZURE_REGION_SHORT is required when TFSTATE_RESOURCE_GROUP is not set."
             exit 1
           fi
-          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          # Trust the Terraform-maintained KEY_VAULT_NAME variable (the real name
+          # carries a suffix), but only if it matches THIS environment's prefix —
+          # the variable is repo-level and both env workloads write it (last
+          # apply wins). Bare "-kv" is the pre-first-apply fallback.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          fi
           if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
             RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
             if [ -n "$RUNNER_IP" ]; then
@@ -164,7 +171,14 @@ jobs:
           else
             WORKLOAD_RG="rg-cna-prod-${REGION_SHORT}"
           fi
-          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          # Trust the Terraform-maintained KEY_VAULT_NAME variable (the real name
+          # carries a suffix), but only if it matches THIS environment's prefix —
+          # the variable is repo-level and both env workloads write it (last
+          # apply wins). Bare "-kv" is the pre-first-apply fallback.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          fi
           RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
           if [ -n "$RUNNER_IP" ]; then
             az keyvault network-rule remove --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --ip-address "$RUNNER_IP" --only-show-errors >/dev/null 2>&1 || true

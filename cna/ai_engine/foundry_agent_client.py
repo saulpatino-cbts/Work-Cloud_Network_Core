@@ -15,7 +15,10 @@ Config (env):
   FOUNDRY_RECOMMENDATION_AGENT_ID — the portal-created agent id
 
 Auth: ``DefaultAzureCredential`` (managed identity in Azure — the same identity the rest
-of the AI path uses). The identity needs the **Azure AI User** role on the Foundry account.
+of the AI path uses). The identity needs the **Cognitive Services User** role on the
+Foundry account (Microsoft documents "Azure AI User" for the agents API, but that role
+does not exist in this tenant; Cognitive Services User's Microsoft.CognitiveServices/*
+data actions are a superset that covers it — see the workload main.tf RBAC block).
 
 Resilience: every failure path (unconfigured, SDK missing, run not completed, unparseable
 output) raises ``FoundryAgentError`` so ``RecommendationEngine`` falls back to ``MCPRouter``

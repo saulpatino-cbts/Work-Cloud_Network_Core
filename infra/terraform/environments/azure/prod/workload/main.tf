@@ -232,24 +232,17 @@ resource "azurerm_role_assignment" "uai_foundry_user" {
 }
 
 # Foundry Agent Service (data plane: threads/runs) for recommendation enrichment.
-# Cognitive Services User covers inference; the agents API needs Azure AI User.
-# The web app does not call the agent, so only api + worker + the UAI get it.
-resource "azurerm_role_assignment" "api_foundry_ai_user" {
+# Microsoft documents "Azure AI User" for the agents API, but that role does not
+# exist in this tenant (`az role definition list --name "Azure AI User"` returns
+# nothing), so assigning it fails the apply with "could not find role". In this
+# tenant "Cognitive Services User" carries the Microsoft.CognitiveServices/*
+# data actions — a superset that covers the agents API as well as inference —
+# so it is the single Foundry role used here. web/api/UAI already hold it
+# above; worker (agents only, no direct inference) gets it here.
+resource "azurerm_role_assignment" "worker_foundry_user" {
   scope                = module.ai.foundry_account_id
-  role_definition_name = "Azure AI User"
-  principal_id         = module.compute.api_principal_id
-}
-
-resource "azurerm_role_assignment" "worker_foundry_ai_user" {
-  scope                = module.ai.foundry_account_id
-  role_definition_name = "Azure AI User"
+  role_definition_name = "Cognitive Services User"
   principal_id         = module.compute.worker_principal_id
-}
-
-resource "azurerm_role_assignment" "uai_foundry_ai_user" {
-  scope                = module.ai.foundry_account_id
-  role_definition_name = "Azure AI User"
-  principal_id         = module.identity.managed_identity_principal_id
 }
 
 

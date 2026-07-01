@@ -361,7 +361,17 @@ jobs:
             exit 1
           fi
           WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
-          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+          # The vault name carries a suffix (key_vault_name_suffix, bumped after
+          # soft-delete collisions), so never derive it bare — trust the
+          # KEY_VAULT_NAME variable that Terraform itself maintains, but only if
+          # it matches THIS environment's prefix: the variable is repo-level and
+          # both env workloads write it (last apply wins), so a prod run could
+          # otherwise be handed the dev vault name. Bare "-kv" is the bootstrap
+          # fallback before the first apply, when the vault doesn't exist anyway.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_NAME_PREFIX}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+          fi
 
           if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
             RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
@@ -563,7 +573,14 @@ jobs:
           else
             WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
           fi
-          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          # Trust the Terraform-maintained KEY_VAULT_NAME variable (the real name
+          # carries a suffix), but only if it matches THIS environment's prefix —
+          # the variable is repo-level and both env workloads write it (last
+          # apply wins). Bare "-kv" is the pre-first-apply fallback.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          fi
           RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
           if [[ -n "$RUNNER_IP" ]]; then
             az keyvault network-rule remove --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --ip-address "$RUNNER_IP" --only-show-errors >/dev/null 2>&1 || true
@@ -659,7 +676,17 @@ jobs:
             exit 1
           fi
           WORKLOAD_NAME_PREFIX="${WORKLOAD_RG#rg-}"
-          KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+          # The vault name carries a suffix (key_vault_name_suffix, bumped after
+          # soft-delete collisions), so never derive it bare — trust the
+          # KEY_VAULT_NAME variable that Terraform itself maintains, but only if
+          # it matches THIS environment's prefix: the variable is repo-level and
+          # both env workloads write it (last apply wins), so a prod run could
+          # otherwise be handed the dev vault name. Bare "-kv" is the bootstrap
+          # fallback before the first apply, when the vault doesn't exist anyway.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_NAME_PREFIX}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_NAME_PREFIX}-kv"
+          fi
 
           if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
             RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
@@ -1085,7 +1112,14 @@ jobs:
           else
             WORKLOAD_RG="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
           fi
-          KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          # Trust the Terraform-maintained KEY_VAULT_NAME variable (the real name
+          # carries a suffix), but only if it matches THIS environment's prefix —
+          # the variable is repo-level and both env workloads write it (last
+          # apply wins). Bare "-kv" is the pre-first-apply fallback.
+          KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
+          if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
+            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+          fi
           RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
           if [[ -n "$RUNNER_IP" ]]; then
             az keyvault network-rule remove --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --ip-address "$RUNNER_IP" --only-show-errors >/dev/null 2>&1 || true

@@ -19,6 +19,17 @@ variable "name_prefix" {
   type        = string
 }
 
+variable "frontdoor_waf_mode" {
+  description = "Azure Front Door WAF policy mode. Use 'Detection' during rollout/tuning of the /auth/* exclusion set (see GitHub issue #111) so nothing can be blocked while WAF logs are reviewed for the Entra ID SSO sign-in flow; switch to 'Prevention' once logs confirm no false positives on the auth path."
+  type        = string
+  default     = "Detection"
+
+  validation {
+    condition     = contains(["Detection", "Prevention"], var.frontdoor_waf_mode)
+    error_message = "frontdoor_waf_mode must be Detection or Prevention."
+  }
+}
+
 variable "key_vault_id" {
   description = "Key Vault resource ID"
   type        = string

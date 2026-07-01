@@ -260,11 +260,16 @@ module "security" {
   container_app_environment_id       = module.compute.container_app_environment_id
   worker_container_app_id            = module.compute.worker_id
   frontdoor_private_link_enabled     = true
-  virtual_network_id                 = data.azurerm_virtual_network.platform.id
-  private_endpoint_subnet_id         = data.azurerm_subnet.private_endpoints.id
-  storage_account_id                 = module.storage.storage_account_id
-  storage_account_name               = module.storage.storage_account_name
-  foundry_account_id                 = module.ai.foundry_account_id
+  # Detection mode while the /auth/* WAF exclusion set is validated against
+  # real Entra ID SSO sign-ins — see GitHub issue #111. Flip to "Prevention"
+  # once WAF logs confirm no false positives on the auth path. Validate in
+  # dev first; only bring prod out of Detection once dev logs are clean.
+  frontdoor_waf_mode         = "Detection"
+  virtual_network_id         = data.azurerm_virtual_network.platform.id
+  private_endpoint_subnet_id = data.azurerm_subnet.private_endpoints.id
+  storage_account_id         = module.storage.storage_account_id
+  storage_account_name       = module.storage.storage_account_name
+  foundry_account_id         = module.ai.foundry_account_id
 }
 
 # App-level diagnostics only. Firewall/NSG diagnostics and VNet flow logs are

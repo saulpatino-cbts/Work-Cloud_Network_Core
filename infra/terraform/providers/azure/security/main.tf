@@ -254,13 +254,22 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   name                = "${replace(var.name_prefix, "-", "")}fdfp"
   resource_group_name = var.resource_group_name
   sku_name            = "Premium_AzureFrontDoor"
-  mode                = "Prevention"
 
-  # [REVIEW REQUIRED] Auth.js v5 Server Actions POST to /auth/signin with a
-  # Next-Action header and text/plain body — both of which trigger OWASP
-  # anomaly scoring rules in DefaultRuleSet 1.0. The OAuth callback arrives at
-  # /api/auth/callback/* with long JWT-like ?code= and ?state= params that
-  # trigger SQLI rules.
+  # [REVIEW REQUIRED — tracked in GitHub issue #111] Starts in "Detection" mode
+  # (var.frontdoor_waf_mode default): the WAF logs what it would have blocked
+  # but lets every request through, so nothing can lock out the Entra ID SSO
+  # sign-in flow (the only way into this app) during rollout. Per Microsoft's
+  # own guidance, this is the recommended way to tune a new/changed policy —
+  # leave it in Detection, exercise real sign-ins, then review
+  # FrontDoorWebApplicationFirewallLog for any would-be Block on /auth/* or
+  # /api/auth/*. Only flip var.frontdoor_waf_mode to "Prevention" once that
+  # comes back clean.
+  mode = var.frontdoor_waf_mode
+
+  # Auth.js v5 Server Actions POST to /auth/signin with a Next-Action header
+  # and text/plain body — both of which trigger OWASP anomaly scoring rules in
+  # DefaultRuleSet 1.0. The OAuth callback arrives at /api/auth/callback/* with
+  # long JWT-like ?code= and ?state= params that trigger SQLI rules.
   #
   # A prior version of this policy used a blanket "Allow" custom rule on all
   # of /auth/* and /api/auth/*, which terminated WAF evaluation for the entire
@@ -274,11 +283,11 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   # firewall/afds/waf-front-door-exclusion#body-contents-inspection), the raw
   # text/plain Server Action body itself cannot be excluded via an exclusion
   # list — unparsed body content surfaces in WAF logs as InitialBodyContents /
-  # DecodedInitialBodyContents, which exclusions don't support. Sign-off must
-  # confirm via WAF logs (Log mode or Prevention-with-monitoring in dev) that
-  # the sign-in POST body doesn't itself trigger a rule. If it does, the fix is
-  # a narrowly-scoped managed_rule.override on the specific rule_id that fires
-  # (not a reintroduction of the broad path-based Allow rule).
+  # DecodedInitialBodyContents, which exclusions don't support. This is exactly
+  # what Detection mode above is for: if the sign-in POST body still trips a
+  # rule, the log will show it, and the fix is a narrowly-scoped
+  # managed_rule.override on the specific rule_id that fires — not a
+  # reintroduction of the broad path-based Allow rule.
   managed_rule {
     type    = "DefaultRuleSet"
     version = "1.0"

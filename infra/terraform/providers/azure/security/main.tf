@@ -266,12 +266,19 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
   # of /auth/* and /api/auth/*, which terminated WAF evaluation for the entire
   # authentication surface — no OWASP inspection at all on a high-value attack
   # target. That has been removed in favor of the narrow, field-specific
-  # exclusions below, which only exempt the exact params/cookies known to
-  # false-positive and leave every other part of the request (body, headers,
-  # other query args) fully inspected by the managed rule set. Get security/
-  # compliance sign-off before this narrower policy ships to prod — verify it
-  # doesn't reintroduce the original false positives before removing the old
-  # blanket rule from a live environment.
+  # exclusions below, which only exempt the exact params/cookies/headers known
+  # to false-positive and leave every other part of the request (other query
+  # args, other headers) fully inspected by the managed rule set.
+  #
+  # KNOWN GAP: per Microsoft Learn (learn.microsoft.com/azure/web-application-
+  # firewall/afds/waf-front-door-exclusion#body-contents-inspection), the raw
+  # text/plain Server Action body itself cannot be excluded via an exclusion
+  # list — unparsed body content surfaces in WAF logs as InitialBodyContents /
+  # DecodedInitialBodyContents, which exclusions don't support. Sign-off must
+  # confirm via WAF logs (Log mode or Prevention-with-monitoring in dev) that
+  # the sign-in POST body doesn't itself trigger a rule. If it does, the fix is
+  # a narrowly-scoped managed_rule.override on the specific rule_id that fires
+  # (not a reintroduction of the broad path-based Allow rule).
   managed_rule {
     type    = "DefaultRuleSet"
     version = "1.0"
@@ -311,6 +318,14 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "platform" {
       match_variable = "RequestCookieNames"
       operator       = "StartsWith"
       selector       = "__Host-authjs."
+    }
+
+    # Next.js Server Actions marker header — Auth.js v5's /auth/signin POST
+    # sends this, and its value has tripped anomaly-scoring rules in testing.
+    exclusion {
+      match_variable = "RequestHeaderNames"
+      operator       = "Equals"
+      selector       = "Next-Action"
     }
   }
 }

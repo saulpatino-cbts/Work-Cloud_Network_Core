@@ -21,6 +21,12 @@ model User {
   emailVerified DateTime?
   image         String?
   role          UserRole  @default(ANALYST)
+  // Break-glass local admin account (not tied to Entra ID SSO). passwordHash
+  // is a PBKDF2-HMAC-SHA256 hash (see lib/local-admin.ts), never plaintext.
+  // Only the single row seeded by prisma/seed-local-admin.ts has these set;
+  // Entra-provisioned users never get a passwordHash.
+  passwordHash  String?
+  isLocalAdmin  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -77,3 +77,22 @@ resource "azurerm_key_vault_secret" "credential_encryption_key" {
     ignore_changes = [value, expiration_date]
   }
 }
+
+# Break-glass local admin: only created when the bootstrap script has
+# generated and pushed the hash (var.local_admin_password != null). Existing
+# environments that haven't bootstrapped this secret yet keep deploying
+# unchanged — this resource simply doesn't exist for them.
+resource "azurerm_key_vault_secret" "local_admin_password" {
+  count           = var.local_admin_password != null ? 1 : 0
+  name            = "cna-local-admin-password"
+  value           = var.local_admin_password
+  key_vault_id    = var.key_vault_id
+  content_type    = "PBKDF2 hash of the break-glass local admin password"
+  expiration_date = var.secret_expiration_date
+
+  lifecycle {
+    # value: rotated manually (delete the GitHub secret + re-run the
+    # bootstrap script) — never overwritten by an unrelated apply.
+    ignore_changes = [value, expiration_date]
+  }
+}

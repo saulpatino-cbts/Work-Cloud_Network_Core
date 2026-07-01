@@ -131,3 +131,9 @@ output "database_connection_string" {
   value       = module.database.connection_string
   sensitive   = true
 }
+
+output "local_admin_password" {
+  description = "PBKDF2 hash of the break-glass local admin password (or null if not configured) — passed to the migrator job by workflow 211 so it can seed/update the local admin user."
+  value       = var.local_admin_password
+  sensitive   = true
+}

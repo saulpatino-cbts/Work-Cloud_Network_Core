@@ -16,3 +16,8 @@ output "entra_client_secret_name" {
   description = "Key Vault secret name for the Entra ID client secret"
   value       = azurerm_key_vault_secret.entra_client_secret.name
 }
+
+output "local_admin_password_secret_name" {
+  description = "Key Vault secret name for the break-glass local admin password hash, or null if not configured for this environment"
+  value       = var.local_admin_password != null ? azurerm_key_vault_secret.local_admin_password[0].name : null
+}

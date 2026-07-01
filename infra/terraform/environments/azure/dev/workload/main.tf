@@ -123,12 +123,17 @@ module "compute" {
   }
 
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
-  web_secret_env_vars = {
-    DATABASE_URL              = "database-url"
-    AUTH_SECRET               = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
-    AZURE_AD_CLIENT_SECRET    = "entra-client-secret"
-    CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key"
-  }
+  # LOCAL_ADMIN_PASSWORD is only added when the break-glass feature has been
+  # bootstrapped for this environment (var.local_admin_password != null).
+  web_secret_env_vars = merge(
+    {
+      DATABASE_URL              = "database-url"
+      AUTH_SECRET               = "nextauth-secret" # Auth.js v5 canonical name (was NEXTAUTH_SECRET)
+      AZURE_AD_CLIENT_SECRET    = "entra-client-secret"
+      CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key"
+    },
+    var.local_admin_password != null ? { LOCAL_ADMIN_PASSWORD = "local-admin-password" } : {}
+  )
 
   # cna-api needs DATABASE_URL to read/write discovery jobs and findings.
   api_secret_env_vars = {
@@ -140,12 +145,15 @@ module "compute" {
   # when a new KV secret version is created (rotation, credential change, etc.).
   # The user-assigned managed identity (key_vault_reference_identity_id) must have
   # Key Vault Secrets User on the vault; Key Vault Secrets Officer covers this.
-  container_app_kv_secrets = {
-    "database-url"              = "${module.identity.key_vault_uri}secrets/cna-database-url"
-    "nextauth-secret"           = "${module.identity.key_vault_uri}secrets/cna-nextauth-secret"
-    "entra-client-secret"       = "${module.identity.key_vault_uri}secrets/cna-entra-client-secret"
-    "credential-encryption-key" = "${module.identity.key_vault_uri}secrets/cna-credential-encryption-key"
-  }
+  container_app_kv_secrets = merge(
+    {
+      "database-url"              = "${module.identity.key_vault_uri}secrets/cna-database-url"
+      "nextauth-secret"           = "${module.identity.key_vault_uri}secrets/cna-nextauth-secret"
+      "entra-client-secret"       = "${module.identity.key_vault_uri}secrets/cna-entra-client-secret"
+      "credential-encryption-key" = "${module.identity.key_vault_uri}secrets/cna-credential-encryption-key"
+    },
+    var.local_admin_password != null ? { "local-admin-password" = "${module.identity.key_vault_uri}secrets/cna-local-admin-password" } : {}
+  )
   key_vault_reference_identity_id = module.identity.managed_identity_id
 
   # depends_on ensures KV secrets (created by module.runtime) exist before
@@ -182,6 +190,7 @@ module "runtime" {
   nextauth_secret               = var.nextauth_secret
   entra_client_secret           = var.entra_client_secret
   credential_encryption_key     = var.credential_encryption_key
+  local_admin_password          = var.local_admin_password
   secret_expiration_date        = var.secret_expiration_date
 }
 

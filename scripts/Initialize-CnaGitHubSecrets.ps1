@@ -193,6 +193,40 @@ function New-RandomBase64 {
     }
 }
 
+# Break-glass local admin password hashing. PBKDF2-HMAC-SHA256 via .NET's
+# built-in Rfc2898DeriveBytes — no external module needed, and the exact same
+# algorithm/params are reproduced in apps/cna-web/lib/local-admin.ts (Node's
+# crypto.pbkdf2Sync) so the two sides agree on the stored hash format without
+# sharing code. Format: "pbkdf2$sha256$210000$<saltBase64>$<hashBase64>".
+function ConvertTo-Pbkdf2Hash {
+    param([Parameter(Mandatory = $true)][string]$PlainText)
+
+    $iterations = 210000
+    $saltBytes = New-Object byte[] 16
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($saltBytes)
+    } finally {
+        $rng.Dispose()
+    }
+
+    $deriveBytes = [System.Security.Cryptography.Rfc2898DeriveBytes]::new(
+        $PlainText,
+        $saltBytes,
+        $iterations,
+        [System.Security.Cryptography.HashAlgorithmName]::SHA256
+    )
+    try {
+        $hashBytes = $deriveBytes.GetBytes(32)
+    } finally {
+        $deriveBytes.Dispose()
+    }
+
+    $saltB64 = [Convert]::ToBase64String($saltBytes)
+    $hashB64 = [Convert]::ToBase64String($hashBytes)
+    return "pbkdf2`$sha256`$$iterations`$$saltB64`$$hashB64"
+}
+
 function Format-ValuePreview {
     param(
         [string]$Value,
@@ -1075,7 +1109,11 @@ function Write-BootstrapReport {
         [string[]]$CreatedGitHubEnvironments,
         [string[]]$OidcSubjectClaims,
         [string]$BootstrapLocation,
-        [string]$BootstrapRegionShort
+        [string]$BootstrapRegionShort,
+        # Only set when a NEW local admin password was generated this run
+        # (null when LOCAL_ADMIN_PASSWORD already existed and was kept as-is).
+        # This is the ONLY place the plaintext is ever written down.
+        [string]$LocalAdminPassword = $null
     )
 
     $reportDir = Split-Path -Parent $Path
@@ -1085,6 +1123,22 @@ function Write-BootstrapReport {
 
     $createdEnvsText = if ($CreatedGitHubEnvironments.Count -gt 0) { ($CreatedGitHubEnvironments -join ", ") } else { "none" }
     $credentialsText = if ($OidcSubjectClaims.Count -gt 0) { ($OidcSubjectClaims -join "`n") } else { "none" }
+    $localAdminSection = if (-not [string]::IsNullOrWhiteSpace($LocalAdminPassword)) {
+        @"
+
+## Local Admin Credential (SHOWN ONCE — SAVE NOW)
+
+Password: $LocalAdminPassword
+
+This is the ONLY time this password is displayed. It is not stored anywhere
+in plaintext — only its hash lives in the LOCAL_ADMIN_PASSWORD GitHub secret.
+Use it to sign in at /local-admin only if Entra ID SSO is ever unavailable.
+To rotate it later, delete the LOCAL_ADMIN_PASSWORD GitHub secret and
+re-run this script.
+"@
+    } else {
+        ""
+    }
 
     $content = @"
 # CNA Bootstrap Report
@@ -1127,7 +1181,7 @@ function Write-BootstrapReport {
 | Tfstate storage account | `$TfstateStorageAccount` (`$TfstateStorageAccountStatus`) |
 | Tfstate container | `$TfstateContainer` (`$TfstateContainerStatus`) |
 | Tfstate storage role | `$TfstateStorageRoleStatus` |
-
+$localAdminSection
 ## Federated Credentials
 
 $credentialsText
@@ -1666,6 +1720,19 @@ $secretValues["CNA_ENTRA_CLIENT_SECRET"] = $entraClientSecret
 $secretValues["CNA_POSTGRES_ADMIN_PASSWORD"] = Read-SecretValue -Name "CNA_POSTGRES_ADMIN_PASSWORD" -Description "PostgreSQL admin password" -Exists $existingSecrets.ContainsKey("CNA_POSTGRES_ADMIN_PASSWORD") -GenerateBytes 18 -Required
 $secretValues["CNA_NEXTAUTH_SECRET"] = Read-SecretValue -Name "CNA_NEXTAUTH_SECRET" -Description "Auth.js signing secret" -Exists $existingSecrets.ContainsKey("CNA_NEXTAUTH_SECRET") -GenerateBytes 32 -Required
 $secretValues["CNA_CREDENTIAL_ENCRYPTION_KEY"] = Read-SecretValue -Name "CNA_CREDENTIAL_ENCRYPTION_KEY" -Description "base64 32-byte AES key for stored cloud credentials" -Exists $existingSecrets.ContainsKey("CNA_CREDENTIAL_ENCRYPTION_KEY") -GenerateBytes 32 -Required
+
+# Break-glass local admin: unlike the other generated secrets above, GitHub
+# never stores the plaintext password — only its PBKDF2 hash. The plaintext
+# is shown exactly once in the bootstrap report below and then discarded.
+# If LOCAL_ADMIN_PASSWORD already exists, this is a no-op (this script's
+# established rotation UX: delete the GitHub secret and re-run to rotate).
+$localAdminPlaintextPassword = $null
+if (-not $existingSecrets.ContainsKey("LOCAL_ADMIN_PASSWORD")) {
+    $localAdminPlaintextPassword = New-RandomBase64 -Bytes 24
+    $secretValues["LOCAL_ADMIN_PASSWORD"] = ConvertTo-Pbkdf2Hash -PlainText $localAdminPlaintextPassword
+} else {
+    $secretValues["LOCAL_ADMIN_PASSWORD"] = $null
+}
 $secretValues["FRONTDOOR_CERTIFICATE_PFX_PASSWORD"] = Read-SecretValue -Name "FRONTDOOR_CERTIFICATE_PFX_PASSWORD" -Description "optional custom TLS certificate PFX password" -Exists $existingSecrets.ContainsKey("FRONTDOOR_CERTIFICATE_PFX_PASSWORD")
 $secretValues["CNA_AWS_ROLE_ARN"] = Read-SecretValue -Name "CNA_AWS_ROLE_ARN" -Description "optional AWS OIDC role ARN for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_AWS_ROLE_ARN")
 $secretValues["CNA_PUBLISH_BUCKET"] = Read-SecretValue -Name "CNA_PUBLISH_BUCKET" -Description "optional S3 bucket for portal publishing" -Exists $existingSecrets.ContainsKey("CNA_PUBLISH_BUCKET")
@@ -1855,7 +1922,8 @@ Write-BootstrapReport -Path (Join-Path $ReportDirectory "$((Get-Date).ToString('
     -CreatedGitHubEnvironments @($createdGitHubEnvironments) `
     -OidcSubjectClaims @($federatedCredentialSubjects) `
     -BootstrapLocation $BootstrapLocation `
-    -BootstrapRegionShort $BootstrapRegionShort
+    -BootstrapRegionShort $BootstrapRegionShort `
+    -LocalAdminPassword $localAdminPlaintextPassword
 
 Write-Step "Summary"
 Write-Host "Repository:       $Repo"

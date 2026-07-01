@@ -94,7 +94,11 @@ jobs:
           # apply wins). Bare "-kv" is the pre-first-apply fallback.
           KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
           if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
-            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+            # Variable missing or belongs to the other environment — resolve the
+            # real vault (name carries a suffix, e.g. -kv2) from Azure instead of
+            # guessing.
+            KEY_VAULT_NAME=$(az keyvault list -g "$WORKLOAD_RG" --query "[?starts_with(name, '${WORKLOAD_RG#rg-}-kv')].name | [0]" -o tsv 2>/dev/null || echo "")
+            KEY_VAULT_NAME="${KEY_VAULT_NAME:-${WORKLOAD_RG#rg-}-kv}"
           fi
           if az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$WORKLOAD_RG" --only-show-errors > /dev/null 2>&1; then
             RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
@@ -191,7 +195,11 @@ jobs:
           # apply wins). Bare "-kv" is the pre-first-apply fallback.
           KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}"
           if [[ "$KEY_VAULT_NAME" != "${WORKLOAD_RG#rg-}-kv"* ]]; then
-            KEY_VAULT_NAME="${WORKLOAD_RG#rg-}-kv"
+            # Variable missing or belongs to the other environment — resolve the
+            # real vault (name carries a suffix, e.g. -kv2) from Azure instead of
+            # guessing.
+            KEY_VAULT_NAME=$(az keyvault list -g "$WORKLOAD_RG" --query "[?starts_with(name, '${WORKLOAD_RG#rg-}-kv')].name | [0]" -o tsv 2>/dev/null || echo "")
+            KEY_VAULT_NAME="${KEY_VAULT_NAME:-${WORKLOAD_RG#rg-}-kv}"
           fi
           RUNNER_IP=$(curl -s https://api.ipify.org || echo "")
           if [ -n "$RUNNER_IP" ]; then

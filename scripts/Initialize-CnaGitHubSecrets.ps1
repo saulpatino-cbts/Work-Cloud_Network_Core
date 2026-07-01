@@ -631,6 +631,13 @@ function New-GitHubAppViaManifest {
             metadata = "read"
             actions = "write"
             actions_variables = "write"
+            # Required for github_actions_environment_variable (POST
+            # /repos/{owner}/{repo}/environments/{env}/variables) — separate
+            # from actions_variables, which only covers repo-scoped variables.
+            # Missing this causes "403 Resource not accessible by integration"
+            # on environment-scoped Terraform variable writes (dev/prod
+            # workload main.tf).
+            environments = "write"
         }
         default_events = @()
     }
@@ -673,7 +680,7 @@ function New-GitHubAppViaManifest {
     Write-Host ""
     Write-Host "  Opening browser for GitHub App creation." -ForegroundColor Cyan
     Write-Host "  App name    : $AppName" -ForegroundColor White
-    Write-Host "  Permissions : Contents(read) · Metadata(read) · Actions(write) · Variables(write)" -ForegroundColor White
+    Write-Host "  Permissions : Contents(read) · Metadata(read) · Actions(write) · Variables(write) · Environments(write)" -ForegroundColor White
     # NOTE: "Variables" maps to the GitHub App manifest permission key 'actions_variables', not 'variables'.
     Write-Host "  Repo scope  : $RepoName" -ForegroundColor White
     Write-Host ""

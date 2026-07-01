@@ -35,8 +35,10 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | CAF naming convention | ✅ Merged | `cna-[env]-[region_short]`, single workload RG per env |
 | Teardown workflow (220) | ✅ Merged | `DESTROY`-gated, optional state wipe |
 | CI — lint/test | ✅ Passing | ruff, pytest 3.13 + 3.14, Docker build smoke |
-| Repository hygiene | ✅ Clean | No open GitHub PRs or Issues as of 2026-06-16 |
+| Repository hygiene | ✅ Clean | No open GitHub PRs; 1 tracked issue (#110, AWS Terraform scoping) as of 2026-07-01 |
+| Azure Terraform hardening | ✅ Merged | AVM + Microsoft Learn review pass: RBAC-propagation fixes, Postgres HA, provider version pinning |
 | Azure deployment | ⏳ Beta validation pending | Live workflow execution and customer-like validation remain |
+| AWS Terraform | 📋 Scoped, not started | Tracked in [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) — discovery engine (`cna/modules/`) already supports AWS; deployable AWS infra does not exist yet |
 
 ---
 
@@ -114,7 +116,8 @@ infra/terraform/
 ├── environments/azure/dev/   Dev environment root module
 ├── environments/azure/prod/  Prod environment root module
 └── providers/azure/          Reusable modules: ai, compute, database, identity,
-                              security, storage, runtime
+                              security, storage, runtime, observability
+                              (AWS provider modules not yet built — tracked in #110)
 .github/workflows/            000–320 banded workflow sequence
 GitHub Wiki                   All documentation, runbooks, blogs, and ADRs live in https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki (no in-repo docs/ directory)
 CHANGELOG.md                  Release history and deployment-gated follow-up context
@@ -212,6 +215,13 @@ To wipe an environment and redeploy clean:
 - Azure release gated by direct Azure Monitor + App Insights evidence
 - Encyclopedia/branded reports flagged `[REVIEW REQUIRED]` before client delivery
 - Cost estimates in FinOps findings flagged `[VERIFY]` for analyst review
+- Terraform hardened per an AVM + Microsoft Learn review pass (2026-07-01): managed-identity Key Vault RBAC grants are propagation-gated, Key Vault purge protection defaults to `true`, Postgres Flexible Server supports zone-redundant HA (enabled in prod), and the Front Door WAF's auth-path exception was narrowed from a blanket bypass to field-specific exclusions — **`[REVIEW REQUIRED]`**: that WAF change needs security sign-off before it ships to a live environment
+
+---
+
+## Backlog
+
+- **AWS Terraform** — [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110): scope and build AWS provider modules (network, compute, database, security, identity) mirroring `infra/terraform/providers/azure/`. The discovery engine already has AWS stubs (`cna/modules/`); deployable AWS infra does not exist yet.
 
 ---
 

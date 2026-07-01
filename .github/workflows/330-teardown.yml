@@ -80,6 +80,8 @@ jobs:
     runs-on: self-hosted
     needs: preflight
     environment: ${{ github.event.inputs.environment }}
+    outputs:
+      workload_rg: ${{ steps.names.outputs.workload_rg }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -205,6 +207,68 @@ jobs:
         run: |
           echo "Preview complete. Review the cleanup target list above."
           echo "Re-run workflow 220 with delete_drifted_resources=true only after approving the preview."
+
+  # ── Purge soft-deleted Cognitive Services accounts ──────────────────────────
+  # AIServices accounts soft-delete on RG deletion and keep their name reserved
+  # (subscription+region scoped), so the next deploy 409s with
+  # "FlagMustBeSetForRestore" unless the tombstone is purged. The provider-level
+  # purge_soft_delete_on_destroy only fires on `terraform destroy`; the
+  # `az group delete` path above bypasses it, so this job is the backstop that
+  # infra/terraform/**/providers.tf refers to.
+  #
+  # Runs REPO-LEVEL (no `environment:` key) on purpose: the purge API lives at a
+  # subscription-level ARM path (/providers/Microsoft.CognitiveServices/locations/
+  # .../deletedAccounts/...), which the RG-scoped Dev/Prod deploy SPs cannot
+  # reach — only the Main SP (subscription Contributor) can.
+  purge-soft-deleted:
+    name: "Purge soft-deleted AI accounts (${{ github.event.inputs.environment }})"
+    runs-on: self-hosted
+    needs: terraform-destroy
+    # Best-effort: the RG delete is async and can outlast the poll window below.
+    # A skipped purge just means the next deploy 409s and someone purges by hand.
+    continue-on-error: true
+    steps:
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Wait for RG deletion, then purge
+        run: |
+          RG="${{ needs.terraform-destroy.outputs.workload_rg }}"
+          if [[ -z "$RG" ]]; then
+            echo "::warning::Workload RG name unavailable — skipping purge backstop."
+            exit 0
+          fi
+
+          # Accounts only enter the soft-deleted list once the async
+          # `az group delete --no-wait` above actually finishes.
+          echo "Waiting for resource group $RG deletion to complete..."
+          for i in $(seq 1 90); do
+            if [[ "$(az group exists --name "$RG")" == "false" ]]; then
+              echo "Resource group deleted."
+              break
+            fi
+            if [[ "$i" == "90" ]]; then
+              echo "::warning::$RG still exists after 45 minutes — purge backstop skipped. Purge manually once deletion finishes: az cognitiveservices account list-deleted"
+              exit 0
+            fi
+            sleep 30
+          done
+
+          FOUND=0
+          while IFS=$'\t' read -r NAME LOC; do
+            [[ -z "$NAME" ]] && continue
+            FOUND=1
+            echo "Purging soft-deleted Cognitive Services account: $NAME ($LOC)"
+            az cognitiveservices account purge -l "$LOC" -g "$RG" -n "$NAME" --only-show-errors
+          done < <(az cognitiveservices account list-deleted \
+            --query "[?contains(id, '/resourceGroups/${RG}/')].[name,location]" -o tsv)
+
+          if [[ "$FOUND" == "0" ]]; then
+            echo "No soft-deleted Cognitive Services accounts found for $RG."
+          fi
 
   # ── Optional: wipe TF state backend ─────────────────────────────────────────
   destroy-backend:

@@ -156,20 +156,20 @@ cp .env.example .env
 2. Let workflow 000 complete — initialize Terraform remote state and import the existing workload RG into state (one-time per environment)
 3. Run workflow 100 — validate all secrets, variables, Azure OIDC
 4. Push to main   — workflow 200 auto-builds the CLI plus all three app container images
-5. Run workflow 210 (environment: dev) — Terraform apply (~20 min)
+5. Run workflow 211 (environment: dev) — Terraform apply (~20 min)
    → Copy Front Door hostname from outputs
-   → Workflow 210 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
-   → Workflow 210 also syncs the Entra app home page URL and redirect URI to the Front Door hostname
-   → Re-run 210 to apply updated NextAuth URL
+   → Workflow 211 now updates `CNA_NEXTAUTH_URL`, `KEY_VAULT_NAME`, and `APPLICATION_INSIGHTS_NAME`
+   → Workflow 211 also syncs the Entra app home page URL and redirect URI to the Front Door hostname
+   → Re-run 211 to apply updated NextAuth URL
 6. Navigate to https://<frontdoor-hostname> — sign in with Entra ID
 ```
 
 To wipe an environment and redeploy clean:
 
 ```
-1. Run workflow 220 — type DESTROY to confirm teardown
+1. Run workflow 330 — type DESTROY to confirm teardown
 2. Leave `delete_drifted_resources=false` on the first run and review the cleanup preview
-3. Re-run workflow 220 with `delete_drifted_resources=true` only after confirming the preview lists only CNA-owned targets
+3. Re-run workflow 330 with `delete_drifted_resources=true` only after confirming the preview lists only CNA-owned targets
 4. Keep `destroy_tfstate_backend=false` unless intentionally resetting Terraform state
 5. Follow deployment steps above
 ```
@@ -182,14 +182,16 @@ To wipe an environment and redeploy clean:
 |---|---|---|
 | `000-bootstrap-backend.yml` | Manual (one-time per environment) | Creates workload RG, provisions tfstate backend in a separate convention-based RG, imports app RG into state |
 | `100-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
-| `110-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
-| `120-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update`, auto-targeting the workload RG from repo variables |
 | `200-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, cna-web, and cna-migrator to Docker Hub |
-| `210-deploy-azure.yml` | Manual + nightly | Terraform plan → apply → health verification |
-| `220-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
+| `211-deploy-azure-split.yml` | Manual + nightly | Terraform plan → apply → migrate → health verification |
+| `220-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update` — no Terraform apply, ~2 min vs ~10+ min for a full deploy |
 | `300-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
 | `310-release-version.yml` | `git tag v*.*.*` | Tags Docker Hub CLI image + creates GitHub Release |
 | `320-publish-portal.yml` | Manual | Delivers reports to client portals from the CLI image, with artifact-backed engagement content and Azure/AWS storage support |
+| `330-teardown.yml` | Manual (`DESTROY`) | Full environment teardown with safety gate |
+| `340-sync-keys.yml` | Manual | Pulls Key Vault secrets → `.env` artifact |
+| `350-drift-dev.yml` | Nightly + manual | Terraform drift detection against dev |
+| `360-drift-prod.yml` | Manual | Terraform drift detection against prod |
 
 ---
 
@@ -215,7 +217,8 @@ To wipe an environment and redeploy clean:
 - Azure release gated by direct Azure Monitor + App Insights evidence
 - Encyclopedia/branded reports flagged `[REVIEW REQUIRED]` before client delivery
 - Cost estimates in FinOps findings flagged `[VERIFY]` for analyst review
-- Terraform hardened per an AVM + Microsoft Learn review pass (2026-07-01): managed-identity Key Vault RBAC grants are propagation-gated, Key Vault purge protection defaults to `true`, Postgres Flexible Server supports zone-redundant HA (enabled in prod), and the Front Door WAF's auth-path exception was narrowed from a blanket bypass to field-specific exclusions — **`[REVIEW REQUIRED]`**: that WAF change needs security sign-off before it ships to a live environment
+- Terraform hardened per an AVM + Microsoft Learn review pass (2026-07-01): managed-identity Key Vault RBAC grants are propagation-gated, Key Vault purge protection defaults to `true`, Postgres Flexible Server supports zone-redundant HA (enabled in prod), and the Front Door WAF's auth-path exception was narrowed from a blanket bypass to field-specific exclusions, signed off in [#111](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/111) — the policy now runs in `Prevention` mode in both dev and prod
+- Break-glass local admin login (`/local-admin`, isolated from Entra ID SSO) reviewed and hardened before first live use ([#112](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/112)): rate limiting keys off Front Door's `X-Azure-ClientIP` (non-spoofable) rather than the client-supplied `X-Forwarded-For`, and the bootstrap script's one-time plaintext password report is `.gitignore`d
 
 ---
 
@@ -232,5 +235,5 @@ To wipe an environment and redeploy clean:
 - Container Apps creates a separate Azure-managed infrastructure resource group for the managed environment. This repo now names it deterministically as `rg-cna-<environment>-<region_short>-cae-managed`, for example `rg-cna-dev-scus-cae-managed`.
 - This managed RG is expected and separate from the workload RG. It contains Azure-managed infrastructure such as the Container Apps environment load balancer and public IP.
 - The Terraform state backend remains separate in `rg-cna-<environment>-<region_short>-tfstate` to avoid backend/self-destroy lifecycle problems.
-- The subscription must have `Microsoft.AlertsManagement` registered before `210` so Application Insights smart-detection alert deployment does not fail.
-- Workflow `210-deploy-azure.yml` syncs the Entra app home page URL and redirect URI from the current Front Door hostname after Terraform apply.
+- The subscription must have `Microsoft.AlertsManagement` registered before `211` so Application Insights smart-detection alert deployment does not fail.
+- Workflow `211-deploy-azure-split.yml` syncs the Entra app home page URL and redirect URI from the current Front Door hostname after Terraform apply.

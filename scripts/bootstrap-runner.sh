@@ -28,7 +28,7 @@
 #   pipx        — Install Python tools (checkov, etc.) without system conflicts
 #   az ext: containerapp — 211 runs `az containerapp job ...` for DB migration +
 #                          revision restarts; core az CLI does NOT include it
-#   powershell (pwsh) — 330 teardown runs cleanup-stale-ai-resources.ps1 via pwsh;
+#   powershell (pwsh) — 330 teardown runs Remove-CnaStaleAiResources.ps1 via pwsh;
 #                       not an apt default, installed from Microsoft's package repo
 #
 # GOTCHAS for self-hosted runners (vs. ubuntu-latest which has these handled):
@@ -99,7 +99,7 @@ apt-get install -y \
 ok "Python3 installed ($(python3 --version))"
 ok "pipx installed ($(pipx --version))"
 
-# PowerShell Core (pwsh) — workflow 330 teardown runs cleanup-stale-ai-resources.ps1
+# PowerShell Core (pwsh) — workflow 330 teardown runs Remove-CnaStaleAiResources.ps1
 # via `pwsh`. Core `apt` has no powershell package; install from Microsoft's repo.
 step "Installing PowerShell (pwsh)"
 if ! command -v pwsh &>/dev/null; then

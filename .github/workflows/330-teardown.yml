@@ -185,7 +185,7 @@ jobs:
             echo "::error::AZURE_REGION_SHORT is required, or pass region_short when dispatching workflow 220."
             exit 1
           fi
-          pwsh -File ./scripts/cleanup-stale-ai-resources.ps1 -Environment "${{ github.event.inputs.environment }}" -RegionShort "$REGION_SHORT" -Scope StaleAi
+          pwsh -File ./scripts/Remove-CnaStaleAiResources.ps1 -Environment "${{ github.event.inputs.environment }}" -RegionShort "$REGION_SHORT" -Scope StaleAi
 
       - name: Delete drifted resources (not managed by Terraform)
         if: github.event.inputs.delete_drifted_resources == 'true'
@@ -198,7 +198,7 @@ jobs:
             echo "::error::AZURE_REGION_SHORT is required, or pass region_short when dispatching workflow 220."
             exit 1
           fi
-          pwsh -File ./scripts/cleanup-stale-ai-resources.ps1 -Environment "${{ github.event.inputs.environment }}" -RegionShort "$REGION_SHORT" -Scope StaleAi -Delete
+          pwsh -File ./scripts/Remove-CnaStaleAiResources.ps1 -Environment "${{ github.event.inputs.environment }}" -RegionShort "$REGION_SHORT" -Scope StaleAi -Delete
 
       - name: Require explicit rerun for drift deletion
         if: github.event.inputs.delete_drifted_resources != 'true'

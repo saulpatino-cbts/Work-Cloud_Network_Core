@@ -16,17 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added streamable HTTP JSON-RPC tool-call support for the Azure and AWS MCP clients while preserving offline recommendation fallback when endpoints are unavailable.
 - Extended CISA ZTMM v2 mappings for AWS WAF, Azure Application Gateway WAF, and Azure Front Door WAF findings into the `Applications and Workloads` pillar.
 - Added regression coverage for live MCP JSON-RPC request shaping and WAF `Applications and Workloads` framework mappings.
+- Added a break-glass local admin login (`/local-admin`, isolated from Entra ID SSO), PBKDF2-HMAC-SHA256 password hashing, and the supporting Terraform/Key Vault/migrator wiring so an environment can be signed into if Entra ID SSO is ever unavailable.
 
 ### Fixed
-- Fixed Key Vault Firewall Circumvention in `210-deploy-azure.yml` by dynamically adding/removing the GitHub runner's public IP.
-- Fixed Missing Azure CLI Version Pinning in `210-deploy-azure.yml` by injecting an installation step.
+- Fixed Key Vault Firewall Circumvention in `211-deploy-azure-split.yml` by dynamically adding/removing the GitHub runner's public IP.
+- Fixed Missing Azure CLI Version Pinning in `211-deploy-azure-split.yml` by injecting an installation step.
 - Removed fragile Private IP guessing script since Terraform now natively manages the PostgreSQL private DNS zone.
 - Replaced pipeline `gh variable set` mutation with the Terraform GitHub Provider for managing repository variables.
 - Removed out-of-band Key Vault certificate import workflow step since certificates are now rotated natively in Terraform.
+- Fixed a rate-limit bypass on the local admin login (`apps/cna-web/app/api/local-admin/route.ts`): the per-IP brute-force guard keyed off the first, client-spoofable hop of `X-Forwarded-For`; it now keys off `X-Azure-ClientIP`, which Azure Front Door sets itself and clients can't override.
+- Added `.reports/` to `.gitignore` — the bootstrap script's one-time plaintext local-admin password report was writing to a path that wasn't excluded from version control.
 
 ### Changed
 - Consolidated the active task list into this changelog and deployment workflow validation. Live Azure prerequisite, image build, deploy, runtime, teardown, beta acceptance, and cost/footprint checks are now validated through the numbered GitHub Actions workflows and deployment evidence rather than a local TODO file.
 - Aligned MCP configuration defaults on `https://mcp.azure.com`, `https://aws-mcp.us-east-1.api.aws/mcp`, and `streamable-http` transport.
+- Signed off on the narrowed Front Door WAF `/auth/*` exclusion policy ([#111](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/111)) and the break-glass local admin login ([#112](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/112)); `frontdoor_waf_mode` now defaults to `Prevention` in both dev and prod (previously `Detection`, pending review).
+- Renamed `scripts/cleanup-stale-ai-resources.ps1` to `scripts/Remove-CnaStaleAiResources.ps1` to follow PowerShell's Verb-Noun naming convention, matching `scripts/Initialize-CnaGitHubSecrets.ps1`.
 
 ### Removed
 - Removed the Anthropic / Foundry-Claude inference path end-to-end (#100): the `foundry-claude` engine and its wire format in `apps/cna-web/lib/ai-engine.ts` and `cna/ai_engine/chat_agent.py`, the `foundry_claude_*` Terraform variables/outputs and `FOUNDRY_CLAUDE_*` container env vars (dev + prod), and the `FOUNDRY_CLAUDE_*` references in `.env.example`, the bootstrap script, and the drift/sync workflows. Azure OpenAI (`gpt-chat-latest`) is now the only supported engine. See `docs/adr/0001`.

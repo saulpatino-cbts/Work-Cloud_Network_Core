@@ -1168,19 +1168,19 @@ re-run this script.
 | Federated credential subjects | $(($OidcSubjectClaims.Count)) |
 | GitHub App status | $GitHubAppStatus |
 | GitHub App installation | $GitHubAppInstallationId |
-| Secrets written | `$SecretsSet` |
-| Secrets kept/skipped | `$SecretsKept` |
-| Variables written | `$VariablesSet` |
+| Secrets written | ``$SecretsSet`` |
+| Secrets kept/skipped | ``$SecretsKept`` |
+| Variables written | ``$VariablesSet`` |
 
 ## Azure Resources
 
 | Resource | Value |
 | --- | --- |
-| Workload RG | `$WorkloadResourceGroup` (`$WorkloadResourceGroupStatus`) |
-| Tfstate RG | `$TfstateResourceGroup` (`$TfstateResourceGroupStatus`) |
-| Tfstate storage account | `$TfstateStorageAccount` (`$TfstateStorageAccountStatus`) |
-| Tfstate container | `$TfstateContainer` (`$TfstateContainerStatus`) |
-| Tfstate storage role | `$TfstateStorageRoleStatus` |
+| Workload RG | ``$WorkloadResourceGroup`` (``$WorkloadResourceGroupStatus``) |
+| Tfstate RG | ``$TfstateResourceGroup`` (``$TfstateResourceGroupStatus``) |
+| Tfstate storage account | ``$TfstateStorageAccount`` (``$TfstateStorageAccountStatus``) |
+| Tfstate container | ``$TfstateContainer`` (``$TfstateContainerStatus``) |
+| Tfstate storage role | ``$TfstateStorageRoleStatus`` |
 $localAdminSection
 ## Federated Credentials
 
@@ -1188,8 +1188,8 @@ $credentialsText
 
 ## CAF / Naming Notes
 
-- Workload and platform resources stay in the CAF-style workload RG: `$WorkloadResourceGroup`
-- Terraform state remains in a separate CAF-named backend RG: `$TfstateResourceGroup`
+- Workload and platform resources stay in the CAF-style workload RG: ``$WorkloadResourceGroup``
+- Terraform state remains in a separate CAF-named backend RG: ``$TfstateResourceGroup``
 - GitHub OIDC subjects are created for the selected branch and GitHub environments
 - GitHub App creation follows the manifest flow and scopes the installation to this repository
 
@@ -1386,6 +1386,76 @@ function Confirm-ResourceGroup {
     }
 }
 
+function Confirm-CnaCustomRole {
+    # Idempotently creates a custom RBAC role definition for permissions that
+    # have no narrow built-in role equivalent (e.g. PostgreSQL Flexible Server
+    # control plane — Azure has no granular built-in role for it, confirmed
+    # against the Azure built-in roles reference). AssignableScopes is the
+    # subscription so the definition can be referenced by name from a
+    # RG-scoped role assignment; the definition itself grants nothing until
+    # assigned somewhere.
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$Name,
+        [string]$Description,
+        [string[]]$Actions,
+        [string]$SubscriptionScope
+    )
+
+    $existing = & az role definition list --name $Name --scope $SubscriptionScope --query "[0].roleName" -o tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existing)) {
+        Write-Ok "Custom role exists: $Name"
+        return
+    }
+
+    $definition = @{
+        Name             = $Name
+        IsCustom         = $true
+        Description      = $Description
+        Actions          = $Actions
+        NotActions       = @()
+        DataActions      = @()
+        NotDataActions   = @()
+        AssignableScopes = @($SubscriptionScope)
+    } | ConvertTo-Json -Depth 5
+
+    $definitionFile = [System.IO.Path]::GetTempFileName()
+    try {
+        Set-Content -Path $definitionFile -Value $definition -Encoding UTF8
+        if ($PSCmdlet.ShouldProcess($Name, "create custom role definition")) {
+            & az role definition create --role-definition $definitionFile --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create custom role '$Name'." }
+        }
+        Write-Ok "Created custom role: $Name"
+    }
+    finally {
+        Remove-Item -Path $definitionFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-CnaRoleAssignmentIfExists {
+    # Revokes a legacy broad role assignment once a narrower replacement is in
+    # place. Used to shrink Dev/Prod SPs from subscription-scope
+    # Contributor/User Access Administrator down to RG-scoped least-privilege
+    # roles without leaving the old grant behind alongside the new one.
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$AssigneeAppId,
+        [string]$RoleName,
+        [string]$Scope
+    )
+
+    $assignmentId = & az role assignment list --assignee $AssigneeAppId --role $RoleName --scope $Scope --query "[0].id" -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($assignmentId)) {
+        return
+    }
+    if ($PSCmdlet.ShouldProcess($Scope, "remove legacy $RoleName assignment for $AssigneeAppId")) {
+        & az role assignment delete --ids $assignmentId --output none
+        if ($LASTEXITCODE -ne 0) { throw "Failed to remove legacy role assignment $RoleName for $AssigneeAppId." }
+    }
+    Write-Ok "Removed legacy subscription-scope $RoleName from $AssigneeAppId"
+}
+
 function Confirm-TfstateBackendResources {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -1487,6 +1557,23 @@ function Confirm-TfstateBackendResources {
     }
 }
 
+if (-not $PSBoundParameters.ContainsKey('Environment')) {
+    # This script bootstraps exactly ONE environment per run — it never
+    # creates/touches both the Dev and Prod deploy service principals in the
+    # same invocation, so a stray run can't widen or duplicate the other
+    # environment's identity. Run it again with the other choice (or
+    # -Environment prod/dev) to bootstrap the other one.
+    Write-Step "Selecting target environment"
+    $Environment = $null
+    while (-not $Environment) {
+        $envChoice = (Read-Host "Which environment are you bootstrapping? [D]evelopment / [P]roduction").Trim()
+        if ($envChoice -match '^(d|dev|development)$') { $Environment = "dev" }
+        elseif ($envChoice -match '^(p|prod|production)$') { $Environment = "prod" }
+        else { Write-Warn "Enter 'Development' or 'Production' (or d/p)." }
+    }
+    Write-Ok "Target environment: $Environment"
+}
+
 Write-Step "Checking local prerequisites"
 Assert-Command "gh"
 if (-not $SkipAzureSetup) {
@@ -1563,6 +1650,9 @@ $resolvedSubscriptionName = ""
 $appId = ""
 $entraClientSecret = $null
 $federatedCredentialSubjects = [System.Collections.Generic.List[string]]::new()
+$bootstrapWorkloadResourceGroup = ""
+$workloadResourceGroupScope = ""
+$bootstrapWorkloadResourceGroupStatus = "not-run"
 
 if (-not $SkipAzureSetup) {
     Write-Step "Preparing Azure OIDC app registration"
@@ -1580,6 +1670,19 @@ if (-not $SkipAzureSetup) {
     $resolvedSubscriptionName = [string]$account.name
     Write-Ok "Azure subscription: $($account.name) ($resolvedSubscriptionId)"
     Write-Ok "Azure tenant: $tenantId"
+
+    # Created here (before the deploy SPs below) rather than at its old spot
+    # further down, so the Dev/Prod SP for the environment THIS run targets
+    # can be scoped to this RG instead of the whole subscription. See the
+    # least-privilege comment above the deploy SP creation block.
+    $bootstrapWorkloadResourceGroup = "rg-cna-$Environment-$BootstrapRegionShort"
+    Write-Step "Ensuring workload resource group"
+    $bootstrapWorkloadResourceGroupStatus = Confirm-ResourceGroup `
+        -SubscriptionId $resolvedSubscriptionId `
+        -Location $BootstrapLocation `
+        -ResourceGroupName $bootstrapWorkloadResourceGroup `
+        -PurposeLabel "workload"
+    $workloadResourceGroupScope = "/subscriptions/$resolvedSubscriptionId/resourceGroups/$bootstrapWorkloadResourceGroup"
 
     $existingApp = & az ad app list --display-name $AppDisplayName --query "[0].appId" -o tsv 2>$null
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingApp)) {
@@ -1605,15 +1708,18 @@ if (-not $SkipAzureSetup) {
     # service principal). The deploy pipeline is least-privilege and has no Graph
     # app-management rights, so it never touches this app. See docs/adr/0003.
     #
-    # Deploy OIDC uses THREE separate, least-privilege service principals:
+    # Deploy OIDC uses TWO separate, least-privilege service principals per run:
     #   - Main: repo-level jobs on main (policy-gates/000/100/320) — ref:refs/heads/main
-    #   - Dev : 211 plan/apply for dev, plus drift/sync — environment:dev
-    #   - Prod: 211 plan/apply for prod + the hub approval gate — environment:prod + environment:hub
+    #   - {Environment}: 211 plan/apply for the environment THIS run targets,
+    #     plus (for prod only) the hub approval gate.
+    # This bootstrap only ever creates/touches ONE of Dev/Prod per invocation —
+    # see the environment-selection prompt above. Run it again for the other
+    # environment; it will never widen or duplicate the one just created here.
     # Subjects are an explicit allow-list (never enumerated from GitHub environments),
     # so a stray auto-created 'copilot' environment is never credentialed.
     $subscriptionScope = "/subscriptions/$resolvedSubscriptionId"
 
-    Write-Step "Creating deploy service principals (Main / Dev / Prod)"
+    Write-Step "Creating deploy service principals (Main / $Environment)"
 
     # Main (shared) — repo-level jobs validate/scan and need to create the tfstate
     # backend (000). Contributor at subscription scope covers backend creation;
@@ -1625,23 +1731,73 @@ if (-not $SkipAzureSetup) {
     )
     $federatedCredentialSubjects.Add("repo:$Repo`:ref:refs/heads/$Branch") | Out-Null
 
-    # Dev — full deploy rights for the dev environment.
-    $devAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Dev" `
-        -Roles @("Contributor", "User Access Administrator") -Scope $subscriptionScope
-    Add-DeployFederatedCredentials -AppId $devAppId -RepoName $Repo -SubjectMap @(
-        @{ Label = "cna-oidc-dev"; Subject = "repo:$Repo`:environment:dev" }
-    )
-    $federatedCredentialSubjects.Add("repo:$Repo`:environment:dev") | Out-Null
+    # {Environment} — scoped to just this environment's workload resource group
+    # (created above) instead of the whole subscription. Built-in roles cover
+    # every resource type Terraform manages here except PostgreSQL Flexible
+    # Server, which has no narrow built-in role — see $cnaCustomRoleName.
+    # Role Based Access Control Administrator replaces User Access
+    # Administrator: it can create/delete role assignments (so Terraform can
+    # wire up its own managed identities' RBAC) but, unlike User Access
+    # Administrator, has no access to the rest of Microsoft.Authorization/*
+    # (policy assignments, locks, etc).
+    $cnaCustomRoleName = "CNA Terraform Workload Extras"
+    Confirm-CnaCustomRole -Name $cnaCustomRoleName `
+        -Description "PostgreSQL Flexible Server control plane + workload RG tag updates for CNA Terraform deploy identities. Azure has no built-in role granular to PostgreSQL Flexible Server management." `
+        -Actions @(
+            "Microsoft.DBforPostgreSQL/flexibleServers/*",
+            "Microsoft.DBforPostgreSQL/locations/*",
+            "Microsoft.Resources/subscriptions/resourceGroups/read",
+            "Microsoft.Resources/subscriptions/resourceGroups/write",
+            "Microsoft.Resources/deployments/*"
+        ) `
+        -SubscriptionScope $subscriptionScope
 
-    # Prod — full deploy rights for the prod environment and the hub approval gate.
-    $prodAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - Prod" `
-        -Roles @("Contributor", "User Access Administrator") -Scope $subscriptionScope
-    Add-DeployFederatedCredentials -AppId $prodAppId -RepoName $Repo -SubjectMap @(
-        @{ Label = "cna-oidc-prod"; Subject = "repo:$Repo`:environment:prod" },
-        @{ Label = "cna-oidc-hub"; Subject = "repo:$Repo`:environment:hub" }
+    $cnaWorkloadDeployRoles = @(
+        "Network Contributor",
+        "Storage Account Contributor",
+        "Container Apps Contributor",
+        "Container Apps ManagedEnvironments Contributor",
+        "Key Vault Contributor",
+        "Cognitive Services Contributor",
+        "Managed Identity Contributor",
+        "Log Analytics Contributor",
+        "Monitoring Contributor",
+        "CDN Profile Contributor",
+        $cnaCustomRoleName,
+        "Role Based Access Control Administrator"
     )
-    $federatedCredentialSubjects.Add("repo:$Repo`:environment:prod") | Out-Null
-    $federatedCredentialSubjects.Add("repo:$Repo`:environment:hub") | Out-Null
+
+    $envDisplayName = if ($Environment -eq "prod") { "Prod" } else { "Dev" }
+    $envAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - $envDisplayName" `
+        -Roles $cnaWorkloadDeployRoles -Scope $workloadResourceGroupScope
+
+    # Shrink from any previous run's subscription-scope grant now that the
+    # RG-scoped roles above are in place — otherwise this SP would accumulate
+    # both the old broad grant and the new narrow one instead of replacing it.
+    Remove-CnaRoleAssignmentIfExists -AssigneeAppId $envAppId -RoleName "Contributor" -Scope $subscriptionScope
+    Remove-CnaRoleAssignmentIfExists -AssigneeAppId $envAppId -RoleName "User Access Administrator" -Scope $subscriptionScope
+
+    $envSubjectMap = if ($Environment -eq "prod") {
+        @(
+            @{ Label = "cna-oidc-prod"; Subject = "repo:$Repo`:environment:prod" },
+            @{ Label = "cna-oidc-hub"; Subject = "repo:$Repo`:environment:hub" }
+        )
+    } else {
+        @(
+            @{ Label = "cna-oidc-dev"; Subject = "repo:$Repo`:environment:dev" }
+        )
+    }
+    Add-DeployFederatedCredentials -AppId $envAppId -RepoName $Repo -SubjectMap $envSubjectMap
+    foreach ($subjectEntry in $envSubjectMap) {
+        $federatedCredentialSubjects.Add($subjectEntry.Subject) | Out-Null
+    }
+
+    # Downstream code (GitHub secret/report writing) reads both variables;
+    # only the one matching this run's environment is non-null, so the
+    # existing "skip if blank" checks leave the other environment's
+    # GitHub secret and report fields untouched.
+    $devAppId = if ($Environment -eq "dev") { $envAppId } else { $null }
+    $prodAppId = if ($Environment -eq "prod") { $envAppId } else { $null }
 
     $nextAuthUrlForRedirect = if ($existingVariables.ContainsKey("CNA_NEXTAUTH_URL")) {
         [string]$existingVariables["CNA_NEXTAUTH_URL"]
@@ -1783,13 +1939,16 @@ $dockerHubSecretValues = Read-DockerHubSecretValues `
     -TokenExists ($existingSecrets.ContainsKey("DOCKERHUB_TOKEN") -and -not $hadLegacyDockerHubSecret)
 $secretValues["DOCKERHUB_TOKEN"] = $dockerHubSecretValues.Token
 
-$bootstrapWorkloadResourceGroup = "rg-cna-$Environment-$BootstrapRegionShort"
+if ([string]::IsNullOrWhiteSpace($bootstrapWorkloadResourceGroup)) {
+    # Only reached with -SkipAzureSetup, where the early "Ensuring workload
+    # resource group" step (which normally sets this) never ran.
+    $bootstrapWorkloadResourceGroup = "rg-cna-$Environment-$BootstrapRegionShort"
+}
 $bootstrapTfstateResourceGroup = [string]$variableValues["TFSTATE_RESOURCE_GROUP"]
 $bootstrapTfstateContainer = [string]$variableValues["TFSTATE_CONTAINER"]
 $bootstrapTfstateStorageAccount = Get-AvailableStorageAccountName -BaseName ([string]$variableValues["TFSTATE_STORAGE_ACCOUNT"]) -ResourceGroupName $bootstrapTfstateResourceGroup
 $variableValues["TFSTATE_STORAGE_ACCOUNT"] = $bootstrapTfstateStorageAccount
 Write-Info "Resolved TFSTATE_STORAGE_ACCOUNT = $bootstrapTfstateStorageAccount"
-$bootstrapWorkloadResourceGroupStatus = "not-run"
 $bootstrapTfstateResourceStatus = [pscustomobject]@{
     ResourceGroupStatus  = "not-run"
     StorageAccountStatus = "not-run"
@@ -1840,13 +1999,6 @@ foreach ($entry in $variableValues.GetEnumerator()) {
 }
 
 if (-not $SkipAzureSetup) {
-    Write-Step "Ensuring workload resource group"
-    $bootstrapWorkloadResourceGroupStatus = Confirm-ResourceGroup `
-        -SubscriptionId $resolvedSubscriptionId `
-        -Location $BootstrapLocation `
-        -ResourceGroupName $bootstrapWorkloadResourceGroup `
-        -PurposeLabel "workload"
-
     # Assign tfstate-blob RBAC to the MAIN deploy SP, not $appId. $appId is the
     # NextAuth OAuth app (end-user sign-in) — an app registration with no service
     # principal and no subscription roles, so `az ad sp show --id $appId` can't

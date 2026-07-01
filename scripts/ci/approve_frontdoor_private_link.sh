@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${MANAGED_ENV_ID:?MANAGED_ENV_ID is required}"
 : "${RESOURCE_GROUP_NAME:?RESOURCE_GROUP_NAME is required}"
+if [[ -z "${MANAGED_ENV_ID:-}" && -z "${MANAGED_ENV_NAME:-}" ]]; then
+  echo "::error::Either MANAGED_ENV_ID or MANAGED_ENV_NAME is required."
+  exit 1
+fi
 
 REQUEST_DESCRIPTION="${REQUEST_DESCRIPTION:-Azure Front Door Private Link request for CNA web origin}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-30}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-20}"
+# When "true", a run that finds no matching request exits 0 instead of failing.
+# Used by the always()-guarded workflow step after a FAILED apply, where the
+# origin (and therefore the request) may legitimately not exist yet.
+TOLERATE_MISSING="${TOLERATE_MISSING:-false}"
 MANAGED_ENV_NAME="${MANAGED_ENV_NAME:-${MANAGED_ENV_ID##*/}}"
 
 echo "Checking Front Door private endpoint requests for managed environment: ${MANAGED_ENV_NAME}"
@@ -71,6 +78,10 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
 done
 
 if [[ -z "$matching_ids" ]]; then
+  if [[ "$TOLERATE_MISSING" == "true" ]]; then
+    echo "No Front Door private endpoint connection request matched description '${REQUEST_DESCRIPTION}'; tolerated (TOLERATE_MISSING=true)."
+    exit 0
+  fi
   echo "::error::No Front Door private endpoint connection request matched description '${REQUEST_DESCRIPTION}'."
   exit 1
 fi

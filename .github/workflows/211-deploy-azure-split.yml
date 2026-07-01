@@ -782,6 +782,7 @@ jobs:
             -var="secret_expiration_date=${SECRET_EXPIRY}"
 
       - name: Terraform apply (workload)
+        id: tf_apply
         working-directory: infra/terraform/environments/azure/${{ inputs.environment }}/workload
         run: terraform apply -auto-approve tfplan
 
@@ -797,15 +798,45 @@ jobs:
           echo "database_server_fqdn=$(terraform output -raw database_server_fqdn)" >> "$GITHUB_OUTPUT"
           echo "database_subnet_prefix=$(terraform output -raw database_subnet_prefix)" >> "$GITHUB_OUTPUT"
 
+      # Runs even when the apply fails: a partial apply can still have created
+      # the Front Door origin, whose AFD-managed private endpoint request then
+      # sits Pending on the Container Apps environment. Without this always()
+      # the approval only ever ran after a fully successful apply, so one
+      # transient origin failure left the request Pending forever and every
+      # retry inherited the stuck half-state (observed 2026-07-01: origin
+      # InternalError + Pending private link + origin present in Azure but
+      # absent from Terraform state). On a failed apply the step derives the
+      # environment from az (Terraform outputs may not exist yet) and tolerates
+      # finding no request at all.
       - name: Approve Front Door private endpoint connections
         id: approve_private_link
+        if: always() && steps.tf_apply.outcome != 'skipped'
         env:
           MANAGED_ENV_ID: ${{ steps.export_ids.outputs.container_app_environment_id }}
           RESOURCE_GROUP_NAME: ${{ steps.export_ids.outputs.resource_group_name }}
           REQUEST_DESCRIPTION: Azure Front Door Private Link request for CNA web origin
-          MAX_ATTEMPTS: "30"
+          MAX_ATTEMPTS: ${{ steps.tf_apply.outcome == 'success' && '30' || '3' }}
           SLEEP_SECONDS: "20"
-        run: bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
+          TOLERATE_MISSING: ${{ steps.tf_apply.outcome == 'success' && 'false' || 'true' }}
+          REGION_SHORT: ${{ vars.AZURE_REGION_SHORT }}
+        run: |
+          if [[ -z "$RESOURCE_GROUP_NAME" ]]; then
+            if [[ -n "$TFSTATE_RESOURCE_GROUP" && "$TFSTATE_RESOURCE_GROUP" == *-tfstate ]]; then
+              RESOURCE_GROUP_NAME="${TFSTATE_RESOURCE_GROUP%-tfstate}"
+            else
+              RESOURCE_GROUP_NAME="rg-cna-${{ inputs.environment }}-${REGION_SHORT}"
+            fi
+            export RESOURCE_GROUP_NAME
+          fi
+          if [[ -z "$MANAGED_ENV_ID" ]]; then
+            MANAGED_ENV_NAME=$(az containerapp env list -g "$RESOURCE_GROUP_NAME" --query "[0].name" -o tsv 2>/dev/null || echo "")
+            if [[ -z "$MANAGED_ENV_NAME" ]]; then
+              echo "No Container Apps environment found in $RESOURCE_GROUP_NAME; nothing to approve."
+              exit 0
+            fi
+            export MANAGED_ENV_NAME
+          fi
+          bash ${{ github.workspace }}/scripts/ci/approve_frontdoor_private_link.sh
 
       - name: Resolve migrator image from deployment manifest
         id: resolve_migrator

@@ -328,37 +328,29 @@ module "database" {
   geo_redundant_backup_enabled = true
 }
 
-# ─── GitHub Repository Variables ──────────────────────────────────────────────
+# ─── GitHub Environment Variables ──────────────────────────────────────────────
 # Pushing Terraform outputs back to the repository via the GitHub provider
 # eliminates the need for the CI/CD pipeline to mutate repository state.
-
-resource "github_actions_variable" "cna_nextauth_url" {
+#
+# Environment-scoped (not repository-scoped): CNA_NEXTAUTH_URL and KEY_VAULT_NAME
+# are genuinely per-environment values (dev's Front Door host and vault name
+# differ from prod's). A repository-scoped variable is a single value shared by
+# both stacks — whichever environment applies last silently overwrites the
+# other's value, which previously caused a prod run to pick up dev's Key Vault
+# name (or vice versa). Environment-scoped variables give each stack its own
+# value that GitHub Actions resolves automatically from a job's `environment:`
+# context, falling back to the repository-scoped value only if no
+# environment-scoped one exists (i.e. before this apply has ever run).
+resource "github_actions_environment_variable" "cna_nextauth_url" {
   repository    = var.github_repository
+  environment   = var.environment
   variable_name = "CNA_NEXTAUTH_URL"
   value         = "https://${module.security.frontdoor_endpoint_host_name}"
 }
 
-resource "github_actions_variable" "key_vault_name" {
+resource "github_actions_environment_variable" "key_vault_name" {
   repository    = var.github_repository
+  environment   = var.environment
   variable_name = "KEY_VAULT_NAME"
   value         = module.identity.key_vault_name
-}
-
-# Adopt the placeholder variables seeded by Initialize-CnaGitHubSecrets.ps1, which
-# runs before any Terraform. Without these imports Terraform's CREATE hits a 409
-# ("Variable already exists") because the repository-scoped github_actions_variable
-# does not upsert on create (unlike the env-scoped sibling fixed in provider
-# PR #2758). On apply Terraform imports the existing variable, then the same apply
-# updates it to its real post-deploy value. ID format is "repository:NAME" per the
-# provider's buildID/parseID2 (colon separator). var.github_repository is the bare
-# repo name (211 passes ${GITHUB_REPOSITORY#*/}). The targets always pre-exist
-# because the bootstrap script seeds them first, so there is no import-missing risk.
-import {
-  to = github_actions_variable.cna_nextauth_url
-  id = "${var.github_repository}:CNA_NEXTAUTH_URL"
-}
-
-import {
-  to = github_actions_variable.key_vault_name
-  id = "${var.github_repository}:KEY_VAULT_NAME"
 }

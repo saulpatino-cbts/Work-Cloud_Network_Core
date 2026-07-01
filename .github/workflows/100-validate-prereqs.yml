@@ -99,10 +99,8 @@ jobs:
           AZURE_REGION_SHORT:        ${{ vars.AZURE_REGION_SHORT }}
           DOCKERHUB_NAMESPACE:       ${{ vars.DOCKERHUB_NAMESPACE }}
           CNA_ENTRA_CLIENT_ID:       ${{ vars.CNA_ENTRA_CLIENT_ID }}
-          CNA_NEXTAUTH_URL:          ${{ vars.CNA_NEXTAUTH_URL }}
           AZURE_SUBSCRIPTION_ID:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           APPLICATION_INSIGHTS_NAME: ${{ vars.APPLICATION_INSIGHTS_NAME }}
-          KEY_VAULT_NAME:            ${{ vars.KEY_VAULT_NAME }}
         run: |
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "## Variable Check" >> "$GITHUB_STEP_SUMMARY"
@@ -159,14 +157,21 @@ jobs:
           check_var "AZURE_REGION_SHORT"      "$AZURE_REGION_SHORT"
           check_var "DOCKERHUB_NAMESPACE"     "$DOCKERHUB_NAMESPACE"
           check_var "CNA_ENTRA_CLIENT_ID"     "$CNA_ENTRA_CLIENT_ID"
-          check_var "CNA_NEXTAUTH_URL"        "$CNA_NEXTAUTH_URL"
           check_secret "AZURE_SUBSCRIPTION_ID" "$AZURE_SUBSCRIPTION_ID"
 
           # AI/MCP variables are optional and fall back to Terraform defaults at deploy time.
 
           # Post-deploy vars — allowed to be 'none' before first Terraform run
           check_var "APPLICATION_INSIGHTS_NAME" "$APPLICATION_INSIGHTS_NAME" "true"
-          check_var "KEY_VAULT_NAME"             "$KEY_VAULT_NAME"             "true"
+
+          # CNA_NEXTAUTH_URL and KEY_VAULT_NAME are NOT checked here: this job runs
+          # with no `environment:` key (it's a repo-level preflight, see the header
+          # comment), but both are environment-scoped GitHub variables written by
+          # each stack's own Terraform apply (dev/workload and prod/workload
+          # main.tf) — reading `vars.*` here would only ever see the stale
+          # repository-scoped fallback, not either environment's real value.
+          # Check them per-environment instead (e.g. workflow 340's dispatch
+          # input) if you need to validate a specific environment's value.
 
           if [[ "$FAILED" -eq 1 ]]; then
             echo ""

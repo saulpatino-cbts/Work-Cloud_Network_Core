@@ -21,21 +21,33 @@ form's "Import CSV" expects (subscription_name,subscription_id,tenant_id).
 Entra display name for the assessment app registration.
 
 .PARAMETER SubscriptionIds
-Subscription IDs the assessment SP should be able to read. Defaults to the
-az CLI's current subscription.
+Subscription IDs the assessment SP should be able to read. When omitted,
+defaults to EVERY enabled subscription in the tenant you are logged into —
+the assessment covers the whole tenant unless you narrow it explicitly.
 
 .PARAMETER SecretYears
 Client secret lifetime in years.
+
+.PARAMETER SkipSecret
+Skip minting a new client secret. Use on re-runs that only extend role
+assignments to more subscriptions — the secret already saved in the app's
+connection keeps working (credential resets here always --append).
 
 .PARAMETER CsvPath
 Where to write the subscription import CSV. Defaults to
 scripts/.reports/assessment/<timestamp>-subscriptions.csv.
 
 .EXAMPLE
+# Tenant-wide scanner (all enabled subscriptions in the current tenant):
 ./scripts/New-CnaAssessmentServicePrincipal.ps1
 
 .EXAMPLE
+# Narrow to specific subscriptions:
 ./scripts/New-CnaAssessmentServicePrincipal.ps1 -SubscriptionIds @("<sub-id-1>", "<sub-id-2>")
+
+.EXAMPLE
+# Extend an existing scanner to newly added subscriptions without rotating its secret:
+./scripts/New-CnaAssessmentServicePrincipal.ps1 -SkipSecret
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -45,6 +57,8 @@ param(
 
     [ValidateRange(1, 2)]
     [int]$SecretYears = 1,
+
+    [switch]$SkipSecret,
 
     [string]$CsvPath = ""
 )
@@ -64,23 +78,33 @@ if (-not $account) {
 $tenantId = [string]$account.tenantId
 Write-Ok "Logged in as $($account.user.name) (tenant $tenantId)"
 
-if ($SubscriptionIds.Count -eq 0) {
-    $SubscriptionIds = @([string]$account.id)
-    Write-Ok "No -SubscriptionIds given; defaulting to current subscription $($account.id) ($($account.name))"
-}
-
 Write-Step "Resolving target subscriptions"
 $subscriptions = @()
-foreach ($subId in $SubscriptionIds) {
-    $sub = az account show --subscription $subId -o json 2>$null | ConvertFrom-Json
-    if (-not $sub) {
-        throw "Subscription '$subId' is not visible to this login. Check the ID and your access."
+if ($SubscriptionIds.Count -eq 0) {
+    # Default: the whole tenant. The scanner is expected to see every enabled
+    # subscription the assessment could target; narrowing is the explicit
+    # opt-in (-SubscriptionIds), not the default.
+    $tenantSubs = az account list --query "[?tenantId=='$tenantId' && state=='Enabled'].{id:id, name:name, tenantId:tenantId}" -o json | ConvertFrom-Json
+    if (-not $tenantSubs -or @($tenantSubs).Count -eq 0) {
+        throw "No enabled subscriptions visible in tenant $tenantId. Run 'az login' with an account that can see the target subscriptions."
     }
-    if ([string]$sub.tenantId -ne $tenantId) {
-        Write-Warn "Subscription $($sub.name) lives in tenant $($sub.tenantId), not $tenantId. The app connects with ONE tenant per connection — add it as a separate connection."
+    foreach ($sub in @($tenantSubs)) {
+        $subscriptions += [pscustomobject]@{ Id = [string]$sub.id; Name = [string]$sub.name; TenantId = [string]$sub.tenantId }
+        Write-Ok "$($sub.name) ($($sub.id))"
     }
-    $subscriptions += [pscustomobject]@{ Id = [string]$sub.id; Name = [string]$sub.name; TenantId = [string]$sub.tenantId }
-    Write-Ok "$($sub.name) ($($sub.id))"
+    Write-Ok "Tenant-wide: $(@($subscriptions).Count) enabled subscription(s) in $tenantId"
+} else {
+    foreach ($subId in $SubscriptionIds) {
+        $sub = az account show --subscription $subId -o json 2>$null | ConvertFrom-Json
+        if (-not $sub) {
+            throw "Subscription '$subId' is not visible to this login. Check the ID and your access."
+        }
+        if ([string]$sub.tenantId -ne $tenantId) {
+            Write-Warn "Subscription $($sub.name) lives in tenant $($sub.tenantId), not $tenantId. The app connects with ONE tenant per connection — add it as a separate connection."
+        }
+        $subscriptions += [pscustomobject]@{ Id = [string]$sub.id; Name = [string]$sub.name; TenantId = [string]$sub.tenantId }
+        Write-Ok "$($sub.name) ($($sub.id))"
+    }
 }
 
 Write-Step "Ensuring app registration + service principal: $DisplayName"
@@ -123,12 +147,17 @@ foreach ($sub in $subscriptions) {
     Write-Ok "Assigned Reader on $($sub.Name)"
 }
 
-Write-Step "Creating client secret ($SecretYears year(s))"
 $secret = $null
-if ($PSCmdlet.ShouldProcess($appId, "reset client credential")) {
-    $secret = (az ad app credential reset --id $appId --append --display-name "cna-assessment-$(Get-Date -Format yyyyMMddHHmmss)" --years $SecretYears --query password -o tsv 2>$null)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($secret)) { throw "Failed to create client secret." }
-    $secret = $secret.Trim()
+if ($SkipSecret) {
+    Write-Step "Skipping client secret creation (-SkipSecret)"
+    Write-Ok "The secret already saved in the app's cloud connection keeps working."
+} else {
+    Write-Step "Creating client secret ($SecretYears year(s))"
+    if ($PSCmdlet.ShouldProcess($appId, "reset client credential")) {
+        $secret = (az ad app credential reset --id $appId --append --display-name "cna-assessment-$(Get-Date -Format yyyyMMddHHmmss)" --years $SecretYears --query password -o tsv 2>$null)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($secret)) { throw "Failed to create client secret." }
+        $secret = $secret.Trim()
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($CsvPath)) {
@@ -151,8 +180,12 @@ Write-Step "Values for the Add Cloud Connection form"
 Write-Host ""
 Write-Host "  Tenant ID        : $tenantId" -ForegroundColor White
 Write-Host "  SP Client ID     : $appId" -ForegroundColor White
-Write-Host "  SP Client Secret : $secret" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "  The secret is shown ONCE and is not saved anywhere by this script." -ForegroundColor Yellow
+if ($null -ne $secret) {
+    Write-Host "  SP Client Secret : $secret" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  The secret is shown ONCE and is not saved anywhere by this script." -ForegroundColor Yellow
+    Write-Host "  Newly minted secrets can take a minute to propagate in Entra before 'Test connection' passes."
+} else {
+    Write-Host "  SP Client Secret : (unchanged — -SkipSecret)" -ForegroundColor White
+}
 Write-Host "  Subscriptions: use 'Import CSV' with the file above, or add rows manually."
-Write-Host "  Newly minted secrets can take a minute to propagate in Entra before 'Test connection' passes."

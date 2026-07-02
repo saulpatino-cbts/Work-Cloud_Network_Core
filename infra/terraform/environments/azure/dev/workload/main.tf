@@ -227,6 +227,16 @@ module "runtime" {
 # Terraform owns the full identity surface — no manual az role assignment calls.
 
 # Storage: web uploads deliverables; api + worker read/write raw artifacts.
+# The user-assigned identity needs this too: AZURE_CLIENT_ID pins
+# DefaultAzureCredential to it in all three apps, so blob calls authenticate
+# as the UAI, not the system-assigned identities. Without this grant, report
+# generation succeeds but the final blob upload 403s. Diagnosed 2026-07-02.
+resource "azurerm_role_assignment" "uai_storage_blob_data_contributor" {
+  scope                = module.storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.identity.managed_identity_principal_id
+}
+
 resource "azurerm_role_assignment" "web_storage_blob_data_contributor" {
   scope                = module.storage.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"

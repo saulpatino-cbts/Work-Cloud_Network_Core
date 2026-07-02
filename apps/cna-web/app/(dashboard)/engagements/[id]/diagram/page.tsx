@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DiagramForms } from "./diagram-forms";
-import { DrawioEmbed } from "@/components/diagrams/DrawioEmbed";
+import { DiagramEditor } from "./diagram-editor";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,6 +31,14 @@ export default async function DiagramPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
+  // Latest saved diagram source (editor saves and .drawio uploads both store
+  // the XML in parsedText) — loaded back into the embedded editor.
+  const latestSource = await prisma.ingestedDocument.findFirst({
+    where: { engagementId: id, docType: "NETWORK_DIAGRAM", parsedText: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { parsedText: true },
+  });
+
   return (
     <div className="space-y-5">
       <section className="glass p-5">
@@ -39,11 +47,10 @@ export default async function DiagramPage({ params }: PageProps) {
           {/* Current / Future state toggle.
               TODO(Phase E follow-up): the future-state .drawio XML is produced by
               cna/diagram_engine/drawio_generator.py:generate_future_state_topology
-              during assessment-report generation (worker), but this page only embeds
-              a blank diagrams.net editor — there is no data flow that loads generated
-              XML into the iframe yet. Once generated diagrams are persisted as
-              engagement documents/deliverables and loadable here, enable this toggle
-              and swap the iframe content between current- and future-state XML. */}
+              during assessment-report generation (worker) but is not yet persisted
+              as an engagement document. The editor now loads/saves current-state
+              XML; once generated future-state diagrams are persisted too, enable
+              this toggle to swap between current- and future-state XML. */}
           <div
             className="inline-flex overflow-hidden rounded-lg border border-navy-700/40 text-xs font-semibold"
             role="group"
@@ -70,11 +77,10 @@ export default async function DiagramPage({ params }: PageProps) {
           </a>
         </div>
         <p className="mb-4 text-sm text-navy-400">
-          Build diagrams in draw.io, then save source `.drawio` files and exported artifacts back into this engagement.
+          Build diagrams in draw.io and save them straight into this engagement with the
+          editor&apos;s Save button. Exported artifacts (.png/.svg/.pdf) can be uploaded below.
         </p>
-        <div className="overflow-hidden rounded-lg border border-navy-700/40 bg-white">
-          <DrawioEmbed />
-        </div>
+        <DiagramEditor engagementId={id} initialXml={latestSource?.parsedText ?? ""} />
       </section>
 
       <DiagramForms engagementId={id} />

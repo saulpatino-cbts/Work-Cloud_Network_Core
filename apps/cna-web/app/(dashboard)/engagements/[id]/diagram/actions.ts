@@ -76,6 +76,83 @@ export async function saveDiagramSource(
   return { success: true };
 }
 
+const MAX_DIAGRAM_XML_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Persists diagram XML sent by the embedded draw.io editor (its Save button /
+ * Ctrl+S). Each save is a new blob + IngestedDocument version; a single
+ * Deliverable entry per engagement is upserted to always point at the latest.
+ */
+export async function saveDiagramXml(
+  engagementId: string,
+  xml: string,
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated." };
+  if (!engagementId) return { error: "Engagement is required." };
+
+  const isMember = await ensureMembership(engagementId, session.user.id);
+  if (!isMember) return { error: "Access denied." };
+
+  const trimmed = xml?.trim() ?? "";
+  if (!trimmed) return { error: "Diagram is empty — nothing to save." };
+  if (!/^<(\?xml|mxfile|mxGraphModel)/.test(trimmed)) {
+    return { error: "Unexpected diagram payload; expected draw.io XML." };
+  }
+  const buffer = Buffer.from(trimmed, "utf-8");
+  if (buffer.byteLength > MAX_DIAGRAM_XML_BYTES) {
+    return { error: "Diagram exceeds the 5 MB save limit." };
+  }
+
+  const fileName = `editor-${new Date().toISOString().slice(0, 10)}.drawio`;
+  const blobPath = await uploadEngagementFile(
+    engagementId,
+    `diagrams/${Date.now()}-${sanitizeFileName(fileName)}`,
+    buffer,
+    "application/xml",
+  );
+
+  await prisma.ingestedDocument.create({
+    data: {
+      engagementId,
+      fileName,
+      blobPath,
+      docType: "NETWORK_DIAGRAM" as DocumentType,
+      parsedText: trimmed,
+    },
+  });
+
+  // Surface the diagram in Deliverables: one entry per engagement, always
+  // pointing at the most recent save.
+  const engagement = await prisma.engagement.findUnique({
+    where: { id: engagementId },
+    select: { clientOrg: true },
+  });
+  const title = `${engagement?.clientOrg ?? "Client"} — Network Diagram (draw.io)`;
+  const existing = await prisma.deliverable.findFirst({
+    where: { engagementId, title },
+    select: { id: true },
+  });
+  if (existing) {
+    await prisma.deliverable.update({ where: { id: existing.id }, data: { blobPath } });
+  } else {
+    await prisma.deliverable.create({
+      data: {
+        engagementId,
+        title,
+        type: "SPECIALIZATION_REPORT" as DeliverableType,
+        blobPath,
+      },
+    });
+  }
+
+  revalidatePath(`/engagements/${engagementId}/diagram`);
+  revalidatePath(`/engagements/${engagementId}/documents`);
+  revalidatePath(`/engagements/${engagementId}/deliverables`);
+  revalidatePath(`/engagements/${engagementId}/client-deliverables`);
+  return { success: true };
+}
+
 export async function uploadDiagramExport(
   _prev: ActionResult | null,
   formData: FormData,

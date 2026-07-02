@@ -375,7 +375,10 @@ class AzureDiscovery:
         the rest of the subscription from being discovered.
         """
         from azure.mgmt.network import NetworkManagementClient
-        from azure.mgmt.resource import ResourceManagementClient
+
+        # azure-mgmt-resource >= 24 split into per-service sub-packages and the
+        # top-level re-export was removed; pyproject pins >= 26.
+        from azure.mgmt.resource.resources import ResourceManagementClient
 
         topo = AzureSubscriptionTopology(
             subscription_id=sub_id,

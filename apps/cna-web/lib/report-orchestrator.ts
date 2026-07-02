@@ -11,6 +11,7 @@ import type { DeliverableContext } from "@/lib/openai";
 import { fetchMsLearnContext, summarizeTopology } from "@/lib/openai";
 import {
   ABBREVIATIONS,
+  buildEnvironmentSnapshot,
   COMPREHENSIVE_SECTIONS,
   inventoryCounts,
   type ReportFinding,
@@ -53,6 +54,7 @@ async function runSection(
   spec: SectionSpec,
   input: SectionInput,
   meta: ReportMeta,
+  environmentSnapshot: string,
   msLearnContext: string,
   onProgress?: ProgressCallback,
 ): Promise<SectionResult> {
@@ -67,7 +69,7 @@ async function runSection(
   }
 
   await onProgress?.({ stepId: spec.id, label: spec.title, status: "running" });
-  const { system, user } = buildSectionMessages(spec, slice, meta, msLearnContext);
+  const { system, user } = buildSectionMessages(spec, slice, meta, environmentSnapshot, msLearnContext);
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -191,12 +193,17 @@ export async function generateComprehensiveReport(
   const categories = [...new Set(findings.map((f) => f.category))];
   const msLearnContext = await fetchMsLearnContext(categories);
 
+  // Deterministic whole-estate snapshot: sections run in parallel and can't
+  // see each other's prose — this shared context is what makes twelve
+  // independent calls narrate one network.
+  const environmentSnapshot = buildEnvironmentSnapshot(input);
+
   // ── Domain sections in batches ─────────────────────────────────────────────
   const results: SectionResult[] = [];
   for (let i = 0; i < COMPREHENSIVE_SECTIONS.length; i += BATCH_SIZE) {
     const batch = COMPREHENSIVE_SECTIONS.slice(i, i + BATCH_SIZE);
     const settled = await Promise.allSettled(
-      batch.map((spec) => runSection(spec, input, meta, msLearnContext, onProgress)),
+      batch.map((spec) => runSection(spec, input, meta, environmentSnapshot, msLearnContext, onProgress)),
     );
     for (const s of settled) {
       // runSection handles its own failures — a rejection here is a bug guard.

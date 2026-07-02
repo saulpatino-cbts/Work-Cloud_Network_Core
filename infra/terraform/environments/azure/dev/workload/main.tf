@@ -94,6 +94,15 @@ module "compute" {
   # AZURE_OPENAI_* must reach the API and worker too, not just web: cna-api's
   # GroundedChatAgent raises ChatConfigError (→ 503 on /chat, all analysis
   # types fail) when AZURE_OPENAI_ENDPOINT is absent from its own environment.
+  #
+  # AZURE_CLIENT_ID: all three container apps carry BOTH a system-assigned and
+  # the shared user-assigned identity (key_vault_reference_identity_id above).
+  # DefaultAzureCredential's ManagedIdentityCredential defaults to "system-
+  # assigned" only when unambiguous; with two identities attached, Container
+  # Apps' identity endpoint returns "(invalid_scope) 500" instead of resolving
+  # the default. Setting AZURE_CLIENT_ID pins DefaultAzureCredential to the
+  # user-assigned identity (which already holds Cognitive Services User on the
+  # AI Foundry account) and removes the ambiguity. Diagnosed 2026-07-02.
   api_env_vars = {
     CNA_STORAGE_ACCOUNT_NAME        = module.storage.storage_account_name
     FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
@@ -101,6 +110,7 @@ module "compute" {
     AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
     AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
     AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
+    AZURE_CLIENT_ID                 = module.identity.managed_identity_client_id
   }
 
   worker_env_vars = {
@@ -110,6 +120,7 @@ module "compute" {
     AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
     AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
     AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
+    AZURE_CLIENT_ID                 = module.identity.managed_identity_client_id
   }
 
   web_env_vars = {
@@ -117,6 +128,7 @@ module "compute" {
     AUTH_TRUST_HOST                     = "true"
     AZURE_AD_TENANT_ID                  = var.tenant_id
     AZURE_AD_CLIENT_ID                  = var.entra_client_id
+    AZURE_CLIENT_ID                     = module.identity.managed_identity_client_id
     CNA_API_INTERNAL_URL                = "http://${local.name_prefix}-ca-api"
     AZURE_STORAGE_ACCOUNT_NAME          = module.storage.storage_account_name
     AZURE_STORAGE_CONTAINER_ENGAGEMENTS = "raw-artifacts"

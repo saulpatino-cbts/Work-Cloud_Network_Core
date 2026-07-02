@@ -5,8 +5,8 @@
   "worker_image": "docker.io/hybridcloudworks/cna:worker-sha-50539a2",
   "web_image": "docker.io/hybridcloudworks/cna:web-sha-50539a2",
   "migrator_image": "docker.io/hybridcloudworks/cna:migrator-sha-50539a2",
-  "commit_sha": "bcabd72fdaa7eee261ef19b7d9f294f6484c18af",
-  "workflow_run_id": "28599345850",
+  "commit_sha": "0a28c1eb106dffac6682feeae88325ef8c91a1d6",
+  "workflow_run_id": "28609049030",
   "approval_status": "approved",
   "health_status": "healthy",
   "validation_checks": {

@@ -77,7 +77,7 @@ export default async function FinOpsPage({ params }: PageProps) {
             data={chartData}
             series={[...SEV_ORDER]}
             colors={SEVERITY_HEX}
-            valueFormatter={(v) => `$${v.toLocaleString()}`}
+            valueFormat="currency"
           />
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-navy-700 px-6 py-10 text-center">

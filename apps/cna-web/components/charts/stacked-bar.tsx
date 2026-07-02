@@ -25,7 +25,7 @@ export function StackedBar({
   series,
   colors,
   height = 280,
-  valueFormatter,
+  valueFormat = "number",
 }: {
   data: StackedBarDatum[];
   /** Keys of each stacked segment, bottom-up. */
@@ -33,9 +33,14 @@ export function StackedBar({
   /** Optional hex per series key; falls back to CATEGORY_PALETTE. */
   colors?: Record<string, string>;
   height?: number;
-  valueFormatter?: (v: number) => string;
+  /** Serializable formatter selector — function props can't cross the
+   *  server→client boundary (RSC serialization throws in production). */
+  valueFormat?: "number" | "currency";
 }) {
-  const fmt = valueFormatter ?? ((v: number) => String(v));
+  const fmt =
+    valueFormat === "currency"
+      ? (v: number) => `$${v.toLocaleString()}`
+      : (v: number) => String(v);
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>

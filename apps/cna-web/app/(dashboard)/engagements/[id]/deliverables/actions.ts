@@ -4,8 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteBlob, uploadDeliverable } from "@/lib/blob";
 import { generateDeliverableContent } from "@/lib/openai";
-import type { DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
+import type { DeliverableContext, DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
+import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { DeliverableType } from "@prisma/client";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -75,8 +77,9 @@ const ENCYCLOPEDIA_EDITIONS: Record<string, "condensed" | "expanded"> = {
   ENCYCLOPEDIA_EXPANDED: "expanded",
 };
 
-const ALL_TYPES: OpenAIDeliverableType[] = [
-  "COMPREHENSIVE_ASSESSMENT",
+// COMPREHENSIVE_ASSESSMENT is dispatched to the background orchestrator, not
+// generated inline with these single-shot types.
+const SINGLE_SHOT_TYPES: OpenAIDeliverableType[] = [
   "EXECUTIVE_SUMMARY",
   "TECHNICAL_FINDINGS",
   "REMEDIATION_PLAN",
@@ -87,6 +90,82 @@ function buildTitle(type: string, clientOrg: string, seqNum: number): string {
   const label = TYPE_LABELS[type] ?? type.replace(/_/g, " ");
   const date = new Date().toISOString().split("T")[0];
   return `${clientOrg} — ${label} — ${date} — #${seqNum}`;
+}
+
+// ─── Background generation for the sectioned Comprehensive Assessment ────────
+// Multi-pass generation (12+ AI calls) exceeds the Front Door / Container Apps
+// ingress timeouts, so the orchestrator runs via next/server after() and the
+// client polls getDeliverableProgress(). Progress steps accumulate in
+// Deliverable.progressLog as a JSON array.
+
+async function runComprehensiveInBackground(
+  deliverableId: string,
+  engagementId: string,
+  ctx: DeliverableContext,
+): Promise<void> {
+  const steps: ProgressUpdate[] = [];
+  const persistProgress = async (update: ProgressUpdate) => {
+    const existing = steps.findIndex((s) => s.stepId === update.stepId);
+    if (existing >= 0) steps[existing] = update;
+    else steps.push(update);
+    await prisma.deliverable
+      .update({
+        where: { id: deliverableId },
+        data: { progressLog: JSON.stringify(steps) },
+      })
+      .catch(() => {}); // progress persistence must never kill the run
+  };
+
+  try {
+    const content = await generateComprehensiveReport(ctx, persistProgress);
+    const fileName = `comprehensive_assessment-${Date.now()}.md`;
+    const blobPath = await uploadDeliverable(engagementId, fileName, content);
+    await prisma.deliverable.update({
+      where: { id: deliverableId },
+      data: { content, blobPath, status: "COMPLETED", progressLog: JSON.stringify(steps) },
+    });
+    await prisma.engagement.update({
+      where: { id: engagementId },
+      data: { status: "REVIEW" },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[runComprehensiveInBackground][error]", err);
+    await prisma.deliverable
+      .update({
+        where: { id: deliverableId },
+        data: {
+          status: "FAILED",
+          progressLog: JSON.stringify([...steps, { stepId: "fatal", label: msg.slice(0, 300), status: "failed" }]),
+        },
+      })
+      .catch(() => {});
+  }
+}
+
+/** Poll target for the deliverables page while a report is QUEUED/RUNNING. */
+export async function getDeliverableProgress(
+  deliverableId: string,
+): Promise<{ status: string; steps: ProgressUpdate[] } | null> {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  const deliverable = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: {
+      status: true,
+      progressLog: true,
+      engagement: { select: { members: { select: { userId: true } } } },
+    },
+  });
+  if (!deliverable) return null;
+  if (!deliverable.engagement.members.some((m) => m.userId === session.user!.id)) return null;
+
+  let steps: ProgressUpdate[] = [];
+  try {
+    steps = deliverable.progressLog ? (JSON.parse(deliverable.progressLog) as ProgressUpdate[]) : [];
+  } catch { /* malformed progress — return empty */ }
+  return { status: deliverable.status, steps };
 }
 
 // OWA-07: SSRF Defense - Validate that external image URLs are restricted to trusted domains
@@ -213,27 +292,46 @@ export async function generateDeliverable(
     revalidatePath(`/engagements/${engagementId}`);
     return { success: true };
   }
-  try {
-    content = await generateDeliverableContent({
-      type: type as OpenAIDeliverableType,
-      title,
-      clientOrg: engagement.clientOrg,
-      engagementName: engagement.name,
-      findings,
-      topologyJson: mergedTopologyJson,
-      documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
-      customerLogoUrl,
-      credentialsInfo: credentials.map((c) => ({
-        label: c.label,
-        platform: c.platform,
-        tenantId: c.tenantId,
-        subscriptionIds: c.subscriptionIds,
-      })),
-      previousAssessments: existingDeliverables.map((d) => ({
-        type: d.type,
-        title: d.title,
-      })),
+  const deliverableCtx: DeliverableContext = {
+    type: type as OpenAIDeliverableType,
+    title,
+    clientOrg: engagement.clientOrg,
+    engagementName: engagement.name,
+    findings,
+    topologyJson: mergedTopologyJson,
+    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+    customerLogoUrl,
+    credentialsInfo: credentials.map((c) => ({
+      label: c.label,
+      platform: c.platform,
+      tenantId: c.tenantId,
+      subscriptionIds: c.subscriptionIds,
+    })),
+    previousAssessments: existingDeliverables.map((d) => ({
+      type: d.type,
+      title: d.title,
+    })),
+  };
+
+  // Sectioned Comprehensive Assessment: 12+ AI calls exceed edge timeouts, so
+  // create the row immediately (RUNNING) and generate in the background.
+  if (type === "COMPREHENSIVE_ASSESSMENT") {
+    const row = await prisma.deliverable.create({
+      data: {
+        engagementId,
+        title,
+        type: type as DeliverableType,
+        status: "RUNNING",
+        progressLog: "[]",
+      },
     });
+    after(() => runComprehensiveInBackground(row.id, engagementId, deliverableCtx));
+    revalidatePath(`/engagements/${engagementId}`);
+    return { success: true };
+  }
+
+  try {
+    content = await generateDeliverableContent(deliverableCtx);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[generateDeliverable][error]", err);
@@ -243,8 +341,7 @@ export async function generateDeliverable(
     return { error: "AI generation failed. Please check the server logs for details." };
   }
 
-  const ext = type === "COMPREHENSIVE_ASSESSMENT" ? "html" : "md";
-  const fileName = `${type.toLowerCase()}-${Date.now()}.${ext}`;
+  const fileName = `${type.toLowerCase()}-${Date.now()}.md`;
   const blobPath = await uploadDeliverable(engagementId, fileName, content);
 
   await prisma.deliverable.create({
@@ -323,11 +420,41 @@ export async function generateAllAssessments(
   }));
   const previousAssessments = existingDeliverables.map((d) => ({ type: d.type, title: d.title }));
 
+  // Dispatch the sectioned Comprehensive Assessment to the background first.
+  const comprehensiveTitle = buildTitle(
+    "COMPREHENSIVE_ASSESSMENT",
+    engagement.clientOrg,
+    existingDeliverables.length + 1,
+  );
+  const comprehensiveRow = await prisma.deliverable.create({
+    data: {
+      engagementId,
+      title: comprehensiveTitle,
+      type: "COMPREHENSIVE_ASSESSMENT",
+      status: "RUNNING",
+      progressLog: "[]",
+    },
+  });
+  after(() =>
+    runComprehensiveInBackground(comprehensiveRow.id, engagementId, {
+      type: "COMPREHENSIVE_ASSESSMENT",
+      title: comprehensiveTitle,
+      clientOrg: engagement.clientOrg,
+      engagementName: engagement.name,
+      findings,
+      topologyJson: mergedTopologyJson,
+      documents: docInput,
+      customerLogoUrl,
+      credentialsInfo,
+      previousAssessments,
+    }),
+  );
+
   const settled = await Promise.allSettled(
-    ALL_TYPES.map((type, i) =>
+    SINGLE_SHOT_TYPES.map((type, i) =>
       generateDeliverableContent({
         type,
-        title: buildTitle(type, engagement.clientOrg, existingDeliverables.length + i + 1),
+        title: buildTitle(type, engagement.clientOrg, existingDeliverables.length + i + 2),
         clientOrg: engagement.clientOrg,
         engagementName: engagement.name,
         findings,
@@ -340,12 +467,11 @@ export async function generateAllAssessments(
     ),
   );
 
-  let saved = 0;
+  let saved = 1; // the background comprehensive row counts as dispatched
   for (const result of settled) {
     if (result.status !== "fulfilled") continue;
     const { type, content } = result.value;
-    const ext = type === "COMPREHENSIVE_ASSESSMENT" ? "html" : "md";
-    const fileName = `${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
+    const fileName = `${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.md`;
     try {
       const blobPath = await uploadDeliverable(engagementId, fileName, content);
       const title = buildTitle(type, engagement.clientOrg, existingDeliverables.length + saved + 1);
@@ -357,8 +483,8 @@ export async function generateAllAssessments(
   }
 
   const failed = settled.filter((r) => r.status === "rejected").length;
-  if (failed > 0 && saved === 0) {
-    return { error: `All ${failed} assessment generations failed. Check active AI engine connectivity.` };
+  if (failed > 0 && saved <= 1) {
+    return { error: `All ${failed} synchronous assessment generations failed. Check active AI engine connectivity. (The Comprehensive Assessment was dispatched in the background — check its status on the deliverables list.)` };
   }
 
   await prisma.engagement.update({

@@ -21,3 +21,8 @@ output "foundry_project_id" {
 output "foundry_project_name" {
   value = var.foundry_project_name
 }
+
+output "chat_deployment_name" {
+  description = "Name of the chat model deployment; null when chat_deployment_enabled is false."
+  value       = var.chat_deployment_enabled ? one(azurerm_cognitive_deployment.chat[*].name) : null
+}

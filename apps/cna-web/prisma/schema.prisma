@@ -287,12 +287,23 @@ model Deliverable {
   type            DeliverableType
   blobPath        String?           // path to generated file in Blob Storage
   content         String?           @db.Text // inline markdown for previews
+  // Sectioned Comprehensive Assessment runs in the background (multi-pass AI
+  // generation exceeds edge timeouts); status + progressLog drive the polling UI.
+  status          DeliverableStatus @default(COMPLETED)
+  progressLog     String?           @db.Text // JSON array of {stepId,label,status}
   publishedAt     DateTime?
   publishedBy     String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   engagement      Engagement        @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+}
+
+enum DeliverableStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
 }
 
 enum DeliverableType {

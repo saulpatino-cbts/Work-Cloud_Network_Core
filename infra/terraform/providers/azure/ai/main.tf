@@ -29,6 +29,32 @@ resource "time_sleep" "foundry_account_settle" {
   }
 }
 
+# Chat model deployment. The app resolves models by DEPLOYMENT name
+# (AZURE_OPENAI_DEPLOYMENT=gpt-chat-latest), so the stable alias lives here and
+# the underlying model/version is pinned via variables. Previously this
+# deployment only existed portal-created on the old cna-dev-eus2-aif account and
+# was lost when the account name was bumped to -aif2 — declaring it in Terraform
+# makes it survive teardown/redeploy.
+resource "azurerm_cognitive_deployment" "chat" {
+  count = var.chat_deployment_enabled ? 1 : 0
+
+  cognitive_account_id = azurerm_cognitive_account.foundry.id
+  name                 = var.chat_deployment_name
+
+  model {
+    format  = "OpenAI"
+    name    = var.chat_model_name
+    version = var.chat_model_version
+  }
+
+  sku {
+    name     = var.chat_deployment_sku_name
+    capacity = var.chat_deployment_capacity
+  }
+
+  depends_on = [time_sleep.foundry_account_settle]
+}
+
 resource "azapi_resource" "foundry_project" {
   type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
   name      = var.foundry_project_name

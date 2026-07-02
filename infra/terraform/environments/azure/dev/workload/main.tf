@@ -91,16 +91,25 @@ module "compute" {
   # Foundry recommendation agent (portal-configured: MCP tools + instructions).
   # Empty values keep the agent transport off; RecommendationEngine then uses the
   # direct MCP clients and the offline library.
+  # AZURE_OPENAI_* must reach the API and worker too, not just web: cna-api's
+  # GroundedChatAgent raises ChatConfigError (→ 503 on /chat, all analysis
+  # types fail) when AZURE_OPENAI_ENDPOINT is absent from its own environment.
   api_env_vars = {
     CNA_STORAGE_ACCOUNT_NAME        = module.storage.storage_account_name
     FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
     FOUNDRY_RECOMMENDATION_AGENT_ID = var.foundry_recommendation_agent_id
+    AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
+    AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
+    AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
   }
 
   worker_env_vars = {
     CNA_STORAGE_ACCOUNT_NAME        = module.storage.storage_account_name
     FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
     FOUNDRY_RECOMMENDATION_AGENT_ID = var.foundry_recommendation_agent_id
+    AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
+    AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
+    AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
   }
 
   web_env_vars = {
@@ -177,6 +186,12 @@ module "ai" {
   # is purged or its retention lapses. Prod (cna-prod-eus2-aif) is NOT bumped.
   foundry_account_name = "cna-dev-eus2-aif2"
   foundry_project_name = "cna-dev-eus2-aif2-proj"
+
+  # The gpt-chat-latest deployment was portal-created on the old -aif account
+  # and vanished with the -aif2 name bump, leaving the account with zero model
+  # deployments (every AI call 404s/503s). Declared here so redeploys keep it.
+  chat_deployment_enabled = true
+  chat_deployment_name    = var.azure_openai_deployment
 }
 
 

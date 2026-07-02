@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { deleteDeliverable } from "./actions";
 import { GenerateDeliverableForm } from "./generate-form";
+import { DeliverableProgress } from "./deliverable-progress";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -61,6 +62,7 @@ export default async function AssessmentsPage({ params }: PageProps) {
           id: true,
           title: true,
           type: true,
+          status: true,
           createdAt: true,
           publishedAt: true,
         },
@@ -155,6 +157,7 @@ export default async function AssessmentsPage({ params }: PageProps) {
           <div className="divide-y divide-navy-700/30">
             {deliverables.map((d) => {
               const meta = TYPE_META[d.type];
+              const inProgress = d.status === "RUNNING" || d.status === "QUEUED";
               const isHtml =
                 d.type === "COMPREHENSIVE_ASSESSMENT" ||
                 d.type === "ENCYCLOPEDIA_CONDENSED" ||
@@ -190,6 +193,13 @@ export default async function AssessmentsPage({ params }: PageProps) {
 
                   {/* Actions */}
                   <div className="flex shrink-0 items-center gap-2">
+                    {inProgress ? (
+                      <DeliverableProgress deliverableId={d.id} />
+                    ) : d.status === "FAILED" ? (
+                      <span className="rounded border border-red-800/40 bg-red-900/20 px-2 py-1 text-xs font-medium text-red-400">
+                        Generation failed
+                      </span>
+                    ) : (
                     <a
                       href={`/api/deliverables/${d.id}`}
                       target="_blank"
@@ -205,6 +215,7 @@ export default async function AssessmentsPage({ params }: PageProps) {
                       {isHtml ? "View / PDF" : "Download"}
                       <span className="sr-only"> (opens in new tab)</span>
                     </a>
+                    )}
 
                     {/* Delete */}
                     <form action={deleteDeliverable} aria-label={`Delete ${d.title}`}>

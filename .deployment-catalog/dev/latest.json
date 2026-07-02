@@ -1,12 +1,12 @@
 {
   "environment": "dev",
   "deploy_mode": "release",
-  "api_image": "docker.io/hybridcloudworks/cna:api-sha-9069439",
-  "worker_image": "docker.io/hybridcloudworks/cna:worker-sha-9069439",
-  "web_image": "docker.io/hybridcloudworks/cna:web-sha-9069439",
-  "migrator_image": "docker.io/hybridcloudworks/cna:migrator-sha-9069439",
-  "commit_sha": "29fc1569f0a77232d567c2f82a71d2a178da5a54",
-  "workflow_run_id": "28555803418",
+  "api_image": "docker.io/hybridcloudworks/cna:api-sha-51f8f33",
+  "worker_image": "docker.io/hybridcloudworks/cna:worker-sha-51f8f33",
+  "web_image": "docker.io/hybridcloudworks/cna:web-sha-51f8f33",
+  "migrator_image": "docker.io/hybridcloudworks/cna:migrator-sha-51f8f33",
+  "commit_sha": "c24979ce762bfd81ffd373e5c5f8bd65826591a2",
+  "workflow_run_id": "28559279979",
   "approval_status": "approved",
   "health_status": "healthy",
   "validation_checks": {

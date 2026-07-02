@@ -19,6 +19,19 @@ locals {
     "production.cloudfront.docker.com",
     "pkg-containers.githubusercontent.com",
     "login.microsoftonline.com",
+    # Regional Entra ID (ESTS-R) endpoints: the Container Apps managed-identity
+    # sidecar fetches tokens from <region>.login.microsoft.com, NOT the classic
+    # login.microsoftonline.com. Without this, every managed-identity token
+    # request in the environment fails with an opaque 500 ("An unexpected error
+    # occured while fetching the AAD Token") — which breaks Key Vault references,
+    # Storage, and all AI calls. Diagnosed 2026-07-02 in dev from AZFW deny logs.
+    "*.login.microsoft.com",
+    "login.microsoft.com",
+    # Container Apps managed-environment required FQDN (node package updates).
+    "packages.aks.azure.com",
+    # Microsoft Container Registry — ACA infrastructure images.
+    "mcr.microsoft.com",
+    "*.data.mcr.microsoft.com",
     "management.azure.com",
   ]
 }

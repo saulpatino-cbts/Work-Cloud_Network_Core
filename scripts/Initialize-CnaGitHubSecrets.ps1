@@ -1656,6 +1656,7 @@ $resolvedSubscriptionId = ""
 $resolvedSubscriptionName = ""
 $appId = ""
 $entraClientSecret = $null
+$entraAppCreated = $false
 $federatedCredentialSubjects = [System.Collections.Generic.List[string]]::new()
 $bootstrapWorkloadResourceGroup = ""
 $workloadResourceGroupScope = ""
@@ -1702,6 +1703,12 @@ if (-not $SkipAzureSetup) {
                 throw "Failed to create Entra app registration."
             }
         }
+        # A freshly created app invalidates BOTH stored halves of the NextAuth
+        # identity: the CNA_ENTRA_CLIENT_ID variable (points at the deleted
+        # app → AADSTS700016 at sign-in) and the CNA_ENTRA_CLIENT_SECRET
+        # secret (credentials die with the app). Both are force-refreshed
+        # below instead of following the usual keep-existing convention.
+        $entraAppCreated = $true
         Write-Ok "Created app registration: $AppDisplayName ($appId)"
     }
 
@@ -1856,7 +1863,10 @@ if ($githubAppStatus -eq "created") {
     $secretValues = [ordered]@{}
 }
 
-if (-not $existingSecrets.ContainsKey("CNA_ENTRA_CLIENT_SECRET")) {
+# $entraAppCreated forces rotation: a client secret kept from a prior app
+# registration is dead the moment that app is deleted, so "keep existing"
+# would seed the new app's deployment with an unusable credential.
+if ($entraAppCreated -or -not $existingSecrets.ContainsKey("CNA_ENTRA_CLIENT_SECRET")) {
     if (-not $SkipAzureSetup) {
         if ($PSCmdlet.ShouldProcess($appId, "create Entra client secret for NextAuth")) {
             $entraClientSecret = (& az ad app credential reset --id $appId --append --display-name "cna-nextauth-$Environment-$(Get-Date -Format yyyyMMddHHmmss)" --years 2 --query password -o tsv).Trim()
@@ -1939,6 +1949,19 @@ foreach ($entry in $variableDefaults.GetEnumerator()) {
     $exists = $existingVariables.ContainsKey($entry.Key)
     $existingValue = if ($exists) { [string]$existingVariables[$entry.Key] } else { "" }
     $variableValues[$entry.Key] = Get-DesiredTextValue -Name $entry.Key -ExistingValue $existingValue -DefaultValue ([string]$entry.Value)
+}
+
+# CNA_ENTRA_CLIENT_ID is exempt from the keep-existing convention above: this
+# script just resolved (or created) the NextAuth app registration by display
+# name, so $appId is authoritative. Keeping a stored value from a deleted app
+# sends sign-in to a nonexistent identifier (AADSTS700016) — which is exactly
+# what happened when a teardown removed the old app and the next bootstrap
+# created a fresh one but "kept" the stale variable.
+if (-not $SkipAzureSetup -and -not [string]::IsNullOrWhiteSpace($appId)) {
+    if ([string]$variableValues["CNA_ENTRA_CLIENT_ID"] -ne $appId) {
+        Write-Info "Overriding CNA_ENTRA_CLIENT_ID with resolved app id $appId (stored value was stale)"
+        $variableValues["CNA_ENTRA_CLIENT_ID"] = $appId
+    }
 }
 
 $dockerHubSecretValues = Read-DockerHubSecretValues `

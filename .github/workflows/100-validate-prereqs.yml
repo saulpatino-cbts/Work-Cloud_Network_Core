@@ -180,6 +180,32 @@ jobs:
           fi
           echo "All variables present ✅"
 
+      # Catches the AADSTS700016 sign-in failure BEFORE users hit it: a teardown
+      # can delete the NextAuth app registration while CNA_ENTRA_CLIENT_ID keeps
+      # the old id (the bootstrap previously "kept existing" — now fixed, but
+      # this guards regressions and manual edits). The deploy SPs have no Graph
+      # read permissions, so instead of az ad app show this probes the public
+      # token endpoint with a deliberately bogus secret: a DEAD client id gets
+      # AADSTS700016 ("application not found"); a LIVE one gets AADSTS7000215
+      # ("invalid client secret") — verified against both cases. No credentials
+      # are exposed and nothing is issued either way.
+      - name: Verify CNA_ENTRA_CLIENT_ID resolves in the tenant
+        env:
+          CLIENT_ID:  ${{ vars.CNA_ENTRA_CLIENT_ID }}
+          TENANT_ID:  ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          if [[ -z "$CLIENT_ID" || "$CLIENT_ID" == "none" ]]; then
+            echo "CNA_ENTRA_CLIENT_ID not set yet; skipping probe."
+            exit 0
+          fi
+          RESPONSE=$(curl -s -X POST "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token" \
+            -d "client_id=${CLIENT_ID}&client_secret=probe&grant_type=client_credentials&scope=https://graph.microsoft.com/.default" || echo "")
+          if grep -q "AADSTS700016" <<<"$RESPONSE"; then
+            echo "::error::CNA_ENTRA_CLIENT_ID ($CLIENT_ID) does not exist in tenant $TENANT_ID (AADSTS700016). The app registration was likely deleted and recreated — re-run scripts/Initialize-CnaGitHubSecrets.ps1 to refresh the variable and rotate CNA_ENTRA_CLIENT_SECRET, then redeploy."
+            exit 1
+          fi
+          echo "CNA_ENTRA_CLIENT_ID resolves in the tenant ✅"
+
       - name: Validate Docker Hub image pull access
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

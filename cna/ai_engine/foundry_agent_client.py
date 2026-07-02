@@ -67,8 +67,12 @@ class FoundryAgentClient:
     """
 
     def __init__(self, endpoint: str | None = None, agent_id: str | None = None):
-        self._endpoint = _clean(endpoint if endpoint is not None else os.environ.get("FOUNDRY_PROJECT_ENDPOINT"))
-        self._agent_id = _clean(agent_id if agent_id is not None else os.environ.get("FOUNDRY_RECOMMENDATION_AGENT_ID"))
+        self._endpoint = _clean(
+            endpoint if endpoint is not None else os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
+        )
+        self._agent_id = _clean(
+            agent_id if agent_id is not None else os.environ.get("FOUNDRY_RECOMMENDATION_AGENT_ID")
+        )
 
     # ------------------------------------------------------------------ public
 
@@ -177,8 +181,7 @@ class FoundryAgentClient:
                 return content
             if isinstance(content, list):
                 joined = "\n".join(
-                    getattr(getattr(c, "text", None), "value", "") or ""
-                    for c in content
+                    getattr(getattr(c, "text", None), "value", "") or "" for c in content
                 )
                 if joined.strip():
                     return joined

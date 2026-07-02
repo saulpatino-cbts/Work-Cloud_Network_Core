@@ -78,7 +78,10 @@ def test_get_recommendations_unconfigured_raises():
     client = FoundryAgentClient(endpoint="", agent_id="")
     with pytest.raises(FoundryAgentError):
         client.get_recommendations(
-            cloud="azure", rule_id="AZ-NET-002", resource_type="Microsoft.Network/x", finding_title="t"
+            cloud="azure",
+            rule_id="AZ-NET-002",
+            resource_type="Microsoft.Network/x",
+            finding_title="t",
         )
 
 

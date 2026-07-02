@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DiagramForms } from "./diagram-forms";
+import { DrawioEmbed } from "@/components/diagrams/DrawioEmbed";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -72,11 +73,7 @@ export default async function DiagramPage({ params }: PageProps) {
           Build diagrams in draw.io, then save source `.drawio` files and exported artifacts back into this engagement.
         </p>
         <div className="overflow-hidden rounded-lg border border-navy-700/40 bg-white">
-          <iframe
-            title="draw.io editor"
-            src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&proto=json&libraries=1"
-            className="h-[560px] w-full"
-          />
+          <DrawioEmbed />
         </div>
       </section>
 

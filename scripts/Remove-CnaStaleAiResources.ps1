@@ -10,8 +10,6 @@ param(
 
     [string]$SubscriptionId,
 
-    [switch]$IncludeFoundry,
-
     [switch]$IncludeTfState,
 
     [switch]$Delete
@@ -147,6 +145,7 @@ switch ($Scope) {
             $_.name -eq $workloadRg -or
             $_.name -eq $tfstateRg -or
             $_.name -like "ai_*cna-$Environment-*_*_managed" -or
+            $_.name -like "rg-cna-$Environment-*-cae-managed" -or
             $_.name -like "ME_*_rg-$($namePrefix)_*"
         })) {
             Add-GroupName -Groups $groupNames -Name ([string]$match.name)

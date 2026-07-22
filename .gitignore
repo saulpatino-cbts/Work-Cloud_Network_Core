@@ -60,3 +60,4 @@ checkov_results.txt
 apps/cna-web/lib/site-packages/
 apps/cna-web/scripts/*.exe
 scripts/*.exe
+PACS/

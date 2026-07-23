@@ -29,7 +29,14 @@ env:
 
 jobs:
   cleanup:
-    runs-on: self-hosted
+    # GitHub-hosted, not self-hosted: hub.docker.com (the web/API domain used
+    # here for tag listing + deletion) sits behind bot/WAF protection that
+    # 403s requests from the VPS's IP before auth even runs — confirmed via
+    # a direct curl test from the VPS. The separate registry domain
+    # (registry-1.docker.io, used by docker login/push/pull in
+    # 200-build-images.yml) is unaffected, which is why builds always work
+    # fine from the VPS but this API-only job doesn't.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -66,12 +73,16 @@ jobs:
 
           # Docker Hub API auth — a repo:admin-scoped PAT works the same as a
           # password here.
-          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST \
             -d "{\"username\": \"${DOCKERHUB_NAMESPACE}\", \"password\": \"${DOCKERHUB_TOKEN}\"}" \
-            https://hub.docker.com/v2/users/login/ | jq -r .token)
+            https://hub.docker.com/v2/users/login/)
+          LOGIN_STATUS=$(tail -n1 <<<"$LOGIN_RESPONSE")
+          LOGIN_BODY=$(sed '$d' <<<"$LOGIN_RESPONSE")
+          TOKEN=$(jq -r '.token // empty' <<<"$LOGIN_BODY")
 
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "::error::Failed to authenticate to Docker Hub API."
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Failed to authenticate to Docker Hub API (HTTP $LOGIN_STATUS)."
+            echo "Response body: $LOGIN_BODY"
             exit 1
           fi
 

@@ -112,7 +112,17 @@ jobs:
           echo "[]" > "$ALL_TAGS_JSON"
           URL="https://hub.docker.com/v2/repositories/${DOCKERHUB_NAMESPACE}/${REPO}/tags/?page_size=100&ordering=-last_updated"
           while [ -n "$URL" ] && [ "$URL" != "null" ]; do
-            PAGE=$(curl -s -H "Authorization: Bearer ${TOKEN}" "$URL")
+            PAGE_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer ${TOKEN}" "$URL")
+            PAGE_STATUS=$(tail -n1 <<<"$PAGE_RESPONSE")
+            PAGE=$(sed '$d' <<<"$PAGE_RESPONSE")
+
+            if [ "$PAGE_STATUS" != "200" ] || [ "$(jq 'has("results")' <<<"$PAGE" 2>/dev/null)" != "true" ]; then
+              echo "::error::Unexpected response listing tags (HTTP $PAGE_STATUS)."
+              echo "URL: $URL"
+              echo "Response body: $PAGE"
+              exit 1
+            fi
+
             jq -c '[.results[] | {name: .name, last_updated: .last_updated}]' <<<"$PAGE" > /tmp/page.json
             jq -s '.[0] + .[1]' "$ALL_TAGS_JSON" /tmp/page.json > /tmp/merged.json
             mv /tmp/merged.json "$ALL_TAGS_JSON"

@@ -71,18 +71,21 @@ jobs:
           echo "Protected (raw): $PROTECTED_RAW"
           echo "Protected (deployed): $PROTECTED_DEPLOYED"
 
-          # Docker Hub API auth — a repo:admin-scoped PAT works the same as a
-          # password here.
-          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST \
-            -d "{\"username\": \"${DOCKERHUB_NAMESPACE}\", \"password\": \"${DOCKERHUB_TOKEN}\"}" \
-            https://hub.docker.com/v2/users/login/)
-          LOGIN_STATUS=$(tail -n1 <<<"$LOGIN_RESPONSE")
-          LOGIN_BODY=$(sed '$d' <<<"$LOGIN_RESPONSE")
-          TOKEN=$(jq -r '.token // empty' <<<"$LOGIN_BODY")
+          # Docker Hub API auth — DOCKERHUB_NAMESPACE ("hybridcloudworks") is
+          # an Organization account, and /v2/users/login/ (the username+
+          # password session exchange) explicitly refuses to log in as an
+          # org ("Cannot log into an organization account"). Skip that
+          # exchange entirely and use the PAT directly as a Bearer
+          # credential instead — supported by the Hub API for both personal
+          # and org-owned repos.
+          TOKEN="${DOCKERHUB_TOKEN}"
 
-          if [ -z "$TOKEN" ]; then
-            echo "::error::Failed to authenticate to Docker Hub API (HTTP $LOGIN_STATUS)."
-            echo "Response body: $LOGIN_BODY"
+          AUTH_CHECK=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer ${TOKEN}" \
+            "https://hub.docker.com/v2/repositories/${DOCKERHUB_NAMESPACE}/cna/")
+          AUTH_STATUS=$(tail -n1 <<<"$AUTH_CHECK")
+          if [ "$AUTH_STATUS" != "200" ]; then
+            echo "::error::Failed to authenticate to Docker Hub API (HTTP $AUTH_STATUS)."
+            echo "Response body: $(sed '$d' <<<"$AUTH_CHECK")"
             exit 1
           fi
 

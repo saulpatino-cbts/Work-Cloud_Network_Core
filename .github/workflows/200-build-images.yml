@@ -13,6 +13,13 @@ on:
       - .github/workflows/200-build-images.yml
   workflow_dispatch:
 
+# A newer push to main makes an in-flight build's images stale before they
+# even finish (e.g. rapid Dependabot merges) — cancel the superseded run
+# instead of letting it finish and burn runner time behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

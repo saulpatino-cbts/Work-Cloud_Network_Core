@@ -50,7 +50,11 @@ jobs:
 
       - name: Prune stale SHA-tagged images
         env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Personal-account PAT, NOT the org access token in DOCKERHUB_TOKEN
+          # (see comment below — org tokens can't manage tags via the Hub API
+          # at all, confirmed against the live API, not just an auth quirk).
+          DOCKERHUB_PERSONAL_USERNAME: ${{ vars.DOCKERHUB_PERSONAL_USERNAME }}
+          DOCKERHUB_PERSONAL_TOKEN: ${{ secrets.DOCKERHUB_PERSONAL_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
@@ -71,21 +75,32 @@ jobs:
           echo "Protected (raw): $PROTECTED_RAW"
           echo "Protected (deployed): $PROTECTED_DEPLOYED"
 
+          if [ -z "$DOCKERHUB_PERSONAL_USERNAME" ] || [ -z "$DOCKERHUB_PERSONAL_TOKEN" ]; then
+            echo "::error::DOCKERHUB_PERSONAL_USERNAME variable and DOCKERHUB_PERSONAL_TOKEN secret are required."
+            exit 1
+          fi
+
           # Docker Hub API auth — DOCKERHUB_NAMESPACE ("hybridcloudworks") is
-          # an Organization account. Two things this rules out, confirmed by
-          # trial against the live API:
+          # an Organization account, and org access tokens (DOCKERHUB_TOKEN,
+          # used elsewhere for docker login/push) cannot manage tags via the
+          # Hub REST API at all — confirmed against the live API through
+          # three failure modes, not just an auth quirk:
           #   - POST /v2/users/login/ (username+password session exchange)
           #     rejects it outright: "Cannot log into an organization account".
-          #   - Using the org access token directly as `Authorization: Bearer`
-          #     is also rejected: "A personal access token or organization
-          #     access token cannot be used as a bearer. A proper bearer
-          #     token must be obtained via /v2/auth/token."
-          # The correct flow (per the Hub API's own OpenAPI spec) is POST
-          # /v2/auth/token with {identifier, secret} — identifier is the org
-          # name when secret is an org access token — which exchanges it for
-          # a short-lived (10 min) JWT to use as the actual Bearer token.
+          #   - Using the org token directly as `Authorization: Bearer` is
+          #     also rejected: "A personal access token or organization
+          #     access token cannot be used as a bearer."
+          #   - Even after the correct /v2/auth/token exchange, the resulting
+          #     JWT is rejected at the tags endpoint specifically: "token
+          #     issued from organization access token is not allowed".
+          # So this needs a personal-account PAT instead (a member of the
+          # org, not the org's own token) exchanged via POST /v2/auth/token
+          # for a short-lived (10 min) JWT to use as the actual Bearer token.
+          # DOCKERHUB_NAMESPACE is still used below to address the org's
+          # repositories — a personal account's token can manage tags on any
+          # repo it has admin/write access to, regardless of namespace.
           AUTH_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST \
-            -d "{\"identifier\": \"${DOCKERHUB_NAMESPACE}\", \"secret\": \"${DOCKERHUB_TOKEN}\"}" \
+            -d "{\"identifier\": \"${DOCKERHUB_PERSONAL_USERNAME}\", \"secret\": \"${DOCKERHUB_PERSONAL_TOKEN}\"}" \
             https://hub.docker.com/v2/auth/token)
           AUTH_STATUS=$(tail -n1 <<<"$AUTH_RESPONSE")
           AUTH_BODY=$(sed '$d' <<<"$AUTH_RESPONSE")

@@ -72,20 +72,28 @@ jobs:
           echo "Protected (deployed): $PROTECTED_DEPLOYED"
 
           # Docker Hub API auth — DOCKERHUB_NAMESPACE ("hybridcloudworks") is
-          # an Organization account, and /v2/users/login/ (the username+
-          # password session exchange) explicitly refuses to log in as an
-          # org ("Cannot log into an organization account"). Skip that
-          # exchange entirely and use the PAT directly as a Bearer
-          # credential instead — supported by the Hub API for both personal
-          # and org-owned repos.
-          TOKEN="${DOCKERHUB_TOKEN}"
+          # an Organization account. Two things this rules out, confirmed by
+          # trial against the live API:
+          #   - POST /v2/users/login/ (username+password session exchange)
+          #     rejects it outright: "Cannot log into an organization account".
+          #   - Using the org access token directly as `Authorization: Bearer`
+          #     is also rejected: "A personal access token or organization
+          #     access token cannot be used as a bearer. A proper bearer
+          #     token must be obtained via /v2/auth/token."
+          # The correct flow (per the Hub API's own OpenAPI spec) is POST
+          # /v2/auth/token with {identifier, secret} — identifier is the org
+          # name when secret is an org access token — which exchanges it for
+          # a short-lived (10 min) JWT to use as the actual Bearer token.
+          AUTH_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -X POST \
+            -d "{\"identifier\": \"${DOCKERHUB_NAMESPACE}\", \"secret\": \"${DOCKERHUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/auth/token)
+          AUTH_STATUS=$(tail -n1 <<<"$AUTH_RESPONSE")
+          AUTH_BODY=$(sed '$d' <<<"$AUTH_RESPONSE")
+          TOKEN=$(jq -r '.access_token // empty' <<<"$AUTH_BODY")
 
-          AUTH_CHECK=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer ${TOKEN}" \
-            "https://hub.docker.com/v2/repositories/${DOCKERHUB_NAMESPACE}/cna/")
-          AUTH_STATUS=$(tail -n1 <<<"$AUTH_CHECK")
-          if [ "$AUTH_STATUS" != "200" ]; then
+          if [ -z "$TOKEN" ]; then
             echo "::error::Failed to authenticate to Docker Hub API (HTTP $AUTH_STATUS)."
-            echo "Response body: $(sed '$d' <<<"$AUTH_CHECK")"
+            echo "Response body: $AUTH_BODY"
             exit 1
           fi
 

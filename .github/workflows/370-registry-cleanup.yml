@@ -1,0 +1,140 @@
+name: "370 · Docker Hub Registry Cleanup"
+# Prunes stale SHA-tagged images pushed by 200-build-images.yml. That workflow
+# fires on almost every commit to main (including dependency-bump PRs), so
+# SHA tags (sha-*, api-sha-*, worker-sha-*, web-sha-*, migrator-sha-*)
+# accumulate unbounded with nothing ever deleting them.
+#
+# Retention: for each component, keep the newest KEEP_COUNT SHA tags, plus
+# the *-latest tag (never touched) and whatever SHA is currently recorded in
+# .deployment-catalog/latest-build.json (rollback safety net). Everything
+# else older than that is deleted.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted without deleting"
+        required: false
+        default: "false"
+        type: string
+  schedule:
+    - cron: '0 6 * * 1'  # weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+
+env:
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+  KEEP_COUNT: 10
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
+
+      - name: Prune stale SHA-tagged images
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          REPO="cna"
+          KEEP="${KEEP_COUNT}"
+
+          # Tags that must never be deleted regardless of age.
+          PROTECTED_RAW="latest api-latest worker-latest web-latest migrator-latest"
+
+          # The SHA currently recorded as deployed — extra safety net beyond
+          # KEEP_COUNT so a slow rollout never loses its source image mid-flight.
+          PROTECTED_DEPLOYED=""
+          if [ -f .deployment-catalog/latest-build.json ]; then
+            PROTECTED_DEPLOYED=$(jq -r '.images | to_entries[] | .value | split(":")[-1]' .deployment-catalog/latest-build.json)
+          fi
+
+          echo "Protected (raw): $PROTECTED_RAW"
+          echo "Protected (deployed): $PROTECTED_DEPLOYED"
+
+          # Docker Hub API auth — a repo:admin-scoped PAT works the same as a
+          # password here.
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"${DOCKERHUB_NAMESPACE}\", \"password\": \"${DOCKERHUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::Failed to authenticate to Docker Hub API."
+            exit 1
+          fi
+
+          # Component name -> SHA-tag regex (matches the sha_prefix values in
+          # 200-build-images.yml).
+          declare -A COMPONENT_PATTERNS=(
+            ["cli"]="^sha-[0-9a-f]+$"
+            ["api"]="^api-sha-[0-9a-f]+$"
+            ["worker"]="^worker-sha-[0-9a-f]+$"
+            ["web"]="^web-sha-[0-9a-f]+$"
+            ["migrator"]="^migrator-sha-[0-9a-f]+$"
+          )
+
+          # Fetch the full tag list once (paginated), newest first.
+          ALL_TAGS_JSON=$(mktemp)
+          echo "[]" > "$ALL_TAGS_JSON"
+          URL="https://hub.docker.com/v2/repositories/${DOCKERHUB_NAMESPACE}/${REPO}/tags/?page_size=100&ordering=-last_updated"
+          while [ -n "$URL" ] && [ "$URL" != "null" ]; do
+            PAGE=$(curl -s -H "Authorization: Bearer ${TOKEN}" "$URL")
+            jq -c '[.results[] | {name: .name, last_updated: .last_updated}]' <<<"$PAGE" > /tmp/page.json
+            jq -s '.[0] + .[1]' "$ALL_TAGS_JSON" /tmp/page.json > /tmp/merged.json
+            mv /tmp/merged.json "$ALL_TAGS_JSON"
+            URL=$(jq -r '.next // empty' <<<"$PAGE")
+          done
+
+          TOTAL=$(jq 'length' "$ALL_TAGS_JSON")
+          echo "Fetched $TOTAL total tags from Docker Hub."
+
+          DELETED=0
+          KEPT=0
+
+          for component in "${!COMPONENT_PATTERNS[@]}"; do
+            pattern="${COMPONENT_PATTERNS[$component]}"
+            # Newest-first list of tag names matching this component's SHA pattern.
+            mapfile -t tags < <(jq -r --arg pat "$pattern" \
+              '[.[] | select(.name | test($pat))] | sort_by(.last_updated) | reverse | .[].name' \
+              "$ALL_TAGS_JSON")
+
+            echo "--- $component: ${#tags[@]} SHA-tagged images ---"
+            i=0
+            for tag in "${tags[@]}"; do
+              i=$((i + 1))
+              protected=false
+              for p in $PROTECTED_RAW $PROTECTED_DEPLOYED; do
+                [ "$tag" = "$p" ] && protected=true && break
+              done
+
+              if [ "$protected" = true ] || [ "$i" -le "$KEEP" ]; then
+                KEPT=$((KEPT + 1))
+                continue
+              fi
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "would delete: $tag"
+              else
+                echo "deleting: $tag"
+                curl -s -o /dev/null -w "  -> HTTP %{http_code}\n" -X DELETE \
+                  -H "Authorization: Bearer ${TOKEN}" \
+                  "https://hub.docker.com/v2/repositories/${DOCKERHUB_NAMESPACE}/${REPO}/tags/${tag}/"
+              fi
+              DELETED=$((DELETED + 1))
+            done
+          done
+
+          echo ""
+          echo "Summary: kept $KEPT, $([ "$DRY_RUN" = "true" ] && echo "would delete" || echo "deleted") $DELETED (retention: last $KEEP per component + *-latest + currently-deployed)."

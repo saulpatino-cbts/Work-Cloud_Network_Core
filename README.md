@@ -35,10 +35,10 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | CAF naming convention | ✅ Merged | `cna-[env]-[region_short]`, single workload RG per env |
 | Teardown workflow (220) | ✅ Merged | `DESTROY`-gated, optional state wipe |
 | CI — lint/test | ✅ Passing | ruff, pytest 3.13 + 3.14, Docker build smoke |
-| Repository hygiene | ✅ Clean | No open GitHub PRs; 1 tracked issue (#110, AWS Terraform scoping) as of 2026-07-01 |
+| Repository hygiene | ✅ Clean | No open GitHub PRs; #113 resolved-by-decision (keep the `hub` approval-gate indirection); #110 foundation scaffolded as of 2026-07-23 |
 | Azure Terraform hardening | ✅ Merged | AVM + Microsoft Learn review pass: RBAC-propagation fixes, Postgres HA, provider version pinning |
 | Azure deployment | ⏳ Beta validation pending | Live workflow execution and customer-like validation remain |
-| AWS Terraform | 📋 Scoped, not started | Tracked in [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) — discovery engine (`cna/modules/`) already supports AWS; deployable AWS infra does not exist yet |
+| AWS Terraform | 🏗️ Foundation scaffolded | Tracked in [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) — `infra/terraform/providers/aws/` (8 modules) and `infra/terraform/environments/aws/` exist and `terraform validate` clean, but declare no resources yet; service selection (ECS vs Lambda, RDS vs Aurora, etc.) is tracked per-module. Discovery engine (`cna/modules/`) already supports AWS |
 
 ---
 
@@ -113,11 +113,11 @@ cna/
 ├── report_engine/    Encyclopedia renderer, WeasyPrint PDF, radar chart SVG
 └── diagram_engine/   Draw.io generator, future-state model
 infra/terraform/
-├── environments/azure/dev/   Dev environment root module
-├── environments/azure/prod/  Prod environment root module
-└── providers/azure/          Reusable modules: ai, compute, database, identity,
-                              security, storage, runtime, observability
-                              (AWS provider modules not yet built — tracked in #110)
+├── environments/azure/{dev,prod}/{platform,workload}/  Azure env composition (deployable)
+├── environments/aws/{dev,prod}/{platform,workload}/    AWS env composition (scaffold, no resources — #110)
+├── providers/azure/          Reusable modules: ai, compute, database, identity,
+│                             security, storage, runtime, observability (deployable)
+└── providers/aws/            Same 8 module boundaries, mirrored (scaffold, no resources — #110)
 .github/workflows/            000–320 banded workflow sequence
 GitHub Wiki                   All documentation, runbooks, blogs, and ADRs live in https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki (no in-repo docs/ directory)
 CHANGELOG.md                  Release history and deployment-gated follow-up context
@@ -184,6 +184,7 @@ To wipe an environment and redeploy clean:
 | `100-validate-prereqs.yml` | Manual | Validates all secrets, variables, OIDC |
 | `200-build-images.yml` | Push to `main` | Builds + pushes cna, cna-api, cna-worker, cna-web, and cna-migrator to Docker Hub |
 | `211-deploy-azure-split.yml` | Manual + nightly | Terraform plan → apply → migrate → health verification |
+| `212-deploy-aws-split.yml` | Manual | **Scaffold, not functional** — mirrors 211's input contract and job shape; each job fails fast pointing to [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) until the AWS provider modules have real resources |
 | `220-fast-redeploy.yml` | Manual | Fast image update via `az containerapp update` — no Terraform apply, ~2 min vs ~10+ min for a full deploy |
 | `300-test-codebase.yml` | Push/PR to `main` | Secret scan → ruff lint → pytest → Docker smoke |
 | `310-release-version.yml` | `git tag v*.*.*` | Tags Docker Hub CLI image + creates GitHub Release |
@@ -224,7 +225,7 @@ To wipe an environment and redeploy clean:
 
 ## Backlog
 
-- **AWS Terraform** — [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110): scope and build AWS provider modules (network, compute, database, security, identity) mirroring `infra/terraform/providers/azure/`. The discovery engine already has AWS stubs (`cna/modules/`); deployable AWS infra does not exist yet.
+- **AWS Terraform** — [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110): foundation is scaffolded (`infra/terraform/providers/aws/` — 8 modules mirroring `providers/azure/`'s `ai, compute, database, identity, observability, runtime, security, storage`; `infra/terraform/environments/aws/{dev,prod}/{platform,workload}/`; `212-deploy-aws-split.yml` workflow shell). Each module is a per-module follow-up issue for the actual service decision (ECS vs Lambda, RDS vs Aurora, etc.) and resource authoring — see the module-specific issues linked from #110.
 
 ---
 

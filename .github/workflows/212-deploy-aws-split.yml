@@ -1,0 +1,129 @@
+name: "212 · Deploy AWS Platform (Split)"
+
+# SCAFFOLD — not yet functional. Mirrors 211-deploy-azure-split.yml's input
+# contract and three-job shape (policy-gates / plan / apply) so the trigger
+# surface is stable while infra/terraform/providers/aws/* and
+# infra/terraform/environments/aws/* are built out module by module.
+#
+# Each job below is a guard that fails fast with a pointer to the tracking
+# issue, rather than actually running `terraform plan/apply` against modules
+# that declare no resources yet — a vacuous "successful" plan against an
+# empty config would look like a working pipeline and isn't.
+#
+# Tracked in https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      api_image:
+        description: API image reference
+        required: false
+        default: ""
+        type: string
+      worker_image:
+        description: Worker image reference
+        required: false
+        default: ""
+        type: string
+      web_image:
+        description: Web (Next.js) image reference
+        required: false
+        default: ""
+        type: string
+      previous_api_image:
+        description: Previous API image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      previous_worker_image:
+        description: Previous worker image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      previous_web_image:
+        description: Previous web image reference for rollback operations
+        required: false
+        default: ""
+        type: string
+      deploy_mode:
+        description: Deployment mode
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - rollback
+
+permissions:
+  actions: write
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-aws-platform-${{ github.event.inputs.environment || 'schedule' }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: true
+  # AWS OIDC equivalent of Azure's ARM_CLIENT_ID / ARM_TENANT_ID /
+  # ARM_SUBSCRIPTION_ID — a single role ARN assumed via
+  # aws-actions/configure-aws-credentials. Not consumed yet; documented here so
+  # the secret name is settled before the first real job needs it.
+  AWS_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+  AWS_REGION: us-east-1
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+
+jobs:
+  policy-gates:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/aws/${{ inputs.environment }}/platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Not yet implemented
+        run: |
+          echo "::error::212-deploy-aws-split.yml is a scaffold. infra/terraform/providers/aws/* has no resources yet — see issue #110 (https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) and its per-module follow-ups."
+          exit 1
+
+  plan:
+    needs: policy-gates
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/aws/${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Not yet implemented
+        run: |
+          echo "::error::212-deploy-aws-split.yml is a scaffold. See issue #110 for AWS provider module status."
+          exit 1
+
+  apply:
+    needs: plan
+    runs-on: self-hosted
+    environment: ${{ inputs.environment == 'prod' && 'hub' || inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/aws/${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Not yet implemented
+        run: |
+          echo "::error::212-deploy-aws-split.yml is a scaffold. See issue #110 for AWS provider module status."
+          exit 1

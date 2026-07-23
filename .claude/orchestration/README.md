@@ -1,11 +1,12 @@
 # Orchestration
 
-How the pack's 32 agents and 273 skills get used together without stepping on each other.
+How the pack's 38 agents and ~1,050 skills get used together without stepping on each other.
 
 The pack spans two families: the **FinOps agents** (cost analysis, the FinOps Framework
-capabilities) and the **platform agents** (Azure, security, Terraform, diagrams, Python). Routing
-covers both, and several workflows deliberately cross the boundary — a secure Azure deployment
-hands its cost baseline to the FinOps pack.
+capabilities) and the **platform agents** (Azure, AWS, the security triad, Terraform, diagrams,
+Docker, agentic workflows, Python). Routing covers both, and several workflows deliberately cross
+the boundary — a secure cloud deployment hands its cost baseline to the FinOps pack, and an
+offensive engagement hands its findings to the defensive and DFIR agents.
 
 | Doc | Use it when |
 |---|---|

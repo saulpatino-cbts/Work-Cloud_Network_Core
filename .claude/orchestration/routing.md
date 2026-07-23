@@ -2,7 +2,7 @@
 
 > Which specialist, and why not the adjacent one.
 
-Twenty-seven agents is more than anyone holds in their head. This is the lookup: symptom or
+Thirty-eight agents is more than anyone holds in their head. This is the lookup: symptom or
 request on the left, specialist on the right, and — most importantly — the **disambiguation
 rules** for the pairs that genuinely overlap.
 
@@ -53,15 +53,21 @@ cloud spend, and not generic platform work:
 
 ### Platform-engineering agents
 
-These five are general-purpose specialists — they apply to any project, and front the large skill
+These are general-purpose specialists — they apply to any project, and front the large skill
 libraries merged from the platform packs:
 
 | They said | Agent | Fronts |
 |---|---|---|
 | Design, deploy, validate, or troubleshoot an Azure workload | [`azure-architect`](../agents/azure-architect.md) | 26 Azure skills |
-| Harden, detect, or prove compliance — any defensive security work | [`security-engineer`](../agents/security-engineer.md) | 168 security skills |
+| Design, provision, secure, or troubleshoot an AWS workload | [`aws-architect`](../agents/aws-architect.md) | ~85 AWS skills |
+| Harden, detect, or prove compliance — defensive security work | [`security-engineer`](../agents/security-engineer.md) | ~355 defensive skills |
+| Authorized penetration testing, red-team, adversary emulation | [`offensive-security-engineer`](../agents/offensive-security-engineer.md) | ~170 offensive skills |
+| Forensics, incident response, threat hunting, detection engineering | [`dfir-threat-hunter`](../agents/dfir-threat-hunter.md) | ~290 DFIR skills |
 | Write a Terraform provider, module, test, or policy | [`terraform-engineer`](../agents/terraform-engineer.md) | 17 Terraform skills |
 | A formal, exportable Azure architecture diagram | [`azure-diagram-architect`](../agents/azure-diagram-architect.md) | `azure2-architecture-diagram` |
+| A formal, exportable AWS architecture diagram | [`aws-diagram-architect`](../agents/aws-diagram-architect.md) | `aws-architecture-diagram` |
+| Optimize, harden, or debug a container image / Dockerfile | [`docker-expert`](../agents/docker-expert.md) | `docker-expert` + container-security skills |
+| Design, create, debug, or upgrade a GitHub Agentic Workflow | [`agentic-workflow-engineer`](../agents/agentic-workflow-engineer.md) | ~40 gh-aw skills |
 | Set up or modernize Python tooling (uv, ruff, ty) | [`python-engineer`](../agents/python-engineer.md) | `modern-python` |
 
 ---
@@ -148,6 +154,44 @@ Python engineer sets up *tooling* (uv, ruff, ty, pyproject, CI gates). Backend e
 *application logic*. "Migrate our workers off pip" → python-engineer. "Add an ingestion endpoint"
 → backend-engineer.
 
+**`aws-architect` vs `azure-architect` vs `infrastructure-engineer`**
+Same dividing line as the Azure trio: *general craft* vs *this repo*. Designing or troubleshooting
+an AWS workload in general (VPC topology, ECS/Lambda, RDS choice, IAM) →
+[`aws-architect`](../agents/aws-architect.md). The Azure equivalent →
+[`azure-architect`](../agents/azure-architect.md). Changing **this** repository's own
+infrastructure, its CI/CD, or its deployment → [`infrastructure-engineer`](../agents/infrastructure-engineer.md).
+Both cloud architects hand every cost *decision* to the FinOps pack and produce only a baseline.
+
+**`aws-architect` vs `aws-diagram-architect`**
+Architect *designs and builds*; diagram architect *draws what exists or is proposed*. "Design a
+multi-AZ VPC" → architect. "Diagram our production account" → diagram architect. Identical split to
+the Azure pair.
+
+**The security triad: `security-engineer` vs `offensive-security-engineer` vs `dfir-threat-hunter`**
+One library, three intents. **Build or harden a control, prove compliance** → defensive
+[`security-engineer`](../agents/security-engineer.md). **Attack it under authorization** (pentest,
+red-team, adversary emulation, LLM red-teaming) → [`offensive-security-engineer`](../agents/offensive-security-engineer.md).
+**Investigate, hunt, or author a detection** (forensics, IR, malware analysis, SIEM/EDR rules,
+threat intel) → [`dfir-threat-hunter`](../agents/dfir-threat-hunter.md). They compose as a loop —
+offense finds the gap, defense closes it, DFIR proves it's now detected; see
+[`handoffs.md`](handoffs.md). Every offensive engagement requires an explicit authorization
+context; without one, offense stops and asks.
+
+**`docker-expert` vs the Kubernetes agents vs `aws-architect`**
+Docker expert owns the *image and its build* (Dockerfile, size, hardening, Compose). The
+Kubernetes agents own what *runs* it — [`kubernetes-workload-optimizer`](../agents/kubernetes-workload-optimizer.md)
+for requests/limits and scheduling, [`kubernetes-finops-engineer`](../agents/kubernetes-finops-engineer.md)
+for cost allocation. Cloud container *services* (ECS, Fargate, App Runner) →
+[`aws-architect`](../agents/aws-architect.md). "Shrink this image" → docker-expert. "Size these
+pods" → workload optimizer.
+
+**`agentic-workflow-engineer` vs `infrastructure-engineer`**
+The agentic-workflow engineer builds *gh-aw agentic workflows* (markdown agents compiled to GitHub
+Actions). The infrastructure engineer owns *this repo's own* CI/CD and deployment pipelines.
+"Create a PR-triage agentic workflow" → agentic-workflow-engineer. "Fix our release pipeline" →
+infrastructure-engineer. Hardening the Actions themselves (secrets, OIDC, supply chain) →
+[`security-engineer`](../agents/security-engineer.md).
+
 ---
 
 ## 3. Route by FinOps Framework domain
@@ -158,7 +202,8 @@ Python engineer sets up *tooling* (uv, ruff, ty, pyproject, CI gates). Backend e
 | **Quantify Business Value** | `forecast-estimation-analyst`, `unit-economics-modeler`, `finops-benchmarking-analyst`, `budget-anomaly-operator` |
 | **Optimize Usage & Cost** | `commitment-discount-strategist`, `edp-negotiation-coach`, `workload-cost-optimizer`, `kubernetes-workload-optimizer`, `idle-orphaned-resource-hunter`, `s3-storage-class-auditor`, `cross-az-egress-investigator`, `platform-sre-cost-lead`, `license-saas-cost-optimizer`, `cloud-sustainability-analyst` |
 | **Manage the FinOps Practice** | `finops-practice-lead`, `finops-enablement-lead`, `finops-tooling-evaluator`, `showback-chargeback-architect`, `cloud-onboarding-coordinator` |
-| **Platform (any project)** | `azure-architect`, `security-engineer`, `terraform-engineer`, `azure-diagram-architect`, `python-engineer` |
+| **Platform (any project)** | `azure-architect`, `aws-architect`, `terraform-engineer`, `azure-diagram-architect`, `aws-diagram-architect`, `docker-expert`, `agentic-workflow-engineer`, `python-engineer` |
+| **Security (any project)** | `security-engineer` (defend), `offensive-security-engineer` (attack, authorized), `dfir-threat-hunter` (detect & investigate) |
 | **This repo's own build** | `backend-engineer`, `frontend-engineer`, `infrastructure-engineer` |
 
 ## 4. Route by symptom to playbook

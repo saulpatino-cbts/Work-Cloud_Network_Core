@@ -132,7 +132,7 @@ For maturity assessment, findings roll up as evidence:
 | Identity model: which managed identities, which roles | So RBAC is authored in, not bolted on after a failed deploy |
 | Region and zone-redundancy decisions, with their cost stated | These are the expensive parameters; the module should make them explicit inputs |
 
-### `azure-architect` / `terraform-engineer` → `security-engineer`
+### `azure-architect` / `aws-architect` / `terraform-engineer` → `security-engineer`
 
 | Field | Why |
 |---|---|
@@ -174,6 +174,73 @@ Route the actual decisions to [`commitment-discount-strategist`](../agents/commi
 |---|---|
 | The topology, and the IaC it derives from | The diagram is *derived*, not drawn — it needs the source |
 | Which boundaries and flows are cost- or risk-significant | So the diagram calls them out rather than burying them |
+
+### `aws-architect` → `aws-diagram-architect`
+
+The AWS mirror of the pair above.
+
+| Field | Why |
+|---|---|
+| The topology, and the IaC it derives from (CloudFormation / CDK / Terraform) | The diagram is *derived*, not drawn — it needs the source |
+| Which boundaries and flows are cost- or risk-significant (cross-AZ, cross-region, egress) | So the diagram calls them out rather than burying them |
+
+### `aws-architect` → FinOps pack
+
+Like the Azure architect, the AWS architect produces a **baseline**, never a commitment analysis.
+
+| Field | Why |
+|---|---|
+| The deployed topology and its `aws-billing-and-cost-management` baseline | The starting point for allocation and anomaly baselines |
+| Region, instance-family, and multi-AZ choices | These are the cost drivers the FinOps pack will question |
+| **Explicitly: no commitment modelling done** | So the strategist knows to start fresh, not to trust an inline guess |
+
+Route the actual decisions to [`commitment-discount-strategist`](../agents/commitment-discount-strategist.md),
+[`allocation-policy-architect`](../agents/allocation-policy-architect.md), and
+[`budget-anomaly-operator`](../agents/budget-anomaly-operator.md).
+
+### `docker-expert` → Kubernetes agents
+
+The image stops where the orchestrator begins.
+
+| Field | Why |
+|---|---|
+| The image, its base, and its resource footprint (memory/CPU at rest and under load) | The optimizer needs a real footprint to set requests/limits, not a guess |
+| Non-root / capability / read-only-rootfs posture | Determines the Pod Security Standard the workload can meet |
+| What runtime config the image expects (env, secrets, volumes) | So the Deployment wires it correctly instead of rediscovering it |
+
+Route to [`kubernetes-workload-optimizer`](../agents/kubernetes-workload-optimizer.md) for
+sizing and scheduling, [`kubernetes-finops-engineer`](../agents/kubernetes-finops-engineer.md)
+for cost allocation.
+
+---
+
+## Contracts for the security triad
+
+The three security agents share one library and hand work around a loop: offense finds the
+gap, defense closes it, DFIR proves it's now detected.
+
+### `offensive-security-engineer` → `security-engineer` / `dfir-threat-hunter`
+
+The output of an authorized engagement is a defender's backlog, split two ways.
+
+| Field | Why |
+|---|---|
+| Each finding with a **reproduction** (steps, payload, preconditions) | A finding the defender cannot reproduce cannot be fixed or verified |
+| The **ATT&CK technique ID** per finding | Turns a raw finding into a detection requirement `dfir-threat-hunter` can author against |
+| Remediation owner vs detection owner, split | `security-engineer` owns the control that closes it; `dfir-threat-hunter` owns the detection that catches the next attempt |
+| Scope and authorization reference | So downstream work stays inside the same authorized envelope |
+
+**Loop-closing rule:** a finding is not closed until the control ships *and* the emulated
+technique fires a tuned detection. Offense → defense (fix) and offense → DFIR (detect) run in
+parallel, then the purple-team re-run verifies both.
+
+### `dfir-threat-hunter` → `security-engineer`
+
+| Field | Why |
+|---|---|
+| The gap a hunt or investigation exposed, mapped to ATT&CK | Becomes a control requirement, not just an incident note |
+| Whether an existing control failed or was absent | Failed control → tune; absent control → build |
+| Indicators and detections to promote to standing rules | So the one-time hunt becomes continuous coverage |
 
 ---
 

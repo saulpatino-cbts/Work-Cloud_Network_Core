@@ -20,6 +20,10 @@ This agent specializes in frontend development tasks for the FinOps platform:
 ## Skills Used
 - `web-frontend` — React development and testing
 - `local-dev-setup` — Local environment setup
+- `frontend-design` — Distinctive, intentional visual design: aesthetic direction, typography,
+  palette, and layout choices that avoid templated defaults. Reach for it when the task is
+  *how it should look and feel*, not *how the component wires up* — new UI, a redesign, or
+  moving beyond the default Aeonik patterns.
 
 ## Responsibilities
 1. Build responsive React components

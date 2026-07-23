@@ -239,6 +239,76 @@ documented but not in the pipeline is not enforced — the same failure the FinO
 
 ---
 
+## W10 — Secure AWS workload, end to end
+
+**Trigger:** "Stand up this workload on AWS, done properly." The AWS mirror of W8 — same shape,
+same gates, same cost handoff.
+
+```
+1. Design the topology        → aws-architect
+2. Diagram it                 → aws-diagram-architect         [committed beside the IaC]
+3. Author reusable IaC        → terraform-engineer
+4. Containerize (if needed)   → docker-expert                 [image built, hardened, scanned]
+5. Harden + policy-as-code    → security-engineer
+6. Wire into this repo's CI   → infrastructure-engineer       [if it lives in this repo]
+7. Validate + deploy          → aws-architect
+8. Cost baseline → FinOps     → cloud-billing-analyst / allocation-policy-architect
+```
+
+**Gates:**
+
+| Transition | Gate |
+|---|---|
+| 1→3 | Topology decided, boundaries explicit (account/VPC/subnet/AZ), access patterns mapped to services |
+| 3→5 | Modules carry mandatory tags and pass `terraform test`; image (if any) passes its scan gate |
+| 5→7 | Security policy enforced (not warn) on the resource types being deployed; IaC scan clean |
+| 7→8 | Preflight validation passed; deployment reconciles to plan |
+
+**Where cost enters:** identical to W8 — the architect produces a *baseline*, step 8 hands the
+decisions (allocation keys, commitment coverage, anomaly baselines) to the FinOps pack. The
+architect never models commitments itself.
+
+**Parallelism:** steps 2, 3, and 4 can run alongside once step 1 is fixed — diagram, IaC, and image
+all derive from the same decided topology. Step 5 must follow 3 and 4 (it hardens what was authored
+and built).
+
+---
+
+## W11 — Red-team to detection loop
+
+**Trigger:** "Test our defenses" / authorized penetration test or red-team engagement. Exercises
+the whole security triad; the point is not the findings but that each one ends up *detected*.
+
+```
+1. Scope + authorize          → offensive-security-engineer   [written scope; no scope, no run]
+2. Emulate the adversary      → offensive-security-engineer   [findings with reproductions + ATT&CK IDs]
+Then, in parallel per finding:
+  3a. Close the control        → security-engineer            [remediation owner]
+  3b. Author the detection     → dfir-threat-hunter           [detection owner, mapped to ATT&CK]
+Then:
+4. Purple re-run              → offensive-security-engineer   [verify: control holds AND detection fires]
+```
+
+**Gates:**
+
+| Transition | Gate |
+|---|---|
+| 1→2 | Explicit authorization context — named engagement, signed scope, CTF, or own estate. Absent → stop and ask |
+| 2→3 | Every finding carries a reproduction and an ATT&CK technique ID; unreproducible findings do not advance |
+| 3→4 | Both the control shipped **and** the detection is authored and tuned |
+
+**The loop-closing rule:** a finding is not closed until step 4 proves both halves — the control
+holds and the emulated technique fires a tuned alert. Steps 3a and 3b run in parallel (different
+owners, different artifacts) but the re-run gates on both. A finding remediated but not detected
+leaves you blind to the next variant; a detection authored but not tuned rejoins the alert-fatigue
+failure mode.
+
+**Scope discipline is the whole game.** This workflow only exists inside an authorization envelope.
+See [`../agents/offensive-security-engineer.md`](../agents/offensive-security-engineer.md) — offense
+stops and asks whenever the authorization context is not clear.
+
+---
+
 ## Composition rules
 
 1. **Sequential unless proven independent.** W3 parallelizes because the tracks touch different

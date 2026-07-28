@@ -48,3 +48,9 @@ variable "task_bedrock_policy_json" {
   type        = string
   default     = null
 }
+
+variable "enable_xray" {
+  description = "Attach X-Ray write permissions to the ECS task role. Mirrors Azure Application Insights auto-instrumentation."
+  type        = bool
+  default     = true
+}

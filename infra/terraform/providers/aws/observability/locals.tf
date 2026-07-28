@@ -20,4 +20,11 @@ locals {
 
   alarms_topic_arn = var.sns_topic_arn != null ? var.sns_topic_arn : one(aws_sns_topic.alarms[*].arn)
   alarm_actions    = local.alarms_topic_arn != null ? [local.alarms_topic_arn] : []
+
+  # Custom metric namespace for application-level metric filters (mirrors
+  # Azure Application Insights custom metrics).
+  custom_metric_namespace = "CNA/${var.name_prefix}"
+
+  # X-Ray daemon log group name (consumed by compute module for sidecar config).
+  xray_log_group_name = "/ecs/${var.name_prefix}/xray-daemon"
 }

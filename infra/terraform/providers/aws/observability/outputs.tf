@@ -31,3 +31,18 @@ output "alarms_topic_arn" {
   description = "SNS topic ARN used for alarm notifications (module-created or supplied), or null when no topic is in use."
   value       = local.alarms_topic_arn
 }
+
+output "xray_log_group_name" {
+  description = "CloudWatch log group name for the X-Ray daemon sidecar, or null when X-Ray is disabled."
+  value       = one(aws_cloudwatch_log_group.xray[*].name)
+}
+
+output "enable_xray" {
+  description = "Whether X-Ray tracing is enabled. Consumed by the compute module to conditionally inject the sidecar."
+  value       = var.enable_xray
+}
+
+output "custom_metric_namespace" {
+  description = "CloudWatch custom metric namespace for application-level metrics from log metric filters."
+  value       = local.custom_metric_namespace
+}

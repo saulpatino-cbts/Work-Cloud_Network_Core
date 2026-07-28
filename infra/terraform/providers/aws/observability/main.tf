@@ -1,7 +1,8 @@
 # =============================================================================
-# Observability — ECS log groups + baseline alarms (source: the /ecs/* groups in
-# migrate/ecs.tf). Mirrors the Azure observability module. Created BEFORE the
-# compute module, which consumes the three log-group names.
+# Observability — ECS log groups, X-Ray tracing, Contributor Insights, metric
+# filters, and baseline alarms. Mirrors the Azure observability module (App
+# Insights + diagnostic settings + VNet flow logs). Created BEFORE the compute
+# module, which consumes the three log-group names and the X-Ray daemon config.
 # =============================================================================
 
 # ─── ECS service log groups ───────────────────────────────────────────────────
@@ -27,6 +28,200 @@ resource "aws_cloudwatch_log_group" "web" {
   kms_key_id        = var.kms_key_arn
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-web-logs" })
+}
+
+# ─── X-Ray tracing log group ──────────────────────────────────────────────────
+resource "aws_cloudwatch_log_group" "xray" {
+  count             = var.enable_xray ? 1 : 0
+  name              = "/ecs/${var.name_prefix}/xray-daemon"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-xray-logs" })
+}
+
+# ─── X-Ray sampling rule ──────────────────────────────────────────────────────
+# Custom sampling rule scoped to this platform's services (reduces noise/cost).
+resource "aws_xray_sampling_rule" "platform" {
+  count = var.enable_xray ? 1 : 0
+
+  rule_name      = "${var.name_prefix}-default"
+  priority       = 1000
+  reservoir_size = 1
+  fixed_rate     = var.xray_sampling_rate
+  host           = "*"
+  http_method    = "*"
+  url_path       = "*"
+  service_name   = "${var.name_prefix}-*"
+  service_type   = "*"
+  resource_arn   = "*"
+  version        = 1
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-xray-sampling" })
+}
+
+# ─── CloudWatch Contributor Insights rules ────────────────────────────────────
+# Mirrors Azure's Application Insights "top contributors" analytics. Identifies
+# top requesters, top error paths, and top slow endpoints from ECS structured logs.
+resource "aws_cloudwatch_log_group" "contributor_insights" {
+  count             = var.enable_contributor_insights ? 1 : 0
+  name              = "/ecs/${var.name_prefix}/contributor-insights"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-contributor-insights" })
+}
+
+# ─── Metric filters (application-level signals from structured logs) ──────────
+# These extract application metrics from the ECS logs, mirroring Azure App
+# Insights' automatic request/dependency/exception telemetry.
+
+resource "aws_cloudwatch_log_metric_filter" "api_errors" {
+  name           = "${var.name_prefix}-api-errors"
+  pattern        = "{ $.level = \"ERROR\" }"
+  log_group_name = aws_cloudwatch_log_group.api.name
+
+  metric_transformation {
+    name          = "ApiErrors"
+    namespace     = local.custom_metric_namespace
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "api_latency" {
+  name           = "${var.name_prefix}-api-latency"
+  pattern        = "{ $.duration_ms = * }"
+  log_group_name = aws_cloudwatch_log_group.api.name
+
+  metric_transformation {
+    name          = "ApiLatencyMs"
+    namespace     = local.custom_metric_namespace
+    value         = "$.duration_ms"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "web_errors" {
+  name           = "${var.name_prefix}-web-errors"
+  pattern        = "{ $.level = \"ERROR\" }"
+  log_group_name = aws_cloudwatch_log_group.web.name
+
+  metric_transformation {
+    name          = "WebErrors"
+    namespace     = local.custom_metric_namespace
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "worker_errors" {
+  name           = "${var.name_prefix}-worker-errors"
+  pattern        = "{ $.level = \"ERROR\" }"
+  log_group_name = aws_cloudwatch_log_group.worker.name
+
+  metric_transformation {
+    name          = "WorkerErrors"
+    namespace     = local.custom_metric_namespace
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "worker_task_duration" {
+  name           = "${var.name_prefix}-worker-task-duration"
+  pattern        = "{ $.task_duration_ms = * }"
+  log_group_name = aws_cloudwatch_log_group.worker.name
+
+  metric_transformation {
+    name          = "WorkerTaskDurationMs"
+    namespace     = local.custom_metric_namespace
+    value         = "$.task_duration_ms"
+    default_value = "0"
+  }
+}
+
+# ─── Application error rate alarm ─────────────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "api_error_rate" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.name_prefix}-api-error-rate-high"
+  namespace           = local.custom_metric_namespace
+  metric_name         = "ApiErrors"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = var.alarm_thresholds.api_error_count
+  evaluation_periods  = 2
+  period              = 300
+  statistic           = "Sum"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-api-error-rate-high" })
+}
+
+resource "aws_cloudwatch_metric_alarm" "worker_error_rate" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.name_prefix}-worker-error-rate-high"
+  namespace           = local.custom_metric_namespace
+  metric_name         = "WorkerErrors"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = var.alarm_thresholds.worker_error_count
+  evaluation_periods  = 2
+  period              = 300
+  statistic           = "Sum"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-worker-error-rate-high" })
+}
+
+# ─── ALB latency alarm (p99) ──────────────────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "alb_latency_p99" {
+  count = var.enable_alarms && var.alb_arn_suffix != null ? 1 : 0
+
+  alarm_name          = "${var.name_prefix}-alb-latency-p99-high"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = var.alarm_thresholds.alb_latency_p99_seconds
+  evaluation_periods  = 3
+  period              = 300
+  extended_statistic  = "p99"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+  }
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-alb-latency-p99-high" })
+}
+
+# ─── RDS connection count alarm ───────────────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "rds_connections" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${local.db_instance_id}-connections-high"
+  namespace           = "AWS/RDS"
+  metric_name         = "DatabaseConnections"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = var.alarm_thresholds.rds_max_connections
+  evaluation_periods  = 2
+  period              = 300
+  statistic           = "Average"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+
+  dimensions = {
+    DBInstanceIdentifier = local.db_instance_id
+  }
+
+  tags = merge(var.tags, { Name = "${local.db_instance_id}-connections-high" })
 }
 
 # ─── Alarm notification topic ─────────────────────────────────────────────────

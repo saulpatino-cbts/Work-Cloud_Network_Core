@@ -38,14 +38,14 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
 
-  container_definitions = jsonencode([
-    merge(
+  container_definitions = jsonencode(compact([
+    jsonencode(merge(
       {
         name         = local.api_container_name
         image        = var.api_image
         essential    = true
         portMappings = [{ containerPort = var.api_target_port, protocol = "tcp" }]
-        environment  = local.api_environment
+        environment  = concat(local.api_environment, local.xray_env_var)
         secrets      = local.api_secrets
 
         logConfiguration = {
@@ -66,8 +66,9 @@ resource "aws_ecs_task_definition" "api" {
         }
       },
       local.repository_credentials != null ? { repositoryCredentials = local.repository_credentials } : {}
-    )
-  ])
+    )),
+    local.xray_sidecar != null ? jsonencode(local.xray_sidecar) : "",
+  ]))
 
   tags = merge(var.tags, { Name = local.api_service_name })
 }
@@ -81,13 +82,13 @@ resource "aws_ecs_task_definition" "worker" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
 
-  container_definitions = jsonencode([
-    merge(
+  container_definitions = jsonencode(compact([
+    jsonencode(merge(
       {
         name        = local.worker_container_name
         image       = var.worker_image
         essential   = true
-        environment = local.worker_environment
+        environment = concat(local.worker_environment, local.xray_env_var)
         secrets     = local.worker_secrets
 
         logConfiguration = {
@@ -100,8 +101,9 @@ resource "aws_ecs_task_definition" "worker" {
         }
       },
       local.repository_credentials != null ? { repositoryCredentials = local.repository_credentials } : {}
-    )
-  ])
+    )),
+    local.xray_sidecar != null ? jsonencode(local.xray_sidecar) : "",
+  ]))
 
   tags = merge(var.tags, { Name = local.worker_service_name })
 }
@@ -115,14 +117,14 @@ resource "aws_ecs_task_definition" "web" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
 
-  container_definitions = jsonencode([
-    merge(
+  container_definitions = jsonencode(compact([
+    jsonencode(merge(
       {
         name         = local.web_container_name
         image        = var.web_image
         essential    = true
         portMappings = [{ containerPort = var.web_target_port, protocol = "tcp" }]
-        environment  = local.web_environment
+        environment  = concat(local.web_environment, local.xray_env_var)
         secrets      = local.web_secrets
 
         logConfiguration = {
@@ -143,8 +145,9 @@ resource "aws_ecs_task_definition" "web" {
         }
       },
       local.repository_credentials != null ? { repositoryCredentials = local.repository_credentials } : {}
-    )
-  ])
+    )),
+    local.xray_sidecar != null ? jsonencode(local.xray_sidecar) : "",
+  ]))
 
   tags = merge(var.tags, { Name = local.web_service_name })
 }
@@ -318,4 +321,199 @@ resource "aws_ecs_service" "web" {
   }
 
   depends_on = [aws_lb_listener.https]
+}
+
+# =============================================================================
+# Application Auto Scaling — mirrors Azure Container Apps' native min_replicas=0
+# and max_replicas scaling. Provides target-tracking on CPU utilization with
+# scale-to-zero support for dev environments (FinOps cost optimization).
+# =============================================================================
+
+# ─── API service autoscaling ──────────────────────────────────────────────────
+resource "aws_appautoscaling_target" "api" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  max_capacity       = var.api_max_count
+  min_capacity       = var.enable_scale_to_zero ? 0 : var.api_min_count
+  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.api.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "api_cpu" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.api_service_name}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.api[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.api[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.api[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = var.autoscaling_cpu_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+resource "aws_appautoscaling_policy" "api_memory" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.api_service_name}-memory-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.api[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.api[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.api[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = var.autoscaling_memory_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+# ─── Worker service autoscaling ───────────────────────────────────────────────
+resource "aws_appautoscaling_target" "worker" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  max_capacity       = var.worker_max_count
+  min_capacity       = var.enable_scale_to_zero ? 0 : var.worker_min_count
+  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.worker.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "worker_cpu" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.worker_service_name}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.worker[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.worker[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = var.autoscaling_cpu_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+resource "aws_appautoscaling_policy" "worker_memory" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.worker_service_name}-memory-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.worker[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.worker[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = var.autoscaling_memory_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+# ─── Web service autoscaling ──────────────────────────────────────────────────
+resource "aws_appautoscaling_target" "web" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  max_capacity       = var.web_max_count
+  min_capacity       = var.enable_scale_to_zero ? 0 : var.web_min_count
+  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.web.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "web_cpu" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.web_service_name}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.web[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.web[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.web[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = var.autoscaling_cpu_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+resource "aws_appautoscaling_policy" "web_memory" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.web_service_name}-memory-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.web[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.web[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.web[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = var.autoscaling_memory_target_percent
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+# ─── ALB request count scaling (web + api) ────────────────────────────────────
+# Mirrors Azure Container Apps' HTTP concurrency scaling trigger.
+resource "aws_appautoscaling_policy" "web_alb_requests" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.web_service_name}-alb-requests"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.web[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.web[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.web[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = "${aws_lb.this.arn_suffix}/${aws_lb_target_group.web.arn_suffix}"
+    }
+    target_value       = var.autoscaling_requests_per_target
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
+}
+
+resource "aws_appautoscaling_policy" "api_alb_requests" {
+  count = var.enable_autoscaling ? 1 : 0
+
+  name               = "${local.api_service_name}-alb-requests"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.api[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.api[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.api[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = "${aws_lb.this.arn_suffix}/${aws_lb_target_group.api.arn_suffix}"
+    }
+    target_value       = var.autoscaling_requests_per_target
+    scale_in_cooldown  = var.autoscaling_scale_in_cooldown
+    scale_out_cooldown = var.autoscaling_scale_out_cooldown
+  }
 }

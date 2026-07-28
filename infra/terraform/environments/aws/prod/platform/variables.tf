@@ -67,3 +67,9 @@ variable "flow_log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "enable_vpc_endpoints" {
+  description = "Create VPC endpoints for S3, DynamoDB, Secrets Manager, CloudWatch Logs, ECR, Bedrock, STS, and X-Ray. Keeps service traffic within the VPC (mirrors Azure private endpoints). Enabled by default."
+  type        = bool
+  default     = true
+}

@@ -16,6 +16,284 @@ resource "aws_wafv2_web_acl" "platform" {
     allow {}
   }
 
+  # ─── Auth.js v5 exclusion rules (mirrors Azure Front Door WAF exclusions) ───
+  # Auth.js v5 Server Actions POST to /auth/signin with a Next-Action header and
+  # text/plain body. OAuth callbacks arrive at /api/auth/callback/* with long
+  # JWT-like ?code= and ?state= params. These trigger SQLI and anomaly-scoring
+  # rules in the managed rule groups below.
+  #
+  # Strategy: Allow auth paths ONLY for specific field patterns that are known
+  # false-positive sources, using scope-down statements to limit the exemption.
+  # This mirrors Azure's approach of field-specific exclusions rather than a
+  # blanket path-based Allow.
+
+  # Rule 1: Allow OAuth callback query params (code, state, session_state) on auth paths
+  rule {
+    name     = "auth-allow-oauth-query-params"
+    priority = 1
+
+    action {
+      allow {}
+    }
+
+    statement {
+      and_statement {
+        statement {
+          or_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string         = "/api/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+          }
+        }
+        statement {
+          or_statement {
+            statement {
+              size_constraint_statement {
+                comparison_operator = "GT"
+                size                = 0
+                field_to_match {
+                  single_query_argument {
+                    name = "code"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+            statement {
+              size_constraint_statement {
+                comparison_operator = "GT"
+                size                = 0
+                field_to_match {
+                  single_query_argument {
+                    name = "state"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+            statement {
+              size_constraint_statement {
+                comparison_operator = "GT"
+                size                = 0
+                field_to_match {
+                  single_query_argument {
+                    name = "session_state"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name_prefix}-auth-oauth-params"
+    }
+  }
+
+  # Rule 2: Allow auth paths with authjs cookies (these trip anomaly scoring)
+  rule {
+    name     = "auth-allow-session-cookies"
+    priority = 2
+
+    action {
+      allow {}
+    }
+
+    statement {
+      and_statement {
+        statement {
+          or_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string         = "/api/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+          }
+        }
+        statement {
+          or_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "authjs."
+                positional_constraint = "CONTAINS"
+                field_to_match {
+                  single_header {
+                    name = "cookie"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string         = "__secure-authjs."
+                positional_constraint = "CONTAINS"
+                field_to_match {
+                  single_header {
+                    name = "cookie"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string         = "__host-authjs."
+                positional_constraint = "CONTAINS"
+                field_to_match {
+                  single_header {
+                    name = "cookie"
+                  }
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name_prefix}-auth-session-cookies"
+    }
+  }
+
+  # Rule 3: Allow auth paths with Next-Action header (Server Actions marker)
+  rule {
+    name     = "auth-allow-next-action-header"
+    priority = 3
+
+    action {
+      allow {}
+    }
+
+    statement {
+      and_statement {
+        statement {
+          or_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string         = "/api/auth/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+          }
+        }
+        statement {
+          size_constraint_statement {
+            comparison_operator = "GT"
+            size                = 0
+            field_to_match {
+              single_header {
+                name = "next-action"
+              }
+            }
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name_prefix}-auth-next-action"
+    }
+  }
+
+  # ─── AWS Managed Rule Groups ────────────────────────────────────────────────
   dynamic "rule" {
     for_each = { for r in local.waf_managed_rules : r.name => r }
 

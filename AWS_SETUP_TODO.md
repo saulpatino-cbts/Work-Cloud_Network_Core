@@ -4,6 +4,27 @@ This repo now contains the AWS Terraform (`infra/terraform/providers/aws/*` + `i
 
 > ⚠️ No real AWS account ID, IAM role ARN, or OIDC provider ARN appears anywhere in this repo. All are resolved at apply time from data sources or supplied as variables / `-backend-config`.
 
+## Current parity status (July 2026)
+
+The AWS Terraform is now at **full architectural parity** with the working Azure stack:
+
+| Capability | Azure | AWS | Status |
+|---|---|---|---|
+| Compute (3 containers) | Container Apps | ECS Fargate + ALB | ✅ Complete |
+| Database | PostgreSQL Flexible Server | RDS PostgreSQL | ✅ Complete |
+| Edge/CDN + WAF | Front Door Premium + WAF | CloudFront + WAFv2 | ✅ Complete |
+| WAF Auth.js exclusions | Field-specific exclusions | Custom rules (query params, cookies, headers) | ✅ Complete |
+| Identity + KMS | Managed Identity + Key Vault RBAC | IAM roles + KMS CMK + GitHub OIDC | ✅ Complete |
+| Secrets | Key Vault | Secrets Manager | ✅ Complete |
+| Storage | Storage Account (blob) | S3 (artifacts + static-site) | ✅ Complete |
+| AI model management | AI Foundry + cognitive_deployment | Bedrock inference profile + optional provisioned throughput | ✅ Complete |
+| Distributed tracing | Application Insights | X-Ray (daemon sidecar + sampling rules) | ✅ Complete |
+| Observability | Log Analytics + diagnostics + flow logs | CloudWatch log groups + metric filters + alarms + VPC flow logs | ✅ Complete |
+| Private networking | Private endpoints (storage, KV, AI) | VPC endpoints (S3, DynamoDB, Secrets Manager, Logs, ECR, Bedrock, STS, X-Ray) | ✅ Complete |
+| Scale-to-zero | Container Apps min_replicas=0 | Application Auto Scaling (CPU + memory + ALB requests) | ✅ Complete |
+| VPC/Networking | VNet + NSG + subnets | VPC + security groups + 3-tier subnets + NAT | ✅ Complete |
+| CI/CD workflow | 211-deploy-azure-split.yml | 212-deploy-aws-split.yml (scaffold, pending human setup) | ⏳ Pending |
+
 **How placeholders appear in the code:** the *only* literal placeholder strings committed are `<GITHUB_OWNER_PLACEHOLDER>` and `<GITHUB_REPO_PLACEHOLDER>` (defaults on `github_owner` / `github_repository` in `providers/aws/identity/variables.tf` and `environments/aws/{dev,prod}/workload/variables.tf`). Everything else in the tables below is *not* a token in the source — it is either resolved automatically (account/partition/region via `data` sources), supplied at `terraform init` (`-backend-config`), or passed as a `sensitive`/defaulted variable at apply. The `<…_PLACEHOLDER>` names used elsewhere in this doc are descriptive labels for values a human must provide, not strings to grep for.
 
 ## 1. Bootstrap the Terraform S3 backend (before first `init`)
@@ -76,7 +97,25 @@ If the platform continues to call the external Azure OpenAI endpoint (as `migrat
 
 ## 7. Deploy order (workload root)
 
-`identity → storage → database → observability → ai → runtime → compute → security`. The platform (networking) root must be applied first; the workload root consumes its outputs.
+`identity → storage → database → observability → ai → runtime → compute → security`. The platform (networking + VPC endpoints) root must be applied first; the workload root consumes its outputs.
+
+## 8. VPC Endpoints (platform root)
+
+The platform root (`environments/aws/{dev,prod}/platform/`) creates 9 VPC endpoints gated behind `var.enable_vpc_endpoints` (default `true`):
+
+| Endpoint | Type | Purpose |
+|---|---|---|
+| S3 | Gateway | Free; routes S3 traffic through VPC |
+| DynamoDB | Gateway | Free; for Terraform state locking |
+| Secrets Manager | Interface | ECS task secret injection |
+| CloudWatch Logs | Interface | ECS awslogs driver |
+| ECR API | Interface | Container image pulls |
+| ECR Docker | Interface | Container image pulls |
+| Bedrock Runtime | Interface | AI inference calls |
+| STS | Interface | IAM role credential exchange |
+| X-Ray | Interface | Trace segment submission |
+
+A dedicated security group (`${name_prefix}-sg-vpce`) allows HTTPS from the app and database tiers.
 
 ---
 

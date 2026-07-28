@@ -30,4 +30,27 @@ locals {
   web_secrets    = [for k, arn in var.web_secrets : { name = k, valueFrom = arn }]
 
   repository_credentials = var.dockerhub_secret_arn != null ? { credentialsParameter = var.dockerhub_secret_arn } : null
+
+  # X-Ray daemon sidecar container definition (injected into each task when enabled).
+  xray_sidecar = var.enable_xray ? {
+    name      = "xray-daemon"
+    image     = "public.ecr.aws/xray/aws-xray-daemon:latest"
+    essential = false
+    cpu       = 32
+    memory    = 64
+    portMappings = [
+      { containerPort = 2000, protocol = "udp" }
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = var.xray_log_group_name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "xray"
+      }
+    }
+  } : null
+
+  # Environment variable injected into application containers to point SDK at local daemon.
+  xray_env_var = var.enable_xray ? [{ name = "AWS_XRAY_DAEMON_ADDRESS", value = "127.0.0.1:2000" }] : []
 }

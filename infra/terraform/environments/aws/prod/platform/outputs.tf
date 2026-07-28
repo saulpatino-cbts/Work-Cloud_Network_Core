@@ -37,3 +37,13 @@ output "database_security_group_id" {
   description = "Database (RDS) security group ID."
   value       = aws_security_group.database.id
 }
+
+output "vpc_endpoint_security_group_id" {
+  description = "VPC endpoint security group ID, or null when endpoints are disabled."
+  value       = one(aws_security_group.vpc_endpoints[*].id)
+}
+
+output "s3_vpc_endpoint_id" {
+  description = "S3 gateway VPC endpoint ID, or null when endpoints are disabled."
+  value       = one(aws_vpc_endpoint.s3[*].id)
+}

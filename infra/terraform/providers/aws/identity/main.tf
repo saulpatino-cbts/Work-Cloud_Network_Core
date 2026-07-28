@@ -132,6 +132,32 @@ resource "aws_iam_role_policy" "ecs_task_bedrock" {
   policy = var.task_bedrock_policy_json
 }
 
+# X-Ray daemon needs xray:PutTraceSegments + xray:PutTelemetryRecords.
+# Attached to the task role so the sidecar inherits it.
+resource "aws_iam_role_policy" "ecs_task_xray" {
+  count = var.enable_xray ? 1 : 0
+  name  = "${var.name_prefix}-ecs-task-xray"
+  role  = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "XRayDaemonWrite"
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+          "xray:GetSamplingRules",
+          "xray:GetSamplingTargets",
+          "xray:GetSamplingStatisticSummaries",
+        ]
+        Resource = ["*"]
+      }
+    ]
+  })
+}
+
 # ─── GitHub Actions OIDC deploy role ──────────────────────────────────────────
 # thumbprint_list is intentionally omitted: the AWS provider 5.x manages the
 # GitHub OIDC thumbprint automatically. Do not ship a hardcoded thumbprint.

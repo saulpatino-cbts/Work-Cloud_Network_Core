@@ -260,3 +260,188 @@ resource "aws_flow_log" "this" {
 
   tags = { Name = "${local.name_prefix}-flow-log" }
 }
+
+# ─── VPC Endpoints ────────────────────────────────────────────────────────────
+# Mirrors Azure's private endpoints for storage, Key Vault, and AI Foundry.
+# Traffic to AWS services stays within the VPC (no public internet traversal).
+
+# Security group for interface endpoints (HTTPS from app tier).
+resource "aws_security_group" "vpc_endpoints" {
+  count       = var.enable_vpc_endpoints ? 1 : 0
+  name_prefix = "${local.name_prefix}-vpce-"
+  vpc_id      = aws_vpc.this.id
+  description = "VPC interface endpoints - HTTPS from app/database subnets"
+
+  tags = { Name = "${local.name_prefix}-sg-vpce" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "vpce_https_from_app" {
+  count                        = var.enable_vpc_endpoints ? 1 : 0
+  security_group_id            = aws_security_group.vpc_endpoints[0].id
+  description                  = "HTTPS from app tier"
+  referenced_security_group_id = aws_security_group.app.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "vpce_https_from_db" {
+  count                        = var.enable_vpc_endpoints ? 1 : 0
+  security_group_id            = aws_security_group.vpc_endpoints[0].id
+  description                  = "HTTPS from database tier (for RDS IAM auth / Secrets Manager)"
+  referenced_security_group_id = aws_security_group.database.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "vpce_all" {
+  count             = var.enable_vpc_endpoints ? 1 : 0
+  security_group_id = aws_security_group.vpc_endpoints[0].id
+  description       = "All outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
+# ─── Gateway Endpoint: S3 ─────────────────────────────────────────────────────
+# Free, no hourly charge. Routes S3 traffic through the VPC rather than NAT.
+resource "aws_vpc_endpoint" "s3" {
+  count        = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id       = aws_vpc.this.id
+  service_name = "com.amazonaws.${var.region}.s3"
+
+  vpc_endpoint_type = "Gateway"
+  route_table_ids = concat(
+    aws_route_table.private[*].id,
+    [aws_route_table.public.id],
+  )
+
+  tags = { Name = "${local.name_prefix}-vpce-s3" }
+}
+
+# ─── Gateway Endpoint: DynamoDB ───────────────────────────────────────────────
+# Free. Used by Terraform state locking (DynamoDB lock table).
+resource "aws_vpc_endpoint" "dynamodb" {
+  count        = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id       = aws_vpc.this.id
+  service_name = "com.amazonaws.${var.region}.dynamodb"
+
+  vpc_endpoint_type = "Gateway"
+  route_table_ids = concat(
+    aws_route_table.private[*].id,
+    [aws_route_table.public.id],
+  )
+
+  tags = { Name = "${local.name_prefix}-vpce-dynamodb" }
+}
+
+# ─── Interface Endpoint: Secrets Manager ──────────────────────────────────────
+# ECS tasks fetch secrets at launch via Secrets Manager. Without this endpoint,
+# traffic goes through NAT (cost + latency). Mirrors Azure Key Vault PE.
+resource "aws_vpc_endpoint" "secretsmanager" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.secretsmanager"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-secretsmanager" }
+}
+
+# ─── Interface Endpoint: CloudWatch Logs ──────────────────────────────────────
+# ECS awslogs driver pushes logs to CloudWatch. Without this endpoint, log
+# writes traverse NAT. Mirrors Azure diagnostic settings over PE.
+resource "aws_vpc_endpoint" "logs" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.logs"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-logs" }
+}
+
+# ─── Interface Endpoint: ECR API ──────────────────────────────────────────────
+# ECS pulls container images from ECR. Two endpoints needed: ecr.api + ecr.dkr.
+resource "aws_vpc_endpoint" "ecr_api" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.ecr.api"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-ecr-api" }
+}
+
+# ─── Interface Endpoint: ECR Docker ───────────────────────────────────────────
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.ecr.dkr"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-ecr-dkr" }
+}
+
+# ─── Interface Endpoint: Bedrock Runtime ──────────────────────────────────────
+# AI inference calls (InvokeModel) stay within VPC. Mirrors Azure AI Foundry PE.
+resource "aws_vpc_endpoint" "bedrock_runtime" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.bedrock-runtime"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-bedrock-runtime" }
+}
+
+# ─── Interface Endpoint: STS ──────────────────────────────────────────────────
+# ECS task role credential exchange uses STS. Keeps IAM auth private.
+resource "aws_vpc_endpoint" "sts" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.sts"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-sts" }
+}
+
+# ─── Interface Endpoint: X-Ray ────────────────────────────────────────────────
+# X-Ray daemon sidecar sends trace segments. Keeps tracing traffic private.
+resource "aws_vpc_endpoint" "xray" {
+  count              = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id             = aws_vpc.this.id
+  service_name       = "com.amazonaws.${var.region}.xray"
+  vpc_endpoint_type  = "Interface"
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpc_endpoints[0].id]
+
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-vpce-xray" }
+}
+

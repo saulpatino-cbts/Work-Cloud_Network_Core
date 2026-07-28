@@ -6,12 +6,14 @@
 # compute -> security.
 # =============================================================================
 
-# ─── AI (Bedrock policy document; consumed by identity) ───────────────────────
+# ─── AI (Bedrock policy document + inference profile; consumed by identity) ───
 module "ai" {
   source = "../../../../providers/aws/ai"
 
-  name_prefix = local.name_prefix
-  tags        = local.tags
+  name_prefix              = local.name_prefix
+  tags                     = local.tags
+  environment              = var.environment
+  enable_inference_profile = var.enable_bedrock_inference_profile
 }
 
 # ─── Identity (KMS, ECS roles, GitHub OIDC) ───────────────────────────────────
@@ -26,6 +28,7 @@ module "identity" {
   github_owner             = var.github_owner
   github_repository        = var.github_repository
   task_bedrock_policy_json = module.ai.task_bedrock_policy_json
+  enable_xray              = var.enable_xray
 }
 
 # ─── Storage (S3 artifacts + static-site) ─────────────────────────────────────
@@ -85,7 +88,7 @@ module "runtime" {
   dockerhub_token           = var.dockerhub_token
 }
 
-# ─── Compute (ECS Fargate + ALB) ──────────────────────────────────────────────
+# ─── Compute (ECS Fargate + ALB + Autoscaling) ────────────────────────────────
 module "compute" {
   source = "../../../../providers/aws/compute"
 
@@ -104,6 +107,11 @@ module "compute" {
 
   alb_certificate_arn  = var.alb_certificate_arn
   enable_scale_to_zero = var.enable_scale_to_zero
+  enable_autoscaling   = true
+
+  # X-Ray tracing (mirrors Azure Application Insights)
+  enable_xray        = var.enable_xray
+  xray_log_group_name = module.observability.xray_log_group_name != null ? module.observability.xray_log_group_name : ""
 
   api_image    = var.api_image
   worker_image = var.worker_image

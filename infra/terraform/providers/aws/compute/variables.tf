@@ -220,3 +220,71 @@ variable "dockerhub_secret_arn" {
   type        = string
   default     = null
 }
+
+# ─── Tracing (X-Ray) ─────────────────────────────────────────────────────────
+variable "enable_xray" {
+  description = "Inject the X-Ray daemon sidecar into each task definition. Mirrors Azure Application Insights distributed tracing."
+  type        = bool
+  default     = false
+}
+
+variable "xray_log_group_name" {
+  description = "CloudWatch log group name for the X-Ray daemon sidecar (from observability module). Required when enable_xray is true."
+  type        = string
+  default     = ""
+}
+
+# ─── Autoscaling ──────────────────────────────────────────────────────────────
+variable "enable_autoscaling" {
+  description = "Create Application Auto Scaling targets and policies for all ECS services. Mirrors Azure Container Apps' built-in scaling. When combined with enable_scale_to_zero, services can scale from 0 to max based on demand."
+  type        = bool
+  default     = true
+}
+
+variable "api_max_count" {
+  description = "Maximum task count for the API service."
+  type        = number
+  default     = 4
+}
+
+variable "worker_max_count" {
+  description = "Maximum task count for the worker service."
+  type        = number
+  default     = 4
+}
+
+variable "web_max_count" {
+  description = "Maximum task count for the web service."
+  type        = number
+  default     = 4
+}
+
+variable "autoscaling_cpu_target_percent" {
+  description = "Target CPU utilization percentage for scale-out."
+  type        = number
+  default     = 70
+}
+
+variable "autoscaling_memory_target_percent" {
+  description = "Target memory utilization percentage for scale-out."
+  type        = number
+  default     = 80
+}
+
+variable "autoscaling_requests_per_target" {
+  description = "Target ALB request count per task for scale-out (web + api). Mirrors Azure Container Apps' HTTP concurrency trigger."
+  type        = number
+  default     = 100
+}
+
+variable "autoscaling_scale_in_cooldown" {
+  description = "Cooldown period (seconds) after a scale-in before another scale-in can occur."
+  type        = number
+  default     = 300
+}
+
+variable "autoscaling_scale_out_cooldown" {
+  description = "Cooldown period (seconds) after a scale-out before another scale-out can occur."
+  type        = number
+  default     = 60
+}

@@ -38,7 +38,7 @@ backed by PostgreSQL and authenticated via Microsoft Entra ID.
 | Repository hygiene | ✅ Clean | No open GitHub PRs; #113 resolved-by-decision (keep the `hub` approval-gate indirection); #110 foundation scaffolded as of 2026-07-23 |
 | Azure Terraform hardening | ✅ Merged | AVM + Microsoft Learn review pass: RBAC-propagation fixes, Postgres HA, provider version pinning |
 | Azure deployment | ⏳ Beta validation pending | Live workflow execution and customer-like validation remain |
-| AWS Terraform | 🏗️ Resources authored, not yet deployed | Tracked in [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) — `infra/terraform/providers/aws/` (8 modules) and `infra/terraform/environments/aws/{dev,prod}/{platform,workload}/` now declare real resources (ECS Fargate, ALB, RDS PostgreSQL, S3, Secrets Manager, CloudFront+WAF, IAM/OIDC, KMS, CloudWatch), mirroring the Azure module boundaries. Code-generation only — not yet applied; human AWS account/IAM/OIDC/backend setup is required first (see [`AWS_SETUP_TODO.md`](AWS_SETUP_TODO.md)). Discovery engine (`cna/modules/`) already supports AWS |
+| AWS Terraform | 🏗️ Resources authored, not yet deployed | Tracked in [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110) — `infra/terraform/providers/aws/` (8 modules) and `infra/terraform/environments/aws/{dev,prod}/{platform,workload}/` now declare real resources (ECS Fargate, ALB, RDS PostgreSQL, S3, Secrets Manager, CloudFront+WAF, IAM/OIDC, KMS, CloudWatch), mirroring the Azure module boundaries. Full parity with Azure achieved: X-Ray distributed tracing, Bedrock inference profiles, Auth.js WAF exclusions, VPC endpoints (S3/DynamoDB Gateway + Secrets Manager/Logs/ECR/Bedrock/STS/X-Ray Interface), and Application Auto Scaling with scale-to-zero. Code-generation only — not yet applied; human AWS account/IAM/OIDC/backend setup is required first (see [`AWS_SETUP_TODO.md`](AWS_SETUP_TODO.md)). Discovery engine (`cna/modules/`) already supports AWS |
 
 ---
 
@@ -225,7 +225,14 @@ To wipe an environment and redeploy clean:
 
 ## Backlog
 
-- **AWS Terraform** — [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110): foundation is scaffolded (`infra/terraform/providers/aws/` — 8 modules mirroring `providers/azure/`'s `ai, compute, database, identity, observability, runtime, security, storage`; `infra/terraform/environments/aws/{dev,prod}/{platform,workload}/`; `212-deploy-aws-split.yml` workflow shell). Each module is a per-module follow-up issue for the actual service decision (ECS vs Lambda, RDS vs Aurora, etc.) and resource authoring — see the module-specific issues linked from #110.
+- **AWS Terraform** — [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110): AWS Terraform is now at **full architectural parity** with the Azure stack. All 8 provider modules (`infra/terraform/providers/aws/`) declare real resources mirroring Azure's module boundaries, plus:
+  - **Observability**: X-Ray distributed tracing (daemon sidecar, sampling rules), CloudWatch metric filters (errors, latency), Contributor Insights, and expanded alarms (error rates, p99 latency, RDS connections)
+  - **AI**: Bedrock inference profile (stable model endpoint mirroring Azure's `cognitive_deployment`), optional provisioned throughput, and guardrails
+  - **WAF**: Auth.js v5-specific exclusion rules (OAuth query params, session cookies, Next-Action header) preventing false positives on sign-in flows
+  - **Private networking**: 9 VPC endpoints (S3/DynamoDB Gateway + Secrets Manager/Logs/ECR API/ECR Docker/Bedrock Runtime/STS/X-Ray Interface) keeping all service traffic within the VPC
+  - **Autoscaling**: Application Auto Scaling with scale-to-zero (CPU, memory, ALB request count target-tracking policies for all 3 ECS services)
+
+  **Remaining before first deploy**: human AWS account/IAM/OIDC/backend setup per [`AWS_SETUP_TODO.md`](AWS_SETUP_TODO.md), ACM certificate creation, Bedrock model access console opt-in, and live workflow execution (212).
 
 ---
 

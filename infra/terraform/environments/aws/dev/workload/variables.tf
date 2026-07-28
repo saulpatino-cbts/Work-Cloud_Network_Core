@@ -263,3 +263,17 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
+
+# ─── X-Ray / Observability ────────────────────────────────────────────────────
+variable "enable_xray" {
+  description = "Enable X-Ray distributed tracing. Mirrors Azure Application Insights."
+  type        = bool
+  default     = true
+}
+
+# ─── Bedrock AI ───────────────────────────────────────────────────────────────
+variable "enable_bedrock_inference_profile" {
+  description = "Create a Bedrock inference profile (stable model endpoint). Mirrors Azure cognitive_deployment."
+  type        = bool
+  default     = true
+}

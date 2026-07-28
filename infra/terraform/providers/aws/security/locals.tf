@@ -10,21 +10,25 @@ locals {
   waf_managed_rules = [
     {
       name        = "aws-managed-common"
-      priority    = 1
+      priority    = 10
       rule_group  = "AWSManagedRulesCommonRuleSet"
       metric_name = "${var.name_prefix}-common-rules"
     },
     {
       name        = "aws-managed-known-bad-inputs"
-      priority    = 2
+      priority    = 20
       rule_group  = "AWSManagedRulesKnownBadInputsRuleSet"
       metric_name = "${var.name_prefix}-bad-inputs"
     },
     {
       name        = "aws-managed-sqli"
-      priority    = 3
+      priority    = 30
       rule_group  = "AWSManagedRulesSQLiRuleSet"
       metric_name = "${var.name_prefix}-sqli"
     },
   ]
+
+  # Auth.js v5 paths that trigger false positives in WAF managed rules.
+  # Mirrors Azure Front Door WAF's field-specific exclusions.
+  auth_paths = ["/auth/*", "/api/auth/*"]
 }

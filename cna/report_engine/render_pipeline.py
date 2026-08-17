@@ -59,15 +59,23 @@ class RenderOptions:
 class RenderPipeline:
     """Renders all engagement deliverables from a reviewed FindingsReport."""
 
-    def __init__(self, store: EngagementStore, options: RenderOptions = None):
+    def __init__(self, store: EngagementStore, options: RenderOptions | None = None):
+        # DeliverableManifest is a dataclass, so it does not validate: a None
+        # engagement_id would be written into the manifest as null rather than
+        # rejected. A pipeline that cannot identify its engagement cannot
+        # produce a valid manifest, so require it here (TODO.md T-410).
+        if store.engagement_id is None:
+            raise ValueError(
+                "RenderPipeline requires an EngagementStore bound to an "
+                "engagement_id; construct it with EngagementStore(engagement_id=...)."
+            )
         self.store = store
+        self.engagement_id: str = store.engagement_id
         self.opts = options or RenderOptions()
-        self._manifest = DeliverableManifest(engagement_id=store.engagement_id)
+        self._manifest = DeliverableManifest(engagement_id=self.engagement_id)
 
     def _output_dir(self) -> Path:
-        base = self.opts.output_dir or (
-            Path("engagements") / self.store.engagement_id / "deliverables"
-        )
+        base = self.opts.output_dir or (Path("engagements") / self.engagement_id / "deliverables")
         base.mkdir(parents=True, exist_ok=True)
         return base
 
@@ -75,7 +83,7 @@ class RenderPipeline:
         return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
     def _filename(self, label: str, ext: str) -> str:
-        return f"{self.store.engagement_id}_{label}_{self._timestamp()}.{ext}"
+        return f"{self.engagement_id}_{label}_{self._timestamp()}.{ext}"
 
     # ---------------------------------------------------------------- gate check
 
@@ -83,16 +91,16 @@ class RenderPipeline:
         """DD-009: Block all rendering if findings have not been reviewed."""
         if not report.review_complete:
             raise ReviewGateError(
-                f"Engagement {self.store.engagement_id}: FindingsReport has "
+                f"Engagement {self.engagement_id}: FindingsReport has "
                 f"review_complete=False. Run `cna review complete "
-                f"--engagement-id {self.store.engagement_id}` before generating reports."
+                f"--engagement-id {self.engagement_id}` before generating reports."
             )
 
     def _enforce_ja_gate(self) -> None:
         """DD-015: Block JA report if native speaker review not complete."""
         if not self.opts.ja_review_complete:
             raise JaReviewGateError(
-                f"Engagement {self.store.engagement_id}: JA regional report requested "
+                f"Engagement {self.engagement_id}: JA regional report requested "
                 f"but ja_review_complete=False. Complete native speaker review and set "
                 f"--ja-review-complete flag."
             )
@@ -109,7 +117,7 @@ class RenderPipeline:
         self._enforce_review_gate(report)
 
         out = self._output_dir()
-        engagement_id = self.store.engagement_id
+        engagement_id = self.engagement_id
 
         if self.opts.render_html_preview:
             from cna.report_engine.html_preview import HtmlPreviewRenderer

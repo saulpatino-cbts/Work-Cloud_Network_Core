@@ -81,6 +81,12 @@ class DiscoveryOptions:
     skip_opt_in_regions: bool = True
     resume: bool = False  # skip accounts with existing checkpoint
     max_concurrent_regions: int = 10
+    # Endpoint used only to reach EC2 for describe_regions(), which must be
+    # called against some enabled region before the region list is known.
+    # Declared here rather than inlined at the call site so the aws-us-gov and
+    # aws-cn partitions can override it — us-east-1 does not exist in either.
+    # It is a last resort: see AWSDiscovery._region_for_region_lookup().
+    region_lookup_endpoint: str = "us-east-1"
 
 
 class AWSDiscovery:
@@ -91,12 +97,29 @@ class AWSDiscovery:
         self.opts = options
         self._mgmt_session: boto3.Session | None = None
 
+    @property
+    def _mgmt(self) -> boto3.Session:
+        """The management-account session, established by ``run()``.
+
+        ``_mgmt_session`` is Optional because it does not exist until ``run()``
+        creates it. Every per-account helper runs after that, so a ``None`` here
+        is a programming error, not a runtime condition — surface it as one
+        rather than letting it become ``AttributeError: 'NoneType' object has no
+        attribute 'client'`` several frames deeper (TODO.md T-410).
+        """
+        if self._mgmt_session is None:
+            raise RuntimeError(
+                "AWS management session not established — call run() before "
+                "per-account discovery helpers."
+            )
+        return self._mgmt_session
+
     # ------------------------------------------------------------------ setup
 
     def _assume_role(self, account_id: str, role_name: str) -> boto3.Session:
         """Assume the CNA read-only role in a member account."""
         role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-        sts = self._mgmt_session.client("sts")
+        sts = self._mgmt.client("sts")
         try:
             kwargs = {
                 "RoleArn": role_arn,
@@ -122,7 +145,7 @@ class AWSDiscovery:
 
     def _list_org_accounts(self) -> list[AWSAccount]:
         """List all accounts in the AWS Organization from the management account."""
-        orgs = self._mgmt_session.client("organizations")
+        orgs = self._mgmt.client("organizations")
         accounts = []
         cursor = PaginationCursor()
         while cursor.has_more:
@@ -152,9 +175,27 @@ class AWSDiscovery:
             cursor.advance(resp.get("NextToken"))
         return accounts
 
+    def _region_for_region_lookup(self, session: boto3.Session) -> str:
+        """Pick the region whose EC2 endpoint answers describe_regions().
+
+        Resolution order, most specific first:
+          1. the session's own configured region (AWS_REGION, profile, or
+             instance metadata) — always correct for the caller's partition;
+          2. the first explicitly requested region, when the caller passed any;
+          3. ``opts.region_lookup_endpoint``, the declared default.
+
+        Never a literal at the call site: a hardcoded us-east-1 is wrong in the
+        aws-us-gov and aws-cn partitions, where that region does not exist.
+        """
+        if session.region_name:
+            return session.region_name
+        if self.opts.regions:
+            return self.opts.regions[0]
+        return self.opts.region_lookup_endpoint
+
     def _get_enabled_regions(self, session: boto3.Session) -> list[str]:
         """Return all enabled regions, optionally filtered."""
-        ec2 = session.client("ec2", region_name="us-east-1")
+        ec2 = session.client("ec2", region_name=self._region_for_region_lookup(session))
         resp = with_retry()(ec2.describe_regions)(
             Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}],
         )
@@ -725,15 +766,23 @@ class AWSDiscovery:
 
         try:
             if account.is_management_account:
-                acct_session = self._mgmt_session
+                acct_session = self._mgmt
             else:
                 acct_session = self._assume_role(account_id, role_name)
         except CNAAuthError as e:
             logger.error("Cannot access account %s: %s", account_id, e)
+            # `cloud` travels inside the event dict: write_audit_event takes
+            # (engagement_id, event) only, and passing "aws" positionally bound
+            # it to `event`, so the following keyword raised TypeError — in the
+            # one path that handles an inaccessible account (TODO.md T-402).
             self.store.write_audit_event(
                 engagement_id,
-                "aws",
-                event={"type": "access_denied", "account": account_id, "error": str(e)},
+                {
+                    "type": "access_denied",
+                    "cloud": "aws",
+                    "account": account_id,
+                    "error": str(e),
+                },
             )
             return
 
@@ -745,12 +794,16 @@ class AWSDiscovery:
             region_topo = self._discover_region(acct_session, account_id, region)
             topology.regions.append(region_topo)
 
+            # Positional, matching the signature
+            # (engagement_id, platform, account_or_sub_id, data). Passing this
+            # as `account_id=` raised TypeError on the first region of the first
+            # account, so no AWS checkpoint was ever written (TODO.md T-410).
             checkpoint_key = f"aws_{account_id}_{region}"
             self.store.write_discovery_checkpoint(
                 engagement_id,
                 "aws",
-                account_id=checkpoint_key,
-                data=json.loads(region_topo.model_dump_json()),
+                checkpoint_key,
+                json.loads(region_topo.model_dump_json()),
             )
 
             vpc_count = len(region_topo.vpcs)
@@ -766,6 +819,11 @@ class AWSDiscovery:
             CNAAuthError: If management account credentials fail.
         """
         engagement_id = self.store.engagement_id
+        if engagement_id is None:
+            raise ValueError(
+                "EngagementStore is not bound to an engagement_id; "
+                "construct it with EngagementStore(engagement_id=...) before discovery."
+            )
         logger.info("[%s] AWS discovery starting", engagement_id)
 
         # 1. Establish management account session

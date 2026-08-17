@@ -20,6 +20,7 @@ Any finding with the same key is deduplicated — the first occurrence wins.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -138,7 +139,8 @@ class AnalysisOptions:
     load_aws: bool = True
     load_azure: bool = True
     dry_run: bool = False  # produce findings but do not write to store
-    progress_callback: callable | None = None
+    # (cloud, current, total, label) — see cli/analyze.py's `progress`
+    progress_callback: Callable[[str, int, int, str], None] | None = None
 
 
 class AnalysisEngine:
@@ -147,7 +149,7 @@ class AnalysisEngine:
     Strictly does NOT inject recommendations — that is RecommendationEngine's job.
     """
 
-    def __init__(self, store: EngagementStore, options: AnalysisOptions = None):
+    def __init__(self, store: EngagementStore, options: AnalysisOptions | None = None):
         self.store = store
         self.opts = options or AnalysisOptions()
         self._enforcer = ObservedStateEnforcer()
@@ -157,7 +159,7 @@ class AnalysisEngine:
 
     # ---------------------------------------------------------------- dedup
 
-    def _dedup_key(self, rule_id: str, resource_id: str) -> str:
+    def _dedup_key(self, rule_id: str | None, resource_id: str | None) -> str:
         return f"{rule_id}:{resource_id}"
 
     def _emit(self, finding: Finding) -> None:
@@ -1424,10 +1426,13 @@ class AnalysisEngine:
         self, sub_topo: AzureSubscriptionTopology, sub_id: str
     ) -> None:
         for vnet in sub_topo.vnets:
-            has_local_gw = (
-                any(gw.vnet_id == vnet.id for gw in sub_topo.virtual_network_gateways)
-                if sub_topo.virtual_network_gateways
-                else False
+            # A gateway has no vnet_id — it lives in a GatewaySubnet, and an ARM
+            # subnet id nests under its VNet id as "<vnet_id>/subnets/<name>".
+            # Reading gw.vnet_id raised AttributeError for any subscription that
+            # actually had a gateway (TODO.md T-410).
+            has_local_gw = any(
+                gw.subnet_id and gw.subnet_id.startswith(f"{vnet.id}/")
+                for gw in sub_topo.virtual_network_gateways or []
             )
             for peering in vnet.peerings:
                 if peering.allow_gateway_transit and not has_local_gw:
@@ -1676,6 +1681,11 @@ class AnalysisEngine:
           5. Return report
         """
         engagement_id = self.store.engagement_id
+        if engagement_id is None:
+            raise ValueError(
+                "AnalysisEngine requires an EngagementStore bound to an engagement_id; "
+                "construct it with EngagementStore(engagement_id=...)."
+            )
         self._findings = []
         self._seen = set()
 

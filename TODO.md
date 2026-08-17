@@ -14,7 +14,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 1](#phase-1--critical-fixes) | Critical fixes — repository states something untrue | T-101 – T-104 |
 | [Phase 2](#phase-2--security-improvements) | Security improvements | T-201 – T-204 |
 | [Phase 3](#phase-3--deployment-readiness) | Deployment readiness | T-301 – T-305 |
-| [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-407 |
+| [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-414 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements | T-501 – T-502 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
 
@@ -169,10 +169,23 @@ Each one actively misleads an engineer or a workflow run.
 - **Recommended action:** Verify no thumbprint appears in `infra/terraform/providers/aws/identity/`
   and add a short comment recording why it is absent, so a future reviewer does not "fix" the
   omission.
-- **Status:** Not started
+- **Status:** Done — verified and documented in code. `grep -rn thumbprint infra/` returns **only
+  comment lines**: there is no `thumbprint_list` value anywhere under `infra/`, so nothing was
+  copied forward. The legacy placeholder does still exist in the superseded root, at
+  `migrate/iam.tf:139` and `migrate/scripts/Initialize-Migration.ps1:97` — forty `f`s, never a real
+  thumbprint — and goes away with T-401.
+  A short comment already existed above `aws_iam_openid_connect_provider.github`; it was expanded
+  rather than duplicated, and now records three things a future reviewer needs: *why* the omission
+  is correct (provider 5.x validates GitHub's endpoint against its own trusted CA store), that the
+  `migrate/` placeholder must not be copied in, and — the part previously recorded only here in
+  `TODO.md` — the one-provider-per-account constraint, with the concrete `terraform import` command
+  to use when the target account already has one. That last point is the difference between a clean
+  first apply and a failed one, so it belongs next to the resource rather than in the backlog.
+  `terraform fmt -check -recursive` still passes and the file's LF endings are unchanged.
 - **Notes for future engineers:** AWS permits exactly one GitHub OIDC provider per account. If the
   target account already has one, the module must import it rather than create it — a duplicate
-  create fails the whole apply.
+  create fails the whole apply. This is now also stated in the module itself, which is where it will
+  actually be read; keep the two in step if either changes.
 
 ### T-204 — Triage the 8 open Dependabot advisories on the default branch
 
@@ -496,10 +509,38 @@ order; do not reorder it.
 - **Recommended action:** Add `ty` to the `dev` optional-dependency group and a corresponding
   `pre-commit` hook, then fix or explicitly ignore the initial findings in one pass so the check
   starts green.
-- **Status:** Not started
+- **Status:** Partly done — the tooling is wired; the "starts green" half is **not** achieved, and
+  deliberately so. `ty>=0.0.72` is in the `dev` group with a `[tool.ty]` section in
+  `pyproject.toml` (py311, `include = ["cna"]`, vendored packs excluded, **no rule suppressed**),
+  and a `ty` hook was **appended** to the existing `.pre-commit-config.yaml`, which already carried
+  13 hooks across 4 repos (gitleaks, detect-secrets, ruff, ruff-format, and eight hygiene hooks
+  including `mixed-line-ending --fix=lf` and `no-commit-to-branch --branch main`). The `ty` hook is
+  `repo: local` / `language: system` so it runs the version pinned in the `dev` group; the existing
+  remote hooks were left exactly as they were.
+  `ty check cna/` reports **96 diagnostics**, so the hook is registered at `stages: [manual]`
+  rather than gating. Forcing it green would have meant widening ignore lists, which this item
+  explicitly forbids; the backlog is tracked in T-410 instead and the hook becomes gating by
+  deleting one line once that clears. Of the original 98, **45 are `unresolved-import` for packages
+  that *are* declared dependencies** simply absent from the review container — environment
+  artifacts, not defects.
+  The first run immediately earned its keep: it found a **guaranteed `TypeError` in production
+  code**, now fixed. `aws_discovery.py` called
+  `store.write_audit_event(engagement_id, "aws", event={...})`, but that method takes
+  `(engagement_id, event)` — so `"aws"` bound to `event` and the keyword raised
+  `TypeError: got multiple values for argument 'event'`. It was the only call site, and it sits in
+  the access-denied branch that fires whenever an account cannot be assumed, which is routine in
+  org-wide discovery. The cloud label now travels inside the event dict, and
+  `TestAccessDeniedAuditEvent` covers it using a **real** `EngagementStore` rather than a
+  `MagicMock`, since a mock accepts any signature and would not have caught it. Verified by
+  reverting the fix and watching the test fail.
 - **Notes for future engineers:** `ruff` is already clean across `cna/` (109 files formatted, all
   checks passing) with `select = E,W,F,I,B,C4,UP,S,N` and `target-version = "py311"`. Match that
   strictness posture. Do not widen ignore lists to make the first type-check run pass.
+  `.pre-commit-config.yaml` already existed — an earlier note under T-406 claiming otherwise was
+  wrong and has been corrected. Check before adding: it holds gitleaks, detect-secrets, ruff, and
+  the pre-commit-hooks hygiene set. Note `mixed-line-ending --fix=lf` in particular, which rewrites
+  CRLF to LF on commit; a number of tracked files are currently CRLF (`package.json`, several
+  `.tf` and test files), so that hook and the tree disagree today.
 
 ### T-403 — Close the coverage gap on discovery orchestrator `run()` paths
 
@@ -509,7 +550,19 @@ order; do not reorder it.
 - **Dependencies:** None.
 - **Recommended action:** Add unit coverage for the AWS and Azure discovery orchestrator entry
   points, including the error and retry branches, before adding further discovery features.
-- **Status:** Not started
+- **Status:** Done — a `TestRun` class was added to `tests/unit/test_aws_discovery.py` (9 cases) and
+  `tests/unit/test_azure_discovery.py` (10 cases), taking both `run()` entry points from **zero**
+  coverage to **100%**: `AWSDiscovery.run()` 21/21 statements, `AzureDiscovery.run()` 44/44,
+  measured with the omit lifted (see T-408). Every cloud SDK collaborator is mocked, so no AWS or
+  ARM call is made. Error and retry branches are covered as the notes below require: the AWS suite
+  asserts `get_caller_identity` is actually retried once on `CNARateLimitError` and that the retry
+  budget is eventually exhausted, and that `CNAAuthError` propagates rather than yielding a silently
+  empty topology. The Azure suite covers `validate_access` failing before any scan work, the
+  network-only-Reader path where `subscriptions.get()` fails and discovery proceeds with the ID as
+  the display name, `--resume` both skipping and not skipping, blocked subscriptions still being
+  recorded and checkpointed, and the progress callback being driven. File-level coverage moved from
+  32% → 37% (AWS) and 18% → 22% (Azure); the rest of those files is out of scope for this item.
+  Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 - **Notes for future engineers:** The same review found and fixed a runtime-breaking `with_retry`
   contract bug in the AWS discovery path — exactly the class of defect an orchestrator test would
   have caught. `tenacity` is already a dependency; assert on retry behaviour, not just the happy
@@ -525,10 +578,35 @@ order; do not reorder it.
 - **Recommended action:** Bring the AWS discovery module's session construction, retry decoration,
   and exception mapping in line with the Azure module's conventions. No hardcoded region or
   account values in either path.
-- **Status:** Not started
-- **Notes for future engineers:** The convention to converge on is the Azure one — it is the older
-  and more exercised path. Any behavioural change should be called out explicitly rather than
-  landed silently.
+- **Status:** Partly done — the "no hardcoded region or account values" half is closed; the
+  exception-mapping half was **deliberately not done** (see below).
+  `aws_discovery.py` called `session.client("ec2", region_name="us-east-1")` in
+  `_get_enabled_regions()`. `describe_regions()` must reach some enabled region before the region
+  list is known, but the literal is wrong in the `aws-us-gov` and `aws-cn` partitions, where
+  us-east-1 does not exist. It is now resolved by `_region_for_region_lookup()`, most specific
+  source first: the session's own configured region (`AWS_REGION`, profile, or instance metadata),
+  then the first explicitly requested region, then the new declared
+  `DiscoveryOptions.region_lookup_endpoint` — overridable, and a last resort rather than an inline
+  literal. Five tests in `TestRegionLookupEndpoint` cover the order and assert the resolved value
+  actually reaches `session.client()`. A sweep of `cna/` found no other inline region literal, no
+  hardcoded account ID, and no inline Azure location; the only region literals remaining are the
+  `_OPT_IN_REGIONS` set, which is a declared list, not a call-site value. The repository-wide rule
+  is now written down in `README.md` → "Repository conventions".
+  The other three asks were assessed and found to need no change: **retry decoration** is already
+  identical (both modules use the same inline `with_retry()(fn)(...)` idiom — 7 AWS sites, 2
+  Azure), and **session construction** is not meaningfully comparable, since a boto3 `Session` and
+  an Azure credential/client pair are not analogous objects and each follows its own SDK's idiom.
+- **Notes for future engineers:** This item said to converge on the Azure convention "because it is
+  the older and more exercised path". For **exception mapping that is backwards, and it was
+  deliberately not done.** AWS catches `botocore.exceptions.ClientError` and inspects the error code
+  to separate `AccessDenied` from everything else; Azure uses a bare `except Exception` in roughly
+  30 places. Converging AWS onto Azure would discard precise discrimination in favour of a catch-all
+  that swallows genuine bugs — including the `with_retry` contract defect that prompted this item
+  and T-403. Both paths already agree on what matters (raise `CNAAuthError`, with a message, using
+  `from e`); AWS simply gets there more precisely. If this is revisited, the convergence should run
+  the other way — narrow Azure's broad handlers toward AWS's — and that is a separate piece of work
+  against a module at 22% coverage, so it needs tests first. Any behavioural change should be
+  called out explicitly rather than landed silently.
 
 ### T-405 — Survey the scaffold/wiring gaps flagged during the dead-code sweep
 
@@ -582,9 +660,10 @@ order; do not reorder it.
 - **Notes for future engineers:** All three scripts follow the same shape — a `validate()`/`main()`
   returning a bool/int and `sys.exit()` in `__main__` — so one parametrised test can cover them.
   The stream inconsistency noted here was closed by T-607; all three now report failures on
-  `stderr`. The `pre-commit` hook (recommended action 3) was deliberately left undone — this
-  repository has no `.pre-commit-config.yaml` and adding one is a separate decision about local
-  tooling, not part of closing the test gap. `validate_shape_catalog.py` is covered only by a
+  `stderr`. The `pre-commit` hook (recommended action 3) was left undone, but the reason
+  recorded here originally was **wrong**: it claimed the repository has no
+  `.pre-commit-config.yaml`. It does, and always did — 13 hooks across 4 repos. Adding the three
+  guard scripts to it is a small, still-open follow-up, not a new-file decision. `validate_shape_catalog.py` is covered only by a
   "still passes against this repository" assertion; it reads a hardcoded catalog path and has no
   fixture seam, so a violating-fixture test for it needs a small refactor first.
 
@@ -606,11 +685,444 @@ order; do not reorder it.
   -recursive` over `infra/terraform/` and `terraform init -backend=false && terraform validate`
   for each AWS root. `-backend=false` is the important flag: it makes validation possible with no
   state backend, which is exactly the situation until R-002 is resolved.
-- **Status:** Not started
+- **Status:** Done — a `terraform-checks` job was added to `300-test-codebase.yml`, so both checks
+  now run on every push and PR. `terraform fmt -check -recursive infra/terraform/` covers **both**
+  clouds (formatting needs no provider download), and `terraform validate` runs per AWS root after
+  `terraform init -backend=false`, which is what makes it possible before the R-002 state backend
+  exists. The loop reports each root under its own `::group::` and accumulates failures so one bad
+  root does not mask the others.
+  Closing this also required fixing four **pre-existing** `fmt` violations that would have turned
+  the new job red immediately — all pure alignment, none introduced by recent work:
+  `environments/aws/{dev,prod}/workload/main.tf` (an `enable_xray` assignment),
+  `providers/aws/observability/variables.tf` (the `alarm_thresholds` object), and
+  `providers/aws/security/locals.tf`. Verified with a real `terraform` 1.9.8 binary: `fmt -check
+  -recursive` is now clean across `infra/terraform/`, and LF endings are unchanged.
+  **`validate` was attempted, failed, and was removed** — see T-409. The first version of this job
+  ran `terraform validate` per AWS root after `init -backend=false`. It failed on its first CI run
+  (check run 95481918579 on commit `cc3c9db`) and the cause could not be determined: the Actions
+  API returns 403 for this automation, and the egress policy blocks `registry.terraform.io`, so the
+  failure could be reproduced neither by reading the log nor by running it locally. `fmt` was
+  re-verified clean at that exact commit with a real terraform 1.9.8 binary, which is how the
+  failure was isolated to the validate step. Only `fmt` shipped; the job is `terraform-fmt`.
 - **Notes for future engineers:** Do not fold this into 212 — that workflow is `workflow_dispatch`
   only and fails fast by design, so validation placed there would never run. It belongs in the
   push/PR test pipeline. Note also that the Azure roots would benefit from the same `fmt -check`
   sweep; scope it to `infra/terraform/` as a whole rather than AWS alone.
+
+### T-408 — The discovery orchestrators are omitted from coverage on a false premise
+
+- **Priority:** Medium
+- **Category:** Test integrity / CI
+- **Description:** `[tool.coverage.run] omit` in `pyproject.toml` excludes
+  `cna/modules/network/discovery/aws_discovery.py` and `azure_discovery.py`, with the comment
+  *"require live AWS/Azure API calls against real tenants. Covered by integration tests run against
+  sandboxed tenants."* That premise is false: `tests/unit/test_aws_discovery.py` and
+  `test_azure_discovery.py` already exercise both modules entirely with `MagicMock`/`patch` and make
+  no network call, and T-403 has now added 19 more such tests. The consequence is that the
+  `fail_under = 80` gate has never measured 1,542 statements — the code T-403 itself calls "the
+  least-tested and highest-risk in the package". A regression in either file cannot fail CI on
+  coverage grounds.
+- **Dependencies:** None, but see the measured cost below before acting.
+- **Recommended action:** Removing the two `omit` entries today would take total coverage from
+  **84% to 67%** and fail the 80% gate by 13 points (measured across the full suite: 4,240 → 5,782
+  statements, 697 → 1,912 missed). Closing that needs roughly **760 further covered statements**
+  across the two files. Land it incrementally: keep the entries, drive per-file coverage up with
+  mocked tests in the style T-403 established, and remove each `omit` line once its file clears
+  ~80% on its own. Do not remove them in one step and lower `fail_under` to compensate — that
+  weakens the gate for the whole package to accommodate two files.
+- **Status:** Not started
+- **Notes for future engineers:** To measure honestly while the entries are still in place, run
+  pytest with `--cov-config` pointing at a copy of the config with the two lines deleted; that is
+  how the figures above were obtained. Also correct the misleading comment when the entries go —
+  and note the same block omits `cna/diagram_engine/diagrams_generator.py` and the diagram modules
+  for a *genuine* reason (they need the graphviz binary), so do not delete the block wholesale.
+
+### T-409 — `terraform validate` for the AWS roots: failed on first run, cause unknown
+
+- **Priority:** Medium
+- **Category:** CI coverage / infrastructure
+- **Description:** T-407 originally added `terraform validate` for each AWS root, run after
+  `terraform init -backend=false`. It **failed on its first CI execution** (check run 95481918579,
+  commit `cc3c9db`, PR #155) and was removed so the rest of that work could land; only
+  `terraform fmt -check` shipped. The failure is genuinely undiagnosed, not merely unfixed. Two
+  independent walls prevented diagnosis from the authoring environment: every GitHub Actions and
+  Checks endpoint returns `403 Resource not accessible by integration` (job logs, check-run detail,
+  annotations), and the session egress policy rejects `registry.terraform.io:443` and
+  `checkpoint-api.hashicorp.com:443` at CONNECT, so `init` cannot resolve providers locally either.
+  `terraform fmt -check -recursive` was re-run against that exact commit with a real terraform
+  1.9.8 binary and was clean, which isolates the failure to the validate step rather than the
+  formatting one.
+- **Dependencies:** None, but the first step needs someone who can read the Actions log.
+- **Recommended action:** Read the failing step's output and split on what it says.
+  1. **If `init` could not reach the registry** — the runner has the same egress restriction. The
+     fix is a provider mirror or committed lock files, not a Terraform change. Note the AWS roots
+     carry **no `.terraform.lock.hcl`** at all, while every Azure root does; that asymmetry is the
+     first thing to check, since it means the AWS roots must resolve `hashicorp/aws ~> 5.0` fresh
+     on every init.
+  2. **If `validate` reported config errors** — they are real defects in roots that have never been
+     validated by anything, and should be fixed root by root before the step is restored.
+  Restore the step in `300-test-codebase.yml` once it passes; the removed version is in this
+  repository's history on commit `cc3c9db`.
+- **Status:** Not started
+- **Notes for future engineers:** Do not restore the step without first reproducing a green run —
+  it blocks every PR when red, which is why it was pulled rather than left failing. Generating the
+  lock files (`terraform providers lock` for the four AWS roots) is worth doing regardless of the
+  outcome: it pins provider versions for supply-chain reasons, matching what the Azure roots
+  already do, and it is the CBTS standard of preferring pinned versions in security-sensitive
+  dependencies.
+
+### T-410 — Clear the 96 `ty` findings so the type check can gate
+
+- **Priority:** Medium
+- **Category:** Type safety
+- **Description:** T-402 wired `ty` but could not make it green. `ty check cna/` reports 96
+  diagnostics, so the pre-commit hook sits at `stages: [manual]`. Breakdown of the 53
+  non-import findings at the time of writing: `unresolved-attribute` 22, `invalid-argument-type`
+  17, `unknown-argument` 3, `invalid-parameter-default` 2, and one each of `unsupported-operator`,
+  `pydantic-discarded-extra-argument`, `parameter-already-assigned` (**fixed** under T-402 — it was
+  a real `TypeError`), `no-matching-overload`, `missing-argument`, `invalid-type-form`,
+  `invalid-return-type`, `invalid-raise`, and `invalid-assignment`. Concentrated in
+  `aws_discovery.py` (10), `azure_discovery.py` (8), `analysis_engine.py` (8), and `cli/publish.py`
+  (7). The remaining ~43 are `unresolved-import` for declared-but-uninstalled packages, which
+  resolve wherever the dependencies are actually present.
+- **Dependencies:** None. Best done after T-403-style tests exist for whatever is touched, since
+  several fixes are in modules at 22–37% coverage.
+- **Recommended action:** Work rule by rule, not file by file — `unresolved-attribute` is the
+  largest group and the most likely to hide genuine bugs of the kind already found. Two worth
+  starting with: `analysis_engine.py:1428` reads `.vnet_id` off `AzureVirtualNetworkGateway`, which
+  has no such attribute, and `core/throttle.py:78` can `raise last_exc` while it is still `None`
+  (currently unreachable, but only by accident of the loop's structure). When the count reaches
+  zero, delete the `stages: [manual]` line from the `ty` hook so it gates.
+- **Status:** In progress — 98 → **49** diagnostics as measured in a bare container, and **24**
+  once the declared dependencies are actually installed. Thirty fixed, each a real defect rather
+  than a style nit:
+  `analysis_engine.py` used the builtin `callable` in a type expression (not a type at all) and
+  `options: AnalysisOptions = None`; `render_pipeline.py` had the same `= None` on a non-Optional
+  parameter, plus `Path("engagements") / self.store.engagement_id` where `engagement_id` is
+  `str | None` — that path now raises a `ValueError` naming the missing input instead of an opaque
+  `TypeError`; `technical_report.py` called `.startswith()` on `Finding.resource_type`, which is
+  `str | None` with default `None`, in two places; and `core/throttle.py` could `raise last_exc`
+  while it was still `None` (unreachable today, but only by accident of the loop's shape — it now
+  falls through to an explicit `RuntimeError`). Verified behaviourally, not just by re-running the
+  checker: `with_retry` still retries then succeeds, both `__init__`s still default correctly, and
+  `_output_dir()` raises `ValueError` rather than `TypeError`.
+  Three further defects fixed in a second pass, both of the same shape as the T-402 bug — a store
+  method called with arguments that do not match its signature, hidden because the tests mock the
+  store:
+  `aws_discovery.py` called `write_discovery_checkpoint(engagement_id, "aws", account_id=...,
+  data=...)`, but that method takes `(engagement_id, platform, account_or_sub_id, data)`. Passing
+  `account_id=` raised `TypeError: got an unexpected keyword argument 'account_id'` **inside the
+  per-region loop**, so the first region of the first account aborted AWS discovery and no
+  checkpoint was ever written. Azure's equivalent call was always correct. Now positional, with
+  `TestRegionCheckpointWrite` covering it against a real `EngagementStore` — verified by reverting
+  the fix and watching the test fail.
+  `AzureSubnet` had no `subnet_type` field while the discovery path already passed one, so Pydantic
+  (which defaults to discarding extras) **silently threw away every classification
+  `_classify_subnet()` computed** — a function that exists for no other purpose. The field is now
+  declared with a `SubnetType.UNKNOWN` default, so checkpoints written before it existed still
+  deserialise, and the value survives the JSON round-trip the checkpoint path uses. Note the AWS
+  `Subnet` model always had this field; only the Azure model was missing it.
+  A third pass found the most fundamental one yet: **`EngagementStore.init()` and `save()` could
+  never run.** Both called `config.model_dump(mode="json", default=str)`, and Pydantic v2's
+  `model_dump` has no `default` parameter, so both raised
+  `TypeError: BaseModel.model_dump() got an unexpected keyword argument 'default'` — an engagement
+  could not be created or persisted at all. The argument was redundant as well as invalid:
+  `_atomic_write` already passes `default=str` to `json.dump`, and `mode="json"` already renders
+  datetimes and enums. Dropping it makes the whole `init` → `save` → `load` cycle work.
+  `tests/unit/test_persistence.py` is new — `EngagementStore` had **no test file at all**, which is
+  precisely why three separate signature bugs survived a green suite. Ten tests, all against a real
+  store on `tmp_path`, including explicit guards that the two previously-wrong call shapes now raise
+  `TypeError`.
+  Also corrected an error introduced earlier in this same item: `progress_callback` was annotated
+  `Callable[[str], None]` on a guess, but `cli/analyze.py` passes
+  `progress(cloud, current, total, label)`. The annotation is now
+  `Callable[[str, int, int, str], None]`, which removes the two
+  `too-many-positional-arguments` findings that annotation had itself created.
+  A fourth pass fixed two more genuine crashes:
+  `analysis_engine._check_azure_peering_gateway_transit()` read `gw.vnet_id`, which
+  `AzureVirtualNetworkGateway` does not have — the model carries `subnet_id`. The rule raised
+  `AttributeError` for any subscription that actually had a gateway, so it only ever "worked" when
+  the gateway list was empty and the short-circuit skipped it. An ARM subnet id nests under its VNet
+  id (`<vnet_id>/subnets/<name>`), which is the real link; `TestAzurePeeringGatewayTransit` covers
+  the no-raise case, suppression by a local gateway, and that a gateway in a *different* VNet does
+  not count.
+  `technical_report._build_context()` called `sorted()` over a set of `Finding.account_id`, which is
+  `str | None`. One finding without an account id raises
+  `TypeError: '<' not supported between instances of 'str' and 'NoneType'` — reproduced directly.
+  Both comprehensions now filter falsy ids.
+  A fifth pass closed the Optional-narrowing group, which was six findings sharing one shape.
+  `AWSDiscovery._mgmt_session` is `Session | None` because it does not exist until `run()` creates
+  it, so every per-account helper dereferenced a possibly-`None` session. A `_mgmt` property now
+  narrows it once and raises a named `RuntimeError` instead of letting it surface as
+  `AttributeError: 'NoneType' object has no attribute 'client'` several frames deeper. Both
+  discovery `run()` methods also took `self.store.engagement_id` — `str | None` — straight into
+  models that require `str`; they now fail early with a `ValueError` naming the fix, matching the
+  guard added to `render_pipeline._output_dir()`. And `PortalGenerator._filesizeformat` divided its
+  own `int` parameter into a float; it uses a local `float` now.
+  **Known false positive, deliberately not "fixed":** `cli/publish.py:173,176` reports
+  `generate_presigned_url` / `generate_sas_token` missing on the `S3Deployer | AzureBlobDeployer`
+  union. The code is correct — `--cloud` is a `click.Choice(["aws", "azure"])`, and the branch that
+  selects the method matches the branch that built the deployer. The checker simply cannot tie
+  `cloud` to the deployer's type. Narrowing it properly needs the two lazily-imported classes in
+  scope at the call site; do that as a small refactor if the noise becomes annoying, not by
+  suppressing the rule.
+  A sixth pass applied the same narrowing pattern to Azure and cleared the tail.
+  `AzureDiscovery._credential` and `._sub_client` start as `None` until `_init_credentials()` runs;
+  `_cred` and `_subs` properties now narrow them across **17** read sites. `DiagramExporter`'s
+  `_drawio_bin` is `str | None` and would have reached `subprocess.run` as `argv[0]`; it now raises
+  `ExportPipelineError` naming the condition. `AnalysisEngine.run()` got the same `engagement_id`
+  guard as the two discovery paths. `RenderPipeline` now requires a bound store **at construction**:
+  `DeliverableManifest` is a plain dataclass with no validation, so a `None` id was being written
+  into the manifest as `null` rather than rejected — the guard moved up from `_output_dir()`, which
+  had been enforcing the same invariant one step too late. `render_tgw_topology` claimed
+  `-> dict[str, Path]` while actually nesting TGW id → format → Path, unlike its siblings which
+  render one diagram each; the annotation now matches (it has no callers today, so nothing broke).
+  `_dedup_key` was widened to `str | None`, which is what it always accepted.
+  **Noticed, not fixed:** `_dedup_key(None, None)` returns the literal `"None:None"`, so any two
+  findings that both lack `rule_id` *and* `resource_id` collide and the second is silently
+  deduplicated away. Both fields are Optional on `Finding`. Whether such a finding should exist at
+  all is a schema decision rather than a typing one, so it is left here rather than papered over.
+  **The count was finally measured honestly.** Running `pip install -e .` and re-checking drops the
+  total to **24**, because all nine declared-but-uninstalled packages resolve. What remains is
+  **15 `unresolved-import`, every one of them an *undeclared* dependency** (T-414), and just **8**
+  real findings: the two T-412 engine writes, four in `foundry_agent_client.py` against an SDK API
+  that does not exist (T-413 — invisible until the dependency was installed), a `dict` variance
+  issue in the drawio MCP client, and an `EncyclopediaReportRenderer.render` parameter typed
+  `list[Finding | dict]` where callers pass `list[Finding]`.
+  T-414 is now done, which took the count to **8**, then T-413 to **6**. Measure in an environment
+  with dependencies installed; a bare container overstates the count fourfold.
+  **The tail is now cleared — 6 → 2.** Four fixes, none of them suppressions:
+  1. `DrawioMCPClient.search_shapes` built its payload as an unannotated literal, which infers
+     `dict[str, str | int]`; `dict` is invariant, so it did not satisfy `_post`'s
+     `dict[str, object]`. Annotated `dict[str, object]`, matching its sibling `create_diagram`,
+     which already did this.
+  2. `EncyclopediaReportRenderer.render` / `.render_html` / `build_encyclopedia_context` declared
+     `findings: list[Finding | dict]` and every caller passes a homogeneous `list[Finding]` —
+     rejected for the same invariance reason. All three now take `Sequence[Finding | dict]`, which
+     is covariant and is all the code needs: the parameter is only iterated
+     (`[normalize_finding(f) for f in findings]`), never mutated.
+  3. `RenderPipeline.run()` re-read `self.store.engagement_id` (`str | None`) instead of the
+     `self.engagement_id: str` the constructor guard already narrowed, throwing the narrowing away
+     at five sites. All five now read the narrowed attribute.
+  4. The **two T-412 engine writes are implemented**, not guarded — see that item. Implementing
+     `write_deliverable_manifest` is what surfaced (3): the argument type could not be checked
+     while the method did not exist.
+  **Remaining: 2, both the T-413 stub artifact** — `project.agents` at
+  `foundry_agent_client.py:133,159`. `AIProjectClient.agents` is annotated
+  `-> AgentsClient  # type: ignore[name-defined]` in the SDK because its companion class is
+  imported lazily, so the checker cannot resolve the return type. Verified at runtime that the
+  attribute and its `threads`/`messages`/`runs` children all exist. There is no structural fix that
+  is not a contortion around working code, so the hook stays non-gating until the SDK ships a
+  resolvable annotation. **Unblock condition:** when `ty check` reports 0, delete the
+  `stages: [manual]` line from the `ty` hook in `.pre-commit-config.yaml` and update the comment
+  above it — that is the entire remaining change.
+- **Notes for future engineers:** Do not close this by widening ignore lists or adding
+  `# type: ignore` — T-402 is explicit on that point, and the two bugs already found are the
+  argument for taking the findings seriously.
+
+### T-411 — Triage the 446 `detect-secrets` findings and close the secret-scanning gap
+
+- **Priority:** High
+- **Category:** Security
+- **Description:** Three related problems, found while wiring pre-commit under T-402.
+  1. **`.secrets.baseline` was corrupt** and had been for some time — invalid JSON, a `]` where a
+     `}` belonged on the `TwilioKeyDetector` entry, which broke the `plugins_used` array. Any tool
+     reading it failed with *"Unable to read baseline"*. **Fixed** under T-402.
+  2. **The corrupt baseline silently broke the commit-time hook.** `detect-secrets` *is* wired in
+     `.pre-commit-config.yaml` and has been, so the practical effect of (1) was that the hook
+     failed with *"Unable to read baseline"* for anyone who ran `pre-commit install` — a broken
+     control rather than a missing one, which is worse, because the config reads as protected.
+  3. **`detect-secrets` is not in CI.** It runs at commit time only. The CI `secret-scan` job uses
+     `gitleaks`, and that job is `continue-on-error: true` (it needs a paid licence on private
+     repos), so no secret scan can currently fail a build. `README.md`'s claim that both "run on
+     every commit and CI push" is accurate for commits and overstated for CI.
+  With a readable baseline, the first scan reports **446 findings across 325 files**, none ever
+  triaged. 367 come from the vendored `.claude/` and `.agents/` packs — third-party security
+  documentation full of example tokens — and the pre-commit hook already excludes those and
+  `.deployment-catalog/` (build manifests whose image digests trip the hex-entropy detector),
+  leaving **31 project findings**. By type across the whole scan: Secret Keyword 279, Hex High
+  Entropy String 127, Basic Auth Credentials 16, AWS Access Key 16, JSON Web Token 3, Private Key
+  2, IBM Cloud IAM Key 2, Slack Token 1.
+- **Dependencies:** None.
+- **Recommended action:** Triage the 31 project findings by hand — they look like Terraform
+  variable names, `.env.example` / `terraform.tfvars.example` placeholders, and test fixtures, but
+  *look like* is not good enough for a category that includes "AWS Access Key" and "Private Key".
+  Audit each, then record the verdicts with `detect-secrets scan --baseline .secrets.baseline` and
+  `detect-secrets audit .secrets.baseline`. The existing hook gates already — it just could not
+  read the baseline — so once the baseline is honest, verify `pre-commit run detect-secrets
+  --all-files` passes. Separately, decide the `gitleaks` question: either license it so the CI
+  job can drop `continue-on-error`, or stop presenting it as a build-blocking control.
+- **Status:** Not started
+- **Notes for future engineers:** Do **not** close this by regenerating the baseline in one step —
+  that marks all 446 as reviewed without anyone having reviewed them, which is worse than the
+  current state because it looks clean. The baseline is an audit record, not a suppression file.
+
+### T-412 — `cna analyze`, `cna report`, and `cna publish` call EngagementStore methods that do not exist
+
+- **Priority:** High
+- **Category:** Correctness / broken feature
+- **Description:** Three CLI commands call **ten methods that are absent from `EngagementStore`**.
+  Confirmed by `hasattr` against the real class, not inferred: the class defines twelve methods
+  (`init`, `load`, `save`, `acquire_lock`, `release_lock`, `write_discovery_checkpoint`,
+  `list_completed_checkpoints`, `write_audit_event`, `engagement_dir`, `_atomic_write`,
+  `output_paths`, `__init__`) and none of the following exist —
+
+  | Missing method | Called from |
+  |---|---|
+  | `load_aws_topology` | `cli/analyze.py:83` |
+  | `load_azure_topology` | `cli/analyze.py:97` |
+  | `load_findings_report` | `cli/report.py:87`, `cli/report.py:149` |
+  | `get_delivery_date` | `cli/publish.py:67` |
+  | `load_deliverable_manifest` | `cli/publish.py:76` |
+  | `load_findings_report_json` | `cli/publish.py:87` |
+  | `write_access_record` | `cli/publish.py:179` |
+  | `load_access_record` | `cli/publish.py:214` |
+  | `write_findings_report` | `ai_engine/analysis_engine.py:1726` |
+  | `write_deliverable_manifest` | `report_engine/render_pipeline.py:237` |
+
+  These are not latent: `EngagementStore().load_aws_topology("eng-1")` raises
+  `AttributeError: 'EngagementStore' object has no attribute 'load_aws_topology'`. Worse, the call
+  in `analyze.py` sits inside `try: ... except FileNotFoundError:`, which does **not** catch
+  `AttributeError`, so the command aborts with an unhandled traceback rather than the intended
+  "run `cna discover` first" message. No `SCAFFOLD` marker or `NotImplementedError` guard exists on
+  any of these paths, so nothing signals that they are unfinished. Found by `ty` on its first run
+  (T-402).
+- **Dependencies:** None. Blocks any real use of `cna analyze`, `cna report`, or `cna publish`.
+- **Recommended action:** Decide first whether these commands are meant to work today or are Phase D
+  scaffold — `cli/analyze.py`'s docstring says "Phase D entry point", which suggests the latter, but
+  nothing in the code says so. If scaffold, guard each command with an explicit
+  `NotImplementedError` naming the blocking item, so the failure is honest. If they are meant to
+  work, implement the ten methods on `EngagementStore`; the call sites already pin down the
+  contract (arguments and expected return types), and `write_discovery_checkpoint` plus
+  `output_paths` show the intended on-disk layout to read back. Cover each with a unit test using a
+  real `EngagementStore` on `tmp_path` — a `MagicMock` store accepts any method name and is exactly
+  why this survived.
+- **Status:** Done as scaffold guards — the repository owner confirmed these commands are Phase D
+  scaffold, not intended to work today, so each now fails honestly instead of dying with an
+  unhandled `AttributeError`. **Five** commands are guarded, not three: the original survey missed
+  `cna report preview` and `cna publish status`, which live in the same groups and call
+  `load_findings_report()` and `load_access_record()` respectively.
+  Each guard raises `NotImplementedError` naming the exact missing `EngagementStore` methods, so
+  the message tells a caller what would have to be built. Verified with `click.testing.CliRunner`:
+  all five raise `NotImplementedError` rather than `AttributeError`.
+  A useful side effect: `ty` treats code after an unconditional `raise` as unreachable, so guarding
+  the commands also removed nine of the eleven findings this item owns — confirmed with a minimal
+  probe before relying on it. The count fell 60 → 49.
+  **Two call sites were left unguarded** — `analysis_engine.py:1736` (`write_findings_report`) and
+  `render_pipeline.py:245` (`write_deliverable_manifest`). Both sit at the end of engines that
+  genuinely work and are covered by tests, so guarding them would have deleted working
+  functionality to silence a checker.
+  **Both are now implemented on `EngagementStore`** rather than guarded, which is what the two
+  engines needed to finish their own work: each was building a complete result and then dying with
+  `AttributeError` on the last statement. They write to `reports/findings_report.json` and
+  `reports/deliverable_manifest.json`, reusing `_atomic_write` (whose `default=str` covers the
+  enums and datetimes `FindingsReport.model_dump()` leaves in place) and creating `reports/` if a
+  caller skipped `init()`. Filenames are class constants (`FINDINGS_REPORT_FILE`,
+  `DELIVERABLE_MANIFEST_FILE`) alongside the existing ones, not inline literals. Parameter names
+  match the existing call sites exactly — `write_deliverable_manifest` is called with keywords.
+  Covered by five tests in `tests/unit/test_persistence.py` against a real store on `tmp_path`.
+  **The eight read-side methods are still missing**, so the five CLI guards stay as they are. When
+  those commands become real, these two writers pin down the on-disk layout the readers must
+  match.
+- **Notes for future engineers:** The existing tests never caught this because they mock the store.
+  That is also how the `write_audit_event` `TypeError` fixed under T-402 survived. When testing
+  anything that touches persistence, prefer a real `EngagementStore` pointed at `tmp_path`.
+
+### T-413 — `FoundryAgentClient` is written against azure-ai-projects 1.x, but 2.x is declared
+
+- **Priority:** High
+- **Category:** Correctness / dependency mismatch
+- **Description:** `cna/ai_engine/foundry_agent_client.py` drives the Foundry agent through
+  `agents.threads.create()`, `agents.messages.create()`, and `agents.runs.create_and_process()`.
+  Those belong to the **1.x** `azure-ai-projects` agents API. `pyproject.toml` declares
+  `azure-ai-projects>=2.3.0`, and 2.x replaced that surface entirely — the installed 2.4.0 exposes
+  `AgentsOperations` with `create_session`, `create_version`, `get`, `list`, and friends, and
+  `hasattr` confirms **no** `threads`, `messages`, or `runs`. Every call in `run()` therefore raises
+  `AttributeError` against the declared dependency.
+  The failure is disguised: the whole body sits in `except Exception`, which re-raises as
+  `FoundryAgentError("Foundry agent run failed: ...")`. A caller sees a generic agent failure, not a
+  version mismatch. This is live code — `RecommendationEngine.__init__` constructs a
+  `FoundryAgentClient` when none is injected. The existing tests pass because they only exercise the
+  static `_parse()` helper, never the SDK path.
+  Found only after `pip install -e .` made the real SDK available to the type checker; in a bare
+  container the import is unresolved and the whole module goes unchecked.
+- **Dependencies:** None.
+- **Recommended action:** Decide which API is intended. Either pin `azure-ai-projects>=1.0,<2` and
+  keep the current calls, or port `run()` and `_latest_assistant_text()` to the 2.x surface. Pinning
+  backwards deserves a check that nothing else needs 2.x. Whichever way, add one test that exercises
+  `run()` against a mocked client shaped like the *declared* SDK version, so the next divergence
+  fails a test rather than a deployment.
+- **Status:** Done — pinned back to 1.x, per the repository owner's decision, rather than porting
+  `run()` to the 2.x surface. `pyproject.toml` now declares `azure-ai-projects>=1.0.0,<2`.
+  **Pinning alone was not sufficient**, which is the part worth remembering. In 1.x,
+  `AIProjectClient.agents` returns an `AgentsClient` from the **separate `azure-ai-agents`
+  package** — that companion package provides `threads`, `messages`, and `runs`, not
+  `azure-ai-projects` itself. It was undeclared, so a pin to 1.x on its own would have swapped one
+  broken state for another. `azure-ai-agents>=1.1.0,<2` is now declared alongside it. That is the
+  same undeclared-dependency class as T-414, found the same way.
+  Verified at runtime rather than by the type checker alone: on the pinned pair,
+  `AIProjectClient.agents` resolves to `AgentsClient`, and `.threads`, `.messages`, and
+  `.runs.create_and_process` all exist. Note only `1.0.0` exists in the 1.x line — there is no
+  newer 1.x to move to, so this pin is a ceiling as well as a floor.
+- **Notes for future engineers:** Two `ty` findings remain on `project.agents` and are a **type-stub
+  artifact, not a bug**: the `agents` property in `azure-ai-projects` 1.0.0 is annotated
+  `-> AgentsClient` with a `# type: ignore[name-defined]`, because its companion package is imported
+  lazily. The runtime chain is proven to work. Do not "fix" these by restructuring the call.
+  Note also the interaction with the broad `except Exception` here. It is what turned a clear
+  `AttributeError` into an opaque `FoundryAgentError`, hiding a total failure of this path behind a
+  generic message — the same narrow-vs-broad question raised under T-404, and the concrete argument
+  for it. If this is revisited, add a test that drives `run()` against a mock shaped like the
+  *declared* SDK, so the next divergence fails a test rather than a deployment.
+
+### T-414 — Ten imported packages are not declared as dependencies
+
+- **Priority:** High
+- **Category:** Packaging / silent feature loss
+- **Description:** `cna/` imports ten distributions that appear nowhere in `pyproject.toml`:
+  `azure-mgmt-monitor`, `azure-monitor-query`, `azure-mgmt-compute`, `azure-mgmt-security`,
+  `azure-mgmt-privatedns`, `azure-mgmt-managementgroups`, `azure-mgmt-loganalytics`,
+  `azure-mgmt-costmanagement`, `cairosvg`, and `mcp`. Confirmed by resolving every import against
+  the declared set, and again after `pip install -e .` — the nine *declared* packages resolved, all
+  ten of these did not.
+  Every one is imported lazily inside `try: ... except ImportError:`, so nothing crashes — on a
+  clean install the features simply never activate: Log Analytics diagnostic checks, alert-count
+  collection, cost-management queries, private DNS and Compute enrichment, security-centre checks,
+  SVG→PNG conversion, and both MCP clients. A deployment looks healthy while producing a thinner
+  assessment than the code can generate.
+  *(Correcting an earlier draft of this item: the handlers are **not** silent. All 24 `except
+  ImportError` blocks in `cna/` either log — 18 at warning level, three at debug — record the reason
+  into the model, or are legitimate capability probes. The gap was in the packaging, not the
+  handlers.)*
+- **Dependencies:** None. Related to T-413, which is the same class of problem from the other
+  direction — a *declared* dependency at a version the code cannot use.
+- **Recommended action:** Decide per package whether the feature is core or genuinely optional.
+  Core ones belong in `[project] dependencies`; optional ones belong in a named extra (say
+  `[project.optional-dependencies] enrichment`) with the `except ImportError` path logging a
+  message naming the extra to install, rather than passing silently. Pin versions, per the CBTS
+  standard for security-sensitive dependencies, and re-run `ty check cna/` afterwards — these ten
+  account for all 15 remaining `unresolved-import` findings under T-410.
+- **Status:** Done — declared as a `[project.optional-dependencies] enrichment` extra, installable
+  with `pip install -e .[enrichment]`. An extra rather than core dependencies, because that matches
+  what the code already does: every import is lazy and every handler degrades, so a default install
+  behaves exactly as before and nothing new is forced on anyone.
+  **The version bounds are the important part, and the obvious ones would have been wrong.** All ten
+  install cleanly at their latest release, but installing them revealed that three have shipped a
+  major that breaks this code — `managementgroups` 2.x renamed `ManagementGroupsAPI` to
+  `ManagementGroupsMgmtClient`, `monitor` 7.x dropped `MonitorManagementClient.diagnostic_settings`,
+  and `costmanagement` 5.x changed `QueryComparisonExpression`'s signature. A naive `>=latest` would
+  have declared a dependency set the code cannot run against. Each bound was verified by installing
+  the version and re-running `ty`; upper bounds are set on all ten, since this failure mode is now
+  demonstrated three times over (four with T-413).
+  Declaring them dropped `ty check cna/` from 24 diagnostics to **8**, and surfaced four more real
+  defects that were invisible while the imports were unresolved — three fixed by the version bounds
+  above, one fixed in code (`QueryDefinition` was passed a `dict` where `QueryTimePeriod` is
+  declared; it now builds the model with datetimes, which is what its `iso-8601` attribute map
+  expects).
+- **Notes for future engineers:** The `except ImportError` blocks are doing real work — they keep a
+  partial install running — so do not delete them when the extra is installed by default somewhere.
+  If you bump any of these past its upper bound, re-run `ty check cna/` **with the package
+  installed**: an unresolved import means the entire module goes unchecked, which is exactly how
+  four defects hid here.
 
 ---
 

@@ -12,7 +12,14 @@ dependencies = [
     "rich>=15.0.0",
     "boto3>=1.43.40",
     "azure-identity>=1.25.3",
-    "azure-ai-projects>=2.3.0",          # Foundry Agent Service: recommendation enrichment
+    # Pinned to 1.x deliberately (TODO.md T-413). FoundryAgentClient drives
+    # agents.threads / .messages / .runs, which is the 1.x surface; 2.x replaced
+    # it entirely and every one of those calls raises AttributeError against it.
+    # In 1.x, AIProjectClient.agents returns an AgentsClient from the separate
+    # azure-ai-agents package, so that must be declared too — it is what actually
+    # provides the operations.
+    "azure-ai-projects>=1.0.0,<2",       # Foundry Agent Service: recommendation enrichment
+    "azure-ai-agents>=1.1.0,<2",         # provides AIProjectClient.agents in 1.x
     "azure-mgmt-network>=31.0.1",
     "azure-mgmt-resource>=26.0.0",
     "azure-mgmt-subscription>=3.1.1",
@@ -38,10 +45,42 @@ dependencies = [
 cna = "cna.cli.main:cli"
 
 [project.optional-dependencies]
+# Optional enrichment dependencies (TODO.md T-414).
+#
+# Every one is imported lazily inside `try: ... except ImportError:` and each
+# handler degrades gracefully, so they are genuinely optional — the assessment
+# still runs without them, just thinner. They were previously imported but
+# declared nowhere, so a clean install could never activate the features and
+# nothing in the packaging said so.
+#
+#   pip install -e .[enrichment]
+#
+# Bounds are VERIFIED against the code, not just "latest that installs". Three
+# of these have shipped a major release that renames or removes the API this
+# code calls, so an unbounded `>=` would install a version that cannot work:
+#   * managementgroups 2.x renamed ManagementGroupsAPI -> ManagementGroupsMgmtClient
+#   * monitor 7.x dropped MonitorManagementClient.diagnostic_settings
+#   * costmanagement 5.x changed QueryComparisonExpression's signature
+# Upper bounds are set on all ten for the same reason — see T-413 for the same
+# failure already present in a declared dependency.
+enrichment = [
+    "azure-mgmt-managementgroups>=1.0.0,<2",  # management-group hierarchy
+    "azure-mgmt-monitor>=6.0.2,<7",           # alert counts, diagnostic settings
+    "azure-mgmt-costmanagement>=4.0.1,<5",    # FinOps cost queries
+    "azure-monitor-query>=2.0.0,<3",          # network traffic analytics
+    "azure-mgmt-compute>=38.2.0,<39",         # NVA discovery
+    "azure-mgmt-security>=7.0.0,<8",          # Defender for Cloud posture
+    "azure-mgmt-privatedns>=2.0.0,<3",        # private DNS zone discovery
+    "azure-mgmt-loganalytics>=14.0.0,<15",    # Log Analytics workspace lookup
+    "cairosvg>=2.9.0,<3",                     # SVG -> PNG for diagram export
+    "mcp>=2.0.0,<3",                          # Azure/AWS MCP recommendation clients
+]
+
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
     "ruff>=0.15.21",
+    "ty>=0.0.72",                       # type checker (TODO.md T-402)
     "pre-commit>=4.6.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]
@@ -49,6 +88,17 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
+
+# Type checking (TODO.md T-402). Matches the ruff posture: py311, project
+# source only, no widened ignore lists. `ty check cna/` is NOT yet green — see
+# TODO.md T-410 for the remaining findings, which are to be fixed rather than
+# silenced. Nothing here suppresses a rule.
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+include = ["cna"]
+exclude = [".claude", ".agents", ".codex"]
 
 [tool.ruff]
 line-length = 100

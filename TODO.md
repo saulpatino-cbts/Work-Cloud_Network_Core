@@ -1347,6 +1347,29 @@ order; do not reorder it.
 - **Notes for future engineers:** Do not close this by muting the check or by making it tolerate
   a missing backend. The check was right; the delivery was missing.
 
+### T-417 — "Generate All Assessments" still runs four reports synchronously in the request
+
+- **Priority:** Medium
+- **Category:** Web app reliability
+- **Description:** `apps/cna-web/app/(dashboard)/engagements/[id]/deliverables/actions.ts` fixed the
+  ingress-timeout problem for one of five generation paths. `generateAllAssessments` dispatches the
+  COMPREHENSIVE_ASSESSMENT through `after()` and returns, but then runs the four `SINGLE_SHOT_TYPES`
+  (`EXECUTIVE_SUMMARY`, `TECHNICAL_FINDINGS`, `REMEDIATION_PLAN`, `SPECIALIZATION_REPORT`) with
+  `await Promise.allSettled(...)` **inside the same request**. Four sequential-ish AI calls behind
+  Front Door reliably outlive the ingress timeout, so the user sees a red error boundary while the
+  comprehensive report is still generating correctly in the background — a false failure that is
+  indistinguishable from a real one. Observed 2026-08-28 during demo prep.
+- **Dependencies:** None. The pattern to copy already exists in the same file
+  (`runComprehensiveInBackground` + `getDeliverableProgress`), and was applied to the interactive
+  assessment in `createInteractiveAssessment`.
+- **Recommended action:** Create all five rows with `status: "RUNNING"` up front, dispatch every one
+  through `after()`, and return the row ids. Have the deliverables page poll `getDeliverableProgress`
+  for each. A single-shot report only needs one progress step, so the existing progress shape covers
+  it without schema change.
+- **Notes for future engineers:** The rate limiter is 5 requests / 60s on `generateDeliverable`.
+  A user who re-clicks after the false failure starts a second comprehensive run plus four more
+  single-shots — so the visible symptom of this bug also makes the underlying load worse.
+
 ---
 
 ## Phase 5 — Feature enhancements

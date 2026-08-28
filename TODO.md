@@ -888,7 +888,12 @@ order; do not reorder it.
   has no such attribute, and `core/throttle.py:78` can `raise last_exc` while it is still `None`
   (currently unreachable, but only by accident of the loop's structure). When the count reaches
   zero, delete the `stages: [manual]` line from the `ty` hook so it gates.
-- **Status:** In progress — 98 → **49** diagnostics as measured in a bare container, and **24**
+- **Status:** Done bar an external blocker — **98 → 2**, and the 2 that remain are the T-413 SDK
+  stub artifact described at the end of this entry, not project defects. The one remaining change
+  (dropping `stages: [manual]` so the hook gates) is blocked on the `azure-ai-projects` SDK
+  shipping a resolvable annotation; the unblock condition is written out below. The narrative that
+  follows is the full record of how the count came down.
+  Measured 98 → **49** in a bare container, and **24**
   once the declared dependencies are actually installed. Thirty fixed, each a real defect rather
   than a style nit:
   `analysis_engine.py` used the builtin `callable` in a type expression (not a type at all) and
@@ -1284,6 +1289,63 @@ order; do not reorder it.
   If you bump any of these past its upper bound, re-run `ty check cna/` **with the package
   installed**: an unresolved import means the entire module goes unchecked, which is exactly how
   four defects hid here.
+
+---
+
+### T-415 — Nothing ever validates the AI Foundry path, and the deploy manifest says so out loud
+
+- **Priority:** High
+- **Category:** Deployment verification
+- **Description:** `211-deploy-azure-split.yml` writes the deployment manifest with
+  `"foundry_private_dns_validation": "required"` and
+  `"foundry_managed_identity_inference": "required"` as **hardcoded literals** (workflow lines
+  ~572–573). Every other check in that block starts `"pending"` and is flipped to `"passed"` by a
+  later step; these two are never flipped by anything, because no step exists that would. They are
+  markers meaning "a human must confirm this out of band" — but nothing in the workflow, the
+  evidence evaluator, or the demo checklist says who, and a green `211` run therefore reports
+  `health_status: healthy` on an environment whose Copilot path has never been exercised.
+  This is not hypothetical: the 2026-08-28 rebuild (`CNA-0.90-updates.md` §5) produced exactly
+  that — a fully green deployment with both markers still `required`.
+- **Dependencies:** A deployed environment (dev now qualifies).
+- **Recommended action:** Decide which the two markers are and act accordingly.
+  1. **If they are automatable** — resolve the Foundry private DNS record from inside the
+     Container Apps environment and make one managed-identity inference call — then add a step
+     that does it and flips both to `passed`/`failed`. That is the honest fix: the check becomes
+     real and `healthy` starts meaning something.
+  2. **If they genuinely need a human** (e.g. model-deployment capacity judgement), then the
+     manifest should not present them alongside machine checks. Move them to a named
+     `manual_verification` block, and make `evaluate_deployment_evidence.py` refuse to report a
+     deployment as fully verified while any manual item is outstanding.
+  Either way, add the check to the demo/release checklist explicitly rather than leaving it in a
+  JSON field nobody reads.
+- **Notes for future engineers:** `CNA-0.90-updates.md` §2.3 already flagged the Foundry path as
+  "the least-proven infra" for unrelated reasons (the dev account was renamed `-aif2` after a
+  soft-delete collision). Two independent signals pointing at the same untested path is the
+  argument for closing this one properly rather than deleting the markers.
+
+### T-416 — A scheduled drift check failed daily for five weeks and nothing surfaced it
+
+- **Priority:** High
+- **Category:** Operational safety
+- **Description:** `350-drift-dev.yml` runs on a schedule and failed **every day from 2026-07-21
+  to 2026-08-28** with `ResourceGroupNotFound: rg-cna-dev-scus-tfstate`. That failure was the
+  first and clearest evidence that the dev environment had been deleted out of band, including its
+  Terraform state backend — the single fact that would have changed the plan for the 0.9.0 demo
+  work, five weeks before anyone discovered it by trying to deploy (`CNA-0.90-updates.md` §5).
+  The workflow did its job perfectly. The gap is that a failing scheduled run notifies nobody:
+  GitHub emails the *workflow author* on scheduled-run failure, which for a bot-authored workflow
+  reaches no one who acts on it.
+- **Dependencies:** None.
+- **Recommended action:** Give scheduled-check failures a destination. The cheapest version that
+  actually works: on failure, `350-drift-dev` and `360-drift-prod` open (or update) a GitHub
+  issue with a fixed title — deduplicating by title so five weeks of failures is one issue that
+  gets staler and more visible, not 35 notifications. Assign it to the repository owner. Consider
+  the same treatment for `370-registry-cleanup` and any other unattended schedule.
+  A second, independent guard is worth its keep given what happened: have the drift workflow
+  distinguish "resources drifted" from "the environment does not exist", and treat the second as
+  a distinct, louder failure — those mean very different things.
+- **Notes for future engineers:** Do not close this by muting the check or by making it tolerate
+  a missing backend. The check was right; the delivery was missing.
 
 ---
 

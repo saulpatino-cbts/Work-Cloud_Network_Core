@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
+import { summarizeErrorText } from "@/lib/summarize-error";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -357,21 +359,13 @@ export default async function InventoryPage({ params }: PageProps) {
 
   if (!topology) {
     return (
-      <div className="glass p-10 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-100 dark:bg-navy-800">
-          <svg aria-hidden="true" focusable="false" className="h-6 w-6 text-navy-400 dark:text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-        </div>
-        <p className="text-sm font-semibold text-navy-600 dark:text-navy-300">No inventory data yet</p>
-        <p className="mt-1 text-xs text-navy-400 dark:text-navy-500">
-          Run discovery on the{" "}
-          <Link href={`/engagements/${id}/connections`} className="text-teal-600 hover:underline dark:text-teal-400">
-            Connections
-          </Link>{" "}
-          tab to populate the network inventory.
-        </p>
-      </div>
+      <EmptyState title="No inventory data yet">
+        Run discovery on the{" "}
+        <Link href={`/engagements/${id}/connections`} className="text-teal-600 hover:underline dark:text-teal-400">
+          Connections
+        </Link>{" "}
+        tab to populate the network inventory.
+      </EmptyState>
     );
   }
 
@@ -434,8 +428,9 @@ export default async function InventoryPage({ params }: PageProps) {
             Check the error below and re-run discovery after granting access.
           </p>
           {subs.filter((s) => s.discovery_blocked && s.block_reason).map((s) => (
-            <div key={s.subscription_id} className="mt-2 rounded border border-red-800/40 bg-red-950/40 p-2 font-mono text-xs text-red-400 break-all">
-              <span className="font-semibold">{s.subscription_name ?? s.subscription_id}: </span>{s.block_reason}
+            <div key={s.subscription_id} className="mt-2 rounded border border-red-300/60 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800/40 dark:bg-red-950/40 dark:text-red-400">
+              <span className="font-semibold">{s.subscription_name ?? s.subscription_id}: </span>
+              {summarizeErrorText(s.block_reason!)}
             </div>
           ))}
         </div>
@@ -466,7 +461,7 @@ export default async function InventoryPage({ params }: PageProps) {
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">Blocked</span>
                     {s.block_reason && (
-                      <span className="max-w-[16rem] text-left font-mono text-[10px] text-red-500 dark:text-red-400 break-all">{s.block_reason}</span>
+                      <span className="max-w-[16rem] text-left text-[10px] text-red-600 dark:text-red-400">{summarizeErrorText(s.block_reason)}</span>
                     )}
                   </div>
                 ) : (

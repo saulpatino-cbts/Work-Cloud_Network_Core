@@ -43,34 +43,20 @@ export default async function DiagramPage({ params }: PageProps) {
     <div className="space-y-5">
       <section className="glass p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-navy-100">Diagram Workspace</h2>
-          {/* Current / Future state toggle.
-              TODO(Phase E follow-up): the future-state .drawio XML is produced by
+          <h2 className="text-lg font-semibold text-navy-800 dark:text-navy-100">Diagram Workspace</h2>
+          {/* TODO(Phase E follow-up): future-state .drawio XML is produced by
               cna/diagram_engine/drawio_generator.py:generate_future_state_topology
               during assessment-report generation (worker) but is not yet persisted
-              as an engagement document. The editor now loads/saves current-state
-              XML; once generated future-state diagrams are persisted too, enable
-              this toggle to swap between current- and future-state XML. */}
-          <div
-            className="inline-flex overflow-hidden rounded-lg border border-navy-700/40 text-xs font-semibold"
-            role="group"
-            aria-label="Diagram state"
-          >
-            <span className="bg-teal-900/30 px-3 py-2 text-teal-300">Current state</span>
-            <button
-              type="button"
-              disabled
-              title="Generated with the assessment report"
-              className="cursor-not-allowed px-3 py-2 text-navy-500"
-            >
-              Future state
-            </button>
-          </div>
+              as an engagement document. Once it is, add a Current/Future state
+              toggle here to swap between the two XML sources. */}
+          <span className="rounded-lg bg-teal-50 dark:bg-teal-900/30 px-3 py-2 text-xs font-semibold text-teal-700 dark:text-teal-300">
+            Current state
+          </span>
           <a
             href="https://app.diagrams.net/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-teal-700/50 bg-teal-900/20 px-3 py-2 text-sm font-semibold text-teal-300 transition-colors hover:bg-teal-900/40"
+            className="inline-flex items-center gap-2 rounded-lg border border-teal-700/50 bg-teal-50 dark:bg-teal-900/20 px-3 py-2 text-sm font-semibold text-teal-700 dark:text-teal-300 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/40"
           >
             Launch draw.io
             <span className="sr-only"> (opens in new tab)</span>
@@ -87,23 +73,23 @@ export default async function DiagramPage({ params }: PageProps) {
 
       <section className="glass p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-navy-100">Recent Diagram Files</h3>
+          <h3 className="text-base font-semibold text-navy-800 dark:text-navy-100">Recent Diagram Files</h3>
           <div className="flex items-center gap-3 text-xs">
-            <Link href={`/engagements/${id}/documents`} className="text-teal-400 hover:underline">
+            <Link href={`/engagements/${id}/documents`} className="text-teal-700 dark:text-teal-400 hover:underline">
               Open Documents
             </Link>
-            <Link href={`/engagements/${id}/deliverables`} className="text-teal-400 hover:underline">
+            <Link href={`/engagements/${id}/deliverables`} className="text-teal-700 dark:text-teal-400 hover:underline">
               Open Deliverables
             </Link>
           </div>
         </div>
         {engagement.documents.length === 0 ? (
-          <p className="text-sm text-navy-500">No diagram files uploaded yet.</p>
+          <p className="py-4 text-center text-sm text-navy-400">No diagram files uploaded yet.</p>
         ) : (
           <ul className="divide-y divide-navy-700/30">
             {engagement.documents.map((doc) => (
               <li key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="truncate text-sm text-navy-200">{doc.fileName}</span>
+                <span className="truncate text-sm text-navy-500 dark:text-navy-200">{doc.fileName}</span>
                 <span className="text-xs text-navy-500">
                   {new Date(doc.createdAt).toLocaleDateString()}
                 </span>

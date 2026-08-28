@@ -97,13 +97,40 @@ Each one actively misleads an engineer or a workflow run.
   `Microsoft.AlertsManagement` provider, and the failure surfaces roughly 20 minutes into a
   `211-deploy-azure-split.yml` run. Workflow `100-validate-prereqs.yml` validates secrets,
   variables, and OIDC but not resource-provider registration.
-- **Dependencies:** `REVIEW.md` → R-007 (the subscription owner must register it first; this task
-  makes the failure detectable, it does not resolve it).
+- **Dependencies:** `REVIEW.md` → R-007 (now closed — see Status).
 - **Recommended action:** Add a registration-state assertion to `100-validate-prereqs.yml`,
   failing with a message that names the provider and points at `REVIEW.md` → R-007.
-- **Status:** Not started
+- **Status:** Done, but not as written — **the premise was stale, and the note below turned out to
+  be the whole item.**
+  1. **`Microsoft.AlertsManagement` is not needed and has not been for some time.** The split
+     refactor removed alerting from the Azure roots: `infra/` contains no
+     `azurerm_application_insights`, no `azurerm_monitor_smart_detector_alert_rule`, no
+     `azurerm_monitor_metric_alert`, and no `azurerm_monitor_action_group`. The only monitor
+     resource left is `azurerm_monitor_diagnostic_setting` (`Microsoft.Insights`). Both
+     `azapi_resource` declarations resolve to namespaces already covered
+     (`Microsoft.CognitiveServices/accounts/projects`,
+     `Microsoft.Network/networkWatchers/flowLogs`). `REVIEW.md` → R-007 is closed on this basis —
+     it was asking the subscription owner for something no longer required.
+  2. **A provider check already existed** in `100-validate-prereqs.yml`, and already carried a
+     comment saying AlertsManagement had been dropped. So the item as written was asking for a
+     check that was there.
+  3. **The real gap was coverage.** That check asserted `Microsoft.App` and `Microsoft.Insights`
+     only — 2 of the 10 namespaces these roots actually need. `Microsoft.Cdn`,
+     `Microsoft.CognitiveServices`, and `Microsoft.DBforPostgreSQL` in particular are commonly
+     *not* registered by default on a fresh subscription, and each fails partway through apply
+     exactly as R-007 described. The list is now derived from the declared resource types and
+     covers all ten, declared once as `REQUIRED_PROVIDERS` with each namespace commented with the
+     resources that require it.
+  `Microsoft.Resources` and `Microsoft.Authorization` are deliberately excluded — they are
+  registered on every subscription and cannot be unregistered, so asserting them is noise. The
+  loop also distinguishes `Registering` (transient; wait and re-run) from `NotRegistered` (run
+  `az provider register`), because telling someone to re-register a provider that is mid-flight is
+  wrong advice. It reports every failing provider before exiting rather than stopping at the
+  first. Verified with a stubbed `az` covering all three states.
 - **Notes for future engineers:** Check whether any other provider registration is assumed by the
   Azure roots while adding this — the same class of late failure applies to every one of them.
+  This note was the actual work. Keep `REQUIRED_PROVIDERS` in sync when adding a service; the
+  workflow comment carries the `grep` that regenerates the resource-type list.
 
 ---
 
@@ -730,9 +757,39 @@ order; do not reorder it.
   mocked tests in the style T-403 established, and remove each `omit` line once its file clears
   ~80% on its own. Do not remove them in one step and lower `fail_under` to compensate — that
   weakens the gate for the whole package to accommodate two files.
-- **Status:** Not started
-- **Notes for future engineers:** To measure honestly while the entries are still in place, run
-  pytest with `--cov-config` pointing at a copy of the config with the two lines deleted; that is
+- **Status:** Done — **both files are covered and both `omit` lines are gone.**
+  46% → **98%** (380 statements, 6 missed), via 46 new tests in `tests/unit/test_aws_discovery.py`
+  covering the collectors that had none: `_assume_role`, `_list_org_accounts`,
+  `_get_enabled_regions`, `_discover_region`, `_collect_vpcs`, `_collect_igws`, `_collect_peering`,
+  `_collect_nacls`, `_collect_tgws`/`_collect_tgw_attachments`, `_collect_dx`,
+  `_collect_vpn_gateways`, `_collect_network_firewalls`, `_collect_waf_web_acls`, and
+  `_discover_account`. All mocked; no network call. With it measured, the package gate **rises**
+  84% → **87.5%**, because the file now sits above the package average.
+  **It found a real bug, which is the argument for the whole item.** `_collect_tgw_attachments`
+  derived the attachment type as `AttachmentType(raw.replace("-", "_"))`. AWS returns six values
+  for `ResourceType`, and that transform mislabelled two of them: `direct-connect-gateway` became
+  `direct_connect_gateway` and `tgw-peering` became `tgw_peering`, neither an enum member, so both
+  fell through the `except ValueError` to `AttachmentType.VPC`. Every Direct Connect gateway
+  attachment on a Transit Gateway was silently recorded as a VPC attachment — wrong in the
+  topology, in the diagrams, and in any rule counting VPC attachments. Replaced with a declared
+  `_TGW_ATTACHMENT_TYPES` mapping covering all six wire values, and an unmapped value now logs a
+  warning naming itself instead of failing silently. Parametrized over every value AWS returns.
+  **`azure_discovery.py` is done too: 22% → 85%** (1,189 statements, 178 missed), across five
+  batches — the module helpers and subnet classifier; `_init_credentials`, `validate_access`, and
+  the subscription listing; `_collect_management_groups`; `_discover_subscription` itself (the
+  largest single block, including the fault-isolation contract that one failing collector must not
+  lose the subscription); the five phase-2 scans; the resource collectors; and the Azure Monitor
+  metrics group with its aggregation helpers.
+  **Both `omit` entries are gone and the gate now measures all 1,569 statements.** Package
+  coverage went *up*, 84% → **87%**, because both files landed above the package average — the
+  13-point shortfall the original estimate predicted never materialised, since it assumed the
+  files stayed at their then-current coverage.
+  A reusable `_Arm` test double carries the Azure work: the collectors read optional attributes
+  directly and coerce them (`int(x or 4)`), so a bare `MagicMock` is the wrong shape —
+  `int(MagicMock())` raises. `_Arm` returns `None` for anything not set, which is what the SDK
+  does for an unpopulated field.
+- **Notes for future engineers:** To measure honestly while the entry is still in place, run
+  pytest with `--cov-config` pointing at a copy of the config with the line deleted; that is
   how the figures above were obtained. Also correct the misleading comment when the entries go —
   and note the same block omits `cna/diagram_engine/diagrams_generator.py` and the diagram modules
   for a *genuine* reason (they need the graphviz binary), so do not delete the block wholesale.
@@ -952,10 +1009,56 @@ order; do not reorder it.
   read the baseline — so once the baseline is honest, verify `pre-commit run detect-secrets
   --all-files` passes. Separately, decide the `gitleaks` question: either license it so the CI
   job can drop `continue-on-error`, or stop presenting it as a build-blocking control.
-- **Status:** Not started
+- **Status:** Done — audited by hand, **no real secret found**, and the control now gates.
+  **One correction to the description above:** the hook did *not* exclude the vendored packs. Its
+  only exclusion was `^\.env\.example$`, so all 8,480 vendored files were in scope. That is why
+  the finding count was unmanageable. Excluding `.claude/`, `.agents/`, `.codex/`, and
+  `.deployment-catalog/` — the same directories `pyproject.toml` excludes from ruff and
+  `validate_documentation_model.py` excludes from the documentation model, on the same grounds —
+  takes the count from **446 to 33**. `.env.example` is deliberately no longer excluded: excluding
+  it meant a real credential pasted into the template would never be caught, so its placeholders
+  are recorded in the baseline instead, which still catches anything new.
+  **All 33 audited individually. Every one is a false positive.** By class:
+
+  | Class | Count | Examples |
+  |---|---|---|
+  | Placeholders in `.example` templates | 8 | `apps/cna-web/.env.example`, `migrate/terraform.tfvars.example` — `change-me-…`, `your-…-secret`, `generate-with-openssl-rand-base64-32`, `sk-...` |
+  | Secret **names**, not values | 9 | Key Vault secret names in both `workload/main.tf` roots; `$keyVaultSecret = "cna-azure-openai-endpoint"`; `"DOCKERHUB" + "_USERNAME"`, a name built by concatenation specifically to dodge scanners |
+  | References to a secret store | 6 | `${{ secrets.* }}` env bindings; `DB_URL=$(terraform output -raw …)`; the Secrets Manager ARN wildcard in `aws/identity/locals.tf` |
+  | Connection strings built from variables | 3 | `aws/runtime/main.tf:19`, `migrate/secrets.tf:14`, and a `description` in `azure/runtime/variables.tf` showing the DSN *format* |
+  | Test fixtures | 5 | `test_auth.py` (`"super-secret"`, `"my-secret"`, `"s"`), `test_aws_discovery.py` (`"example-secret-not-real"`, `"b"`) |
+  | Local-dev / CI throwaway values | 3 | the `devpassword@localhost` DSN in both `.env.example` files; `test:test@localhost` plus `ci-smoke-secret-not-real` in the 200 smoke test |
+  | A checksum | 1 | `scripts/bootstrap-runner.sh:50` — the SHA-256 of the runner tarball, verified at line 177. A supply-chain control, the opposite of a secret |
+
+  **The 16 "AWS Access Key" and 2 "Private Key" findings that made this High priority are all in
+  the vendored packs**, not in project code — they are example keys in third-party security
+  documentation. No project file produced a finding of either type.
+  **The control was verified working, not merely quiet.** A green scan is exactly what a broken
+  hook looks like, which is how problem (2) above survived. `detect-secrets-hook` exits 0 against
+  the audited baseline, and exits 1 with `Potential secrets about to be committed` when a canary
+  file containing an AWS-shaped key is added. The canary was removed afterwards.
+  **Problem (3) is closed too.** A gating `detect-secrets` job was added to
+  `300-test-codebase.yml`. It runs the hook *through pre-commit* rather than invoking
+  `detect-secrets` directly, so the exclusion list lives in exactly one place instead of being
+  restated in the workflow and drifting. The `gitleaks` job stays `continue-on-error` — that is a
+  licensing constraint, not a choice — but the repository now has a secret scan that can fail a
+  build. `README.md` said both "run on every commit and CI push"; it now states which one gates and
+  which is advisory.
+  **Still open (deliberately):** the per-finding `is_secret: false` labels are *not* set in the
+  baseline. `detect-secrets audit` is interactive-only — there is no non-interactive labelling
+  mode — and when driven headlessly it offered only `(s)kip/(b)ack/(q)uit`, because the baseline
+  stores hashes rather than values and it could not render a verdict prompt. Rather than risk
+  mislabelling security data, the verdicts are recorded in the table above, which is reviewable in
+  version control rather than buried in JSON. Anyone who wants the labels in the file can run
+  `detect-secrets audit .secrets.baseline` at a terminal.
+  **The `gitleaks` licensing question is still a decision for the repository owner** — see the
+  recommended action. It is no longer urgent now that detect-secrets gates.
 - **Notes for future engineers:** Do **not** close this by regenerating the baseline in one step —
   that marks all 446 as reviewed without anyone having reviewed them, which is worse than the
   current state because it looks clean. The baseline is an audit record, not a suppression file.
+  That instruction was followed: the baseline covers only the 33 findings in the table above, each
+  inspected individually, and the 413 vendored findings are *excluded by path* rather than
+  laundered through the baseline as if reviewed.
 
 ### T-412 — `cna analyze`, `cna report`, and `cna publish` call EngagementStore methods that do not exist
 

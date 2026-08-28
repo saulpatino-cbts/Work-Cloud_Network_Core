@@ -22,6 +22,7 @@ This repository keeps exactly four documents. Everything else lives in the
 | [`CHANGELOG.md`](CHANGELOG.md) | Completed work, by release |
 | [`REVIEW.md`](REVIEW.md) | Blockers that require a human decision, approval, or access grant |
 | [`TODO.md`](TODO.md) | The engineering work queue — every actionable item, phased |
+| [`CNA-0.90-updates.md`](CNA-0.90-updates.md) | *Temporary* — the 0.9.0 pre-demo review, cleanup record, and polish plan; retired when 0.9.0 ships |
 | [GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki) | Architecture, ADRs, runbooks, workflow reference, security posture, deployment guides |
 
 If you are picking up work on this repository, start with `TODO.md`. If you are waiting on
@@ -138,8 +139,11 @@ Reference** explains each value in full.
   human must supply take no default at all, so a plan fails rather than applying something
   plausible-but-wrong.
 - **PowerShell scripts** use Verb-Noun naming (`Initialize-CnaGitHubSecrets.ps1`).
-- **All GitHub Actions are pinned to a SHA digest**, and `gitleaks` plus `detect-secrets` run on
-  every commit and CI push.
+- **All GitHub Actions are pinned to a SHA digest.** `detect-secrets` runs at commit time and in
+  CI, and **fails the build** on any finding not recorded in `.secrets.baseline` — which holds only
+  hand-audited false positives, never a suppression dump. `gitleaks` also runs in CI but is
+  advisory: it needs a paid licence on private repositories, so its job is `continue-on-error` and
+  cannot fail a build. Do not read it as a gate.
 - **Vendored agent configuration** under `.claude/`, `.agents/`, and `.codex/` is configuration,
   not project source. It is excluded from lint (see `pyproject.toml`) and from the documentation
   model, and it must never contain project-specific facts.

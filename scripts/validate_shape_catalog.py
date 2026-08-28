@@ -3,6 +3,16 @@
 icon library (azure2 or aws4). Fails non-zero on any violation so a careless
 edit cannot drift the deliverables into another icon set.
 
+Each cloud has one valid reference form, and they differ (see
+cna/diagram_engine/shape_catalog.py for the full account):
+
+    AWS   shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.<name>
+    Azure image=img/lib/azure2/<category>/<File_Name>.svg
+
+`shape=mxgraph.azure2.*` is rejected on purpose: that stencil namespace does
+not exist, so draw.io silently renders a plain blue rectangle instead of an
+icon. The catalog shipped that form until 2026-08-28.
+
 Run from repo root:
     python scripts/validate_shape_catalog.py
 """
@@ -15,7 +25,10 @@ import sys
 from pathlib import Path
 
 ALLOWED_LIBS = {"azure2", "aws4"}
-STYLE_RE = re.compile(r"shape=mxgraph\.([a-z0-9]+)\.", re.IGNORECASE)
+STENCIL_RE = re.compile(r"shape=mxgraph\.([a-z0-9]+)\.", re.IGNORECASE)
+IMAGE_RE = re.compile(r"image=img/lib/([a-z0-9]+)/", re.IGNORECASE)
+# Stencil namespaces draw.io actually ships. azure2 is deliberately not one.
+STENCIL_LIBS = {"aws4"}
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = [
@@ -26,8 +39,13 @@ TARGETS = [
 
 
 def lib_of(style: str) -> str | None:
-    m = STYLE_RE.search(style or "")
-    return m.group(1).lower() if m else None
+    m = IMAGE_RE.search(style or "")
+    if m:
+        return m.group(1).lower()
+    m = STENCIL_RE.search(style or "")
+    if m and m.group(1).lower() in STENCIL_LIBS:
+        return m.group(1).lower()
+    return None
 
 
 def check(path: Path) -> list[str]:
@@ -48,7 +66,13 @@ def check(path: Path) -> list[str]:
     for key, style in iterator:
         lib = lib_of(style)
         if lib is None:
-            violations.append(f"{path}: '{key}' has no recognisable mxgraph library prefix")
+            hint = ""
+            if "mxgraph.azure2" in style:
+                hint = (
+                    " — mxgraph.azure2 is not a real stencil set and renders as a"
+                    " blank blue box; use image=img/lib/azure2/<category>/<File>.svg"
+                )
+            violations.append(f"{path}: '{key}' references no pinned icon library{hint}")
         elif lib not in ALLOWED_LIBS:
             violations.append(
                 f"{path}: '{key}' uses library '{lib}' outside ALLOWED_LIBS {sorted(ALLOWED_LIBS)}"

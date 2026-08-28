@@ -53,6 +53,7 @@ from routers.chat import router as chat_router  # noqa: E402, I001
 from routers.metrics import rebuild_metrics  # noqa: E402
 from routers.metrics import router as metrics_router  # noqa: E402
 from routers.reports import router as reports_router  # noqa: E402
+from routers.diagrams import router as diagrams_router  # noqa: E402
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
@@ -66,6 +67,7 @@ app = FastAPI(title="CNA API", version="0.2.0")
 app.include_router(metrics_router)
 app.include_router(chat_router)
 app.include_router(reports_router)
+app.include_router(diagrams_router)
 
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────

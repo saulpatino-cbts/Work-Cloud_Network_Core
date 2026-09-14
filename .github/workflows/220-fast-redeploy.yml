@@ -42,9 +42,16 @@ permissions:
   id-token: write
   contents: read
 
+# Serialize redeploys per environment so two overlapping runs don't race to
+# update the same Container Apps revision; don't cancel an in-flight rollout.
+concurrency:
+  group: fast-redeploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: self-hosted
+    timeout-minutes: 20
     environment: ${{ inputs.environment }}
     steps:
       - name: Validate — at least one image must be specified

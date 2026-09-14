@@ -92,5 +92,10 @@ USER nextjs
 
 EXPOSE 3000
 
+# Liveness for orchestrators (Container Apps/ECS/AKS): the Next.js server
+# answers on $PORT once ready. Uses node (no curl in the runtime image).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # server.js lives at /app/app/server.js due to outputFileTracingRoot path mirroring.
 CMD ["node", "app/server.js"]

@@ -11,7 +11,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   useSecureCookies: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
   logger: {
     error(error) {
-      console.error("[auth][error]", error.name, error.message, JSON.stringify({ cause: error.cause, type: (error as any).type }))
+      // Auth.js error subclasses carry a `type` discriminant that isn't on the
+      // base Error type; read it through an unknown-narrowed accessor rather
+      // than an `any` cast to keep this type-safe.
+      const type = (error as { type?: unknown }).type;
+      console.error("[auth][error]", error.name, error.message, JSON.stringify({ cause: error.cause, type }))
     },
     warn(code) {
       console.warn("[auth][warn]", code)

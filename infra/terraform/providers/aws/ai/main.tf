@@ -56,7 +56,9 @@ resource "aws_bedrock_inference_profile" "chat" {
 
   name        = local.inference_profile_name
   description = "CNA ${var.environment} chat inference profile — mirrors Azure AI Foundry gpt-chat-latest deployment"
-  type        = "APPLICATION"
+  # `type` is a read-only/computed attribute in the AWS provider: creating a
+  # profile via `model_source` always yields an APPLICATION profile, so setting
+  # it here is rejected with "Invalid Configuration for Read-Only Attribute".
 
   model_source {
     copy_from = local.chat_model_arn

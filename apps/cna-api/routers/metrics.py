@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Query
 # Ensure the repo root is on the path so `cna` package is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from cna.api_status import Outcome, status_for
 from cna.core.stat_masters import StatMasterRecord, build_stat_masters
 
 logger = logging.getLogger("cna-api.metrics")
@@ -158,7 +159,10 @@ def rebuild_metrics(engagement_id: str) -> int:
 def rebuild(engagement_id: str) -> dict:
     """Rebuild stat-master records from current findings + latest topology."""
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
     count = rebuild_metrics(engagement_id)
     return {"engagement_id": engagement_id, "records": count, "status": "rebuilt"}
 
@@ -177,7 +181,10 @@ def get_metrics(  # noqa: PLR0913 — one optional filter per dimension
 ) -> list[dict]:
     """Flat StatMasterRecord rows, optionally filtered per dimension."""
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
 
     filters = {
         "traffic_direction": traffic_direction,
@@ -211,7 +218,10 @@ def get_summary(engagement_id: str) -> dict:
     """Rollups for dashboards: by direction, severity × direction, by region,
     plus the total estimated monthly cost impact."""
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
 
     with _get_db() as conn:
         with conn.cursor() as cur:

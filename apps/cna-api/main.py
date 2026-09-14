@@ -25,7 +25,10 @@ from pydantic import BaseModel
 # Ensure the repo root is on the path so `cna` package is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from cna.api_errors import sanitize_downstream_error
+from cna.api_status import Outcome, status_for
 from cna.core.finding_taxonomy import classify_traffic_direction
+from cna.core.logging_config import JSONFormatter
 from cna.core.persistence import EngagementStore
 from cna.modules.network.analysis import (
     generate_bcdr_findings,
@@ -36,7 +39,28 @@ from cna.modules.network.discovery.azure_discovery import (
     AzureDiscoveryOptions,
 )
 
-logging.basicConfig(level=logging.INFO)
+
+def _configure_structured_logging() -> None:
+    """Emit API log records as single-line JSON (level + message + context).
+
+    Requirement 8.2: an error the API emits must be captured as a *structured*
+    log record. ``logging.basicConfig`` alone produces unstructured plain-text
+    lines, so a JSON error surfaced by ``logger.exception(...)`` could not be
+    parsed downstream. Attaching the core engine's :class:`JSONFormatter` to a
+    stdout handler on the root logger makes every emitted record (including the
+    ``cna-api`` logger and the ``cna`` engine loggers) a parseable JSON object
+    carrying at least ``level`` and ``message``, so Container Apps / Log
+    Analytics can ingest and query them.
+    """
+    root = logging.getLogger()
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JSONFormatter())
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+_configure_structured_logging()
 logger = logging.getLogger("cna-api")
 
 _MIN_ZONE_REDUNDANCY = 2
@@ -1182,10 +1206,14 @@ def health() -> dict:
 
 
 # Legacy phase endpoints — honest 501s until the phases are actually wired up.
-@app.post("/intake", status_code=501)
+# The status flows through the single outcome→status mapping so this endpoint
+# can never regress to a fabricated 2xx: NOT_IMPLEMENTED maps to 501 (a 5xx),
+# which honestly reflects that the intake phase does not run yet (Requirement
+# 2.1).
+@app.post("/intake", status_code=status_for(Outcome.NOT_IMPLEMENTED))
 def intake(body: dict) -> dict:
     raise HTTPException(
-        status_code=501,
+        status_code=status_for(Outcome.NOT_IMPLEMENTED),
         detail="The intake phase is not yet implemented in the API.",
     )
 
@@ -1269,11 +1297,14 @@ def publish(request: PublishRequest) -> dict:
     superseded by this endpoint.
     """
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
     account_name = os.environ.get("AZURE_STORAGE_ACCOUNT_NAME", "")
     if not account_name:
         raise HTTPException(
-            status_code=503,
+            status_code=status_for(Outcome.NOT_CONFIGURED),
             detail="AZURE_STORAGE_ACCOUNT_NAME is not configured on the API.",
         )
 
@@ -1281,7 +1312,7 @@ def publish(request: PublishRequest) -> dict:
     deliverables = _load_published_deliverables(engagement_id)
     if not deliverables:
         raise HTTPException(
-            status_code=409,
+            status_code=status_for(Outcome.CONFLICT),
             detail=(
                 "No published deliverables for this engagement — publish at least one "
                 "deliverable in the app before creating the client portal."
@@ -1306,7 +1337,7 @@ def publish(request: PublishRequest) -> dict:
     try:
         RetentionEngine.check(engagement_id, delivery_date)
     except RetentionExpiredError as exc:
-        raise HTTPException(status_code=410, detail=str(exc)) from None
+        raise HTTPException(status_code=status_for(Outcome.GONE), detail=str(exc)) from None
 
     try:
         import tempfile
@@ -1345,7 +1376,7 @@ def publish(request: PublishRequest) -> dict:
 
             if not file_paths:
                 raise HTTPException(
-                    status_code=409,
+                    status_code=status_for(Outcome.CONFLICT),
                     detail="No publishable deliverable content found for this engagement.",
                 )
 
@@ -1406,15 +1437,15 @@ def publish(request: PublishRequest) -> dict:
         }
     except HTTPException:
         raise
-    except Exception:
-        # Full details stay server-side; callers get a sanitized message.
-        logger.exception("publish failed for engagement %s", engagement_id)
+    except Exception as exc:
+        # Raw SDK detail is logged server-side; the caller gets a sanitized,
+        # category-level message with no raw exception text (Requirement 2.3).
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"publish for engagement {engagement_id}"
+        )
         raise HTTPException(
-            status_code=502,
-            detail=(
-                "Publishing the client portal failed. Check that the API's identity has "
-                "Storage Blob Data Contributor on the storage account, then try again."
-            ),
+            status_code=status_for(sanitized.outcome),
+            detail=sanitized.client_message,
         ) from None
 
 
@@ -1440,15 +1471,15 @@ async def test_connection(request: TestConnectionRequest) -> dict:
             "ok": True,
             "subscriptions": [{"id": s.subscription_id, "name": s.display_name} for s in subs],
         }
-    except Exception:
-        # Full details stay server-side; callers get a sanitized message.
-        logger.exception("test-connection failed for tenant %s", request.tenant_id)
+    except Exception as exc:
+        # Raw Azure SDK detail is logged server-side; the caller gets a
+        # sanitized, category-level message with no raw text (Requirement 2.3).
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"test-connection for tenant {request.tenant_id}"
+        )
         raise HTTPException(
-            status_code=502,
-            detail=(
-                "Could not validate the service principal against the Azure tenant. "
-                "Check the tenant ID, client ID, and client secret, then try again."
-            ),
+            status_code=status_for(sanitized.outcome),
+            detail=sanitized.client_message,
         ) from None
 
 
@@ -1484,15 +1515,15 @@ async def test_connection_aws(request: AwsTestConnectionRequest) -> dict:
             "caller_account": identity["Account"],
             "assumed_role_arn": assumed["AssumedRoleUser"]["Arn"],
         }
-    except Exception:
-        # Full details stay server-side; callers get a sanitized message.
-        logger.exception("test-connection-aws failed for role %s", request.role_arn)
+    except Exception as exc:
+        # Raw AWS SDK detail is logged server-side; the caller gets a
+        # sanitized, category-level message with no raw text (Requirement 2.3).
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"test-connection-aws for role {request.role_arn}"
+        )
         raise HTTPException(
-            status_code=502,
-            detail=(
-                "Could not validate the AWS credentials or assume the read-only role. "
-                "Check the access key, secret, role ARN, and external ID, then try again."
-            ),
+            status_code=status_for(sanitized.outcome),
+            detail=sanitized.client_message,
         ) from None
 
 
@@ -1521,11 +1552,12 @@ async def start_discovery(
     if request.platform.upper() == "AWS":
         if not request.aws_role_arn:
             raise HTTPException(
-                status_code=422, detail="aws_role_arn is required for AWS discovery"
+                status_code=status_for(Outcome.INVALID_REQUEST),
+                detail="aws_role_arn is required for AWS discovery",
             )
         if not request.aws_access_key_id or not request.aws_secret_access_key:
             raise HTTPException(
-                status_code=422,
+                status_code=status_for(Outcome.INVALID_REQUEST),
                 detail="aws_access_key_id and aws_secret_access_key are required for AWS discovery",
             )
         _update_job(request.job_id, status="RUNNING", startedAt=datetime.now(UTC))
@@ -1533,7 +1565,10 @@ async def start_discovery(
         return {"job_id": request.job_id, "status": "RUNNING"}
 
     if not request.tenant_id:
-        raise HTTPException(status_code=422, detail="tenant_id is required")
+        raise HTTPException(
+            status_code=status_for(Outcome.INVALID_REQUEST),
+            detail="tenant_id is required",
+        )
     _update_job(request.job_id, status="RUNNING", startedAt=datetime.now(UTC))
     background_tasks.add_task(_run_azure_discovery, request)
     return {"job_id": request.job_id, "status": "RUNNING"}
@@ -1542,7 +1577,10 @@ async def start_discovery(
 @app.get("/discovery/jobs/{job_id}")
 def get_job_status(job_id: str) -> dict:
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
     with _get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1553,7 +1591,7 @@ def get_job_status(job_id: str) -> dict:
             )
             row = cur.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="job not found")
+        raise HTTPException(status_code=status_for(Outcome.NOT_FOUND), detail="job not found")
     return dict(row)
 
 

@@ -23,6 +23,7 @@ from pydantic import BaseModel
 # Ensure the repo root is on the path so `cna` package is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from cna.api_status import Outcome, status_for
 from cna.core.stat_masters import build_stat_masters
 from cna.report_engine.encyclopedia_report import (
     EDITION_CONDENSED,
@@ -91,17 +92,20 @@ def _load_latest_topology(engagement_id: str):
 def render_encyclopedia(engagement_id: str, body: EncyclopediaRequest) -> dict:
     """Render the encyclopedia report as HTML for the given edition."""
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
     if body.edition not in (EDITION_CONDENSED, EDITION_EXPANDED):
         raise HTTPException(
-            status_code=422,
+            status_code=status_for(Outcome.INVALID_REQUEST),
             detail=f"edition must be 'condensed' or 'expanded', got {body.edition!r}",
         )
 
     findings = _load_findings(engagement_id)
     if not findings:
         raise HTTPException(
-            status_code=409,
+            status_code=status_for(Outcome.CONFLICT),
             detail="No findings for this engagement — run discovery/analysis first.",
         )
 

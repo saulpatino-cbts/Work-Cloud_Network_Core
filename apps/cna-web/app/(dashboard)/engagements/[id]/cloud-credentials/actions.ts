@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { sanitizeBackendDetail } from "@/lib/summarize-error";
 import { revalidatePath } from "next/cache";
 
 // ─── Add credential ───────────────────────────────────────────────────────────
@@ -334,9 +335,10 @@ export async function testAwsConnection(params: {
       const body = (await res.json().catch(() => null)) as { detail?: string } | null;
       return {
         ok: false,
-        error:
-          body?.detail ??
+        error: sanitizeBackendDetail(
+          body?.detail,
           "AWS rejected the credentials. Verify the access key, secret, role ARN, and external ID.",
+        ),
       };
     }
 

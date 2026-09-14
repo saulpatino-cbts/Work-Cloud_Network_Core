@@ -92,6 +92,7 @@ jobs:
   policy-gates:
     if: github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: infra/terraform/environments/aws/${{ inputs.environment }}/platform
@@ -109,6 +110,7 @@ jobs:
   plan:
     needs: policy-gates
     runs-on: self-hosted
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: infra/terraform/environments/aws/${{ inputs.environment }}
@@ -125,6 +127,7 @@ jobs:
   apply:
     needs: plan
     runs-on: self-hosted
+    timeout-minutes: 60
     environment: ${{ inputs.environment == 'prod' && 'hub' || inputs.environment }}
     defaults:
       run:

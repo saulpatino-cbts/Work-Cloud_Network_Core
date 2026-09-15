@@ -1347,6 +1347,57 @@ order; do not reorder it.
 - **Notes for future engineers:** Do not close this by muting the check or by making it tolerate
   a missing backend. The check was right; the delivery was missing.
 
+### T-417 — "Generate All Assessments" still runs four reports synchronously in the request
+
+- **Priority:** Medium
+- **Category:** Web app reliability
+- **Description:** `apps/cna-web/app/(dashboard)/engagements/[id]/deliverables/actions.ts` fixed the
+  ingress-timeout problem for one of five generation paths. `generateAllAssessments` dispatches the
+  COMPREHENSIVE_ASSESSMENT through `after()` and returns, but then runs the four `SINGLE_SHOT_TYPES`
+  (`EXECUTIVE_SUMMARY`, `TECHNICAL_FINDINGS`, `REMEDIATION_PLAN`, `SPECIALIZATION_REPORT`) with
+  `await Promise.allSettled(...)` **inside the same request**. Four sequential-ish AI calls behind
+  Front Door reliably outlive the ingress timeout, so the user sees a red error boundary while the
+  comprehensive report is still generating correctly in the background — a false failure that is
+  indistinguishable from a real one. Observed 2026-08-28 during demo prep.
+- **Dependencies:** None. The pattern to copy already exists in the same file
+  (`runComprehensiveInBackground` + `getDeliverableProgress`), and was applied to the interactive
+  assessment in `createInteractiveAssessment`.
+- **Recommended action:** Create all five rows with `status: "RUNNING"` up front, dispatch every one
+  through `after()`, and return the row ids. Have the deliverables page poll `getDeliverableProgress`
+  for each. A single-shot report only needs one progress step, so the existing progress shape covers
+  it without schema change.
+- **Notes for future engineers:** The rate limiter is 5 requests / 60s on `generateDeliverable`.
+  A user who re-clicks after the false failure starts a second comprehensive run plus four more
+  single-shots — so the visible symptom of this bug also makes the underlying load worse.
+
+### T-418 — Diagram generation covers Azure only, and two C4 layers are the same diagram
+
+- **Priority:** Medium
+- **Category:** Diagram engine
+- **Description:** The 2026-08-28 wiring made the Diagram page generate from discovery, but the
+  work stopped at the Azure path. Two gaps remain.
+  1. `generate_vpc_topology` (AWS) still renders VPCs, subnets, IGW and NAT only. The AWS
+     equivalent of the new Azure "Network services" band — Transit Gateways, Direct Connect,
+     VPN/customer gateways, Network Firewall, VPC endpoints, WAF, Shield — is not drawn, even
+     though `AWSRegionTopology` carries all of it and the catalog now has verified `aws4` icons
+     for every one of them. The band helper is Azure-shaped (`_azure_service_groups`); the
+     layout half of it generalises cleanly.
+  2. `author_engagement_bundle` emits CONTAINER and COMPONENT layers with **identical XML** —
+     its own comment says "splitting these is a follow-up sprint". The diagrams router works
+     around this by dropping the COMPONENT layer, so the architect and engineer audiences get
+     the same picture and the C4 layering is currently decorative.
+- **Dependencies:** None for (1). For (2), decide what the engineer view shows that the
+  architect view does not — route tables, NSG rules and effective routes are the obvious
+  candidates, and all three are already in the topology models.
+- **Recommended action:** Generalise the services band to take a list of (label, style, names)
+  from either cloud, then give the AWS generator its own group list. Separately, either make
+  COMPONENT a genuinely denser diagram or drop the layer from the bundle rather than emitting a
+  duplicate the caller has to filter.
+- **Notes for future engineers:** AWS discovery is real (`CHANGELOG` → AWS end-to-end) but the
+  inventory/diagram/FinOps pages remain Azure-shaped, so (1) is part of a wider AWS parity gap,
+  not a diagram-only issue. Do not "fix" the duplicate layer by having the router keep both —
+  that puts two identical tabs in front of the consultant.
+
 ---
 
 ## Phase 5 — Feature enhancements

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DiagramForms } from "./diagram-forms";
 import { DiagramEditor } from "./diagram-editor";
+import { GenerateDiagramButton } from "./generate-diagram-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,9 +64,13 @@ export default async function DiagramPage({ params }: PageProps) {
           </a>
         </div>
         <p className="mb-4 text-sm text-navy-400">
-          Build diagrams in draw.io and save them straight into this engagement with the
-          editor&apos;s Save button. Exported artifacts (.png/.svg/.pdf) can be uploaded below.
+          Generate a diagram from the topology discovery already found, then adjust it here —
+          the editor&apos;s Save button writes changes straight back into this engagement.
+          Exported artifacts (.png/.svg/.pdf) can be uploaded below.
         </p>
+        <div className="mb-4">
+          <GenerateDiagramButton engagementId={id} />
+        </div>
         <DiagramEditor engagementId={id} initialXml={latestSource?.parsedText ?? ""} />
       </section>
 

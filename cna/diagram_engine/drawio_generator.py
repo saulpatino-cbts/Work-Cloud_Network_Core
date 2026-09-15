@@ -20,6 +20,7 @@ Export pipeline:
 from __future__ import annotations
 
 import html
+import logging
 import textwrap
 import uuid
 
@@ -38,6 +39,8 @@ from cna.diagram_engine.future_state import (
 )
 from cna.diagram_engine.shape_catalog import shape_style
 from cna.modules.network.analysis.topology_classifier import TopologyClassification
+
+logger = logging.getLogger("cna.diagram_engine.drawio_generator")
 
 # ── Draw.io style constants ─────────────────────────────────────────────────
 #
@@ -87,30 +90,55 @@ STYLE_TGW = shape_style(
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transit_gateway;"
     "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
-STYLE_VWAN_HUB = shape_style(
-    "azure2",
-    "vwan_hub",
-    "shape=mxgraph.azure2.virtual_hub;"
-    "fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
-)
-STYLE_FIREWALL = shape_style(
-    "azure2",
-    "firewall",
-    "shape=mxgraph.azure2.firewalls;fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
-)
+
+
+def _azure_fallback(svg: str) -> str:
+    """Fallback style for an Azure icon, in the only form draw.io renders.
+
+    Azure icons are SVG image paths — `shape=mxgraph.azure2.*` is not a real
+    stencil namespace and degrades to a plain blue rectangle (see
+    shape_catalog.py). Fallbacks must therefore be image styles too, or a
+    missing catalog entry silently reintroduces the blue box.
+    """
+    return (
+        f"image;html=1;image=img/lib/azure2/networking/{svg}.svg;"
+        "fontFamily=Helvetica;fontSize=10;"
+        "verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;"
+    )
+
+
+STYLE_VWAN_HUB = shape_style("azure2", "vwan_hub", _azure_fallback("Virtual_WAN_Hub"))
+STYLE_FIREWALL = shape_style("azure2", "firewall", _azure_fallback("Firewalls"))
 STYLE_VNET_GATEWAY = shape_style(
-    "azure2",
-    "vnet_gateway",
-    "shape=mxgraph.azure2.virtual_network_gateways;"
-    "fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+    "azure2", "vnet_gateway", _azure_fallback("Virtual_Network_Gateways")
 )
+# Azure Route Server has no dedicated icon in the Azure2 palette; the virtual
+# network gateway icon is the closest accurate stand-in for a routing appliance.
 STYLE_ROUTE_SERVER = shape_style(
-    "azure2",
-    "route_server",
-    "shape=mxgraph.azure2.virtual_router;"
-    "fillColor=#0078D4;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+    "azure2", "route_server", _azure_fallback("Virtual_Network_Gateways")
 )
+STYLE_BASTION = shape_style("azure2", "bastion", _azure_fallback("Bastions"))
+STYLE_AZ_NAT = shape_style("azure2", "nat_gateway", _azure_fallback("NAT"))
+STYLE_AZ_LB = shape_style("azure2", "load_balancer", _azure_fallback("Load_Balancers"))
+STYLE_APP_GATEWAY = shape_style(
+    "azure2", "application_gateway", _azure_fallback("Application_Gateways")
+)
+STYLE_EXPRESSROUTE = shape_style("azure2", "expressroute", _azure_fallback("ExpressRoute_Circuits"))
+STYLE_PRIVATE_ENDPOINT = shape_style(
+    "azure2", "private_endpoint", _azure_fallback("Private_Endpoint")
+)
+STYLE_PRIVATE_DNS = shape_style("azure2", "private_dns_zone", _azure_fallback("DNS_Zones"))
+STYLE_PUBLIC_IP = shape_style("azure2", "public_ip", _azure_fallback("Public_IP_Addresses"))
+STYLE_WAF_POLICY = shape_style(
+    "azure2", "waf_policy", _azure_fallback("Web_Application_Firewall_Policies_WAF")
+)
+STYLE_AZ_VWAN = shape_style("azure2", "vwan", _azure_fallback("Virtual_WANs"))
 STYLE_EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;"
+STYLE_SERVICE_BAND = (
+    "rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6fc;strokeColor=#0078D4;"
+    "dashed=1;fontSize=11;fontStyle=1;verticalAlign=top;align=left;spacingLeft=12;"
+    "fontFamily=Helvetica;"
+)
 
 # Phase E: net-new (recommended) resources in future-state diagrams get a
 # dashed bright-teal border (CBTS accent #00E9BB) and a "(recommended)" suffix.
@@ -152,6 +180,29 @@ def _safe(text: str | None) -> str:
     return html.escape(str(text), quote=True)
 
 
+def _label(text: str | None) -> str:
+    """Escape a cell label and turn newlines into real line breaks.
+
+    Every style in this module sets html=1, under which a raw newline collapses
+    to a single space — so the multi-line labels this generator has always
+    written (name / CIDR / location) rendered as one run-on line.
+
+    The break has to be written as an entity, not as a literal tag: `value` is
+    an XML attribute, where a raw "<" is malformed and makes draw.io drop the
+    cell (and, in practice, its siblings). Writing "&lt;br&gt;" here means the
+    parsed attribute holds "<br>", which html=1 then renders as a line break.
+    Escaping before substituting also keeps the substitution the only markup
+    that can reach the label.
+    """
+    return _safe(text).replace("\n", "&lt;br&gt;")
+
+
+def _truncate(text: str, limit: int = 24) -> str:
+    """Shorten a resource name that would otherwise overrun its icon column."""
+    text = text or ""
+    return text if len(text) <= limit else text[: limit - 1] + "\u2026"
+
+
 def _cell_id() -> str:
     return str(uuid.uuid4()).replace("-", "")[:16]
 
@@ -176,7 +227,7 @@ def _vpc_dims(subnet_count: int) -> tuple[int, int]:
 
 def _container_cell(cell_id: str, label: str, x: int, y: int, w: int, h: int, style: str) -> str:  # noqa: PLR0913
     return (
-        f'<mxCell id="{cell_id}" value="{_safe(label)}" style="{style}" '
+        f'<mxCell id="{cell_id}" value="{_label(label)}" style="{style}" '
         f'vertex="1" parent="1">'
         f'<mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry"/>'
         f"</mxCell>\n"
@@ -187,7 +238,7 @@ def _child_cell(  # noqa: PLR0913
     cell_id: str, label: str, x: int, y: int, w: int, h: int, style: str, parent_id: str
 ) -> str:
     return (
-        f'<mxCell id="{cell_id}" value="{_safe(label)}" style="{style}" '
+        f'<mxCell id="{cell_id}" value="{_label(label)}" style="{style}" '
         f'vertex="1" parent="{parent_id}">'
         f'<mxGeometry x="{x}" y="{y}" width="{w}" height="{h}" as="geometry"/>'
         f"</mxCell>\n"
@@ -330,6 +381,99 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
 # ── VNet Topology ──────────────────────────────────────────────────────────
 
 
+# ── Azure subscription network services band ───────────────────────────────
+#
+# The VNet diagram used to show VNets, subnets and peerings only, which left
+# every firewall, gateway, bastion and load balancer the discovery already
+# captured off the page. These render as a labelled band of real Azure icons
+# above the VNets, so the diagram reflects what was actually found.
+
+SERVICE_ICON_W = 48
+SERVICE_ICON_H = 48
+SERVICE_COL_GAP = 132
+SERVICE_ROW_H = 108
+SERVICE_BAND_PADDING = 20
+SERVICE_BAND_HEADER_H = 30
+SERVICES_PER_ROW = 6
+# Per resource type: draw this many named icons, then summarise the remainder.
+# Keeps a subscription with 200 private endpoints from producing 200 icons.
+MAX_ICONS_PER_TYPE = 4
+
+
+def _azure_service_groups(sub: AzureSubscriptionTopology) -> list[tuple[str, str, list[str]]]:
+    """Return (label, style, names) per network service type actually present."""
+    groups: list[tuple[str, str, list[str]]] = [
+        ("Firewall", STYLE_FIREWALL, [f.name for f in sub.firewalls]),
+        ("VNet Gateway", STYLE_VNET_GATEWAY, [g.name for g in sub.virtual_network_gateways]),
+        ("ExpressRoute", STYLE_EXPRESSROUTE, [c.name for c in sub.express_route_circuits]),
+        ("Virtual WAN", STYLE_AZ_VWAN, [w.name for w in sub.virtual_wans]),
+        ("Route Server", STYLE_ROUTE_SERVER, [r.name for r in sub.route_servers]),
+        ("App Gateway", STYLE_APP_GATEWAY, [a.name for a in sub.application_gateways]),
+        ("Load Balancer", STYLE_AZ_LB, [lb.name for lb in sub.load_balancers]),
+        ("WAF Policy", STYLE_WAF_POLICY, [w.name for w in sub.front_door_waf_policies]),
+        ("Bastion", STYLE_BASTION, [b.name for b in sub.bastion_hosts]),
+        ("NAT Gateway", STYLE_AZ_NAT, [n.name for n in sub.nat_gateways]),
+        ("Private Endpoint", STYLE_PRIVATE_ENDPOINT, [p.name for p in sub.private_endpoints]),
+        ("Private DNS", STYLE_PRIVATE_DNS, [z.name for z in sub.private_dns_zones]),
+        ("Public IP", STYLE_PUBLIC_IP, [p.name for p in sub.public_ips]),
+    ]
+    return [g for g in groups if g[2]]
+
+
+def _service_band_cells(sub: AzureSubscriptionTopology, y: int) -> tuple[str, int]:
+    """Render the services band at `y`. Returns (cells, band_height).
+
+    An empty band renders nothing and reports zero height, so a subscription
+    with no discovered network services lays out exactly as before.
+    """
+    groups = _azure_service_groups(sub)
+    if not groups:
+        return "", 0
+
+    # One slot per icon drawn, plus one slot for each type that overflows.
+    slots: list[tuple[str, str]] = []  # (style, label)
+    for label, style, names in groups:
+        for name in names[:MAX_ICONS_PER_TYPE]:
+            slots.append((style, f"{_truncate(name)}\n{label}"))
+        overflow = len(names) - MAX_ICONS_PER_TYPE
+        if overflow > 0:
+            slots.append((style, f"+{overflow} more\n{label}"))
+
+    rows = max(1, -(-len(slots) // SERVICES_PER_ROW))  # ceiling div
+    cols = min(len(slots), SERVICES_PER_ROW)
+    band_w = SERVICE_BAND_PADDING * 2 + cols * SERVICE_COL_GAP
+    band_h = SERVICE_BAND_HEADER_H + SERVICE_BAND_PADDING + rows * SERVICE_ROW_H
+
+    band_id = _cell_id()
+    cells = _container_cell(
+        band_id,
+        f"Network services — {sub.subscription_name or sub.subscription_id}",
+        40,
+        y,
+        band_w,
+        band_h,
+        STYLE_SERVICE_BAND,
+    )
+    for idx, (style, label) in enumerate(slots):
+        col = idx % SERVICES_PER_ROW
+        row = idx // SERVICES_PER_ROW
+        sx = SERVICE_BAND_PADDING + col * SERVICE_COL_GAP
+        sy = SERVICE_BAND_HEADER_H + row * SERVICE_ROW_H
+        # Nudge the icon to its column centre so the wider label beneath it
+        # stays inside the band instead of colliding with its neighbour.
+        cells += _child_cell(
+            _cell_id(),
+            label,
+            sx + (SERVICE_COL_GAP - SERVICE_ICON_W) // 2,
+            sy,
+            SERVICE_ICON_W,
+            SERVICE_ICON_H,
+            style,
+            band_id,
+        )
+    return cells, band_h
+
+
 def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
     """Generate draw.io XML for all VNets in an Azure subscription."""
     if sub_topology.discovery_blocked:
@@ -339,7 +483,10 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
             "Cannot generate diagram from incomplete data."
         )
 
-    cells = ""
+    # Subscription-level network services render above the VNets; the VNet row
+    # starts below whatever height that band needed.
+    cells, band_h = _service_band_cells(sub_topology, VPC_Y_START)
+    vnet_y = VPC_Y_START + (band_h + 40 if band_h else 0)
     cursor_x = 40
 
     if not sub_topology.vnets:
@@ -348,7 +495,7 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
             note_id,
             f"No VNets found in subscription {sub_topology.subscription_id}",
             40,
-            80,
+            vnet_y,
             420,
             60,
             "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;",
@@ -363,9 +510,7 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
         vnet_label = (
             f"{vnet.name}\n{', '.join(vnet.address_space)}\n{vnet.location} | {vnet.resource_group}"
         )
-        cells += _container_cell(
-            vnet_id, vnet_label, cursor_x, VPC_Y_START, vnet_w, vnet_h, STYLE_VNET
-        )
+        cells += _container_cell(vnet_id, vnet_label, cursor_x, vnet_y, vnet_w, vnet_h, STYLE_VNET)
 
         for idx, subnet in enumerate(vnet.subnets):
             col = idx % SUBNETS_PER_ROW
@@ -380,14 +525,16 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
                 + (f"\n{subnet.delegation}" if subnet.delegation else "")
                 + nsg_indicator
             )
-            cells += _child_cell(
-                sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, STYLE_SUBNET_PRIVATE, vnet_id
-            )
+            # Colour by the classifier's verdict — painting every subnet with
+            # the private style hid public exposure, the thing the diagram is
+            # most often read to check.
+            subnet_style = SUBNET_STYLES.get(subnet.subnet_type, STYLE_SUBNET_UNKNOWN)
+            cells += _child_cell(sn_id, sn_label, sx, sy, SUBNET_W, SUBNET_H, subnet_style, vnet_id)
 
         for peering in vnet.peerings:
             peer_note_id = _cell_id()
             peer_x = cursor_x + vnet_w + 40
-            peer_y = VPC_Y_START + 20
+            peer_y = vnet_y + 20
             remote_name = peering.remote_vnet_name or peering.remote_vnet_id.split("/")[-1]
             cells += _container_cell(
                 peer_note_id,
@@ -655,3 +802,48 @@ def generate_future_state_topology(
 
     label = f"Future State Topology — {future.target_pattern}"
     return _wrap_diagram(cells, label)
+
+
+# ── Multi-page assembly ────────────────────────────────────────────────────
+
+
+def merge_diagrams(pages: list[tuple[str, str]]) -> str:
+    """Combine single-page diagram XML strings into one multi-page .drawio file.
+
+    Each generator here emits a complete `<mxfile>` with exactly one
+    `<diagram>`. draw.io shows one tab per `<diagram>`, so an engagement that
+    spans several subscriptions or regions belongs in one file with one tab
+    each rather than in several files the consultant has to open separately.
+
+    `pages` is a list of (tab_name, single_page_xml). Inputs that cannot be
+    parsed are skipped rather than failing the whole bundle — a malformed page
+    from one scope should not cost the consultant every other scope.
+    """
+    # defusedxml, not xml.dom: these strings reach us through the API from
+    # persisted discovery data, so the parser must not honour entity expansion.
+    from defusedxml import minidom  # noqa: PLC0415 — only needed on this path
+
+    fragments: list[str] = []
+    for name, xml in pages:
+        if not xml or not xml.strip():
+            continue
+        try:
+            doc = minidom.parseString(xml)
+        except Exception as exc:  # noqa: BLE001 — one bad page must not sink the file
+            logger.warning("skipping unparseable diagram page %r: %s", name, exc)
+            continue
+        for node in doc.getElementsByTagName("diagram"):
+            node.setAttribute("name", name)
+            node.setAttribute("id", _cell_id())
+            fragments.append(node.toxml())
+
+    if not fragments:
+        # An empty bundle still has to be a valid, openable document.
+        fragments.append(
+            f'<diagram name="No topology" id="{_cell_id()}">'
+            '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+            "</root></mxGraphModel></diagram>"
+        )
+
+    body = "\n  ".join(fragments)
+    return f'<mxfile host="CNA" version="21.0.0">\n  {body}\n</mxfile>'

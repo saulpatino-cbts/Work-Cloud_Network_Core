@@ -5,14 +5,15 @@ Hardened by T-605 – T-608. Runs in CI (repository-guardrails job) and can be
 run locally.
 
 The model (README.md → "Repository conventions"): the repository keeps exactly
-the four documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — plus
-CLAUDE.md, the agent-instruction file that states the rules an AI coding agent
-must not infer wrongly (the core ↔ appliance contract above all). Long-form
-documentation lives in the GitHub Wiki. Vendored agent configuration
-(.claude/, .agents/, .codex/) is excluded. Platform-required documents under
-.github/ are permitted.
+four documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — and long-form
+documentation lives in the GitHub Wiki. CLAUDE.md, the agent-instruction file
+that states the rules an AI coding agent must not infer wrongly (the core ↔
+appliance contract above all), is allowed alongside them but not required, so
+a repository without agent instructions still conforms. Vendored agent
+configuration (.claude/, .agents/, .codex/) is excluded. Platform-required
+documents under .github/ are permitted.
 
-The allow-list is enforced in both directions: a missing required document is a
+"Exactly four" is enforced in both directions: a missing required document is a
 violation, not just an extra one (T-605).
 
 Candidates come from `git ls-files`, not a filesystem walk, because the rule is
@@ -37,6 +38,10 @@ ALLOWED_ROOT_DOCUMENTS = {
     "CHANGELOG.md",
     "REVIEW.md",
     "TODO.md",
+}
+
+# Agent instructions for AI coding tools. Allowed at the root, never required.
+AGENT_INSTRUCTION_DOCUMENTS = {
     "CLAUDE.md",
 }
 
@@ -46,7 +51,10 @@ OPTIONAL_ROOT_DOCUMENTS = {
     "CNA-0.90-updates.md",
 }
 
-_ALLOWED_ROOT_LOWER = {name.lower() for name in ALLOWED_ROOT_DOCUMENTS | OPTIONAL_ROOT_DOCUMENTS}
+_ALLOWED_ROOT_LOWER = {
+    name.lower()
+    for name in ALLOWED_ROOT_DOCUMENTS | OPTIONAL_ROOT_DOCUMENTS | AGENT_INSTRUCTION_DOCUMENTS
+}
 
 # Extensions GitHub renders as a document. Compared case-folded, so ROADMAP.MD
 # and NOTES.Md are caught alongside notes.md (T-606).
@@ -157,7 +165,7 @@ def validate() -> bool:
             print(f"  {name}", file=sys.stderr)
         print(file=sys.stderr)
         print(
-            "The repository keeps exactly the four documents plus CLAUDE.md. Restore the",
+            "The repository keeps exactly four markdown documents. Restore the",
             file=sys.stderr,
         )
         print("missing file(s) rather than deleting the model.", file=sys.stderr)
@@ -166,11 +174,11 @@ def validate() -> bool:
         if missing:
             print(file=sys.stderr)
         print(
-            "Documentation model violation — the repository keeps exactly the four",
+            "Documentation model violation — the repository keeps exactly four",
             file=sys.stderr,
         )
         print(
-            "documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md) plus CLAUDE.md.",
+            "markdown documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md), plus CLAUDE.md.",
             file=sys.stderr,
         )
         print("Long-form documentation belongs in the GitHub Wiki.", file=sys.stderr)

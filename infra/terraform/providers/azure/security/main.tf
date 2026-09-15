@@ -101,10 +101,13 @@ resource "time_sleep" "private_endpoint_settle" {
   create_duration = var.private_endpoint_settle_duration
 
   triggers = {
+    # The empty-string substitute keeps the trigger byte-identical in saas mode
+    # (join() rejects null elements), so introducing ai_mode does not replace
+    # the sleep. Not coalesce(): it errors when every argument is null/empty.
     targets = join(",", [
       var.storage_account_id,
       var.key_vault_id,
-      var.foundry_account_id,
+      var.foundry_account_id != null ? var.foundry_account_id : "",
     ])
   }
 }
@@ -151,7 +154,11 @@ resource "azurerm_private_endpoint" "keyvault" {
   depends_on = [time_sleep.private_endpoint_settle]
 }
 
+# Present only when a Foundry account exists (workload ai_mode = saas). The
+# cognitive/openai/services_ai private DNS zones above stay unconditional: they
+# cost pennies and removing them would add churn for no functional gain.
 resource "azurerm_private_endpoint" "foundry" {
+  count               = var.foundry_account_id != null ? 1 : 0
   name                = "${var.name_prefix}-pep-aif"
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -174,6 +181,14 @@ resource "azurerm_private_endpoint" "foundry" {
   }
 
   depends_on = [time_sleep.private_endpoint_settle]
+}
+
+# Adding count re-addresses the live private endpoint; without this the plan
+# destroys and recreates it. Module-relative address applies to every instance
+# of this module. Safe to delete once every environment has applied.
+moved {
+  from = azurerm_private_endpoint.foundry
+  to   = azurerm_private_endpoint.foundry[0]
 }
 
 resource "azurerm_cdn_frontdoor_profile" "platform" {

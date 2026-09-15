@@ -1,19 +1,20 @@
+# Image references are resolved by the deploy workflow from the build manifest
+# and passed with -var. No default: a placeholder would plan cleanly and fail
+# at pull time, which is exactly the failure the "no default for human-supplied
+# values" convention exists to prevent.
 variable "api_image" {
-  description = "Container image for CNA API (docker.io/example-namespace/cna:api-latest)"
+  description = "Container image for CNA API (docker.io/<namespace>/cna:api-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:api-latest"
 }
 
 variable "worker_image" {
-  description = "Container image for CNA worker (docker.io/example-namespace/cna:worker-latest)"
+  description = "Container image for CNA worker (docker.io/<namespace>/cna:worker-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:worker-latest"
 }
 
 variable "web_image" {
-  description = "Container image for CNA web (docker.io/example-namespace/cna:web-latest)"
+  description = "Container image for CNA web (docker.io/<namespace>/cna:web-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:web-latest"
 }
 
 variable "tenant_id" {
@@ -125,14 +126,35 @@ variable "local_admin_password" {
 }
 
 # ─── AI Engine + MCP configuration ────────────────────────────────────────────
+variable "ai_mode" {
+  description = "AI provisioning mode, selected in the deploy workflow's Run-workflow dialog. saas = provision the Foundry/AIServices account, project, chat deployment, private endpoint and RBAC, and inject AZURE_OPENAI_*; byo-api = provision NO cloud AI resources — admins enter Anthropic/OpenAI API keys on /admin/ai-engine (stored AES-256-GCM encrypted in Postgres) and the firewall opens egress to those providers. Flipping a live environment between modes is destructive for the AI resources."
+  type        = string
+  default     = "saas"
+  nullable    = false
+
+  validation {
+    condition     = contains(["saas", "byo-api"], var.ai_mode)
+    error_message = "ai_mode must be \"saas\" or \"byo-api\"."
+  }
+}
+
 variable "ai_engine_default" {
-  description = "Default global GenAI engine when no database setting exists. Azure OpenAI is the only supported engine; Anthropic/Claude on Foundry is not available in this tenant and was removed (see docs/adr/0001)."
+  description = "Default global GenAI engine when no ai.activeEngine database setting exists. Must match ai_mode: saas on Azure => azure-openai; byo-api => anthropic or openai (only consulted as the tie-break when both BYO keys are present)."
   type        = string
   default     = "azure-openai"
 
   validation {
-    condition     = contains(["azure-openai"], var.ai_engine_default)
-    error_message = "ai_engine_default must be azure-openai."
+    condition     = contains(["azure-openai", "bedrock", "anthropic", "openai"], var.ai_engine_default)
+    error_message = "ai_engine_default must be one of azure-openai, bedrock, anthropic, openai."
+  }
+
+  validation {
+    condition = (
+      var.ai_mode == "saas"
+      ? var.ai_engine_default == "azure-openai"
+      : contains(["anthropic", "openai"], var.ai_engine_default)
+    )
+    error_message = "ai_engine_default is incompatible with ai_mode: saas on Azure requires azure-openai; byo-api requires anthropic or openai."
   }
 }
 

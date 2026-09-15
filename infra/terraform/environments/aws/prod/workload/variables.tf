@@ -80,22 +80,21 @@ variable "database_security_group_id" {
 }
 
 # ─── Container images ─────────────────────────────────────────────────────────
+# Resolved by the deploy workflow from the build manifest and passed with -var.
+# No default: a placeholder would plan cleanly and fail at pull time.
 variable "api_image" {
-  description = "Container image for CNA API"
+  description = "Container image for CNA API (docker.io/<namespace>/cna:api-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:api-latest"
 }
 
 variable "worker_image" {
-  description = "Container image for CNA worker"
+  description = "Container image for CNA worker (docker.io/<namespace>/cna:worker-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:worker-latest"
 }
 
 variable "web_image" {
-  description = "Container image for CNA Web (Next.js 15)"
+  description = "Container image for CNA Web (docker.io/<namespace>/cna:web-sha-<7>)"
   type        = string
-  default     = "docker.io/example-namespace/cna:web-latest"
 }
 
 # ─── Scaling / FinOps ─────────────────────────────────────────────────────────
@@ -211,16 +210,37 @@ variable "entra_client_id" {
   default     = ""
 }
 
-variable "openai_endpoint" {
-  description = "OpenAI-compatible endpoint URL."
+# ─── AI Engine ────────────────────────────────────────────────────────────────
+variable "ai_mode" {
+  description = "AI provisioning mode, selected in the deploy workflow's Run-workflow dialog. saas = provision the Bedrock invoke policy and inference profile and inject CNA_BEDROCK_*; byo-api = provision NO cloud AI resources — admins enter Anthropic/OpenAI API keys on /admin/ai-engine (stored AES-256-GCM encrypted in Postgres). Flipping a live environment between modes is destructive for the AI resources."
   type        = string
-  default     = ""
+  default     = "saas"
+  nullable    = false
+
+  validation {
+    condition     = contains(["saas", "byo-api"], var.ai_mode)
+    error_message = "ai_mode must be \"saas\" or \"byo-api\"."
+  }
 }
 
-variable "openai_deployment" {
-  description = "OpenAI model deployment name."
+variable "ai_engine_default" {
+  description = "Default global GenAI engine when no ai.activeEngine database setting exists. Must match ai_mode: saas on AWS => bedrock; byo-api => anthropic or openai (only consulted as the tie-break when both BYO keys are present)."
   type        = string
-  default     = ""
+  default     = "bedrock"
+
+  validation {
+    condition     = contains(["azure-openai", "bedrock", "anthropic", "openai"], var.ai_engine_default)
+    error_message = "ai_engine_default must be one of azure-openai, bedrock, anthropic, openai."
+  }
+
+  validation {
+    condition = (
+      var.ai_mode == "saas"
+      ? var.ai_engine_default == "bedrock"
+      : contains(["anthropic", "openai"], var.ai_engine_default)
+    )
+    error_message = "ai_engine_default is incompatible with ai_mode: saas on AWS requires bedrock; byo-api requires anthropic or openai."
+  }
 }
 
 # ─── TLS / edge ───────────────────────────────────────────────────────────────

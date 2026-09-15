@@ -104,45 +104,46 @@ module "compute" {
   # user-assigned identity (which already holds Cognitive Services User on the
   # AI Foundry account) and removes the ambiguity. Diagnosed 2026-07-02 in dev;
   # applied here pre-emptively so prod doesn't hit it when AI is enabled.
-  api_env_vars = {
-    CNA_STORAGE_ACCOUNT_NAME        = module.storage.storage_account_name
-    FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
-    FOUNDRY_RECOMMENDATION_AGENT_ID = var.foundry_recommendation_agent_id
-    AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
-    AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
-    AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
-    AZURE_CLIENT_ID                 = module.identity.managed_identity_client_id
-  }
+  # AI env (local.azure_ai_env_vars, saas only) and the mode contract
+  # (local.ai_mode_env_vars) are merged in from locals.tf so the two modes
+  # differ only by those keys.
+  api_env_vars = merge(
+    {
+      CNA_STORAGE_ACCOUNT_NAME = module.storage.storage_account_name
+      AZURE_CLIENT_ID          = module.identity.managed_identity_client_id
+    },
+    local.azure_ai_env_vars,
+    local.ai_mode_env_vars,
+  )
 
-  worker_env_vars = {
-    CNA_STORAGE_ACCOUNT_NAME        = module.storage.storage_account_name
-    FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
-    FOUNDRY_RECOMMENDATION_AGENT_ID = var.foundry_recommendation_agent_id
-    AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
-    AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
-    AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
-    AZURE_CLIENT_ID                 = module.identity.managed_identity_client_id
-  }
+  worker_env_vars = merge(
+    {
+      CNA_STORAGE_ACCOUNT_NAME = module.storage.storage_account_name
+      AZURE_CLIENT_ID          = module.identity.managed_identity_client_id
+    },
+    local.azure_ai_env_vars,
+    local.ai_mode_env_vars,
+  )
 
-  web_env_vars = {
-    NEXTAUTH_URL                        = var.nextauth_url
-    AUTH_TRUST_HOST                     = "true"
-    AZURE_AD_TENANT_ID                  = var.tenant_id
-    AZURE_AD_CLIENT_ID                  = var.entra_client_id
-    AZURE_CLIENT_ID                     = module.identity.managed_identity_client_id
-    CNA_API_INTERNAL_URL                = "http://${local.name_prefix}-ca-api"
-    AZURE_STORAGE_ACCOUNT_NAME          = module.storage.storage_account_name
-    AZURE_STORAGE_CONTAINER_ENGAGEMENTS = "raw-artifacts"
-    CNA_AI_ENGINE_DEFAULT               = var.ai_engine_default
-    AZURE_OPENAI_ENDPOINT               = var.azure_openai_endpoint
-    AZURE_OPENAI_DEPLOYMENT             = var.azure_openai_deployment
-    AZURE_OPENAI_API_VERSION            = var.azure_openai_api_version
-    CNA_AZURE_MCP_ENDPOINT              = var.azure_mcp_endpoint
-    CNA_AZURE_MCP_TRANSPORT             = var.azure_mcp_transport
-    CNA_AWS_MCP_ENDPOINT                = var.aws_mcp_endpoint
-    CNA_AWS_MCP_TRANSPORT               = var.aws_mcp_transport
-    CNA_DRAWIO_MCP_URL                  = var.drawio_mcp_url
-  }
+  web_env_vars = merge(
+    {
+      NEXTAUTH_URL                        = var.nextauth_url
+      AUTH_TRUST_HOST                     = "true"
+      AZURE_AD_TENANT_ID                  = var.tenant_id
+      AZURE_AD_CLIENT_ID                  = var.entra_client_id
+      AZURE_CLIENT_ID                     = module.identity.managed_identity_client_id
+      CNA_API_INTERNAL_URL                = "http://${local.name_prefix}-ca-api"
+      AZURE_STORAGE_ACCOUNT_NAME          = module.storage.storage_account_name
+      AZURE_STORAGE_CONTAINER_ENGAGEMENTS = "raw-artifacts"
+      CNA_AZURE_MCP_ENDPOINT              = var.azure_mcp_endpoint
+      CNA_AZURE_MCP_TRANSPORT             = var.azure_mcp_transport
+      CNA_AWS_MCP_ENDPOINT                = var.aws_mcp_endpoint
+      CNA_AWS_MCP_TRANSPORT               = var.aws_mcp_transport
+      CNA_DRAWIO_MCP_URL                  = var.drawio_mcp_url
+    },
+    local.azure_ai_env_vars,
+    local.ai_mode_env_vars,
+  )
 
   # ── Secret-backed env vars (reference Container App secrets by name) ─────────
   # LOCAL_ADMIN_PASSWORD is only added when the break-glass feature has been
@@ -157,10 +158,13 @@ module "compute" {
     var.local_admin_password != null ? { LOCAL_ADMIN_PASSWORD = "local-admin-password" } : {}
   )
 
-  # cna-api needs DATABASE_URL to read/write discovery jobs and findings.
-  api_secret_env_vars = {
-    DATABASE_URL = "database-url"
-  }
+  # cna-api needs DATABASE_URL to read/write discovery jobs and findings. In
+  # byo-api mode it also decrypts the admin-entered AI keys from AppSetting, so
+  # it needs the same encryption key the web tier uses (secret already exists).
+  api_secret_env_vars = merge(
+    { DATABASE_URL = "database-url" },
+    local.ai_saas ? {} : { CREDENTIAL_ENCRYPTION_KEY = "credential-encryption-key" },
+  )
 
   # ── Key Vault secret references ──────────────────────────────────────────────
   # Versionless URIs — Azure auto-refreshes the injected value within 30 minutes
@@ -183,7 +187,10 @@ module "compute" {
   depends_on = [module.runtime]
 }
 
+# Only in saas mode. byo-api provisions no cloud AI resources at all; the app
+# talks to Anthropic/OpenAI with admin-entered keys instead.
 module "ai" {
+  count               = local.ai_saas ? 1 : 0
   source              = "../../../../providers/azure/ai"
   resource_group_name = data.azurerm_resource_group.this.name
   location            = data.azurerm_resource_group.this.location
@@ -194,6 +201,36 @@ module "ai" {
   foundry_location     = var.foundry_location
   foundry_account_name = "cna-prod-eus2-aif"
   foundry_project_name = "cna-prod-eus2-aif-proj"
+}
+
+# Adding count re-addresses every resource in the module (module.ai ->
+# module.ai[0]). Without these moved blocks the plan destroys and — with
+# purge_soft_delete_on_destroy — PURGES the Foundry account and its chat
+# deployment, then recreates them. Safe to delete once every environment has
+# applied on this version.
+moved {
+  from = module.ai
+  to   = module.ai[0]
+}
+
+moved {
+  from = azurerm_role_assignment.web_foundry_user
+  to   = azurerm_role_assignment.web_foundry_user[0]
+}
+
+moved {
+  from = azurerm_role_assignment.api_foundry_user
+  to   = azurerm_role_assignment.api_foundry_user[0]
+}
+
+moved {
+  from = azurerm_role_assignment.uai_foundry_user
+  to   = azurerm_role_assignment.uai_foundry_user[0]
+}
+
+moved {
+  from = azurerm_role_assignment.worker_foundry_user
+  to   = azurerm_role_assignment.worker_foundry_user[0]
 }
 
 
@@ -245,20 +282,24 @@ resource "azurerm_role_assignment" "worker_storage_blob_data_contributor" {
   principal_id         = module.compute.worker_principal_id
 }
 
+# Foundry RBAC exists only alongside the Foundry account (saas mode).
 resource "azurerm_role_assignment" "web_foundry_user" {
-  scope                = module.ai.foundry_account_id
+  count                = local.ai_saas ? 1 : 0
+  scope                = module.ai[0].foundry_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.compute.web_principal_id
 }
 
 resource "azurerm_role_assignment" "api_foundry_user" {
-  scope                = module.ai.foundry_account_id
+  count                = local.ai_saas ? 1 : 0
+  scope                = module.ai[0].foundry_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.compute.api_principal_id
 }
 
 resource "azurerm_role_assignment" "uai_foundry_user" {
-  scope                = module.ai.foundry_account_id
+  count                = local.ai_saas ? 1 : 0
+  scope                = module.ai[0].foundry_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.identity.managed_identity_principal_id
 }
@@ -272,7 +313,8 @@ resource "azurerm_role_assignment" "uai_foundry_user" {
 # so it is the single Foundry role used here. web/api/UAI already hold it
 # above; worker (agents only, no direct inference) gets it here.
 resource "azurerm_role_assignment" "worker_foundry_user" {
-  scope                = module.ai.foundry_account_id
+  count                = local.ai_saas ? 1 : 0
+  scope                = module.ai[0].foundry_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.compute.worker_principal_id
 }
@@ -303,7 +345,7 @@ module "security" {
   private_endpoint_subnet_id = data.azurerm_subnet.private_endpoints.id
   storage_account_id         = module.storage.storage_account_id
   storage_account_name       = module.storage.storage_account_name
-  foundry_account_id         = module.ai.foundry_account_id
+  foundry_account_id         = local.foundry_account_id # null in byo-api: no Foundry private endpoint
 }
 
 # App-level diagnostics only. Firewall/NSG diagnostics and VNet flow logs are
@@ -318,17 +360,19 @@ module "observability" {
   location                             = data.azurerm_resource_group.this.location
   tags                                 = local.tags
 
-  diagnostic_targets = {
-    frontdoor_profile          = module.security.frontdoor_profile_id
-    container_apps_environment = module.compute.container_app_environment_id
-    container_app_web          = module.compute.web_id
-    container_app_api          = module.compute.api_id
-    container_app_worker       = module.compute.worker_id
-    key_vault                  = module.identity.key_vault_id
-    storage_account            = module.storage.storage_account_id
-    postgres_server            = module.database.server_id
-    foundry_account            = module.ai.foundry_account_id
-  }
+  diagnostic_targets = merge(
+    {
+      frontdoor_profile          = module.security.frontdoor_profile_id
+      container_apps_environment = module.compute.container_app_environment_id
+      container_app_web          = module.compute.web_id
+      container_app_api          = module.compute.api_id
+      container_app_worker       = module.compute.worker_id
+      key_vault                  = module.identity.key_vault_id
+      storage_account            = module.storage.storage_account_id
+      postgres_server            = module.database.server_id
+    },
+    local.foundry_account_id != null ? { foundry_account = local.foundry_account_id } : {},
+  )
 }
 
 

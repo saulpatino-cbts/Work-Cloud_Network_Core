@@ -50,20 +50,26 @@ output "worker_name" {
   value = module.compute.worker_name
 }
 
+# All four are null in byo-api mode (module.ai has count 0).
 output "foundry_resource_group_name" {
-  value = module.ai.foundry_resource_group_name
+  value = one(module.ai[*].foundry_resource_group_name)
 }
 
 output "foundry_account_name" {
-  value = module.ai.foundry_account_name
+  value = one(module.ai[*].foundry_account_name)
 }
 
 output "foundry_project_name" {
-  value = module.ai.foundry_project_name
+  value = one(module.ai[*].foundry_project_name)
 }
 
 output "foundry_endpoint" {
-  value = module.ai.foundry_endpoint
+  value = one(module.ai[*].foundry_endpoint)
+}
+
+output "ai_mode" {
+  description = "AI provisioning mode this workload was applied with (saas | byo-api). Recorded in the deployment manifest so image updates preserve it."
+  value       = var.ai_mode
 }
 
 output "private_endpoint_subnet_prefix" {

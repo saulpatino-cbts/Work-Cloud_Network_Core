@@ -8,6 +8,32 @@ locals {
     ManagedBy   = "terraform"
   }
 
+  # ── AI mode ─────────────────────────────────────────────────────────────────
+  ai_saas = var.ai_mode == "saas"
+
+  # null when module.ai is not instantiated (byo-api). one() on the module splat
+  # is the zero-or-one accessor; it never indexes into an empty list.
+  foundry_account_id = one(module.ai[*].foundry_account_id)
+
+  # Mode-independent runtime contract, injected into all three apps. The app
+  # resolves its engine family from these (apps/cna-web/lib/ai-engine-rules.ts,
+  # cna/ai_engine/chat_agent.py).
+  ai_mode_env_vars = {
+    CNA_AI_MODE           = var.ai_mode
+    CNA_APPLIANCE_CLOUD   = "azure"
+    CNA_AI_ENGINE_DEFAULT = var.ai_engine_default
+  }
+
+  # saas-only env. Empty in byo-api so AZURE_OPENAI_* / FOUNDRY_* are absent and
+  # the Azure OpenAI engine reports unconfigured on both tiers.
+  azure_ai_env_vars = local.ai_saas ? {
+    FOUNDRY_PROJECT_ENDPOINT        = var.foundry_project_endpoint
+    FOUNDRY_RECOMMENDATION_AGENT_ID = var.foundry_recommendation_agent_id
+    AZURE_OPENAI_ENDPOINT           = var.azure_openai_endpoint
+    AZURE_OPENAI_DEPLOYMENT         = var.azure_openai_deployment
+    AZURE_OPENAI_API_VERSION        = var.azure_openai_api_version
+  } : {}
+
   optional_outbound_urls = compact([
     trimspace(var.azure_mcp_endpoint) != "" && lower(trimspace(var.azure_mcp_endpoint)) != "none" && startswith(lower(trimspace(var.azure_mcp_endpoint)), "http") ? trimspace(var.azure_mcp_endpoint) : null,
     trimspace(var.aws_mcp_endpoint) != "" && lower(trimspace(var.aws_mcp_endpoint)) != "none" && startswith(lower(trimspace(var.aws_mcp_endpoint)), "http") ? trimspace(var.aws_mcp_endpoint) : null,

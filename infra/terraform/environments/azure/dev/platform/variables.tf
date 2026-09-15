@@ -63,6 +63,18 @@ variable "subnet_firewall_prefixes" {
   nullable    = false
 }
 
+variable "ai_mode" {
+  description = "AI provisioning mode of the workload this platform hosts (saas | byo-api). Must match the workload root's ai_mode: byo-api opens firewall egress to the bring-your-own AI providers, which saas does not need (Azure OpenAI is reached over a private endpoint)."
+  type        = string
+  default     = "saas"
+  nullable    = false
+
+  validation {
+    condition     = contains(["saas", "byo-api"], var.ai_mode)
+    error_message = "ai_mode must be \"saas\" or \"byo-api\"."
+  }
+}
+
 variable "manage_diagnostic_settings" {
   description = "Whether Terraform manages per-resource diagnostic settings. Defaults FALSE: on an Azure Landing Zone the DeployIfNotExists policy ('setByPolicy-*') already owns diagnostics, and managing our own races the policy's remediation (azurerm 'already exists / needs import'). Set true (TF_VAR_manage_diagnostic_settings / ALZ_DIAGNOSTICS_MANAGE) only on a non-governed subscription, or to dual-ship to a different workspace and accept the create-race."
   type        = bool

@@ -139,8 +139,9 @@ variable "storage_account_name" {
 }
 
 variable "foundry_account_id" {
-  description = "Azure AI Foundry account resource ID for private endpoint wiring."
+  description = "Azure AI Foundry account resource ID for private endpoint wiring. Null skips the Foundry private endpoint (ai_mode = byo-api provisions no Foundry account)."
   type        = string
+  default     = null
 }
 
 variable "secret_expiration_date" {

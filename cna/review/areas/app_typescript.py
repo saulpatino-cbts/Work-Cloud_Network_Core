@@ -8,7 +8,8 @@ by Requirement 4.4:
      align each view with the AWS deployment model."
 
 It is the companion to spec task 5.1, which recorded the general app-area
-type-safety / error-handling findings in ``apps/cna-web/REVIEW_FINDINGS.md``.
+type-safety / error-handling findings (F-APP-001 – F-APP-003, now recorded in
+``CHANGELOG.md`` → Unreleased → Fixed).
 Task 5.2 is scoped specifically to the AWS-view alignment gap, so those entries
 live here as structured :class:`~cna.review.model.Finding` records the task-14
 consolidation engine can ingest alongside every other area.

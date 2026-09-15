@@ -139,8 +139,8 @@ class TestDocumentationModel:
         assert result.returncode == 0, result.stderr
 
     def test_ignores_vendored_agent_configuration(self, fixture_repo: Path) -> None:
-        """T-604: `.claude/`, `.agents/`, `.codex/` are configuration, not documentation."""
-        for vendored in (".claude", ".agents", ".codex"):
+        """T-604: `.claude/`, `.agents/`, `.codex/`, `.kiro/` are configuration, not documentation."""
+        for vendored in (".claude", ".agents", ".codex", ".kiro"):
             directory = fixture_repo / vendored / "skills"
             directory.mkdir(parents=True)
             (directory / "SKILL.md").write_text("# vendored\n")

@@ -107,17 +107,17 @@ python-version = "3.11"
 
 [tool.ty.src]
 include = ["cna"]
-exclude = [".claude", ".agents", ".codex"]
+exclude = [".claude", ".agents", ".codex", ".kiro"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# .claude, .agents, and .codex are vendored Claude Code agent/skill/tooling
-# configuration, not this repo's own source — they aren't held to project lint
+# .claude, .agents, .codex, and .kiro are vendored agent/skill/tooling
+# configuration (Kiro's spec workspace included), not this repo's own source — they aren't held to project lint
 # standards. Kept in sync with EXCLUDED_DIRS in
 # scripts/validate_documentation_model.py and the README "Repository
 # conventions" section (TODO.md T-607).
-extend-exclude = [".claude", ".agents", ".codex"]
+extend-exclude = [".claude", ".agents", ".codex", ".kiro"]
 
 [tool.ruff.lint]
 select = [

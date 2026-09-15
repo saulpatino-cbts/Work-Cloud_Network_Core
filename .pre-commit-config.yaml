@@ -33,7 +33,7 @@ repos:
         # more. Excluding it meant a real credential pasted into the template
         # would never be caught; its three placeholder findings are recorded in
         # the baseline instead, which still catches anything new.
-        exclude: ^(\.claude|\.agents|\.codex|\.deployment-catalog)/
+        exclude: ^(\.claude|\.agents|\.codex|\.kiro|\.deployment-catalog)/
 
   # --- Python linting ---
   - repo: https://github.com/astral-sh/ruff-pre-commit

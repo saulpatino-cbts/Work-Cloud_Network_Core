@@ -56,7 +56,7 @@ infra/terraform/
 scripts/              Bootstrap, validation, cleanup, and CI helper scripts
 tests/                unit/ and integration/
 .github/workflows/    Numbered workflow sequence (see conventions below)
-.claude/ .agents/ .codex/   Vendored agent configuration — not project source
+.claude/ .agents/ .codex/ .kiro/   Vendored agent configuration — not project source
 ```
 
 ---
@@ -181,7 +181,7 @@ Reference** explains each value in full.
   hand-audited false positives, never a suppression dump. `gitleaks` also runs in CI but is
   advisory: it needs a paid licence on private repositories, so its job is `continue-on-error` and
   cannot fail a build. Do not read it as a gate.
-- **Vendored agent configuration** under `.claude/`, `.agents/`, and `.codex/` is configuration,
+- **Vendored agent configuration** under `.claude/`, `.agents/`, `.codex/`, and `.kiro/` is configuration,
   not project source. It is excluded from lint (see `pyproject.toml`) and from the documentation
   model, and it must never contain project-specific facts.
 

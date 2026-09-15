@@ -84,7 +84,7 @@ or record a `TODO.md` item naming them — never leave one side implied.
 - **Secrets** travel as GitHub secrets → OIDC / Key Vault / Secrets Manager →
   `TF_VAR_*` env or container secrets. Never as `-var` on a command line, never
   in a `workflow_dispatch` input, never committed.
-- **Vendored agent configuration** under `.claude/`, `.agents/`, `.codex/` is
+- **Vendored agent configuration** under `.claude/`, `.agents/`, `.codex/`, `.kiro/` is
   not project source and must never contain project-specific facts.
 - Start with `TODO.md` when picking up work; check `REVIEW.md` when blocked on a
   human decision.

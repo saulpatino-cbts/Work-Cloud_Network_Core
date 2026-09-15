@@ -67,25 +67,41 @@ def _owner_repo(draw: st.DrawFn) -> str:
 
 
 # --- Category strategies, each tagged with (ref, expected_recorded). ---------
+#
+# ``expected_recorded`` is always computed from the *real* predicate functions
+# (``is_third_party_action`` and ``is_sha_pinned``) rather than hardcoded, so a
+# generated ref can never carry a label that disagrees with the checker's
+# contract. For example ``_owner_repo`` can emit a path whose first segment is a
+# bare ``.`` (``./0``), which reads as a local ``./`` ref that
+# ``is_third_party_action`` correctly excludes — computing the label keeps the
+# tuple honest regardless of which shape a segment takes.
+
+
+def _expected_recorded(ref: str) -> bool:
+    """The checker's biconditional: recorded iff third-party and not SHA-pinned."""
+    return is_third_party_action(ref) and not is_sha_pinned(ref)
 
 
 @st.composite
 def _third_party_pinned(draw: st.DrawFn) -> tuple[str, bool]:
     """A third-party action pinned to a 40-hex SHA — never recorded."""
-    return f"{draw(_owner_repo())}@{draw(_SHA40)}", False
+    ref = f"{draw(_owner_repo())}@{draw(_SHA40)}"
+    return ref, _expected_recorded(ref)
 
 
 @st.composite
 def _third_party_unpinned(draw: st.DrawFn) -> tuple[str, bool]:
-    """A third-party action pinned to a tag/branch/short-sha — always recorded."""
-    return f"{draw(_owner_repo())}@{draw(_MUTABLE_REF)}", True
+    """A third-party action pinned to a tag/branch/short-sha — usually recorded."""
+    ref = f"{draw(_owner_repo())}@{draw(_MUTABLE_REF)}"
+    return ref, _expected_recorded(ref)
 
 
 @st.composite
 def _local_ref(draw: st.DrawFn) -> tuple[str, bool]:
     """A local ``./`` or ``../`` action ref — never recorded."""
     prefix = draw(st.sampled_from(["./", "../"]))
-    return f"{prefix}{draw(_SEGMENT)}/{draw(_SEGMENT)}", False
+    ref = f"{prefix}{draw(_SEGMENT)}/{draw(_SEGMENT)}"
+    return ref, _expected_recorded(ref)
 
 
 @st.composite
@@ -93,7 +109,8 @@ def _docker_ref(draw: st.DrawFn) -> tuple[str, bool]:
     """A ``docker://`` container ref — never recorded."""
     image = f"{draw(_SEGMENT)}/{draw(_SEGMENT)}"
     ref = draw(st.one_of(_MUTABLE_REF, st.builds(lambda h: f"sha256:{h}", _SHA40)))
-    return f"docker://{image}@{ref}", False
+    ref = f"docker://{image}@{ref}"
+    return ref, _expected_recorded(ref)
 
 
 @st.composite
@@ -102,7 +119,8 @@ def _reusable_workflow_ref(draw: st.DrawFn) -> tuple[str, bool]:
     ext = draw(st.sampled_from([".yml", ".yaml"]))
     path = f"{draw(_owner_repo())}/{draw(_SEGMENT)}{ext}"
     ref = draw(st.one_of(_SHA40, _MUTABLE_REF))
-    return f"{path}@{ref}", False
+    ref = f"{path}@{ref}"
+    return ref, _expected_recorded(ref)
 
 
 _ANY_REF = st.one_of(

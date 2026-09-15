@@ -123,9 +123,13 @@ def test_blocker_in_scope_only_when_closed():
 # ---- load_blockers against the real REVIEW.md ------------------------------
 
 
-def test_load_blockers_reads_all_nine_from_review_md():
+def test_load_blockers_reads_all_review_md_blockers():
+    # REVIEW.md grows over time; assert the parser reads the known blockers
+    # rather than pinning an exact count. R-001..R-009 are the original set and
+    # R-010 was added later — the loaded set must be a superset of all of them.
     blockers = load_blockers()
-    assert set(blockers) == {f"R-00{n}" for n in range(1, 10)}
+    known = {f"R-00{n}" for n in range(1, 10)} | {"R-010"}
+    assert known <= set(blockers)
 
 
 def test_load_blockers_r007_resolved_but_not_closed():
@@ -137,7 +141,11 @@ def test_load_blockers_r007_resolved_but_not_closed():
 
 def test_load_blockers_all_others_open():
     blockers = load_blockers()
-    for bid in ("R-001", "R-002", "R-003", "R-004", "R-005", "R-006", "R-008", "R-009"):
+    # Every known blocker except R-007 (resolved-but-not-closed) is Open;
+    # R-010 (dev-environment out-of-band deletion protection) is Open too.
+    for bid in (
+        "R-001", "R-002", "R-003", "R-004", "R-005", "R-006", "R-008", "R-009", "R-010",
+    ):
         assert blockers[bid].status is BlockerStatus.NOT_CLOSED, bid
 
 

@@ -15,7 +15,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 2](#phase-2--security-improvements) | Security improvements | T-201 – T-204 |
 | [Phase 3](#phase-3--deployment-readiness) | Deployment readiness | T-301 – T-305 |
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
-| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-505 |
+| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-506 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
 
 ---
@@ -1514,6 +1514,37 @@ order; do not reorder it.
 - **Status:** Blocked on R-012
 - **Notes for future engineers:** User-owned Projects v2 are not reachable with a GitHub App
   installation token; that is the whole reason R-012 exists.
+
+### T-506 — Relay the parked appliance bootstrap branches and delete them
+
+- **Priority:** High
+- **Description:** The two appliance trees that T-503 expects as draft pull requests were built and
+  validated (`terraform fmt`/`validate` on every root, docs guard, `actionlint`, `detect-secrets`)
+  but could not be pushed to the appliance repositories from the authoring session (see T-503's
+  note on session scope). They are parked on this repository as two branches that carry the
+  appliance history, not the core's — each is the appliance's own "Initial commit" plus one
+  bootstrap commit:
+  `claude/appliance-azure-bootstrap` (`ceafcec`) and `claude/appliance-aws-bootstrap` (`6f963c4`).
+  No core workflow runs on them (`300` runs on `main`/`develop` and their pull requests, `200` on
+  `main`, `310` on tags).
+- **Dependencies:** Push access to both appliance repositories.
+- **Recommended action:** From any checkout with that access:
+
+  ```bash
+  git fetch origin claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap
+  git push https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance.git \
+    origin/claude/appliance-azure-bootstrap:refs/heads/claude/appliance-bootstrap
+  git push https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance.git \
+    origin/claude/appliance-aws-bootstrap:refs/heads/claude/appliance-bootstrap
+  ```
+
+  Open a draft pull request in each appliance (`main` ← `claude/appliance-bootstrap`); its
+  `300-validate` workflow runs on the pull request. Then delete both parked branches here
+  (`git push origin --delete claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap`).
+  `scripts/appliance-kit/build.sh azure|aws` produces the same trees if a rebuild is ever preferred.
+- **Status:** Open — blocked on the repository owner
+- **Notes for future engineers:** The parked branches are a transport, not a home: the appliance
+  content must never be merged into or referenced from the core's `main`.
 
 ---
 

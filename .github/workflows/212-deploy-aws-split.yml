@@ -68,6 +68,60 @@ on:
         options:
           - release
           - rollback
+      ai_mode:
+        description: "AI mode: saas = Bedrock provisioned by Terraform; byo-api = no cloud AI, admins enter Anthropic/OpenAI keys in the app"
+        required: true
+        default: saas
+        type: choice
+        options:
+          - saas
+          - byo-api
+  # Same contract as 211 so the appliance image-update workflow can call it.
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      api_image:
+        required: false
+        default: ""
+        type: string
+      worker_image:
+        required: false
+        default: ""
+        type: string
+      web_image:
+        required: false
+        default: ""
+        type: string
+      previous_api_image:
+        required: false
+        default: ""
+        type: string
+      previous_worker_image:
+        required: false
+        default: ""
+        type: string
+      previous_web_image:
+        required: false
+        default: ""
+        type: string
+      deploy_mode:
+        required: false
+        default: release
+        type: string
+      ai_mode:
+        required: false
+        default: saas
+        type: string
+      source_repo:
+        required: false
+        default: ""
+        type: string
+      source_manifest_run_id:
+        required: false
+        default: ""
+        type: string
 
 permissions:
   actions: write
@@ -75,7 +129,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-aws-platform-${{ github.event.inputs.environment || 'schedule' }}
+  group: deploy-aws-platform-${{ inputs.environment || 'schedule' }}
   cancel-in-progress: false
 
 env:
@@ -90,7 +144,9 @@ env:
 
 jobs:
   policy-gates:
-    if: github.event_name == 'workflow_dispatch'
+    # inputs.* is populated for both workflow_dispatch and workflow_call; the
+    # event name is the caller's under workflow_call, so it cannot be the guard.
+    if: inputs.environment != ''
     runs-on: self-hosted
     timeout-minutes: 15
     defaults:

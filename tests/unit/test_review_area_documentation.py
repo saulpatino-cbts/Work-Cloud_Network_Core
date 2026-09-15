@@ -135,8 +135,7 @@ def test_verify_records_validator_link_and_command_checks():
     assert "documentation:commands-and-workflows-resolve" in by_key
     # The validator entry names the script that was run.
     assert (
-        "validate_documentation_model.py"
-        in by_key["documentation:model-validator-passes"].subject
+        "validate_documentation_model.py" in by_key["documentation:model-validator-passes"].subject
     )
     # The command/workflow entry names a referenced workflow and the CLI entry point.
     commands = by_key["documentation:commands-and-workflows-resolve"].proposed_action

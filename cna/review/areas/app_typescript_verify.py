@@ -1,7 +1,7 @@
 """Verification of the ``app-typescript`` area (spec task 5.3, Requirements 1.1/1.2).
 
-Task 5.1 recorded the app-area type-safety / error-handling audit (in
-``apps/cna-web/REVIEW_FINDINGS.md``) and task 5.2 recorded the AWS-view alignment
+Task 5.1 recorded the app-area type-safety / error-handling audit (F-APP-001 –
+F-APP-003, ``CHANGELOG.md`` → Unreleased → Fixed) and task 5.2 recorded the AWS-view alignment
 entries (in :mod:`cna.review.areas.app_typescript`). This module closes the area
 by running the executed verification the design's "1. App / TypeScript"
 *Verification* line calls for — ``npm run lint``, ``npm run build`` (type-check +
@@ -149,7 +149,7 @@ def _middleware_deprecation_finding() -> Finding:
 def app_typescript_verify_findings() -> list[Finding]:
     """Return the ``app-typescript`` area verification findings (spec task 5.3).
 
-    Complements the task-5.1 audit (``apps/cna-web/REVIEW_FINDINGS.md``) and the
+    Complements the task-5.1 audit (F-APP-001 – F-APP-003 in ``CHANGELOG.md``) and the
     task-5.2 AWS-view alignment entries (:func:`~cna.review.areas.app_typescript.
     app_typescript_findings`) with the executed verification the design requires:
     ``tsc --noEmit`` and ``npm run build`` both pass (recorded verified-compliant,

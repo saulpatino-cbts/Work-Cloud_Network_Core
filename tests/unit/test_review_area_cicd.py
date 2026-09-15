@@ -48,8 +48,7 @@ def test_every_self_hosted_only_workflow_is_flagged_as_a_spof():
     spof_subjects = {
         f.subject.rsplit("/", 1)[-1]
         for f in findings
-        if f.dedup_key.startswith("cicd:self-hosted-spof:")
-        and f.severity is Severity.MEDIUM
+        if f.dedup_key.startswith("cicd:self-hosted-spof:") and f.severity is Severity.MEDIUM
     }
     assert spof_subjects == set(SELF_HOSTED_ONLY_WORKFLOWS)
     # Each SPOF finding carries a concrete mitigation, not just a flag.
@@ -66,9 +65,7 @@ def test_github_hosted_workflow_recorded_as_informational_non_spof():
     """5.2 counter-case: the ubuntu-latest workflow is not a self-hosted SPOF."""
     findings = cicd_findings()
     informational_spof = [
-        f
-        for f in findings
-        if f.dedup_key == "cicd:self-hosted-spof:370-registry-cleanup.yml"
+        f for f in findings if f.dedup_key == "cicd:self-hosted-spof:370-registry-cleanup.yml"
     ]
     assert len(informational_spof) == 1
     assert informational_spof[0].severity is Severity.INFORMATIONAL
@@ -151,9 +148,7 @@ def test_verify_findings_are_verified_compliant_informational():
         action = finding.proposed_action.lower()
         assert "verified compliant" in action
     # The actionlint record names the tool and the clean result.
-    actionlint = next(
-        f for f in findings if f.dedup_key == "cicd:actionlint-sweep"
-    )
+    actionlint = next(f for f in findings if f.dedup_key == "cicd:actionlint-sweep")
     assert "actionlint" in actionlint.proposed_action.lower()
     assert "0 errors" in actionlint.proposed_action
     assert "14 workflows" in actionlint.proposed_action
@@ -178,9 +173,7 @@ def test_all_workflow_files_parse_as_yaml():
 
     import yaml
 
-    workflows_dir = (
-        pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows"
-    )
+    workflows_dir = pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows"
     files = sorted(workflows_dir.glob("*.yml"))
     assert len(files) == 14
     for path in files:

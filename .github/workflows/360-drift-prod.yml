@@ -63,7 +63,8 @@ jobs:
       - name: Terraform drift plan (platform)
         working-directory: infra/terraform/environments/azure/prod/platform
         run: |
-          terraform plan -detailed-exitcode || EXIT=$?
+          AI_MODE=$(jq -r '.ai_mode // "saas"' "$GITHUB_WORKSPACE/.deployment-catalog/prod/latest.json" 2>/dev/null || echo saas)
+          terraform plan -detailed-exitcode -var="ai_mode=${AI_MODE:-saas}" || EXIT=$?
           if [ "${EXIT:-0}" -eq 2 ]; then
             echo "::warning::Drift detected in prod/platform state."
           fi
@@ -154,7 +155,30 @@ jobs:
               echo "$VALUE"
             fi
           }
+          # Drift must be measured against what was actually deployed, not the
+          # floating tags or the current repo variables: the release catalog
+          # written by the deploy workflow is the source of truth for the image
+          # references and the ai_mode this environment was applied with.
+          CATALOG="$GITHUB_WORKSPACE/.deployment-catalog/prod/latest.json"
+          catalog_value() {
+            local KEY="$1" FALLBACK="$2"
+            if [ -f "$CATALOG" ]; then
+              local V
+              V=$(jq -r "$KEY // empty" "$CATALOG")
+              if [ -n "$V" ]; then echo "$V"; return; fi
+            fi
+            echo "$FALLBACK"
+          }
+          API_IMAGE=$(catalog_value '.api_image' "docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest")
+          WORKER_IMAGE=$(catalog_value '.worker_image' "docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest")
+          WEB_IMAGE=$(catalog_value '.web_image' "docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest")
+          AI_MODE=$(catalog_value '.ai_mode' "saas")
           AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          if [ "$AI_MODE" = "byo-api" ]; then
+            case "$AI_ENGINE_DEFAULT" in anthropic|openai) ;; *) AI_ENGINE_DEFAULT="anthropic" ;; esac
+          else
+            AI_ENGINE_DEFAULT="azure-openai"
+          fi
           AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
           AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
           AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
@@ -164,13 +188,14 @@ jobs:
           FOUNDRY_RECOMMENDATION_AGENT_ID=$(optional_var "${{ vars.FOUNDRY_RECOMMENDATION_AGENT_ID }}")
 
           terraform plan -detailed-exitcode \
-            -var="api_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:api-latest" \
-            -var="worker_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:worker-latest" \
-            -var="web_image=docker.io/${DOCKERHUB_NAMESPACE}/cna:web-latest" \
+            -var="api_image=${API_IMAGE}" \
+            -var="worker_image=${WORKER_IMAGE}" \
+            -var="web_image=${WEB_IMAGE}" \
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-azure-openai}" \
+            -var="ai_mode=${AI_MODE}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \

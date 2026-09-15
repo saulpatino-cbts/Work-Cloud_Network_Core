@@ -1,14 +1,17 @@
-"""CI script: enforce the four-document documentation model.
+"""CI script: enforce the documentation model.
 
 Closes TODO.md T-603: nothing prevented documentation sprawl from returning.
 Hardened by T-605 – T-608. Runs in CI (repository-guardrails job) and can be
 run locally.
 
 The model (README.md → "Repository conventions"): the repository keeps exactly
-four markdown documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — and
-long-form documentation lives in the GitHub Wiki. Vendored agent configuration
-(.claude/, .agents/, .codex/) is excluded. Platform-required documents under
-.github/ are permitted.
+four documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — and long-form
+documentation lives in the GitHub Wiki. CLAUDE.md, the agent-instruction file
+that states the rules an AI coding agent must not infer wrongly (the core ↔
+appliance contract above all), is allowed alongside them but not required, so
+a repository without agent instructions still conforms. Vendored agent
+configuration (.claude/, .agents/, .codex/, .kiro/) is excluded. Platform-required
+documents under .github/ are permitted.
 
 "Exactly four" is enforced in both directions: a missing required document is a
 violation, not just an extra one (T-605).
@@ -37,13 +40,21 @@ ALLOWED_ROOT_DOCUMENTS = {
     "TODO.md",
 }
 
+# Agent instructions for AI coding tools. Allowed at the root, never required.
+AGENT_INSTRUCTION_DOCUMENTS = {
+    "CLAUDE.md",
+}
+
 # Allowed at the root but not required to exist — temporary working documents
 # with a planned retirement (removed again once their release ships).
 OPTIONAL_ROOT_DOCUMENTS = {
     "CNA-0.90-updates.md",
 }
 
-_ALLOWED_ROOT_LOWER = {name.lower() for name in ALLOWED_ROOT_DOCUMENTS | OPTIONAL_ROOT_DOCUMENTS}
+_ALLOWED_ROOT_LOWER = {
+    name.lower()
+    for name in ALLOWED_ROOT_DOCUMENTS | OPTIONAL_ROOT_DOCUMENTS | AGENT_INSTRUCTION_DOCUMENTS
+}
 
 # Extensions GitHub renders as a document. Compared case-folded, so ROADMAP.MD
 # and NOTES.Md are caught alongside notes.md (T-606).
@@ -65,13 +76,16 @@ DOCUMENT_SUFFIXES = {
 
 # Vendored agent configuration and tooling directories — not project
 # documentation, out of scope for the model (TODO.md T-604). Tracked files live
-# under the first three, so the exclusion is still required even though
-# candidates now come from git.
+# under the first four, so the exclusion is still required even though
+# candidates now come from git. `.kiro/` holds the Kiro spec workspace
+# (requirements/design/tasks of a spec run), which is agent tooling on the
+# same footing as `.claude/`.
 EXCLUDED_DIRS = {
     ".git",
     ".claude",
     ".agents",
     ".codex",
+    ".kiro",
     "node_modules",
     ".venv",
     "venv",
@@ -167,7 +181,7 @@ def validate() -> bool:
             file=sys.stderr,
         )
         print(
-            "markdown documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md).",
+            "markdown documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md), plus CLAUDE.md.",
             file=sys.stderr,
         )
         print("Long-form documentation belongs in the GitHub Wiki.", file=sys.stderr)

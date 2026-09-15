@@ -47,9 +47,7 @@ def test_gated_findings_name_every_dependency_kind():
     """Each R-001..R-006 dependency kind is recorded with a gated: marker."""
     findings = terraform_aws_findings()
     gated_kinds = {
-        f.dedup_key.split("gated:", 1)[1]
-        for f in findings
-        if "terraform-aws:gated:" in f.dedup_key
+        f.dedup_key.split("gated:", 1)[1] for f in findings if "terraform-aws:gated:" in f.dedup_key
     }
     assert gated_kinds == {
         "account",

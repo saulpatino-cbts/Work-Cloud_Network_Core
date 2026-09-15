@@ -144,7 +144,15 @@ def test_load_blockers_all_others_open():
     # Every known blocker except R-007 (resolved-but-not-closed) is Open;
     # R-010 (dev-environment out-of-band deletion protection) is Open too.
     for bid in (
-        "R-001", "R-002", "R-003", "R-004", "R-005", "R-006", "R-008", "R-009", "R-010",
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-004",
+        "R-005",
+        "R-006",
+        "R-008",
+        "R-009",
+        "R-010",
     ):
         assert blockers[bid].status is BlockerStatus.NOT_CLOSED, bid
 

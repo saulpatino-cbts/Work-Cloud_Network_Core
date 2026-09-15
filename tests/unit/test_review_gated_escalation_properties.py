@@ -41,9 +41,7 @@ _NOT_CLOSED_IDS = sorted(
 
 # Sanity: the fixture we build the property on matches the stated state — every
 # real blocker is not closed, so the not-closed set is the full set.
-assert _NOT_CLOSED_IDS == sorted(_BLOCKERS), (
-    "expected every REVIEW.md blocker to be not-closed"
-)
+assert _NOT_CLOSED_IDS == sorted(_BLOCKERS), "expected every REVIEW.md blocker to be not-closed"
 
 _AREA = st.sampled_from(sorted(AREAS))
 _SEVERITY = st.sampled_from(list(Severity))

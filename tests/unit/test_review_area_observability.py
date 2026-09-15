@@ -48,9 +48,7 @@ def test_verified_compliant_surfaces_are_informational():
 def test_api_structured_logging_gap_is_a_fixable_low():
     """8.2: the API basicConfig gap is a fixable LOW finding (no blocker)."""
     findings = observability_findings()
-    api = next(
-        f for f in findings if f.dedup_key == "observability:api-structured-json-logging"
-    )
+    api = next(f for f in findings if f.dedup_key == "observability:api-structured-json-logging")
     assert api.severity is Severity.LOW
     assert api.blocker_id is None
     assert api.subject == "apps/cna-api/main.py"
@@ -59,9 +57,7 @@ def test_api_structured_logging_gap_is_a_fixable_low():
 def test_ai_path_trace_token_coverage_is_fixable():
     """8.3: the non-Bedrock AI-path coverage entry is fixable (no blocker)."""
     findings = observability_findings()
-    ai = next(
-        f for f in findings if f.dedup_key == "observability:ai-path-trace-token-coverage"
-    )
+    ai = next(f for f in findings if f.dedup_key == "observability:ai-path-trace-token-coverage")
     assert ai.blocker_id is None
     action = ai.proposed_action.lower()
     assert "token" in action
@@ -71,9 +67,7 @@ def test_ai_path_trace_token_coverage_is_fixable():
 def test_ai_path_bedrock_coverage_references_r005():
     """8.3: the live-Bedrock AI-path coverage escalation carries blocker_id R-005."""
     findings = observability_findings()
-    esc = next(
-        f for f in findings if f.dedup_key == "observability:ai-path-bedrock-coverage"
-    )
+    esc = next(f for f in findings if f.dedup_key == "observability:ai-path-bedrock-coverage")
     assert esc.blocker_id == "R-005"
 
 

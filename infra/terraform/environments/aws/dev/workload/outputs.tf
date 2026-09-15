@@ -47,3 +47,8 @@ output "artifacts_bucket" {
   description = "Artifacts S3 bucket name."
   value       = module.storage.artifacts_bucket_id
 }
+
+output "ai_mode" {
+  description = "AI provisioning mode this workload was applied with (saas | byo-api). Recorded in the deployment manifest so image updates preserve it."
+  value       = var.ai_mode
+}

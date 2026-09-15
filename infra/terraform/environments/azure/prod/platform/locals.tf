@@ -12,7 +12,14 @@ locals {
   # Reduced from 90 in the FinOps pass; 30-day retention reviewed and approved.
   log_analytics_retention_in_days = 30
 
-  firewall_application_rule_fqdns = [
+  # Bring-your-own AI providers are public SaaS endpoints reached through the
+  # firewall; saas mode reaches Azure OpenAI over a private endpoint instead,
+  # so these are opened only when the workload runs byo-api.
+  byo_ai_provider_fqdns = var.ai_mode == "byo-api" ? ["api.anthropic.com", "api.openai.com"] : []
+
+  firewall_application_rule_fqdns = concat(local.firewall_application_rule_base_fqdns, local.byo_ai_provider_fqdns)
+
+  firewall_application_rule_base_fqdns = [
     "index.docker.io",
     "registry-1.docker.io",
     "auth.docker.io",

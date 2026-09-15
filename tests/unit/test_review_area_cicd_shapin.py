@@ -20,9 +20,7 @@ from cna.review.areas import (
     sha_pin_findings,
 )
 
-_WORKFLOWS_DIR = (
-    Path(__file__).resolve().parents[2] / ".github" / "workflows"
-)
+_WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 
 _SHA = "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # 40 hex chars
 
@@ -50,9 +48,7 @@ def test_is_third_party_action_classification():
     # docker:// container actions are out of scope.
     assert is_third_party_action("docker://alpine:3.20") is False
     # A reusable-workflow reference (path ends in .yml) is not a third-party action.
-    assert (
-        is_third_party_action("owner/repo/.github/workflows/build.yml@v1") is False
-    )
+    assert is_third_party_action("owner/repo/.github/workflows/build.yml@v1") is False
     # A bare ref with no owner/repo path is not a third-party action.
     assert is_third_party_action("some-ref@v1") is False
 
@@ -83,8 +79,7 @@ def test_find_unpinned_references_records_exactly_the_tag_pinned_ref():
 def test_fully_pinned_workflow_records_nothing(tmp_path: Path):
     wf = tmp_path / "clean.yml"
     wf.write_text(
-        f"      - uses: actions/checkout@{_SHA}\n"
-        f"      - uses: actions/setup-python@{_SHA}\n",
+        f"      - uses: actions/checkout@{_SHA}\n      - uses: actions/setup-python@{_SHA}\n",
         encoding="utf-8",
     )
     findings = sha_pin_findings(tmp_path)
@@ -116,13 +111,8 @@ def test_live_scan_flags_the_two_known_unpinned_references():
     """5.3: the real workflow tree's unpinned third-party refs are recorded."""
     findings = sha_pin_findings(_WORKFLOWS_DIR)
     keys = {f.dedup_key for f in findings}
-    assert (
-        "cicd:sha-pin:212-deploy-aws-split.yml:actions/checkout" in keys
-    )
-    assert (
-        "cicd:sha-pin:211-deploy-azure-split.yml:actions/create-github-app-token"
-        in keys
-    )
+    assert "cicd:sha-pin:212-deploy-aws-split.yml:actions/checkout" in keys
+    assert "cicd:sha-pin:211-deploy-azure-split.yml:actions/create-github-app-token" in keys
     # Every SHA-pin finding is fixable (no blocker id) and MEDIUM.
     for f in findings:
         if f.dedup_key.startswith("cicd:sha-pin:") and f.severity is Severity.MEDIUM:

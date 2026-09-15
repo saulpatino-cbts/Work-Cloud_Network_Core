@@ -7,13 +7,23 @@
 # =============================================================================
 
 # ─── AI (Bedrock policy document + inference profile; consumed by identity) ───
+# Only in saas mode. byo-api provisions no cloud AI resources at all; the app
+# talks to Anthropic/OpenAI with admin-entered keys instead.
 module "ai" {
+  count  = local.ai_saas ? 1 : 0
   source = "../../../../providers/aws/ai"
 
   name_prefix              = local.name_prefix
   tags                     = local.tags
   environment              = var.environment
   enable_inference_profile = var.enable_bedrock_inference_profile
+}
+
+# No AWS state exists yet, so this is a no-op today; it is correct the moment
+# a saas environment applied before count was added gets upgraded.
+moved {
+  from = module.ai
+  to   = module.ai[0]
 }
 
 # ─── Identity (KMS, ECS roles, GitHub OIDC) ───────────────────────────────────
@@ -27,7 +37,9 @@ module "identity" {
   kms_deletion_window_days = var.kms_deletion_window_days
   github_owner             = var.github_owner
   github_repository        = var.github_repository
-  task_bedrock_policy_json = module.ai.task_bedrock_policy_json
+  # null in byo-api (module.ai has count 0) — identity already gates the policy
+  # attachment on null.
+  task_bedrock_policy_json = one(module.ai[*].task_bedrock_policy_json)
   enable_xray              = var.enable_xray
 }
 
@@ -123,34 +135,46 @@ module "compute" {
 
   dockerhub_secret_arn = module.runtime.dockerhub_secret_arn
 
-  api_environment = {
-    CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
-    AWS_REGION         = var.region
-    OPENAI_ENDPOINT    = var.openai_endpoint
-    OPENAI_DEPLOYMENT  = var.openai_deployment
-  }
+  # AI env (local.bedrock_env_vars, saas only) and the mode contract
+  # (local.ai_mode_env_vars) are merged in from locals.tf so the two modes
+  # differ only by those keys. Mirrors the Azure workload.
+  api_environment = merge(
+    {
+      CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
+      AWS_REGION         = var.region
+    },
+    local.bedrock_env_vars,
+    local.ai_mode_env_vars,
+  )
 
-  worker_environment = {
-    CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
-    AWS_REGION         = var.region
-    OPENAI_ENDPOINT    = var.openai_endpoint
-    OPENAI_DEPLOYMENT  = var.openai_deployment
-  }
+  worker_environment = merge(
+    {
+      CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
+      AWS_REGION         = var.region
+    },
+    local.bedrock_env_vars,
+    local.ai_mode_env_vars,
+  )
 
-  web_environment = {
-    NEXTAUTH_URL       = var.nextauth_url
-    AUTH_TRUST_HOST    = "true"
-    AZURE_AD_TENANT_ID = var.entra_tenant_id
-    AZURE_AD_CLIENT_ID = var.entra_client_id
-    CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
-    AWS_REGION         = var.region
-    OPENAI_ENDPOINT    = var.openai_endpoint
-    OPENAI_DEPLOYMENT  = var.openai_deployment
-  }
+  web_environment = merge(
+    {
+      NEXTAUTH_URL       = var.nextauth_url
+      AUTH_TRUST_HOST    = "true"
+      AZURE_AD_TENANT_ID = var.entra_tenant_id
+      AZURE_AD_CLIENT_ID = var.entra_client_id
+      CNA_STORAGE_BUCKET = module.storage.artifacts_bucket_id
+      AWS_REGION         = var.region
+    },
+    local.bedrock_env_vars,
+    local.ai_mode_env_vars,
+  )
 
-  api_secrets = {
-    DATABASE_URL = module.runtime.database_url_secret_arn
-  }
+  # In byo-api mode cna-api decrypts the admin-entered AI keys from AppSetting,
+  # so it needs the same encryption key the web tier uses.
+  api_secrets = merge(
+    { DATABASE_URL = module.runtime.database_url_secret_arn },
+    local.ai_saas ? {} : { CREDENTIAL_ENCRYPTION_KEY = module.runtime.credential_encryption_key_secret_arn },
+  )
 
   worker_secrets = {
     DATABASE_URL = module.runtime.database_url_secret_arn

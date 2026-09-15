@@ -49,6 +49,64 @@ on:
         options:
           - release
           - rollback
+      ai_mode:
+        description: "AI mode: saas = Foundry/Azure OpenAI provisioned by Terraform; byo-api = no cloud AI, admins enter Anthropic/OpenAI keys in the app"
+        required: true
+        default: saas
+        type: choice
+        options:
+          - saas
+          - byo-api
+  # Same contract as workflow_dispatch so the appliance image-update workflow
+  # (230) can run a full release without a human in the dialog. Booleans and
+  # choices arrive as strings either way; every job reads `inputs.*`.
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      api_image:
+        required: false
+        default: ""
+        type: string
+      worker_image:
+        required: false
+        default: ""
+        type: string
+      web_image:
+        required: false
+        default: ""
+        type: string
+      previous_api_image:
+        required: false
+        default: ""
+        type: string
+      previous_worker_image:
+        required: false
+        default: ""
+        type: string
+      previous_web_image:
+        required: false
+        default: ""
+        type: string
+      deploy_mode:
+        required: false
+        default: release
+        type: string
+      ai_mode:
+        required: false
+        default: saas
+        type: string
+      source_repo:
+        description: Repository that published the build manifest (recorded in the deployment manifest)
+        required: false
+        default: ""
+        type: string
+      source_manifest_run_id:
+        description: Build run id from latest-build.json (recorded in the deployment manifest)
+        required: false
+        default: ""
+        type: string
 permissions:
   actions: write
   contents: write
@@ -57,7 +115,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: deploy-azure-platform-${{ github.event.inputs.environment || 'schedule' }}
+  group: deploy-azure-platform-${{ inputs.environment || 'schedule' }}
   cancel-in-progress: false
 
 env:
@@ -79,7 +137,7 @@ env:
 
 jobs:
   policy-gates:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.environment != ''
     runs-on: self-hosted
     timeout-minutes: 15
     outputs:
@@ -112,7 +170,7 @@ jobs:
 
           if [ "${{ inputs.deploy_mode }}" = "rollback" ]; then
             if [[ -z "${{ inputs.previous_api_image }}" || -z "${{ inputs.previous_worker_image }}" || -z "${{ inputs.previous_web_image }}" ]]; then
-              echo "::error::Rollback requires all three previous_*_image inputs. Check .deployment-catalog/<env>/deployment-state.json for the image SHAs to roll back to."
+              echo "::error::Rollback requires all three previous_*_image inputs. Check .deployment-catalog/<env>/latest.json (or a <run_id>.json archive) for the image SHAs to roll back to."
               exit 1
             fi
             echo "EFFECTIVE_API_IMAGE=${{ inputs.previous_api_image }}" >> "$GITHUB_ENV"
@@ -261,7 +319,7 @@ jobs:
           path: policy-gates-${{ inputs.environment }}.json
 
   plan:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.environment != ''
     runs-on: self-hosted
     timeout-minutes: 30
     needs: policy-gates
@@ -433,17 +491,23 @@ jobs:
 
       - name: Resolve image references from build manifest
         id: resolve_images
-        # When images are not explicitly provided (or still `:latest`), read the
-        # SHA-tagged references written by 200-build-images so the plan always uses
-        # an immutable, traceable image digest rather than the floating :latest tag.
+        # When images are not explicitly provided (or still a floating tag), read
+        # the SHA-tagged references written by 200-build-images so the plan always
+        # uses an immutable, traceable image tag rather than a floating one. The
+        # defaults are `cna:api-latest` etc., so the floating check matches any
+        # `-latest` / `:latest` suffix — a bare `:latest` substring test missed
+        # them and deployed floating tags. The appliance image-update workflow
+        # relies on this pinning.
         working-directory: ${{ github.workspace }}
         run: |
           MANIFEST=".deployment-catalog/latest-build.json"
           resolve() {
             local INPUT="$1" KEY="$2"
-            if [[ -z "$INPUT" || "$INPUT" == *":latest"* ]]; then
+            if [[ -z "$INPUT" || "$INPUT" == *"-latest" || "$INPUT" == *":latest" ]]; then
               if [ -f "$MANIFEST" ]; then
-                jq -r ".images.${KEY}" "$MANIFEST"
+                local PINNED
+                PINNED=$(jq -r ".images.${KEY} // empty" "$MANIFEST")
+                if [ -n "$PINNED" ]; then echo "$PINNED"; else echo "$INPUT"; fi
               else
                 echo "$INPUT"
               fi
@@ -492,8 +556,11 @@ jobs:
       # management-group-scoped ALZ policy assignment, so it false-negatives and
       # would re-enable management. To manage diagnostics on a non-governed
       # subscription, set TF_VAR_manage_diagnostic_settings=true here explicitly.
+      #
+      # ai_mode is the one app-facing value the platform root does declare: in
+      # byo-api it opens firewall egress to the bring-your-own AI providers.
       - name: Terraform plan (platform)
-        run: terraform plan -out=tfplan
+        run: terraform plan -out=tfplan -var="ai_mode=${{ inputs.ai_mode }}"
 
       # Workload = compute, database, identity, AI, Front Door. It owns every app
       # variable and secret. Secrets are passed via TF_VAR_* env (never -var on the
@@ -521,7 +588,16 @@ jobs:
               echo "$VALUE"
             fi
           }
+          # ai_engine_default must satisfy the Terraform cross-variable validation for
+          # the selected ai_mode: saas => azure-openai, byo-api => anthropic|openai.
+          # A repo variable that names an engine from the other mode is ignored.
+          AI_MODE="${{ inputs.ai_mode }}"
           AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          if [ "$AI_MODE" = "byo-api" ]; then
+            case "$AI_ENGINE_DEFAULT" in anthropic|openai) ;; *) AI_ENGINE_DEFAULT="anthropic" ;; esac
+          else
+            AI_ENGINE_DEFAULT="azure-openai"
+          fi
           AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
           AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
           AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
@@ -540,7 +616,8 @@ jobs:
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-azure-openai}" \
+            -var="ai_mode=${AI_MODE}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
@@ -557,6 +634,9 @@ jobs:
           {
             "environment": "${{ inputs.environment }}",
             "deploy_mode": "${{ inputs.deploy_mode }}",
+            "ai_mode": "${{ inputs.ai_mode }}",
+            "source_repo": "${{ inputs.source_repo || github.repository }}",
+            "source_manifest_run_id": "${{ inputs.source_manifest_run_id }}",
             "api_image": "${{ env.EFFECTIVE_API_IMAGE }}",
             "worker_image": "${{ env.EFFECTIVE_WORKER_IMAGE }}",
             "web_image": "${{ env.EFFECTIVE_WEB_IMAGE }}",
@@ -571,9 +651,9 @@ jobs:
               "independent_verification": "pending",
               "promotion_ready": "pending",
               "external_health_validation": "pending",
-              "foundry_private_dns_validation": "required",
-              "foundry_managed_identity_inference": "required",
-              "azure_openai_provider_status": "out_of_band_optional",
+              "foundry_private_dns_validation": "${{ inputs.ai_mode == 'byo-api' && 'not_applicable' || 'required' }}",
+              "foundry_managed_identity_inference": "${{ inputs.ai_mode == 'byo-api' && 'not_applicable' || 'required' }}",
+              "azure_openai_provider_status": "${{ inputs.ai_mode == 'byo-api' && 'not_applicable' || 'out_of_band_optional' }}",
               "certificate_monitoring": "pending",
               "canary_telemetry": "pending",
               "staged_promotion": "pending",
@@ -629,7 +709,7 @@ jobs:
           fi
 
   apply:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.environment != ''
     runs-on: self-hosted
     timeout-minutes: 60
     needs: plan
@@ -831,7 +911,16 @@ jobs:
               echo "$VALUE"
             fi
           }
+          # ai_engine_default must satisfy the Terraform cross-variable validation for
+          # the selected ai_mode: saas => azure-openai, byo-api => anthropic|openai.
+          # A repo variable that names an engine from the other mode is ignored.
+          AI_MODE="${{ inputs.ai_mode }}"
           AI_ENGINE_DEFAULT=$(optional_var "${{ vars.CNA_AI_ENGINE_DEFAULT }}")
+          if [ "$AI_MODE" = "byo-api" ]; then
+            case "$AI_ENGINE_DEFAULT" in anthropic|openai) ;; *) AI_ENGINE_DEFAULT="anthropic" ;; esac
+          else
+            AI_ENGINE_DEFAULT="azure-openai"
+          fi
           AZURE_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AZURE_MCP_ENDPOINT }}")
           AZURE_MCP_TRANSPORT=$(optional_var "${{ vars.CNA_AZURE_MCP_TRANSPORT }}")
           AWS_MCP_ENDPOINT=$(optional_var "${{ vars.CNA_AWS_MCP_ENDPOINT }}")
@@ -850,7 +939,8 @@ jobs:
             -var="entra_client_id=${{ vars.CNA_ENTRA_CLIENT_ID }}" \
             -var="nextauth_url=${{ vars.CNA_NEXTAUTH_URL }}" \
             -var="container_registry_username=${{ vars.DOCKERHUB_NAMESPACE }}" \
-            -var="ai_engine_default=${AI_ENGINE_DEFAULT:-azure-openai}" \
+            -var="ai_mode=${AI_MODE}" \
+            -var="ai_engine_default=${AI_ENGINE_DEFAULT}" \
             -var="azure_mcp_endpoint=${AZURE_MCP_ENDPOINT}" \
             -var="azure_mcp_transport=${AZURE_MCP_TRANSPORT:-streamable-http}" \
             -var="aws_mcp_endpoint=${AWS_MCP_ENDPOINT}" \
@@ -1240,7 +1330,7 @@ jobs:
           fi
 
   verify:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.environment != ''
     runs-on: self-hosted
     timeout-minutes: 20
     needs: apply

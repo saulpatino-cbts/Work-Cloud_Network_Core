@@ -37,9 +37,8 @@ _ROOT_TOKENS = st.sampled_from(["root", "ROOT", "Root", "0"])
 
 # A non-root user name: an identifier that is not "root" and not purely a
 # root-equivalent uid. Constrained to a realistic Dockerfile USER token.
-_NON_ROOT_NAME = (
-    st.from_regex(r"[a-z][a-z0-9_-]{0,15}", fullmatch=True)
-    .filter(lambda s: s.lower() != "root")
+_NON_ROOT_NAME = st.from_regex(r"[a-z][a-z0-9_-]{0,15}", fullmatch=True).filter(
+    lambda s: s.lower() != "root"
 )
 
 # A non-root uid: any positive integer (uid 0 is root).
@@ -48,10 +47,9 @@ _NON_ROOT_UID = st.integers(min_value=1, max_value=65535).map(str)
 _NON_ROOT_TOKENS = _NON_ROOT_NAME | _NON_ROOT_UID
 
 # A group token to exercise the ``name:group`` / ``uid:gid`` forms.
-_GROUP_TOKEN = (
-    st.from_regex(r"[a-z][a-z0-9_-]{0,10}", fullmatch=True)
-    | st.integers(min_value=0, max_value=65535).map(str)
-)
+_GROUP_TOKEN = st.from_regex(r"[a-z][a-z0-9_-]{0,10}", fullmatch=True) | st.integers(
+    min_value=0, max_value=65535
+).map(str)
 
 _SUBJECT = st.sampled_from(
     [

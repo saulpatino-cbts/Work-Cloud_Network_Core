@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { generateDeliverableContent } from "@/lib/openai";
+import { sanitizeBackendDetail } from "@/lib/summarize-error";
 
 // ─── Multi-subscription topology merge (same pattern as deliverables/actions.ts) ─
 async function getMergedTopologyJson(engagementId: string): Promise<string | null> {
@@ -214,9 +215,10 @@ export async function publishClientPortal(
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { detail?: string } | null;
       return {
-        error:
-          body?.detail ??
+        error: sanitizeBackendDetail(
+          body?.detail,
           "Publishing the client portal failed. Please try again, or contact your administrator if it persists.",
+        ),
       };
     }
 

@@ -20,9 +20,16 @@ permissions:
   id-token: write
   contents: read
 
+# One key-sync per environment at a time — overlapping runs would produce
+# competing .env artifacts; a newer dispatch supersedes an in-flight one.
+concurrency:
+  group: sync-keys-${{ inputs.environment }}
+  cancel-in-progress: true
+
 jobs:
   sync-env:
     runs-on: self-hosted
+    timeout-minutes: 15
     environment: ${{ inputs.environment }}
     steps:
       - name: Azure login with OIDC

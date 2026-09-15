@@ -23,6 +23,12 @@ on:
 permissions:
   contents: read
 
+# Only one cleanup at a time — a scheduled run and a manual dispatch racing to
+# delete the same tags would just produce duplicate 404s; serialize them.
+concurrency:
+  group: registry-cleanup
+  cancel-in-progress: false
+
 env:
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
   KEEP_COUNT: 10
@@ -37,6 +43,7 @@ jobs:
     # 200-build-images.yml) is unaffected, which is why builds always work
     # fine from the VPS but this API-only job doesn't.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0

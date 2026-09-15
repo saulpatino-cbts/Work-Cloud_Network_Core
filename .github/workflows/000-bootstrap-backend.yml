@@ -47,9 +47,17 @@ permissions:
   id-token: write
   contents: read
 
+# Bootstrap creates shared backend state — never let two runs race to create the
+# same RG / storage account / container. Serialize by environment and do not
+# cancel an in-flight run (a half-created backend is worse than a queued one).
+concurrency:
+  group: bootstrap-backend-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   bootstrap:
     runs-on: self-hosted
+    timeout-minutes: 30
     env:
       TF_IN_AUTOMATION: true
       ARM_USE_OIDC: true

@@ -90,6 +90,31 @@ resource "aws_s3_bucket" "static_site" {
 # Left with SSE-S3 (the S3 default), NOT SSE-KMS: CloudFront OAC reads would
 # otherwise need kms:Decrypt on the customer-managed key, adding key-policy
 # coupling. Matches migrate/s3.tf, where the static bucket is unencrypted-by-KMS.
+# Encryption at rest is still declared explicitly (AES256) rather than relying on
+# the implicit account default, so the intended posture is auditable and cannot
+# drift if the account's default-encryption setting changes.
+resource "aws_s3_bucket_server_side_encryption_configuration" "static_site" {
+  bucket = aws_s3_bucket.static_site.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Versioning protects the served static site against accidental overwrite or
+# deletion (a bad deploy can be rolled back to a prior object version). It does
+# not interfere with CloudFront OAC reads, which resolve the current version.
+resource "aws_s3_bucket_versioning" "static_site" {
+  bucket = aws_s3_bucket.static_site.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "static_site" {
   bucket                  = aws_s3_bucket.static_site.id
   block_public_acls       = true

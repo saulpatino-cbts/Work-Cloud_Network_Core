@@ -30,4 +30,11 @@ RUN python -m pip uninstall -y pip
 
 USER cna
 
+# The worker is a run-once batch process (and a retirement candidate — see spec
+# task 4.5), so a network liveness probe would be misleading. This smoke check
+# verifies the module and its Azure SDK deps import cleanly, which is the
+# meaningful "the container is well-formed" signal for a batch image.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=2 \
+    CMD python -c "import azure.identity, azure.storage.blob" || exit 1
+
 CMD ["python", "apps/cna-worker/main.py"]

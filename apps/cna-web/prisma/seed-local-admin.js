@@ -2,7 +2,8 @@
 // image (see Dockerfile "migrator" stage) right after `prisma migrate deploy`.
 //
 // Reads LOCAL_ADMIN_PASSWORD (a PBKDF2 hash string, never the plaintext —
-// see lib/local-admin.ts and scripts/Initialize-CnaGitHubSecrets.ps1) and
+// see lib/local-admin.ts and the appliance repositories'
+// scripts/Initialize-CnaGitHubSecrets.ps1) and
 // upserts the single local admin User row. No-ops if the env var isn't set,
 // so environments that haven't bootstrapped this secret yet deploy unchanged.
 //

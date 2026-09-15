@@ -201,68 +201,7 @@ jobs:
         run: python3 scripts/validate_documentation_model.py
 
   # ------------------------------------------------------------------
-  # 5. Terraform format check (TODO.md T-407)
-  # ------------------------------------------------------------------
-  # The AWS Terraform had no fmt coverage anywhere: the only terraform
-  # invocations lived in the Azure deploy and drift workflows, and
-  # 212-deploy-aws-split.yml fails fast before terraform runs. 90 resources
-  # across eight modules were unformatted-unchecked.
-  #
-  # fmt needs no provider download, no AWS account, and no credentials, so this
-  # job is deliberately independent of REVIEW.md R-001 - R-003 and covers both
-  # clouds.
-  #
-  # `terraform validate` is NOT here. It was in the first version of this job
-  # and failed on its first run; the cause could not be diagnosed, because the
-  # Actions API is not readable from the authoring environment and the egress
-  # policy blocks registry.terraform.io, so `init` cannot resolve providers
-  # locally either. Rather than guess, validate was dropped back to TODO.md
-  # T-409, which records the open question: the AWS roots carry no
-  # .terraform.lock.hcl (unlike the Azure roots), so it is not yet known
-  # whether the failure was provider resolution or a genuine config error.
-  terraform-fmt:
-    name: Terraform Format Check
-    runs-on: self-hosted
-    timeout-minutes: 10
-    needs: [test]
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
-        with:
-          terraform_wrapper: false
-
-      - name: Terraform fmt check (all roots and modules)
-        run: terraform fmt -check -recursive infra/terraform/
-
-      # Restored under TODO.md T-409. The original run failed on both AWS
-      # workload roots because providers/aws/runtime/variables.tf carried an
-      # unescaped ${name_prefix} in a variable description — a real config
-      # error, now fixed (escaped as $${name_prefix}). Reproduced and
-      # re-verified locally with terraform 1.9.8 + hashicorp/aws 5.100.0.
-      - name: Terraform validate (AWS roots)
-        run: |
-          set -euo pipefail
-          failed=0
-          for root in dev/platform dev/workload prod/platform prod/workload; do
-            dir="infra/terraform/environments/aws/${root}"
-            echo "::group::terraform validate ${dir}"
-            # Guard init as well as validate: under bash -e an unguarded init
-            # failure would kill the whole step before the ::error:: annotation
-            # and skip the remaining roots.
-            if ! terraform -chdir="${dir}" init -backend=false -input=false >/dev/null; then
-              echo "::error::terraform init failed for ${dir}"
-              failed=1
-            elif ! terraform -chdir="${dir}" validate -no-color; then
-              echo "::error::terraform validate failed for ${dir}"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit "${failed}"
-
-  # ------------------------------------------------------------------
-  # 6. Docker build smoke test
+  # 5. Docker build smoke test
   # ------------------------------------------------------------------
   docker-build:
     name: Docker Build Smoke Test

@@ -107,18 +107,23 @@ def test_unpinned_refs_deduped_per_file(tmp_path: Path):
 # --- live-tree scan ---------------------------------------------------------
 
 
-def test_live_scan_flags_the_two_known_unpinned_references():
-    """5.3: the real workflow tree's unpinned third-party refs are recorded."""
+def test_live_scan_finds_every_core_workflow_pinned():
+    """5.3: the real workflow tree carries no unpinned third-party refs.
+
+    The two references the original scan recorded lived in
+    ``211-deploy-azure-split.yml`` and ``212-deploy-aws-split.yml``, which moved
+    to the appliance repositories (TODO.md T-504); the workflows that remain in
+    the core are all SHA-pinned, so the scan records the single informational
+    all-pinned entry and nothing MEDIUM.
+    """
     findings = sha_pin_findings(_WORKFLOWS_DIR)
     keys = {f.dedup_key for f in findings}
-    assert "cicd:sha-pin:212-deploy-aws-split.yml:actions/checkout" in keys
-    assert "cicd:sha-pin:211-deploy-azure-split.yml:actions/create-github-app-token" in keys
-    # Every SHA-pin finding is fixable (no blocker id) and MEDIUM.
+    assert keys == {"cicd:sha-pin:all-pinned"}
     for f in findings:
-        if f.dedup_key.startswith("cicd:sha-pin:") and f.severity is Severity.MEDIUM:
-            assert f.blocker_id is None
-            assert f.area == "cicd"
-            assert f.area in AREAS
+        assert f.severity is Severity.INFORMATIONAL
+        assert f.blocker_id is None
+        assert f.area == "cicd"
+        assert f.area in AREAS
 
 
 def test_no_false_positive_on_pinned_or_local_or_docker_refs():

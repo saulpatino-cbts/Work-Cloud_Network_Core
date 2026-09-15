@@ -1410,8 +1410,10 @@ order; do not reorder it.
   [`Work-Cloud_Network_Azure_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance)
   and [`Work-Cloud_Network_AWS_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance)
   — receive their contents as draft pull requests (Terraform, deploy/update/drift/teardown
-  workflows, `README.md`, `CLAUDE.md`, release catalog). Everything below needs account access the
-  code cannot supply.
+  workflows, `README.md`, `CLAUDE.md`, release catalog). `scripts/appliance-kit/build.sh azure|aws`
+  regenerates either tree from this checkout at any time (it clones the appliance repository,
+  assembles the tree on `claude/appliance-bootstrap`, and stages it). Everything below needs account
+  access the code cannot supply.
 - **Dependencies:** The appliance draft PRs merged to each `main`.
 - **Recommended action:**
   1. Install the existing GitHub App on both appliance repositories.

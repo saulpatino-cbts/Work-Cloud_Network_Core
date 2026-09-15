@@ -1,0 +1,29 @@
+name: "340 · Sync Local Keys"
+
+@@SCAFFOLD_HEADER@@
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Blocked on AWS account setup
+        run: |
+          echo "::error::340-sync-keys cannot run yet: the Secrets Manager secrets are created by the (unapplied) runtime module and no OIDC role exists (REVIEW.md R-001, R-003)."
+          echo "::error::When they exist, this job reads them and uploads a 1-day .env artifact — the AWS twin of the Key Vault version. Implementation: TODO.md T-102."
+          exit 1

@@ -1553,7 +1553,10 @@ order; do not reorder it.
   (`git push origin --delete claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap`).
   The generator that produced the trees (`scripts/appliance-kit/`) was retired with T-504; it
   remains in the core's history at commit `8bb989d` if a rebuild is ever needed.
-- **Status:** Relayed 2026-09-15 — `claude/appliance-bootstrap` exists in both appliance repositories (Azure `ceafcec`, AWS `6f963c4`). A second commit per appliance (T-507's transfer: Azure `f3718aa`, AWS `7c13b1d`) is parked on the same transport branches and needs the same relay push (fast-forward). Still open: the two draft pull requests and the deletion of the parked branches afterwards.
+- **Status:** Done — 2026-09-15. Both appliance repositories carry `claude/appliance-bootstrap`
+  (Azure `f3718aa`, AWS `7c13b1d`, each the bootstrap commit plus T-507's transfer), draft pull
+  request #1 is open in each (`main` ← `claude/appliance-bootstrap`), and the parked transport
+  branches were deleted from this repository.
 - **Notes for future engineers:** The parked branches are a transport, not a home: the appliance
   content must never be merged into or referenced from the core's `main`.
 

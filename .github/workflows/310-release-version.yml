@@ -19,6 +19,12 @@ permissions:
   contents: write    # create GitHub Release
   id-token: write    # OIDC (future Cosign signing)
 
+# One release run per tag — don't let a re-pushed tag race a still-running
+# release; serialize rather than cancel so a partial GitHub Release isn't left.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
 
   release:

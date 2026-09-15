@@ -34,6 +34,24 @@ resource "azurerm_storage_account" "this" {
     }
   }
 
+  # Deny-by-default data-plane firewall. Application traffic reaches this account
+  # over the private endpoint created in the security module; the AzureServices
+  # bypass keeps Azure platform access (diagnostics, static-website provisioning)
+  # working. public_network_access_enabled stays true because Terraform apply and
+  # the static-website bootstrap need a data-plane window, but leaving
+  # default_action at its implicit "Allow" exposed the account to every source IP
+  # on the internet. The deploy/drift workflows add and remove the transient
+  # runner IP the same way they do for the Key Vault (identity module), so that
+  # ephemeral ip_rules entry must not fight Terraform.
+  network_rules {
+    bypass         = ["AzureServices"]
+    default_action = "Deny"
+  }
+
+  lifecycle {
+    ignore_changes = [network_rules[0].ip_rules]
+  }
+
 }
 
 resource "azurerm_storage_account_static_website" "this" {

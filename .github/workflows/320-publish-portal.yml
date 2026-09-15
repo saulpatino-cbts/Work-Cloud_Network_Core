@@ -52,6 +52,12 @@ permissions:
   contents: read
   id-token: write   # OIDC
 
+# One publish per engagement at a time — overlapping runs would race to write
+# the same portal output; a newer dispatch supersedes an in-flight one.
+concurrency:
+  group: publish-portal-${{ inputs.engagement_id }}
+  cancel-in-progress: true
+
 jobs:
   publish:
     name: Publish — ${{ inputs.engagement_id }}

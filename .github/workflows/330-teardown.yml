@@ -57,6 +57,7 @@ jobs:
   preflight:
     name: Preflight safety check
     runs-on: self-hosted
+    timeout-minutes: 5
     steps:
       - name: Validate confirmation string
         run: |
@@ -78,6 +79,7 @@ jobs:
   terraform-destroy:
     name: "terraform destroy (${{ github.event.inputs.environment }})"
     runs-on: self-hosted
+    timeout-minutes: 60
     needs: preflight
     environment: ${{ github.event.inputs.environment }}
     outputs:
@@ -162,6 +164,7 @@ jobs:
   cleanup-drift:
     name: "Remove drifted resources (${{ github.event.inputs.environment }})"
     runs-on: self-hosted
+    timeout-minutes: 30
     needs: terraform-destroy
     # Non-blocking: the StaleAi targets all live inside the workload RG, which the
     # terraform-destroy job already deletes, so this job is a best-effort sweep for
@@ -223,6 +226,7 @@ jobs:
   purge-soft-deleted:
     name: "Purge soft-deleted AI accounts (${{ github.event.inputs.environment }})"
     runs-on: self-hosted
+    timeout-minutes: 30
     needs: terraform-destroy
     # Best-effort: the RG delete is async and can outlast the poll window below.
     # A skipped purge just means the next deploy 409s and someone purges by hand.
@@ -274,6 +278,7 @@ jobs:
   destroy-backend:
     name: "Destroy TF state backend RG"
     runs-on: self-hosted
+    timeout-minutes: 20
     needs: cleanup-drift
     if: github.event.inputs.destroy_tfstate_backend == 'true'
     steps:

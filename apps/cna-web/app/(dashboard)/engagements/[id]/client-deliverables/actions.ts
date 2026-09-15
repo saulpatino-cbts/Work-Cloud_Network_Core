@@ -7,6 +7,7 @@ import { after } from "next/server";
 import type { DeliverableContext } from "@/lib/openai";
 import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
 import { uploadDeliverable } from "@/lib/blob";
+import { sanitizeBackendDetail } from "@/lib/summarize-error";
 
 // ─── Multi-subscription topology merge (same pattern as deliverables/actions.ts) ─
 async function getMergedTopologyJson(engagementId: string): Promise<string | null> {
@@ -262,9 +263,10 @@ export async function publishClientPortal(
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { detail?: string } | null;
       return {
-        error:
-          body?.detail ??
+        error: sanitizeBackendDetail(
+          body?.detail,
           "Publishing the client portal failed. Please try again, or contact your administrator if it persists.",
+        ),
       };
     }
 

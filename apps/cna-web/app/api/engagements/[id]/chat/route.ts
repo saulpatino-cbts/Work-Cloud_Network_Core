@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeBackendDetail } from "@/lib/summarize-error";
 import { NextResponse } from "next/server";
 
 // Proxy to the cna-api chat router (Phase G). Auth + membership are enforced
@@ -63,10 +64,12 @@ export async function POST(
 
     const data: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const detail =
+      const rawDetail =
         data && typeof data === "object" && "detail" in data
           ? String((data as { detail: unknown }).detail)
-          : `Copilot request failed (${res.status})`;
+          : null;
+      // Never forward raw backend detail verbatim: bound it to a single line.
+      const detail = sanitizeBackendDetail(rawDetail, `Copilot request failed (${res.status}).`);
       return NextResponse.json({ error: detail }, { status: res.status });
     }
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });

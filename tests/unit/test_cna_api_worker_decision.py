@@ -25,11 +25,7 @@ _WORKER_DEDUP_KEY = "python-engine-api:worker-retirement"
 
 
 def _worker_finding():
-    return next(
-        f
-        for f in python_engine_api_findings()
-        if f.dedup_key == _WORKER_DEDUP_KEY
-    )
+    return next(f for f in python_engine_api_findings() if f.dedup_key == _WORKER_DEDUP_KEY)
 
 
 def test_worker_retirement_entry_exists_and_is_well_formed():

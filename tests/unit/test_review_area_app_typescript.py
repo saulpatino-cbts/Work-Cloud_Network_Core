@@ -37,9 +37,7 @@ def test_credential_form_is_verified_compliant():
     """The AWS credential-capture surface is already correctly AWS-shaped."""
     findings = app_typescript_findings()
     aligned = next(
-        f
-        for f in findings
-        if f.dedup_key == "app-typescript:aws-view-credential-form-aligned"
+        f for f in findings if f.dedup_key == "app-typescript:aws-view-credential-form-aligned"
     )
     assert aligned.severity is Severity.INFORMATIONAL
     assert aligned.blocker_id is None

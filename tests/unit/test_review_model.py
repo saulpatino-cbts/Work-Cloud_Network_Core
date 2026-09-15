@@ -14,11 +14,7 @@ def test_severity_is_ordered_informational_to_critical():
     assert Severity.INFORMATIONAL == 0
     assert Severity.CRITICAL == 4
     assert (
-        Severity.INFORMATIONAL
-        < Severity.LOW
-        < Severity.MEDIUM
-        < Severity.HIGH
-        < Severity.CRITICAL
+        Severity.INFORMATIONAL < Severity.LOW < Severity.MEDIUM < Severity.HIGH < Severity.CRITICAL
     )
     # max() over a set of findings yields the most severe.
     assert max(Severity.LOW, Severity.CRITICAL, Severity.MEDIUM) is Severity.CRITICAL

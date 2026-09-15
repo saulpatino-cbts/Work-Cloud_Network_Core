@@ -239,9 +239,7 @@ def assert_escalations_well_formed(
 
     for entry in plan.entries:
         if entry.is_escalation:
-            assert entry.blocker_id, (
-                f"escalation entry {entry.dedup_key!r} carries no blocker_id"
-            )
+            assert entry.blocker_id, f"escalation entry {entry.dedup_key!r} carries no blocker_id"
             assert _BLOCKER_ID_PATTERN.fullmatch(entry.blocker_id), (
                 f"escalation entry {entry.dedup_key!r} has a malformed "
                 f"blocker_id {entry.blocker_id!r}"
@@ -252,8 +250,7 @@ def assert_escalations_well_formed(
             )
         else:
             assert entry.blocker_id is None, (
-                f"fixable entry {entry.dedup_key!r} carries a blocker_id "
-                f"{entry.blocker_id!r}"
+                f"fixable entry {entry.dedup_key!r} carries a blocker_id {entry.blocker_id!r}"
             )
 
     summary = escalation_summary(plan)

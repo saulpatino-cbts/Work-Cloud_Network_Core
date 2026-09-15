@@ -83,9 +83,7 @@ def test_secret_findings_never_reproduce_a_value():
 def test_records_gitleaks_coverage_gap():
     """6.1: gitleaks was unavailable — recorded as a coverage gap, not a pass."""
     findings = security_secrets_findings()
-    gap = next(
-        f for f in findings if f.dedup_key == "security-secrets:gitleaks:tool-unavailable"
-    )
+    gap = next(f for f in findings if f.dedup_key == "security-secrets:gitleaks:tool-unavailable")
     assert gap.severity is Severity.MEDIUM
     assert "gitleaks" in gap.proposed_action.lower()
 
@@ -104,19 +102,14 @@ def test_records_each_npm_audit_advisory_at_reported_severity():
     assert by_key["security-secrets:npm-audit:next"].severity is Severity.CRITICAL
     assert by_key["security-secrets:npm-audit:browserslist"].severity is Severity.HIGH
     assert by_key["security-secrets:npm-audit:sharp"].severity is Severity.HIGH
-    assert (
-        by_key["security-secrets:npm-audit:baseline-browser-mapping"].severity
-        is Severity.MEDIUM
-    )
+    assert by_key["security-secrets:npm-audit:baseline-browser-mapping"].severity is Severity.MEDIUM
 
 
 def test_runtime_secret_escalation_references_r006():
     """6.4: the runtime-secret escalation carries blocker_id R-006."""
     findings = security_secrets_findings()
     esc = next(
-        f
-        for f in findings
-        if f.dedup_key == "security-secrets:runtime-secrets-supplied-at-deploy"
+        f for f in findings if f.dedup_key == "security-secrets:runtime-secrets-supplied-at-deploy"
     )
     assert esc.blocker_id == "R-006"
 

@@ -25,9 +25,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from cna.api_errors import (
+    _CLIENT_MESSAGE,
     DownstreamCategory,
     SanitizedError,
-    _CLIENT_MESSAGE,
     sanitize_downstream_error,
 )
 from cna.api_status import Outcome, OutcomeClass, class_for
@@ -124,9 +124,7 @@ def _substantial_substrings(text: str) -> list[str]:
 
 @_PROPERTY_SETTINGS
 @given(exc_class=_EXC_CLASS, raw=_RAW_MESSAGE)
-def test_property11_client_message_excludes_raw_text(
-    exc_class: type[Exception], raw: str
-) -> None:
+def test_property11_client_message_excludes_raw_text(exc_class: type[Exception], raw: str) -> None:
     """Feature: production-readiness, Property 11: Downstream SDK errors are sanitized.
 
     The returned ``client_message`` never contains the raw exception text (nor
@@ -146,9 +144,7 @@ def test_property11_client_message_excludes_raw_text(
 
     # No substantial token of the raw text survives into the client message.
     for token in _substantial_substrings(raw):
-        assert token not in message, (
-            f"raw token {token!r} leaked into client message {message!r}"
-        )
+        assert token not in message, f"raw token {token!r} leaked into client message {message!r}"
 
 
 @_PROPERTY_SETTINGS

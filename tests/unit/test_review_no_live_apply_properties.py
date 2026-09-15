@@ -128,9 +128,7 @@ def test_property9_no_live_apply_emitted(action_set: list[Finding]) -> None:
         # 1. It is a record, not an executable action: no live-apply/plan type.
         assert _is_record_not_action(finding), finding.dedup_key
         # 2. Any live apply/plan mention is a negation/exclusion, never an action.
-        assert _apply_plan_mention_is_excluded(finding.proposed_action), (
-            finding.dedup_key
-        )
+        assert _apply_plan_mention_is_excluded(finding.proposed_action), finding.dedup_key
 
 
 @_PROPERTY_SETTINGS

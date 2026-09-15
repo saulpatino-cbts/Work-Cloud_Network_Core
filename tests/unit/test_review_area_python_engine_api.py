@@ -23,9 +23,7 @@ def test_findings_are_well_formed_and_in_area():
 def test_records_intake_verified_compliant():
     """2.1: the /intake honest-501 outcome is recorded (verified compliant)."""
     findings = python_engine_api_findings()
-    intake = next(
-        f for f in findings if f.dedup_key == "python-engine-api:intake-honest-501"
-    )
+    intake = next(f for f in findings if f.dedup_key == "python-engine-api:intake-honest-501")
     assert intake.severity is Severity.INFORMATIONAL
     assert "501" in intake.proposed_action
     assert "intake" in intake.subject
@@ -35,9 +33,7 @@ def test_records_single_status_mapping_gap():
     """2.2/2.4: the single outcome→status mapping is recorded as the gap closed."""
     findings = python_engine_api_findings()
     mapping = next(
-        f
-        for f in findings
-        if f.dedup_key == "python-engine-api:single-outcome-status-mapping"
+        f for f in findings if f.dedup_key == "python-engine-api:single-outcome-status-mapping"
     )
     assert mapping.severity is Severity.LOW
     assert "outcome→status" in mapping.proposed_action or "2xx" in mapping.proposed_action
@@ -50,9 +46,7 @@ def test_records_worker_retirement_decision():
     not retained with a responsibility, and carry the removal action.
     """
     findings = python_engine_api_findings()
-    worker = next(
-        f for f in findings if f.dedup_key == "python-engine-api:worker-retirement"
-    )
+    worker = next(f for f in findings if f.dedup_key == "python-engine-api:worker-retirement")
     assert worker.subject == "apps/cna-worker"
     action = worker.proposed_action.lower()
     assert "retire" in action

@@ -32,15 +32,11 @@ def test_records_tsc_and_build_verified_compliant():
     """1.1/1.2: the type-check and build passes are recorded verified-compliant."""
     findings = app_typescript_verify_findings()
 
-    tsc = next(
-        f for f in findings if f.dedup_key == "app-typescript:tsc-noemit-clean"
-    )
+    tsc = next(f for f in findings if f.dedup_key == "app-typescript:tsc-noemit-clean")
     assert tsc.severity is Severity.INFORMATIONAL
     assert "tsc --noemit" in tsc.proposed_action.lower()
 
-    build = next(
-        f for f in findings if f.dedup_key == "app-typescript:next-build-succeeds"
-    )
+    build = next(f for f in findings if f.dedup_key == "app-typescript:next-build-succeeds")
     assert build.severity is Severity.INFORMATIONAL
     assert "build" in build.proposed_action.lower()
 

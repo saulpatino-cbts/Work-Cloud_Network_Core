@@ -21,7 +21,6 @@ from cna.api_errors import (
 )
 from cna.api_status import Outcome, OutcomeClass, class_for
 
-
 # ── Stand-in SDK exception types ──────────────────────────────────────────────
 # The sanitizer detects the SDK family by the exception type's ``__module__``,
 # so these stand-ins reproduce the real SDKs' module paths without importing
@@ -61,9 +60,7 @@ _RAW = (
         (RuntimeError("boom"), DownstreamCategory.DOWNSTREAM),
     ],
 )
-def test_classify_maps_sdk_module_to_category(
-    exc: BaseException, expected: DownstreamCategory
-):
+def test_classify_maps_sdk_module_to_category(exc: BaseException, expected: DownstreamCategory):
     assert classify_downstream_error(exc) is expected
 
 

@@ -55,9 +55,7 @@ def test_records_terraform_validate_result():
     """4.2/4.3: the terraform validate gate result is recorded for the AWS roots."""
     findings = terraform_aws_gated_escalations()
 
-    result = next(
-        f for f in findings if f.dedup_key == "terraform-aws:validate-result"
-    )
+    result = next(f for f in findings if f.dedup_key == "terraform-aws:validate-result")
     assert result.severity is Severity.INFORMATIONAL
     assert result.blocker_id is None
     action = result.proposed_action.lower()
@@ -105,8 +103,6 @@ def test_no_live_apply_or_plan_action_is_emitted():
     for finding in terraform_aws_gated_escalations():
         action = finding.proposed_action.lower()
         if "apply" in action or "plan" in action:
-            assert (
-                "no live" in action
-                or "do not attempt" in action
-                or "cannot run" in action
-            ), finding.dedup_key
+            assert "no live" in action or "do not attempt" in action or "cannot run" in action, (
+                finding.dedup_key
+            )

@@ -54,19 +54,13 @@ def test_records_non_root_verified_for_every_service_image():
 def test_no_root_user_finding_when_all_images_non_root():
     """Property 15 negative case: non-root images produce no root-user finding."""
     findings = containers_packaging_findings()
-    assert not [
-        f for f in findings if f.dedup_key.startswith("containers-packaging:root-user:")
-    ]
+    assert not [f for f in findings if f.dedup_key.startswith("containers-packaging:root-user:")]
 
 
 def test_records_compose_web_fallback_gap():
     """7.2: the missing docker-compose Web_Service fallback is recorded."""
     findings = containers_packaging_findings()
-    entry = next(
-        f
-        for f in findings
-        if f.dedup_key == "containers-packaging:compose-web-fallback"
-    )
+    entry = next(f for f in findings if f.dedup_key == "containers-packaging:compose-web-fallback")
     assert entry.subject == "docker-compose.yml"
     assert entry.severity is Severity.MEDIUM
     assert "cna-web" in entry.proposed_action
@@ -75,11 +69,7 @@ def test_records_compose_web_fallback_gap():
 def test_records_service_healthcheck_gap():
     """7.1: the missing HEALTHCHECKs on service images are recorded."""
     findings = containers_packaging_findings()
-    entry = next(
-        f
-        for f in findings
-        if f.dedup_key == "containers-packaging:service-healthchecks"
-    )
+    entry = next(f for f in findings if f.dedup_key == "containers-packaging:service-healthchecks")
     assert "HEALTHCHECK" in entry.proposed_action
 
 
@@ -209,24 +199,18 @@ def test_observed_run_records_packaging_and_build_verified():
 def test_observed_run_records_hadolint_coverage_gap():
     """hadolint was unavailable: recorded as a coverage gap, not a pass."""
     findings = containers_packaging_verify_findings()
-    gap = next(
-        f for f in findings if f.dedup_key == "containers-packaging:hadolint-coverage-gap"
-    )
+    gap = next(f for f in findings if f.dedup_key == "containers-packaging:hadolint-coverage-gap")
     assert gap.severity is Severity.LOW
     assert "hadolint" in gap.proposed_action
     # and NOT recorded as a verified pass
-    assert not [
-        f for f in findings if f.dedup_key == "containers-packaging:hadolint-verified"
-    ]
+    assert not [f for f in findings if f.dedup_key == "containers-packaging:hadolint-verified"]
 
 
 def test_built_image_non_root_reuses_is_root_user():
     """7.4: the built-image assertion agrees with is_root_user on each USER."""
     findings = containers_packaging_verify_findings()
     entry = next(
-        f
-        for f in findings
-        if f.dedup_key == "containers-packaging:built-image-non-root-verified"
+        f for f in findings if f.dedup_key == "containers-packaging:built-image-non-root-verified"
     )
     # the observed run's inspected users are all non-root by is_root_user
     assert all(not is_root_user(u) for u in _OBSERVED.inspected_users.values())
@@ -236,23 +220,17 @@ def test_built_image_non_root_reuses_is_root_user():
 def test_private_pull_note_is_not_an_escalation():
     """The R-006 reference here is a note only — no blocker_id, no escalation."""
     findings = containers_packaging_verify_findings()
-    note = next(
-        f for f in findings if f.dedup_key == "containers-packaging:private-pull-r006-note"
-    )
+    note = next(f for f in findings if f.dedup_key == "containers-packaging:private-pull-r006-note")
     assert note.blocker_id is None
     assert "R-006" in note.proposed_action
 
 
 def test_packaging_gap_recorded_when_cli_help_fails():
     findings = containers_packaging_verify_findings(_results(cli_help_ok=False))
-    gap = next(
-        f for f in findings if f.dedup_key == "containers-packaging:cli-packaging-gap"
-    )
+    gap = next(f for f in findings if f.dedup_key == "containers-packaging:cli-packaging-gap")
     assert gap.severity is Severity.HIGH
     assert "cna --help" in gap.proposed_action
-    assert not [
-        f for f in findings if f.dedup_key == "containers-packaging:cli-packaging-verified"
-    ]
+    assert not [f for f in findings if f.dedup_key == "containers-packaging:cli-packaging-verified"]
 
 
 def test_docker_build_coverage_gap_when_docker_unavailable():
@@ -267,13 +245,9 @@ def test_docker_build_coverage_gap_when_docker_unavailable():
 
 def test_docker_build_failure_recorded():
     findings = containers_packaging_verify_findings(
-        _results(
-            docker_build_ok={**dict(_OBSERVED.docker_build_ok), "Dockerfile": False}
-        )
+        _results(docker_build_ok={**dict(_OBSERVED.docker_build_ok), "Dockerfile": False})
     )
-    fail = next(
-        f for f in findings if f.dedup_key == "containers-packaging:docker-build-failure"
-    )
+    fail = next(f for f in findings if f.dedup_key == "containers-packaging:docker-build-failure")
     assert fail.severity is Severity.HIGH
     assert "Dockerfile" in fail.subject
 

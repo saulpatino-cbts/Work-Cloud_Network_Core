@@ -49,9 +49,7 @@ _SHA40 = st.text(alphabet=st.sampled_from(list("0123456789abcdefABCDEF")), min_s
 # A mutable git ref: a version tag, a branch name, or a short (non-40) SHA.
 _TAG = st.builds(lambda n: f"v{n}", st.integers(min_value=0, max_value=99))
 _BRANCH = st.sampled_from(["main", "master", "develop", "release", "next"])
-_SHORT_SHA = st.text(
-    alphabet=st.sampled_from(list("0123456789abcdef")), min_size=1, max_size=39
-)
+_SHORT_SHA = st.text(alphabet=st.sampled_from(list("0123456789abcdef")), min_size=1, max_size=39)
 _MUTABLE_REF = st.one_of(_TAG, _BRANCH, _SHORT_SHA)
 
 
@@ -182,11 +180,7 @@ def test_property14_mixed_workflow_records_exactly_unpinned_third_party(
     scanned = scan_uses_references(_workflow_text(refs))
     assert scanned == refs
 
-    expected = [
-        ref
-        for ref in refs
-        if is_third_party_action(ref) and not is_sha_pinned(ref)
-    ]
+    expected = [ref for ref in refs if is_third_party_action(ref) and not is_sha_pinned(ref)]
     assert recorded == expected
 
     # And no recorded ref is a pinned third-party, local, docker, or reusable ref.

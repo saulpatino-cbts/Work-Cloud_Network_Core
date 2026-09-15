@@ -307,5 +307,5 @@ def test_sanitized_error_body_has_no_traceback(client, monkeypatch):
         },
     )
     text = resp.text
-    for leak in ("Traceback", "File \"", "line ", "Error:", _RAW_DETAIL):
+    for leak in ("Traceback", 'File "', "line ", "Error:", _RAW_DETAIL):
         assert leak not in text

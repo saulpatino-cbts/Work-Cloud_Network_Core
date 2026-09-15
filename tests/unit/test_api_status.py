@@ -69,12 +69,9 @@ def test_partition_is_exhaustive():
     """Success ∪ client-error ∪ server-error covers every outcome exactly once."""
     partition = _SUCCESS_OUTCOMES | _CLIENT_ERROR_OUTCOMES | _SERVER_ERROR_OUTCOMES
     assert partition == set(Outcome)
-    assert (
-        len(_SUCCESS_OUTCOMES)
-        + len(_CLIENT_ERROR_OUTCOMES)
-        + len(_SERVER_ERROR_OUTCOMES)
-        == len(Outcome)
-    )
+    assert len(_SUCCESS_OUTCOMES) + len(_CLIENT_ERROR_OUTCOMES) + len(
+        _SERVER_ERROR_OUTCOMES
+    ) == len(Outcome)
 
 
 def test_no_error_outcome_maps_to_2xx():

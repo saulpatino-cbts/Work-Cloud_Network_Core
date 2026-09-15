@@ -113,9 +113,7 @@ def test_assert_escalations_well_formed_rejects_missing_blocker():
     plan = build_remediation_plan()
     # Drop every escalation owned by R-009 so the set is no longer exact.
     plan.entries = [
-        entry
-        for entry in plan.entries
-        if not (entry.is_escalation and entry.blocker_id == "R-009")
+        entry for entry in plan.entries if not (entry.is_escalation and entry.blocker_id == "R-009")
     ]
     with pytest.raises(AssertionError):
         assert_escalations_well_formed(plan)

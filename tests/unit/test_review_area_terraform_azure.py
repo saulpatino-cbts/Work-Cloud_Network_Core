@@ -33,8 +33,7 @@ def test_records_storage_network_rules_gap():
     storage = next(
         f
         for f in findings
-        if f.dedup_key
-        == "terraform-azure:storage-account-network-rules-deny-default"
+        if f.dedup_key == "terraform-azure:storage-account-network-rules-deny-default"
     )
     assert storage.severity is Severity.MEDIUM
     assert "Deny" in storage.proposed_action
@@ -44,11 +43,7 @@ def test_records_storage_network_rules_gap():
 def test_records_dev_environment_drift():
     """3.3: drift of the live-but-stale dev environment is recorded."""
     findings = terraform_azure_findings()
-    drift = next(
-        f
-        for f in findings
-        if f.dedup_key == "terraform-azure:dev-environment-live-drift"
-    )
+    drift = next(f for f in findings if f.dedup_key == "terraform-azure:dev-environment-live-drift")
     assert "drift" in drift.proposed_action.lower()
     assert "dev" in drift.subject
 
@@ -97,11 +92,7 @@ def test_verify_findings_are_well_formed_and_in_area():
 def test_records_terraform_validate_sweep():
     """3.2: the terraform validate result is recorded for the Azure roots."""
     findings = terraform_azure_verify_findings()
-    sweep = next(
-        f
-        for f in findings
-        if f.dedup_key == "terraform-azure:terraform-validate-sweep"
-    )
+    sweep = next(f for f in findings if f.dedup_key == "terraform-azure:terraform-validate-sweep")
     action = sweep.proposed_action.lower()
     assert "terraform validate" in action
     assert "-backend=false" in action
@@ -122,9 +113,7 @@ def test_r008_gates_to_an_escalation_record():
     blockers = load_blockers()
     assert "R-008" in blockers, "R-008 must be a real REVIEW.md blocker"
 
-    r008 = next(
-        f for f in terraform_azure_verify_findings() if f.blocker_id == "R-008"
-    )
+    r008 = next(f for f in terraform_azure_verify_findings() if f.blocker_id == "R-008")
     entry = gate_finding(r008, blockers)
     assert entry.is_escalation is True
     assert entry.blocker_id == "R-008"

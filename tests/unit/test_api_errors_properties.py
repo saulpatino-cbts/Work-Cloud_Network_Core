@@ -137,9 +137,11 @@ def test_property11_client_message_excludes_raw_text(exc_class: type[Exception],
 
     message = result.client_message
 
-    # The whole raw string never appears verbatim (unless it was empty/blank,
-    # in which case there is nothing to leak).
-    if raw.strip():
+    # The whole raw string never appears verbatim — unless it was empty/blank
+    # (nothing to leak) or is itself a fragment of one of the fixed generic
+    # messages (hypothesis also draws from constants in the code under test, so
+    # it produces "." and the like): that is a coincidence, not passthrough.
+    if raw.strip() and not any(raw in generic for generic in _GENERIC_MESSAGES):
         assert raw not in message
 
     # No substantial token of the raw text survives into the client message.

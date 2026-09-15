@@ -16,7 +16,6 @@ from cna.review.areas.cicd_shapin import (
     find_unpinned_references,
     is_sha_pinned,
     is_third_party_action,
-    r003_escalation_finding,
     scan_uses_references,
     sha_pin_findings,
 )
@@ -37,27 +36,13 @@ from cna.review.areas.observability import observability_findings
 from cna.review.areas.python_engine_api import python_engine_api_findings
 from cna.review.areas.python_engine_api_verify import python_engine_api_verify_findings
 from cna.review.areas.security_secrets import security_secrets_findings
-from cna.review.areas.terraform_aws import AWS_MODULES, terraform_aws_findings
-from cna.review.areas.terraform_aws_verify import (
-    AWS_ROOTS,
-    GATED_KIND_TO_BLOCKER,
-    blocker_for_gated_kind,
-    terraform_aws_gated_escalations,
-)
-from cna.review.areas.terraform_azure import (
-    terraform_azure_findings,
-    terraform_azure_verify_findings,
-)
+from cna.review.areas.terraform_relocated import terraform_relocated_findings
 
 __all__ = [
-    "AWS_MODULES",
-    "AWS_ROOTS",
-    "GATED_KIND_TO_BLOCKER",
     "RootUserFindingError",
     "VerificationResults",
     "app_typescript_findings",
     "app_typescript_verify_findings",
-    "blocker_for_gated_kind",
     "cicd_findings",
     "cicd_sha_and_escalation_findings",
     "cicd_verify_findings",
@@ -73,13 +58,9 @@ __all__ = [
     "observability_findings",
     "python_engine_api_findings",
     "python_engine_api_verify_findings",
-    "r003_escalation_finding",
     "record_root_user_finding",
     "scan_uses_references",
     "security_secrets_findings",
     "sha_pin_findings",
-    "terraform_aws_findings",
-    "terraform_aws_gated_escalations",
-    "terraform_azure_findings",
-    "terraform_azure_verify_findings",
+    "terraform_relocated_findings",
 ]

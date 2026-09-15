@@ -22,11 +22,12 @@ findings so the plan captures what was checked, not only what broke:
     ``CHANGELOG.md``, ``REVIEW.md``, ``TODO.md`` and the one optional
     ``CNA-0.90-updates.md`` — consistent.
   * **Numbered workflows.** ``README`` conventions describe numeric workflow
-    bands and reference specific workflows (``300-test-codebase.yml``,
-    ``310-release-version.yml``, ``340-sync-keys.yml``). All 14 numbered
-    workflows exist under ``.github/workflows/`` and every referenced filename
-    resolves — consistent (the stale ``110-sync-keys.yml`` reference was already
-    corrected under ``TODO.md`` T-102).
+    bands shared with the appliances and name the four workflows the core keeps
+    (``200-build-images.yml``, ``300-test-codebase.yml``,
+    ``310-release-version.yml``, ``370-registry-cleanup.yml``). All four exist
+    under ``.github/workflows/`` and every referenced filename resolves —
+    consistent (the deploy and operations workflows left with the deployment
+    layer, ``TODO.md`` T-504).
 
 Executable status of documented paths (Requirement 9.2):
 
@@ -36,11 +37,12 @@ Executable status of documented paths (Requirement 9.2):
     only present after the documented install step. The documented path is
     therefore *executable only after* its own install prerequisite — recorded so
     the plan states the path's executable status rather than assuming it runs.
-  * **AWS deploy path.** ``README`` states Azure is the deployable path today and
-    the AWS Terraform is authored but never applied, its prerequisites tracked in
-    ``REVIEW.md``. That documented status is accurate: the AWS deploy path is not
-    executable pending the human-gated account prerequisites (R-001–R-006), so it
-    is recorded as documented-non-executable-by-design, not a defect.
+  * **Deploy path.** ``README`` states that deployment does not happen from this
+    repository — each appliance repository owns its cloud's Terraform and deploy
+    workflows, and the AWS appliance's deploy stays fail-fast until its account
+    prerequisites clear (its ``REVIEW.md`` R-001 – R-003). That documented status
+    is accurate: no deploy path is executable from the core, by design, so it is
+    recorded as documented-non-executable-by-design, not a defect.
 
 Open doc tasks (Requirement 9.3). Of T-103, T-304, T-401 — checked against
 ``TODO.md`` current status:
@@ -111,11 +113,13 @@ def _accuracy_findings() -> list[Finding]:
             area=_AREA,
             severity=Severity.INFORMATIONAL,
             proposed_action=(
-                "Verified compliant: all 14 numbered workflows exist under "
-                ".github/workflows/ and every workflow filename README references "
-                "(300-test-codebase.yml, 310-release-version.yml, "
-                "340-sync-keys.yml) resolves. Reference workflows by filename per "
-                "the numbered-workflow convention."
+                "Verified compliant: the four core workflows exist under "
+                ".github/workflows/ (200-build-images.yml, 300-test-codebase.yml, "
+                "310-release-version.yml, 370-registry-cleanup.yml) and every "
+                "workflow filename README references resolves; the deploy and "
+                "operations workflows live in the appliance repositories (TODO.md "
+                "T-504). Reference workflows by filename per the numbered-workflow "
+                "convention."
             ),
             dedup_key="documentation:workflow-references-accurate",
             subject="README.md / .github/workflows",
@@ -156,12 +160,13 @@ def _executable_status_findings() -> list[Finding]:
             area=_AREA,
             severity=Severity.LOW,
             proposed_action=(
-                "Executable status: the documented AWS deploy path is "
-                "authored-but-never-applied and is NOT executable until the "
-                "human-gated account prerequisites (REVIEW.md R-001-R-006) clear "
-                "— README already states this. Recorded as "
-                "documented-non-executable-by-design; keep README pointing at "
-                "REVIEW.md/TODO.md for the AWS prerequisites."
+                "Executable status: the deploy path is not executable from this "
+                "repository — README's Deploying an environment section points "
+                "at the appliance repositories, which own the Terraform and "
+                "deploy workflows (TODO.md T-504); the AWS appliance's deploy "
+                "stays fail-fast until its REVIEW.md R-001 - R-003 clear. "
+                "Recorded as documented-non-executable-by-design; keep README "
+                "pointing at the appliances for deployment."
             ),
             dedup_key="documentation:aws-deploy-path-not-executable",
             subject="README.md::deploying-an-environment",
@@ -241,8 +246,9 @@ def _verify_findings() -> list[Finding]:
         inventory files README points at (repository root and
         ``apps/cna-web/``).
       * **Command / workflow-name resolution.** Every workflow filename README
-        references by name (``300-test-codebase.yml``, ``310-release-version.yml``,
-        ``340-sync-keys.yml``) exists under ``.github/workflows/``, and the
+        references by name (``200-build-images.yml``, ``300-test-codebase.yml``,
+        ``310-release-version.yml``, ``370-registry-cleanup.yml``) exists under
+        ``.github/workflows/``, and the
         documented ``cna`` CLI command resolves to a declared entry point
         (``pyproject.toml`` ``[project.scripts] cna = "cna.cli.main:cli"`` with
         the ``cna/cli/main.py`` module present). Running ``cna --help`` itself
@@ -286,8 +292,9 @@ def _verify_findings() -> list[Finding]:
             severity=Severity.INFORMATIONAL,
             proposed_action=(
                 "Verified compliant: every workflow filename README references "
-                "by name (300-test-codebase.yml, 310-release-version.yml, "
-                "340-sync-keys.yml) exists under .github/workflows/, and the "
+                "by name (200-build-images.yml, 300-test-codebase.yml, "
+                "310-release-version.yml, 370-registry-cleanup.yml) exists under "
+                ".github/workflows/, and the "
                 "documented `cna` command resolves to its declared entry point "
                 '(pyproject.toml [project.scripts] cna = "cna.cli.main:cli", '
                 "module cna/cli/main.py present). Running `cna --help` still "

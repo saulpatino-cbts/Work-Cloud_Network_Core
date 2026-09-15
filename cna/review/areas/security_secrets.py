@@ -3,7 +3,7 @@
 This is the *verify-then-close-gaps* record for the security-and-secrets audit:
 the ``detect-secrets`` / ``gitleaks`` secret scans and the ``pip-audit`` /
 ``npm audit`` dependency scans across the repository and its manifests, plus
-the runtime-secret escalation to ``REVIEW.md`` R-006.
+the scan results recorded for the core repository.
 
 Every finding below records a scan result by **location and key name only** —
 never a secret value (Requirement 6.2, Property 12). The secret detections are
@@ -14,7 +14,7 @@ secret material is never reproduced here or in any downstream output.
 Scans performed (design "6. Security & secrets"):
 
   * **detect-secrets** (``scan --baseline .secrets.baseline``). The committed
-    baseline records **31 detections across 19 in-project files** — every one
+    baseline records **21 detections across 12 in-project files** — every one
     marked ``is_verified: false``, i.e. baselined/accepted as a known-safe test
     or example placeholder rather than a live credential. Requirement 6.2 was
     *tightened* to require a remediation entry for **all** detections regardless
@@ -37,12 +37,11 @@ Scans performed (design "6. Security & secrets"):
     and ``sharp``, and a moderate ``baseline-browser-mapping`` DoS. Each is
     recorded as its own finding at its reported severity (Requirement 6.3).
 
-The R-006 runtime-secret escalation (Requirement 6.4) is recorded as an
-``Escalation_Record``: the five ``sensitive``-with-no-default runtime inputs are
-supplied at deploy time by an external secret owner; the review never invents or
-commits a value. Its ``blocker_id`` is ``R-006`` and it carries no automated
-fix. These records are consumed by the consolidation step (spec task 14.1) and,
-for the escalation, routed through the scope gate (spec task 2.1 / 14.3).
+The R-006 runtime-secret escalation (Requirement 6.4) this area used to record
+left the core with the AWS Terraform whose ``sensitive``-with-no-default inputs
+it described (``TODO.md`` T-504); the AWS appliance's ``REVIEW.md`` owns it. No
+finding here carries a ``blocker_id``. These records are consumed by the
+consolidation step (spec task 14.1).
 """
 
 from __future__ import annotations
@@ -51,7 +50,7 @@ from cna.review.model import Finding, Severity
 
 _AREA = "security-secrets"
 
-# The 19 in-project files carrying baselined detect-secrets detections, each
+# The 12 in-project files carrying baselined detect-secrets detections, each
 # paired with the detector *type(s)* it flagged and the number of detections.
 # Location + key-name only — no secret value is reproduced (Requirement 6.2,
 # Property 12). Types are the detector's own classification, e.g. a "Secret
@@ -59,24 +58,17 @@ _AREA = "security-secrets"
 # in the file and is never copied here.
 _BASELINED_SECRET_LOCATIONS: tuple[tuple[str, str, int], ...] = (
     (".env.example", "Basic Auth Credentials", 1),
-    (".github/workflows/000-bootstrap-backend.yml", "Secret Keyword", 1),
-    (".github/workflows/100-validate-prereqs.yml", "Secret Keyword", 1),
     (".github/workflows/200-build-images.yml", "Basic Auth Credentials", 1),
-    (".github/workflows/211-deploy-azure-split.yml", "Secret Keyword", 3),
     ("TODO.md", "Secret Keyword", 1),
     ("apps/cna-web/.env.example", "Basic Auth Credentials + Secret Keyword", 3),
     ("apps/cna-web/app/api/local-admin/route.ts", "Secret Keyword", 1),
-    ("infra/terraform/environments/azure/dev/workload/main.tf", "Secret Keyword", 3),
-    ("infra/terraform/environments/azure/prod/workload/main.tf", "Secret Keyword", 3),
-    ("infra/terraform/providers/aws/identity/locals.tf", "Secret Keyword", 1),
-    ("infra/terraform/providers/aws/runtime/main.tf", "Secret Keyword", 1),
-    ("infra/terraform/providers/azure/runtime/variables.tf", "Basic Auth Credentials", 1),
-    ("scripts/Initialize-CnaGitHubSecrets.ps1", "Secret Keyword", 1),
-    ("scripts/Remove-CnaStaleAiResources.ps1", "Secret Keyword", 1),
-    ("scripts/bootstrap-runner.sh", "Hex High Entropy String", 1),
+    ("tests/unit/test_api_errors_properties.py", "AWS Access Key + Basic Auth Credentials", 2),
     ("tests/unit/test_auth.py", "Secret Keyword", 3),
     ("tests/unit/test_aws_discovery.py", "Secret Keyword", 3),
     ("tests/unit/test_azure_discovery.py", "Secret Keyword", 1),
+    ("tests/unit/test_cna_api_error_paths.py", "Secret Keyword", 2),
+    ("tests/unit/test_review_area_cicd_shapin.py", "Hex High Entropy String", 1),
+    ("tests/unit/test_review_sha_pin_properties.py", "Hex High Entropy String", 2),
 )
 
 
@@ -116,7 +108,7 @@ def _secret_location_findings() -> list[Finding]:
 
     Requirement 6.2 (tightened) requires a remediation entry for **every**
     detection regardless of context — including baselined known-safe test/example
-    secrets — so each of the 19 in-project locations is recorded via the pure
+    secrets — so each of the 12 in-project locations is recorded via the pure
     :func:`secret_location_finding` builder, which never takes a secret value
     (Property 12).
     """
@@ -129,7 +121,7 @@ def _secret_location_findings() -> list[Finding]:
 def security_secrets_findings() -> list[Finding]:
     """Return the Requirement 6 findings recorded for the security-secrets area.
 
-    Covers the four scans and the R-006 runtime-secret escalation. No finding
+    Covers the four scans. No finding
     reproduces a secret value: committed-secret detections are identified by
     location and detector key-name type only (Requirement 6.2, Property 12).
     """
@@ -257,24 +249,8 @@ def security_secrets_findings() -> list[Finding]:
         )
     )
 
-    # 6.4 — runtime-secret escalation to R-006 (escalation-only, no fix, no value).
-    findings.append(
-        Finding(
-            area=_AREA,
-            severity=Severity.HIGH,
-            proposed_action=(
-                "Escalation: the runtime secrets (db_admin_password, "
-                "nextauth_secret, entra_client_secret, credential_encryption_key, "
-                "dockerhub_username/dockerhub_token) are declared sensitive with "
-                "no defaults and must be supplied at deploy time by the external "
-                "secret owner (Secrets Manager / GitHub environment secrets / Key "
-                "Vault). The review records the requirement by key name only and "
-                "never invents or commits a value; owner: REVIEW.md R-006."
-            ),
-            dedup_key="security-secrets:runtime-secrets-supplied-at-deploy",
-            subject="infra/terraform/providers/aws/{runtime,database}/variables.tf",
-            blocker_id="R-006",
-        )
-    )
+    # 6.4 — the runtime-secret escalation (R-006) left the core with the AWS
+    # Terraform whose variables it described (TODO.md T-504); the AWS
+    # appliance's REVIEW.md owns it (R-008 there).
 
     return findings

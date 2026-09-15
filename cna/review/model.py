@@ -45,9 +45,9 @@ AREAS: frozenset[str] = frozenset(
     {
         "app-typescript",  # apps/cna-web (Next.js, incl. AWS-shaped UI views)
         "python-engine-api",  # cna/ core + apps/cna-api + apps/cna-worker decision
-        "terraform-azure",  # infra/terraform .../azure
-        "terraform-aws",  # infra/terraform .../aws (8 modules)
-        "cicd",  # .github/workflows (14)
+        "terraform-azure",  # the Azure appliance's Terraform (reviewed there; T-504)
+        "terraform-aws",  # the AWS appliance's Terraform (reviewed there; T-504)
+        "cicd",  # .github/workflows (200, 300, 310, 370)
         "security-secrets",  # detect-secrets, gitleaks, pip-audit, npm audit
         "containers-packaging",  # Dockerfiles, docker-compose, cna CLI packaging
         "observability",  # structured logging, AI-path coverage

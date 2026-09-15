@@ -3,15 +3,16 @@
 Covers the verify-then-close-gaps record for the security-and-secrets audit
 (spec task 10.1): the detect-secrets baselined detections recorded by location
 and key-name type (never value), the gitleaks tool-unavailable coverage gap, the
-clean pip-audit outcome, each npm-audit advisory at its reported severity, and
-the R-006 runtime-secret escalation. The most load-bearing invariant is
-Property 12: no finding reproduces a secret value.
+clean pip-audit outcome and each npm-audit advisory at its reported severity.
+The R-006 runtime-secret escalation this area used to record left the core with
+the AWS Terraform (TODO.md T-504), so no finding here carries a blocker id. The
+most load-bearing invariant is Property 12: no finding reproduces a secret value.
 """
 
 import json
 from pathlib import Path
 
-from cna.review import AREAS, Severity, consolidate, gate_finding, load_blockers
+from cna.review import AREAS, Severity, consolidate
 from cna.review.areas import security_secrets_findings
 
 _BASELINE_PATH = Path(__file__).resolve().parents[2] / ".secrets.baseline"
@@ -52,11 +53,11 @@ def test_records_every_baselined_secret_location():
         if f.dedup_key.startswith("security-secrets:detect-secrets:")
         and f.dedup_key != "security-secrets:detect-secrets:baseline-drift-skill-libraries"
     }
-    # The committed .secrets.baseline records 19 distinct in-project files.
-    assert len(secret_subjects) == 19
+    # The committed .secrets.baseline records 12 distinct in-project files.
+    assert len(secret_subjects) == 12
     assert ".env.example" in secret_subjects
     assert "tests/unit/test_auth.py" in secret_subjects
-    assert "infra/terraform/providers/aws/runtime/main.tf" in secret_subjects
+    assert ".github/workflows/200-build-images.yml" in secret_subjects
 
 
 def test_secret_findings_never_reproduce_a_value():
@@ -105,34 +106,13 @@ def test_records_each_npm_audit_advisory_at_reported_severity():
     assert by_key["security-secrets:npm-audit:baseline-browser-mapping"].severity is Severity.MEDIUM
 
 
-def test_runtime_secret_escalation_references_r006():
-    """6.4: the runtime-secret escalation carries blocker_id R-006."""
+def test_no_finding_is_blocker_owned():
+    """6.4: the runtime-secret escalation left with the AWS Terraform (T-504)."""
     findings = security_secrets_findings()
-    esc = next(
-        f for f in findings if f.dedup_key == "security-secrets:runtime-secrets-supplied-at-deploy"
-    )
-    assert esc.blocker_id == "R-006"
-
-
-def test_only_the_runtime_secret_finding_is_blocker_owned():
-    """Every finding except the R-006 escalation is engineering-fixable."""
-    findings = security_secrets_findings()
-    blocker_owned = [f for f in findings if f.blocker_id is not None]
-    assert len(blocker_owned) == 1
-    assert blocker_owned[0].blocker_id == "R-006"
-
-
-def test_r006_finding_gates_to_an_escalation_entry():
-    """Through the scope gate, the R-006 finding becomes an Escalation_Record."""
-    blockers = load_blockers()
-    esc = next(
-        f
-        for f in security_secrets_findings()
-        if f.dedup_key == "security-secrets:runtime-secrets-supplied-at-deploy"
-    )
-    entry = gate_finding(esc, blockers)
-    assert entry.is_escalation is True
-    assert entry.blocker_id == "R-006"
+    assert all(f.blocker_id is None for f in findings)
+    assert "security-secrets:runtime-secrets-supplied-at-deploy" not in {
+        f.dedup_key for f in findings
+    }
 
 
 def test_findings_consolidate_and_are_severity_ordered():

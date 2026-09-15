@@ -1,15 +1,18 @@
 """Findings for the ``cicd`` area (Requirement 5 CI/CD resilience).
 
-This is a *verify-then-close-gaps* record for the 14 numbered GitHub Actions
-workflows under ``.github/workflows/``. The audit against Requirement 5 covers
+This is a *verify-then-close-gaps* record for the numbered GitHub Actions
+workflows under ``.github/workflows/``. Since the deployment layer left the core
+(``TODO.md`` T-504) the tree holds four workflows — ``200-build-images``,
+``300-test-codebase``, ``310-release-version`` and ``370-registry-cleanup``; the
+deploy and operations workflows are reviewed in the appliance repositories. The audit against Requirement 5 covers
 runner topology (5.1, 5.2), least-privilege ``permissions`` blocks, concurrency
-guards, and per-job timeouts. Third-party action SHA-pinning (5.3) and the
-R-003 escalation for ``212-deploy-aws-split.yml`` (5.4) are recorded separately
-by spec task 9.3 — this module deliberately records neither so the two tasks do
-not double-count.
+guards, and per-job timeouts. Third-party action SHA-pinning (5.3) is recorded
+separately by spec task 9.3 — this module deliberately does not record it so the
+two tasks do not double-count. The R-003 escalation for the AWS deploy workflow
+(5.4) left with that workflow and is owned by the AWS appliance's ``REVIEW.md``.
 
-Runner topology (5.2). The self-hosted runner is the *sole* executor for 13 of
-the 14 workflows; only ``370-registry-cleanup.yml`` runs on a GitHub-hosted
+Runner topology (5.2). The self-hosted runner is the *sole* executor for three
+of the four workflows; only ``370-registry-cleanup.yml`` runs on a GitHub-hosted
 runner (``ubuntu-latest``), because the Docker Hub web/API domain WAF-blocks the
 self-hosted VPS IP. Every self-hosted-only workflow is therefore a single point
 of failure: if the one runner is offline, unregistered, or its host is down,
@@ -20,8 +23,8 @@ runner matrix, and no documented failover. Each is recorded as a
 Best-practice fixes applied in-tree by this task (low-risk, runner-topology
 untouched): added ``timeout-minutes`` to jobs that lacked a runaway-billing
 guard, and added ``concurrency`` guards to the scheduled/dispatch workflows that
-lacked one. Least-privilege ``permissions`` blocks were already present on all
-14 workflows and are recorded as verified-compliant.
+lacked one. Least-privilege ``permissions`` blocks were already present on every
+workflow and are recorded as verified-compliant.
 
 These records are consumed by the consolidation step (spec task 14.1).
 """
@@ -32,29 +35,19 @@ from cna.review.model import Finding, Severity
 
 _AREA = "cicd"
 
-# The 13 workflows whose sole executor is the self-hosted runner (every job
+# The workflows whose sole executor is the self-hosted runner (every job
 # declares ``runs-on: self-hosted`` with no GitHub-hosted fallback and no runner
 # matrix). ``370-registry-cleanup.yml`` is deliberately absent: it is the one
 # workflow pinned to ``ubuntu-latest`` (GitHub-hosted), so it is not a
 # self-hosted SPOF. Keep this in sync with a grep over the workflow tree:
 #   grep -rL 'runs-on: ubuntu' .github/workflows/*.yml
 SELF_HOSTED_ONLY_WORKFLOWS: tuple[str, ...] = (
-    "000-bootstrap-backend.yml",
-    "100-validate-prereqs.yml",
     "200-build-images.yml",
-    "211-deploy-azure-split.yml",
-    "212-deploy-aws-split.yml",
-    "220-fast-redeploy.yml",
     "300-test-codebase.yml",
     "310-release-version.yml",
-    "320-publish-portal.yml",
-    "330-teardown.yml",
-    "340-sync-keys.yml",
-    "350-drift-dev.yml",
-    "360-drift-prod.yml",
 )
 
-# The one GitHub-hosted workflow — recorded so coverage of all 14 workflows is
+# The one GitHub-hosted workflow — recorded so coverage of every workflow is
 # explicit and the "not a SPOF" outcome is captured rather than merely omitted.
 GITHUB_HOSTED_WORKFLOWS: tuple[str, ...] = ("370-registry-cleanup.yml",)
 
@@ -113,8 +106,8 @@ def cicd_findings() -> list[Finding]:
     findings: list[Finding] = [_spof_finding(workflow) for workflow in SELF_HOSTED_ONLY_WORKFLOWS]
 
     # 5.2 counter-case: the one GitHub-hosted workflow is not a SPOF against the
-    # self-hosted runner. Recorded as INFORMATIONAL so the plan reflects that all
-    # 14 workflows were audited, not only the 13 flagged ones.
+    # self-hosted runner. Recorded as INFORMATIONAL so the plan reflects that
+    # every workflow was audited, not only the flagged ones.
     findings.append(
         Finding(
             area=_AREA,
@@ -130,7 +123,7 @@ def cicd_findings() -> list[Finding]:
         )
     )
 
-    # 5.1 best-practice: least-privilege permissions blocks. All 14 workflows
+    # 5.1 best-practice: least-privilege permissions blocks. All workflows
     # already declare an explicit top-level permissions block, so the
     # default-broad GITHUB_TOKEN scope is not in play. Recorded as verified
     # compliant to guard against regression.
@@ -199,7 +192,7 @@ def cicd_verify_findings() -> list[Finding]:
     does not double-count. Two records:
 
       * **actionlint sweep (INFORMATIONAL, verified-compliant).** ``actionlint``
-        v1.7.7 linted all 14 workflows under ``.github/workflows/`` with **0
+        v1.7.7 linted every workflow under ``.github/workflows/`` with **0
         errors** — confirming the workflow tree, including the ``timeout-minutes``
         and ``concurrency`` blocks added by spec tasks 9.1/9.3 and the SHA-pinned
         ``uses:`` references, is syntactically valid and free of the checks
@@ -212,8 +205,8 @@ def cicd_verify_findings() -> list[Finding]:
         If ``actionlint`` itself were unavailable this would instead be recorded
         as a coverage-gap finding rather than a silent pass.
 
-      * **YAML parse validation (INFORMATIONAL, verified-compliant).** Every one
-        of the 14 workflow files parses cleanly via ``yaml.safe_load`` — the
+      * **YAML parse validation (INFORMATIONAL, verified-compliant).** Every
+        workflow file parses cleanly via ``yaml.safe_load`` — the
         recent 9.1/9.3 edits left valid YAML with no tab/indentation or
         duplicate-key breakage.
 
@@ -226,7 +219,7 @@ def cicd_verify_findings() -> list[Finding]:
             area=_AREA,
             severity=Severity.INFORMATIONAL,
             proposed_action=(
-                "Verified compliant: actionlint v1.7.7 linted all 14 workflows "
+                "Verified compliant: actionlint v1.7.7 linted every workflow "
                 "under .github/workflows/ with 0 errors, confirming the tree — "
                 "including the timeout-minutes/concurrency blocks added by tasks "
                 "9.1/9.3 and the SHA-pinned uses: references — passes every "
@@ -247,7 +240,7 @@ def cicd_verify_findings() -> list[Finding]:
             area=_AREA,
             severity=Severity.INFORMATIONAL,
             proposed_action=(
-                "Verified compliant: all 14 .github/workflows/*.yml files parse "
+                "Verified compliant: every .github/workflows/*.yml file parses "
                 "cleanly via yaml.safe_load — the timeout-minutes and concurrency "
                 "edits from tasks 9.1/9.3 left valid YAML with no indentation, "
                 "tab, or duplicate-key breakage. Keep YAML parse validation in "

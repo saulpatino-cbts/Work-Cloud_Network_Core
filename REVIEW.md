@@ -15,11 +15,11 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-003](#r-003--github-oidc-deploy-role-must-be-wired-into-ci) | GitHub OIDC deploy role wired into CI secrets | Repository admin | Open — tracked in the AWS appliance's `REVIEW.md` (R-003); deploy layer moved 2026-09-15 |
 | [R-004](#r-004--acm-certificates-and-custom-domain-decision) | ACM certificates + custom-domain decision | DNS / domain owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-004); deploy layer moved 2026-09-15 |
 | [R-005](#r-005--amazon-bedrock-model-access-opt-in) | Amazon Bedrock foundation-model access opt-in | AWS account owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-005); deploy layer moved 2026-09-15 |
-| [R-006](#r-006--runtime-secrets-have-no-defaults-and-must-be-supplied) | Runtime secrets supplied at apply time | Security / secret owner | Open — AWS appliance concern, transfer via `TODO.md` T-507 |
+| [R-006](#r-006--runtime-secrets-have-no-defaults-and-must-be-supplied) | Runtime secrets supplied at apply time | Security / secret owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-008); transferred 2026-09-15 |
 | [R-007](#r-007--azure-subscription-resource-provider-registration) | `Microsoft.AlertsManagement` provider registration | Azure subscription owner | Resolved — no longer required |
-| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding; Azure appliance concern, transfer via `TODO.md` T-507 |
+| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding; tracked in the Azure appliance's `REVIEW.md` (R-003); transferred 2026-09-15 |
 | [R-009](#r-009--github-wiki-write-access-for-documentation-migration) | GitHub Wiki write access to publish prepared pages | Repository owner | Open — not blocking |
-| [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open — Azure appliance concern, transfer via `TODO.md` T-507 |
+| [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open — tracked in the Azure appliance's `REVIEW.md` (R-004); transferred 2026-09-15 |
 | [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
 | [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
 
@@ -231,7 +231,7 @@ multi-hour approval delay for some models, so it should not be discovered late.
 
 ## R-006 — Runtime secrets have no defaults and must be supplied
 
-> **Appliance concern (AWS) since 2026-09-15.** The `runtime` and `database` modules this blocker describes left the core with `TODO.md` → T-504; the AWS appliance has no equivalent entry yet, so this one stays here until `TODO.md` → T-507 transfers it.
+> **Transferred 2026-09-15** to the AWS appliance's `REVIEW.md` as **R-008** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 Five runtime inputs are declared `sensitive` with **no defaults** and are intentionally absent
@@ -327,7 +327,7 @@ operation the deploy identity cannot perform itself.
 
 ## R-008 — Live Azure beta acceptance sign-off
 
-> **Appliance concern (Azure) since 2026-09-15.** Every reference below (`100`, `211`, the evidence script, the release catalog) is an Azure appliance file now; the acceptance decision stays open and moves with `TODO.md` → T-507.
+> **Transferred 2026-09-15** to the Azure appliance's `REVIEW.md` as **R-003** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 The repository is at `0.8.0b0`. Code, Terraform, workflows, and the changelog are aligned on
@@ -417,7 +417,7 @@ merge rather than create.
 
 ## R-010 — The dev environment has no protection against out-of-band deletion
 
-> **Appliance concern (Azure) since 2026-09-15.** The dev environment is operated from the Azure appliance; the `.deployment-catalog/dev/33169632082.json` record cited below left the core with `TODO.md` → T-504 and remains in the appliance's catalog. Transfer via `TODO.md` → T-507.
+> **Transferred 2026-09-15** to the Azure appliance's `REVIEW.md` as **R-004** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 The entire Azure dev environment — workload resource group *and* the `-tfstate` resource group

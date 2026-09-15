@@ -1,9 +1,8 @@
-"""SHA-pin checker and R-003 escalation for the ``cicd`` area (Req 5.3/5.4).
+"""SHA-pin checker for the ``cicd`` area (Requirement 5.3).
 
 Spec task 9.1 (:mod:`cna.review.areas.cicd`) audited runner topology and
 best-practice gaps but deliberately left third-party action SHA-pinning (5.3)
-and the R-003 escalation for ``212-deploy-aws-split.yml`` (5.4) to this task
-(9.3) so the two do not double-count.
+to this task (9.3) so the two do not double-count.
 
 SHA-pinning (5.3, design Property 14). Every third-party ``uses:`` reference in
 ``.github/workflows/*.yml`` must be pinned to a **40-hex commit SHA**
@@ -31,22 +30,18 @@ when* it is not pinned to a 40-hex commit SHA. :func:`is_third_party_action` and
 :func:`is_sha_pinned` are the two predicates that decision rests on.
 
 The live scan over ``.github/workflows/`` at authoring time found two unpinned
-third-party references (every other ``uses:`` is already 40-hex pinned):
+third-party references — ``actions/checkout@v4`` in the AWS deploy workflow and
+``actions/create-github-app-token@v3`` in the Azure deploy workflow. Both
+workflows left the core with the deployment layer (``TODO.md`` T-504) and are
+now the appliances' to pin; every ``uses:`` reference that remains here is
+40-hex pinned, so the scan records the single informational all-pinned entry.
 
-  * ``actions/checkout@v4`` in ``212-deploy-aws-split.yml`` (three jobs).
-  * ``actions/create-github-app-token@v3`` in ``211-deploy-azure-split.yml``
-    (two jobs).
-
-Each *distinct* unpinned reference is recorded once as a fixable ``Finding``
-(MEDIUM: a mutable tag is a supply-chain exposure, engineering-fixable by
-pinning to the tag's current commit SHA).
-
-R-003 escalation (5.4). ``212-deploy-aws-split.yml`` cannot authenticate to AWS
-without the externally provisioned GitHub OIDC deploy role (``REVIEW.md``
-R-003). That is a human-gated blocker, so it is recorded as an
-``Escalation_Record`` carrying ``blocker_id="R-003"`` — escalation-only, no
-automated fix. These records are consumed by the consolidation step (spec task
-14.1) and, for the escalation, routed through the scope gate (spec task 14.3).
+Each *distinct* unpinned reference found is recorded once as a fixable
+``Finding`` (MEDIUM: a mutable tag is a supply-chain exposure,
+engineering-fixable by pinning to the tag's current commit SHA). The R-003
+escalation for the AWS deploy workflow (5.4) that used to be recorded here is
+owned by the AWS appliance's ``REVIEW.md``. These records are consumed by the
+consolidation step (spec task 14.1).
 """
 
 from __future__ import annotations
@@ -223,37 +218,14 @@ def sha_pin_findings(workflows_dir: Path = _WORKFLOWS_DIR) -> list[Finding]:
     return findings
 
 
-def r003_escalation_finding() -> Finding:
-    """Record the R-003 escalation for ``212-deploy-aws-split.yml`` (5.4).
-
-    The workflow cannot authenticate to AWS without the externally provisioned
-    GitHub OIDC deploy role, a human-gated ``REVIEW.md`` blocker. Recorded as an
-    ``Escalation_Record`` carrying ``blocker_id="R-003"`` — escalation-only, no
-    automated fix.
-    """
-    return Finding(
-        area=_AREA,
-        severity=Severity.HIGH,
-        proposed_action=(
-            "Escalation: 212-deploy-aws-split.yml cannot authenticate to AWS "
-            "because its OIDC deploy role is externally provisioned — every job "
-            "is currently gated on a 'Blocked on AWS account setup' step. Wiring "
-            "the GitHub OIDC deploy role into CI is a repository-admin action "
-            "outside automated scope; the review records the dependency and "
-            "performs no deploy. Owner: REVIEW.md R-003."
-        ),
-        dedup_key="cicd:aws-deploy-oidc-role",
-        subject=".github/workflows/212-deploy-aws-split.yml",
-        blocker_id="R-003",
-    )
-
-
 def cicd_sha_and_escalation_findings(
     workflows_dir: Path = _WORKFLOWS_DIR,
 ) -> list[Finding]:
-    """Return spec task 9.3's findings: SHA-pinning (5.3) + R-003 (5.4).
+    """Return spec task 9.3's findings: the SHA-pinning scan (5.3).
 
-    The SHA-pinning findings scanned from the real workflow tree, plus the
-    single R-003 escalation for the AWS deploy workflow.
+    The R-003 escalation for the AWS deploy workflow (5.4) that this function
+    used to append left the core with that workflow (``TODO.md`` T-504); the
+    AWS appliance's ``REVIEW.md`` owns it. The name is kept so the plan wiring
+    and its tests read the same.
     """
-    return [*sha_pin_findings(workflows_dir), r003_escalation_finding()]
+    return [*sha_pin_findings(workflows_dir)]

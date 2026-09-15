@@ -23,12 +23,12 @@ The flow is deliberately two-stage so both load-bearing behaviours are honoured:
     :class:`~cna.review.model.PlanEntry` records as well as raw findings, feeding
     it the gated entries preserves the escalation classification through the merge.
 
-Every area emitter listed in :data:`AREA_EMITTERS` contributes, including the
-separate gated-escalation emitters
-(:func:`~cna.review.areas.terraform_aws_gated_escalations` and
-:func:`~cna.review.areas.cicd_sha_and_escalation_findings`, which carries the
-R-003 escalation) so the plan reflects the full audit — every area's audit
-findings, verification records, and escalations.
+Every area emitter listed in :data:`AREA_EMITTERS` contributes, so the plan
+reflects the full audit — every area's audit findings, verification records,
+and escalations. The two Terraform areas are represented by the relocation
+records in :mod:`cna.review.areas.terraform_relocated`: the deployment layer
+left the core (``TODO.md`` T-504) and its findings and gated escalations live in
+the appliance repositories.
 """
 
 from __future__ import annotations
@@ -51,10 +51,7 @@ from cna.review.areas import (
     python_engine_api_findings,
     python_engine_api_verify_findings,
     security_secrets_findings,
-    terraform_aws_findings,
-    terraform_aws_gated_escalations,
-    terraform_azure_findings,
-    terraform_azure_verify_findings,
+    terraform_relocated_findings,
 )
 from cna.review.blockers import Blocker, gate_finding, load_blockers
 from cna.review.consolidate import consolidate
@@ -70,21 +67,17 @@ __all__ = [
 ]
 
 # The owning ``REVIEW.md`` blockers this review's escalations consume (design
-# "Blocker model" table, "Consumers in this review" column). R-001..R-006 are
-# the AWS/CI/observability/security account prerequisites, R-008 is the live
-# Azure beta acceptance sign-off, and R-009 is the Wiki-publication gate. R-007
-# is deliberately absent: it is resolved-but-not-closed, so its subject (Azure
-# provider registration) stays entirely out of automated scope rather than
-# becoming an escalation consumer.
+# "Blocker model" table, "Consumers in this review" column). R-005 is the
+# Bedrock model-access opt-in the observability area's live-Bedrock coverage
+# depends on, and R-009 is the Wiki-publication gate. R-001 – R-004, R-006 and
+# R-008 left the core with the deployment layer (TODO.md T-504): the Terraform
+# and workflow subjects they gated are reviewed in the appliance repositories,
+# whose REVIEW.md files own those escalations now. R-007 is deliberately
+# absent: it is resolved-but-not-closed, so its subject stays out of automated
+# scope rather than becoming an escalation consumer.
 EXPECTED_ESCALATION_BLOCKERS: frozenset[str] = frozenset(
     {
-        "R-001",  # AWS account / admin access — Terraform AWS, CI/CD
-        "R-002",  # Terraform S3 state backend + lock — Terraform AWS
-        "R-003",  # GitHub OIDC deploy role in CI — CI/CD (workflow 212)
-        "R-004",  # ACM certs + custom-domain decision — Terraform AWS
-        "R-005",  # Bedrock model access opt-in — Terraform AWS (ai), Observability
-        "R-006",  # Runtime secrets supplied at deploy — Security, Terraform AWS
-        "R-008",  # Live Azure beta acceptance sign-off — Terraform Azure
+        "R-005",  # Bedrock model access opt-in — Observability (live AI-path coverage)
         "R-009",  # GitHub Wiki write access — Documentation
     }
 )
@@ -95,11 +88,11 @@ _BLOCKER_ID_PATTERN = re.compile(r"R-\d{3,}")
 
 # Every area finding emitter that feeds the consolidated plan. Ordered by owner
 # area for readability; ordering does not affect the consolidated result (the
-# consolidation engine sorts by severity and dedup key). The gated-escalation
-# emitters (terraform_aws_gated_escalations, cicd_sha_and_escalation_findings)
-# are included so the R-001..R-006 AWS escalations and the R-003 CI escalation
-# reach the plan — the area audit emitters deliberately leave those to their
-# companion escalation emitter so the two do not double-count.
+# consolidation engine sorts by severity and dedup key). The AWS gated
+# escalations (R-001 – R-006) and the R-003 CI escalation left with the
+# deployment layer (TODO.md T-504) and are owned by the appliances' REVIEW.md
+# files; the escalations that remain are R-005 (observability, live Bedrock) and
+# R-009 (documentation, Wiki publication).
 AREA_EMITTERS: tuple[Callable[[], list[Finding]], ...] = (
     # python-engine-api
     python_engine_api_findings,
@@ -107,17 +100,13 @@ AREA_EMITTERS: tuple[Callable[[], list[Finding]], ...] = (
     # app-typescript
     app_typescript_findings,
     app_typescript_verify_findings,
-    # terraform-azure
-    terraform_azure_findings,
-    terraform_azure_verify_findings,
-    # terraform-aws (audit + the R-001..R-006 gated escalations + validate result)
-    terraform_aws_findings,
-    terraform_aws_gated_escalations,
-    # cicd (audit + verify + the SHA-pin findings and R-003 escalation)
+    # terraform-azure + terraform-aws (relocated to the appliances; T-504)
+    terraform_relocated_findings,
+    # cicd (audit + verify + the SHA-pin findings)
     cicd_findings,
     cicd_verify_findings,
     cicd_sha_and_escalation_findings,
-    # security-secrets (includes the R-006 runtime-secret escalation)
+    # security-secrets
     security_secrets_findings,
     # containers-packaging
     containers_packaging_findings,
@@ -222,7 +211,7 @@ def assert_escalations_well_formed(
       * **The escalation blocker set is exactly the expected consumers.** The
         set of owning blockers across all escalations equals
         ``expected_blockers`` (by default :data:`EXPECTED_ESCALATION_BLOCKERS`,
-        the R-001–R-006, R-008, R-009 consumers).
+        the R-005 and R-009 consumers that remain in the core).
 
     :param plan: the consolidated ``Remediation_Plan`` to verify.
     :param review_path: path to ``REVIEW.md`` for the blocker model; defaults to

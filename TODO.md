@@ -147,7 +147,7 @@ Each one actively misleads an engineer or a workflow run.
 - **Recommended action:** Reference the stored secret from `212-deploy-aws-split.yml` using
   `aws-actions/configure-aws-credentials` with `id-token: write`, matching the OIDC-only
   credential policy used on the Azure side. No long-lived AWS keys.
-- **Status:** Blocked on R-003 (now the AWS appliance's R-003). AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-104 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** The deploy role's trust `sub` condition is scoped to
   `repo:<owner>/<repo>:*`. If the workflow is ever moved to a reusable workflow in another
   repository, that condition must be widened deliberately — it is the only thing preventing
@@ -313,7 +313,7 @@ order; do not reorder it.
 - **Dependencies:** `REVIEW.md` → R-001, R-002. Blocks T-302.
 - **Recommended action:** `terraform init` with the four `-backend-config` values from R-002, plan,
   review, apply. Confirm all nine endpoints come up before proceeding.
-- **Status:** Blocked on R-001, R-002 (now the AWS appliance's R-001, R-002). AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-105 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** The nine endpoints and why each exists —
 
   | Endpoint | Type | Purpose |
@@ -341,7 +341,7 @@ order; do not reorder it.
 - **Recommended action:** Apply in this order:
   `identity → storage → database → observability → ai → runtime → compute → security`.
   The workload root reads platform outputs through variables populated from the platform state.
-- **Status:** Blocked on T-301. AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-106 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** The platform state and workload state are separate state files
   by design, mirroring the Azure split. Cross-state values move as explicit variables, not remote
   state data sources — keep it that way; it is what makes the two roots independently
@@ -356,7 +356,7 @@ order; do not reorder it.
   availability check reports a false negative).
 - **Recommended action:** After the opt-in, list available foundation models in the deploy region
   and reconcile against the module defaults. Adjust the variable rather than the module.
-- **Status:** Blocked on R-005 (now the AWS appliance's R-005). AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-107 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** If the platform keeps calling the external Azure OpenAI endpoint
   from AWS — as the superseded `migrate/` root does today — the `ai` module can be disabled
   entirely and the endpoint stays an environment variable. That is a fallback, not the target
@@ -375,7 +375,7 @@ order; do not reorder it.
   last check no environment was deployed, so this is a no-op for the initial rollout.
 - **Recommended action:** Follow the runbook below before the next apply in any affected
   environment. Run it **once per environment** (dev, then prod).
-- **Status:** Not started — not currently applicable. Azure appliance concern — the Terraform and workflows it refers to now live in the Azure appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the Azure appliance's `TODO.md` → T-103 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:**
 
   **Why the workspace moved.** The workspace used to be created by the `compute` module, which
@@ -460,7 +460,7 @@ order; do not reorder it.
 - **Recommended action:** After the first successful workload apply, walk the parity matrix
   capability by capability and record the result. Demote any capability that does not hold in
   practice from "complete" to a Phase 5 item.
-- **Status:** Blocked on T-302. AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507.
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-108 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** The parity matrix as authored —
 
   | Capability | Azure | AWS |
@@ -1322,9 +1322,7 @@ order; do not reorder it.
   "the least-proven infra" for unrelated reasons (the dev account was renamed `-aif2` after a
   soft-delete collision). Two independent signals pointing at the same untested path is the
   argument for closing this one properly rather than deleting the markers.
-- **Status:** Open. Azure appliance concern — the Terraform and workflows it refers to now live in the Azure appliance repository; transfer via T-507 (`210-deploy`'s manifest markers and `scripts/ci/evaluate_deployment_evidence.py` are appliance files now).
-
-### T-416 — A scheduled drift check failed daily for five weeks and nothing surfaced it
+- **Status:** Moved 2026-09-15 — tracked as the Azure appliance's `TODO.md` → T-104 (transferred under T-507; body kept here for history only, do not update it).### T-416 — A scheduled drift check failed daily for five weeks and nothing surfaced it
 
 - **Priority:** High
 - **Category:** Operational safety
@@ -1347,9 +1345,7 @@ order; do not reorder it.
   a distinct, louder failure — those mean very different things.
 - **Notes for future engineers:** Do not close this by muting the check or by making it tolerate
   a missing backend. The check was right; the delivery was missing.
-- **Status:** Open. Appliance concern for both clouds — `350-drift-dev`/`360-drift-prod` are appliance workflows now; `370-registry-cleanup` stays in the core. Transfer via T-507.
-
-### T-417 — "Generate All Assessments" still runs four reports synchronously in the request
+- **Status:** Moved 2026-09-15 — tracked as the both appliances appliance's `TODO.md` → T-110 (AWS) / T-105 (Azure) (transferred under T-507; body kept here for history only, do not update it).### T-417 — "Generate All Assessments" still runs four reports synchronously in the request
 
 - **Priority:** Medium
 - **Category:** Web app reliability
@@ -1449,7 +1445,7 @@ order; do not reorder it.
   first).
 - **Recommended action:** Add the validation flow behind a feature flag defaulting to off, so
   externally hosted DNS keeps the current input-ARN behaviour.
-- **Status:** Blocked on R-004 (now the AWS appliance's R-004). AWS appliance concern — the Terraform and workflows it refers to now live in the AWS appliance repository; transfer via T-507 (the AWS appliance has no ACM-validation item yet).
+- **Status:** Moved 2026-09-15 — tracked as the AWS appliance's `TODO.md` → T-109 (transferred under T-507; body kept here for history only, do not update it).
 - **Notes for future engineers:** The CloudFront viewer certificate must be in `us-east-1`
   regardless of deployment region — the repository already declares a `us-east-1` aliased provider
   for the CloudFront-scoped WAF; reuse it.
@@ -1557,10 +1553,7 @@ order; do not reorder it.
   (`git push origin --delete claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap`).
   The generator that produced the trees (`scripts/appliance-kit/`) was retired with T-504; it
   remains in the core's history at commit `8bb989d` if a rebuild is ever needed.
-- **Status:** Relayed 2026-09-15 — `claude/appliance-bootstrap` exists in both appliance
-  repositories (Azure `ceafcec`, AWS `6f963c4`). Still open: the two draft pull requests and the
-  deletion of the parked branches (the authoring session's git proxy refused the delete; the
-  owner's command above still applies).
+- **Status:** Relayed 2026-09-15 — `claude/appliance-bootstrap` exists in both appliance repositories (Azure `ceafcec`, AWS `6f963c4`). A second commit per appliance (T-507's transfer: Azure `f3718aa`, AWS `7c13b1d`) is parked on the same transport branches and needs the same relay push (fast-forward). Still open: the two draft pull requests and the deletion of the parked branches afterwards.
 - **Notes for future engineers:** The parked branches are a transport, not a home: the appliance
   content must never be merged into or referenced from the core's `main`.
 
@@ -1582,7 +1575,7 @@ order; do not reorder it.
   (live Azure acceptance sign-off) and R-010 (dev-environment deletion protection). Add T-416
   (drift-check failure visibility) to **both**. Then reduce each item here to a one-line pointer.
   Keep the ids stable in the pointer so `CHANGELOG.md` references still resolve.
-- **Status:** Open — blocked on appliance write access
+- **Status:** Done — transferred 2026-09-15 in commits `7c13b1d` (AWS appliance: T-104 – T-110, R-008, plus T-111 with the 27 exported Terraform findings) and `f3718aa` (Azure appliance: T-103 – T-105, R-003, R-004, plus T-106 with the five exported Terraform findings), carried on the core's transport branches `claude/appliance-aws-bootstrap` / `claude/appliance-azure-bootstrap` for relay to `claude/appliance-bootstrap` in each appliance (T-506). Every moved item here is reduced to a pointer in its Status line; `REVIEW.md` R-006, R-008 and R-010 point at their appliance ids.
 - **Notes for future engineers:** Application-level items never move; `CLAUDE.md` in each
   appliance says application work belongs here, and `REVIEW.md` here keeps R-009, R-011 and
   R-012, which both appliances point back at.
@@ -1605,7 +1598,7 @@ order; do not reorder it.
   appliances (each appliance reviewing its own Terraform) or are retired here; prune
   `SELF_HOSTED_ONLY_WORKFLOWS` to the four core workflows and re-derive the secret-location list
   from the current `.secrets.baseline`; update the pinned counts in the tests in the same change.
-- **Status:** Open
+- **Status:** Done — 2026-09-15. The `terraform-aws`/`terraform-azure` emitters and their tests were retired; each area is represented by one relocation record (`cna/review/areas/terraform_relocated.py`) so the closed nine-area set and Property 2 still hold, and the findings they carried were exported to the appliances (AWS T-111, Azure T-106). `SELF_HOSTED_ONLY_WORKFLOWS` names the three self-hosted core workflows, the documentation area describes the four-workflow tree and the appliance-owned deploy path, the security-secrets location list is regenerated from the current `.secrets.baseline` (12 files), and the R-003/R-006 escalations left with their subjects — `EXPECTED_ESCALATION_BLOCKERS` is now `{R-005, R-009}`. Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased → Changed.
 - **Notes for future engineers:** `cna/review/blockers.py` parses `REVIEW.md`'s index table at
   runtime and `test_review_blockers.py` asserts that R-001 – R-010 are present and that only R-007
   is "Resolved" — keep every `R-0NN` row in the table (with a redirect in the Status cell) rather

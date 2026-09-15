@@ -1,13 +1,13 @@
 """Unit tests for the ``cicd`` area findings (Requirement 5.1/5.2 CI/CD).
 
-Covers the verify-then-close-gaps record for the 14 GitHub Actions workflows
+Covers the verify-then-close-gaps record for the core's GitHub Actions workflows
 (spec task 9.1): the self-hosted-only SPOF entries (5.2), the one GitHub-hosted
-workflow recorded as an informational non-SPOF so all 14 workflows are covered,
+workflow recorded as an informational non-SPOF so every workflow is covered,
 and the best-practice gaps this task closed in-tree (per-job timeout-minutes and
 concurrency guards) plus the verified-compliant least-privilege permissions
-record. Third-party action SHA-pinning and the R-003 escalation for
-``212-deploy-aws-split.yml`` are spec task 9.3's job, so no finding here carries
-a blocker_id.
+record. Third-party action SHA-pinning is spec task 9.3's job, so no finding
+here carries a blocker_id. The deploy and operations workflows left the core
+with the deployment layer (TODO.md T-504) and are reviewed in the appliances.
 """
 
 from cna.review import AREAS, Severity, consolidate
@@ -17,7 +17,7 @@ from cna.review.areas.cicd import (
     SELF_HOSTED_ONLY_WORKFLOWS,
 )
 
-# The full set of 14 numbered workflows under .github/workflows/.
+# The full set of numbered workflows under .github/workflows/.
 _ALL_WORKFLOWS = SELF_HOSTED_ONLY_WORKFLOWS + GITHUB_HOSTED_WORKFLOWS
 
 
@@ -31,11 +31,11 @@ def test_findings_are_well_formed_and_in_area():
         assert finding.dedup_key.startswith("cicd:")
 
 
-def test_topology_covers_all_fourteen_workflows():
-    """5.1: exactly 14 workflows, 13 self-hosted-only + 1 GitHub-hosted."""
-    assert len(SELF_HOSTED_ONLY_WORKFLOWS) == 13
+def test_topology_covers_all_core_workflows():
+    """5.1: exactly four workflows, three self-hosted-only + one GitHub-hosted."""
+    assert len(SELF_HOSTED_ONLY_WORKFLOWS) == 3
     assert len(GITHUB_HOSTED_WORKFLOWS) == 1
-    assert len(_ALL_WORKFLOWS) == 14
+    assert len(_ALL_WORKFLOWS) == 4
     # The one GitHub-hosted workflow is the registry-cleanup job by design.
     assert GITHUB_HOSTED_WORKFLOWS == ("370-registry-cleanup.yml",)
     # No workflow is both self-hosted-only and GitHub-hosted.
@@ -72,8 +72,8 @@ def test_github_hosted_workflow_recorded_as_informational_non_spof():
     assert informational_spof[0].subject.endswith("370-registry-cleanup.yml")
 
 
-def test_all_fourteen_workflows_are_covered():
-    """Every one of the 14 workflows appears as a subject in the findings."""
+def test_all_core_workflows_are_covered():
+    """Every core workflow appears as a subject in the findings."""
     findings = cicd_findings()
     covered = {
         f.subject.rsplit("/", 1)[-1]
@@ -81,7 +81,7 @@ def test_all_fourteen_workflows_are_covered():
         if f.dedup_key.startswith("cicd:self-hosted-spof:")
     }
     assert covered == set(_ALL_WORKFLOWS)
-    assert len(covered) == 14
+    assert len(covered) == 4
 
 
 def test_best_practice_gaps_are_recorded():
@@ -151,7 +151,7 @@ def test_verify_findings_are_verified_compliant_informational():
     actionlint = next(f for f in findings if f.dedup_key == "cicd:actionlint-sweep")
     assert "actionlint" in actionlint.proposed_action.lower()
     assert "0 errors" in actionlint.proposed_action
-    assert "14 workflows" in actionlint.proposed_action
+    assert "every workflow" in actionlint.proposed_action
 
 
 def test_verify_findings_consolidate_into_fixable_entries():

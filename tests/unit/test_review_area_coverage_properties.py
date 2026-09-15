@@ -40,7 +40,6 @@ from cna.review import (
     build_remediation_plan,
     consolidate,
 )
-from cna.review.areas import AWS_MODULES
 from cna.review.areas.cicd import (
     GITHUB_HOSTED_WORKFLOWS,
     SELF_HOSTED_ONLY_WORKFLOWS,
@@ -54,12 +53,13 @@ _PROPERTY_SETTINGS = settings(max_examples=100)
 # The nine owner areas — the closed set every finding's area is drawn from.
 _EXPECTED_AREAS = frozenset(AREAS)
 
-# The eight AWS module boundaries, recorded as repo-relative provider subjects.
+# The two Terraform areas are represented by their relocation records: the
+# Terraform itself lives in the appliance repositories (TODO.md T-504).
 _EXPECTED_AWS_SUBJECTS = frozenset(
-    f"infra/terraform/providers/aws/{module}" for module in AWS_MODULES
+    {"saulpatinojr/Work-Cloud_Network_AWS_Appliance:infra/terraform"}
 )
 
-# All 14 numbered CI workflows, recorded as repo-relative workflow subjects.
+# The core's numbered CI workflows, recorded as repo-relative workflow subjects.
 _ALL_WORKFLOWS = SELF_HOSTED_ONLY_WORKFLOWS + GITHUB_HOSTED_WORKFLOWS
 _EXPECTED_WORKFLOW_SUBJECTS = frozenset(
     f".github/workflows/{workflow}" for workflow in _ALL_WORKFLOWS
@@ -140,8 +140,8 @@ def _covering_findings(draw: st.DrawFn) -> list[Finding]:
     """Findings that between them cover every fixed expected area and subject.
 
     Every one of the nine owner areas is emitted at least once (so area coverage
-    is representable), the eight AWS module subjects are attached to the
-    ``terraform-aws`` area, the 14 workflow subjects to ``cicd``, and the
+    is representable), the AWS relocation subject is attached to the
+    ``terraform-aws`` area, the workflow subjects to ``cicd``, and the
     container subjects to ``containers-packaging`` — matching how the real area
     emitters record them. Severity, dedup key, and blocker id are drawn freely so
     the required subjects land under merges, escalations, and every ordering.
@@ -162,7 +162,7 @@ def _covering_findings(draw: st.DrawFn) -> list[Finding]:
             )
         )
 
-    # The eight AWS module subjects under the terraform-aws area.
+    # The AWS relocation subject under the terraform-aws area.
     for subject in sorted(_EXPECTED_AWS_SUBJECTS):
         findings.append(
             _covering_finding(
@@ -174,7 +174,7 @@ def _covering_findings(draw: st.DrawFn) -> list[Finding]:
             )
         )
 
-    # The 14 workflow subjects under the cicd area.
+    # The workflow subjects under the cicd area.
     for subject in sorted(_EXPECTED_WORKFLOW_SUBJECTS):
         findings.append(
             _covering_finding(
@@ -290,13 +290,12 @@ def test_property2_real_plan_covers_all_nine_owner_areas() -> None:
     )
 
 
-def test_property2_real_plan_covers_eight_aws_modules() -> None:
+def test_property2_real_plan_covers_the_aws_relocation_subject() -> None:
     """Feature: production-readiness, Property 2: Area coverage is complete.
 
-    The real plan represents all eight AWS module boundaries (Requirement 4.1) as
-    subjects.
+    The real plan represents the AWS Terraform area (Requirement 4.1) through its
+    relocation record — the modules themselves live in the AWS appliance.
     """
-    assert len(AWS_MODULES) == 8
     tokens = _subject_tokens(build_remediation_plan())
     for subject in sorted(_EXPECTED_AWS_SUBJECTS):
         assert any(token.startswith(subject) for token in tokens), (
@@ -304,12 +303,12 @@ def test_property2_real_plan_covers_eight_aws_modules() -> None:
         )
 
 
-def test_property2_real_plan_covers_all_fourteen_workflows() -> None:
+def test_property2_real_plan_covers_all_core_workflows() -> None:
     """Feature: production-readiness, Property 2: Area coverage is complete.
 
-    The real plan represents all 14 CI workflows (Requirement 5.1) as subjects.
+    The real plan represents every core CI workflow (Requirement 5.1) as a subject.
     """
-    assert len(_ALL_WORKFLOWS) == 14
+    assert len(_ALL_WORKFLOWS) == 4
     tokens = _subject_tokens(build_remediation_plan())
     missing = _EXPECTED_WORKFLOW_SUBJECTS - tokens
     assert not missing, f"CI workflows not covered: {sorted(missing)}"

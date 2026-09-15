@@ -7,8 +7,11 @@ answer over that context only. No conversation state is stored server-side —
 the client resends the full message list each turn.
 
 The active AI engine follows the same AppSetting 'ai.activeEngine' switch
-the web tier uses (apps/cna-web/lib/ai-engine.ts); transport/config is the
-existing Azure Foundry path — no new provider.
+the web tier uses (apps/cna-web/lib/ai-engine.ts). In bring-your-own mode
+(CNA_AI_MODE=byo-api) the admin-entered Anthropic/OpenAI keys are read from
+the same table (ai.byo.<provider>.apiKey, AES-256-GCM blobs written by
+lib/crypto.ts) and decrypted here with cna.core.credential_crypto. Keys never
+leave this process and are never logged.
 """
 
 from __future__ import annotations
@@ -27,17 +30,33 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from cna.ai_engine.chat_agent import (
+    BYO_ENGINES,
+    MODE_BYO_API,
     ChatConfigError,
     GroundedChatAgent,
     build_grounding_context,
+    resolve_ai_mode,
 )
+from cna.core.credential_crypto import CredentialCryptoError, decrypt
 
 logger = logging.getLogger("cna-api.chat")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-# Keep in sync with apps/cna-web/lib/ai-engine.ts AI_ENGINE_SETTING_KEY
+# Keep in sync with apps/cna-web/lib/ai-engine.ts AI_ENGINE_SETTING_KEY and
+# lib/ai-byo-credentials.ts byoSettingKey()
 AI_ENGINE_SETTING_KEY = "ai.activeEngine"
+
+
+def _byo_setting_key(provider: str, field: str) -> str:
+    return f"ai.byo.{provider}.{field}"
+
+
+AI_SETTING_KEYS = (
+    AI_ENGINE_SETTING_KEY,
+    *(_byo_setting_key(p, "apiKey") for p in BYO_ENGINES),
+    *(_byo_setting_key(p, "model") for p in BYO_ENGINES),
+)
 
 MAX_MESSAGES = 30
 MAX_MESSAGE_CHARS = 4000
@@ -131,19 +150,43 @@ def _load_topology_classification(engagement_id: str) -> tuple[str | None, str |
         return None, None
 
 
-def _load_active_engine() -> str | None:
-    """Read the AppSetting engine switch; None falls back to env default."""
+def _load_ai_settings() -> dict[str, str]:
+    """Read the engine switch and BYO provider settings in one round trip.
+
+    Empty on any failure — a settings read must never block chat; the agent
+    then resolves from env alone (saas) or reports the missing key (byo-api).
+    """
     try:
         with _get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    'SELECT value FROM "AppSetting" WHERE key = %s',
-                    (AI_ENGINE_SETTING_KEY,),
+                    'SELECT key, value FROM "AppSetting" WHERE key = ANY(%s)',
+                    (list(AI_SETTING_KEYS),),
                 )
-                row = cur.fetchone()
-        return row["value"] if row else None
+                rows = cur.fetchall()
+        return {row["key"]: row["value"] for row in rows if row.get("value")}
     except Exception:  # noqa: BLE001 — setting read must never block chat
-        return None
+        logger.warning("AppSetting read failed; resolving AI engine from env only")
+        return {}
+
+
+def _load_byo_credentials(
+    settings: dict[str, str],
+) -> tuple[dict[str, str | None], dict[str, str | None]]:
+    """Decrypt the admin-entered BYO keys — only in byo-api mode, so a saas
+    appliance never needs CREDENTIAL_ENCRYPTION_KEY in the API container."""
+    if resolve_ai_mode() != MODE_BYO_API:
+        return {}, {}
+    keys = {
+        provider: (
+            decrypt(blob) if (blob := settings.get(_byo_setting_key(provider, "apiKey"))) else None
+        )
+        for provider in BYO_ENGINES
+    }
+    models = {
+        provider: settings.get(_byo_setting_key(provider, "model")) for provider in BYO_ENGINES
+    }
+    return keys, models
 
 
 @router.post("/{engagement_id}")
@@ -172,9 +215,15 @@ def chat(engagement_id: str, request: ChatRequest) -> dict:
     )
 
     try:
-        agent = GroundedChatAgent(engine=_load_active_engine())
+        settings = _load_ai_settings()
+        byo_keys, byo_models = _load_byo_credentials(settings)
+        agent = GroundedChatAgent(
+            engine=settings.get(AI_ENGINE_SETTING_KEY),
+            byo_keys=byo_keys,
+            byo_models=byo_models,
+        )
         result = agent.answer(messages, context)
-    except ChatConfigError as exc:
+    except (ChatConfigError, CredentialCryptoError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — surface upstream failures as 502
         # Full details stay in the server log; callers get a sanitized message.

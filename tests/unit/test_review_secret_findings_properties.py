@@ -16,7 +16,7 @@ Validates: Requirements 6.2
 
 from __future__ import annotations
 
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from cna.review.areas.security_secrets import secret_location_finding
@@ -78,6 +78,15 @@ def test_property12_raw_secret_value_never_appears(
     field.
     """
     finding = secret_location_finding(location, key_name, count)
+
+    # Everything in the recorded fields that is not the location or key name is
+    # the builder's fixed wording. A generated value that is a substring of that
+    # wording (hypothesis also draws string constants from the code under test,
+    # so it finds ".secrets" and "security") is a coincidence, not the value
+    # reaching the finding, and is excluded rather than asserted on.
+    template = secret_location_finding("", "", count)
+    assume(secret_value not in template.proposed_action)
+    assume(secret_value not in template.dedup_key)
 
     # The raw secret value is never reproduced in any recorded text field,
     # unless it coincidentally equals the location/key name the reviewer chose

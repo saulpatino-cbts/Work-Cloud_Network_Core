@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-08-10
+**Last reviewed:** 2026-08-28
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -17,8 +17,9 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-005](#r-005--amazon-bedrock-model-access-opt-in) | Amazon Bedrock foundation-model access opt-in | AWS account owner | Open |
 | [R-006](#r-006--runtime-secrets-have-no-defaults-and-must-be-supplied) | Runtime secrets supplied at apply time | Security / secret owner | Open |
 | [R-007](#r-007--azure-subscription-resource-provider-registration) | `Microsoft.AlertsManagement` provider registration | Azure subscription owner | Resolved — no longer required |
-| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open |
+| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding |
 | [R-009](#r-009--github-wiki-write-access-for-documentation-migration) | GitHub Wiki write access to publish prepared pages | Repository owner | Open — not blocking |
+| [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open |
 
 ---
 
@@ -286,6 +287,16 @@ than partway through apply. It previously checked only two of the ten, so the *c
 R-007 describes was real and largely unguarded; it is now closed for every provider at once, not
 just this one.
 
+**2026-08-28 addendum — the leftover register call in 211**
+The first full `211` run under the RG-scoped deploy identities (rebuilt dev environment) failed
+in seconds on a leftover from the pre-split era: both the `plan` and `apply` jobs still ran an
+unconditional `az provider register --namespace Microsoft.App --wait`, which requires the
+subscription-scope `register/action` this item says the deploy identity must never hold. That
+step is now a read-only verification (fails with the one-time Owner command only on
+`NotRegistered`), and all four environment roots set `resource_provider_registrations = "none"`
+so the azurerm provider's default auto-registration cannot hit the same wall during plan.
+Workflow 100 remains the gating assertion.
+
 **If a future change reintroduces alerting**
 Add `Microsoft.AlertsManagement` to `REQUIRED_PROVIDERS` in `100-validate-prereqs.yml` in the same
 commit as the alert resource, and reopen this item — the registration is still a subscription-level
@@ -313,9 +324,19 @@ work moves the release posture past `0.8 beta` without someone accepting the liv
 Product owner (with the AWS/Azure account owners for the deploy windows).
 
 **Required action**
-1. Schedule the live dev deploy window (workflows 100 → 200 → 211).
-2. Review the deployment evidence artifacts produced by the workflow run.
+1. ~~Schedule the live dev deploy window (workflows 100 → 200 → 211).~~ **Done 2026-08-28** —
+   though not as a scheduled window: the dev environment had been deleted out of band (see R-010
+   and `CNA-0.90-updates.md` §5), so it was rebuilt from nothing via `000` → `100` → `211`.
+   Run `33169632082`, all jobs green.
+2. **Review the deployment evidence artifacts produced by the workflow run.** These now exist:
+   `.deployment-catalog/dev/33169632082.json` records `health_status: healthy`, 100% origin
+   health, and passing canary, staged-promotion, certificate and private-endpoint checks.
+   **Read the two `required` markers before accepting** — `foundry_private_dns_validation` and
+   `foundry_managed_identity_inference` are never set by any workflow step, so a `healthy`
+   verdict does not cover the AI Foundry / Copilot path (`TODO.md` → T-415).
 3. Accept or reject the customer-like beta acceptance run, and record the decision.
+   Note the acceptance run has not happened yet: the rebuilt environment has an empty database,
+   so there is no discovery, finding, or deliverable in it to accept against.
 
 **Impact if unresolved**
 The platform stays in beta indefinitely and cannot be offered to a client engagement, regardless
@@ -373,3 +394,52 @@ Confirm the Wiki page names before publishing so the cross-links resolve — in 
 `Runbook: Log Analytics Workspace State Migration` and `Legacy AWS Migrate Root`. `Workflows
 Guide` and `Secrets Reference` are already referenced by `.env.example` and may already exist;
 merge rather than create.
+
+---
+
+## R-010 — The dev environment has no protection against out-of-band deletion
+
+**Problem**
+The entire Azure dev environment — workload resource group *and* the `-tfstate` resource group
+holding the Terraform state — was deleted from `sub-cbtssandbox-ops-tst` around **2026-07-21**,
+outside CI. No teardown workflow ran in that window (`330-teardown` last ran 2026-07-01), so the
+deletion was performed directly against the subscription, consistent with a sandbox cost sweep.
+
+It was rebuilt on 2026-08-28 (`CNA-0.90-updates.md` §5), but nothing prevents a repeat, and the
+rebuild was not cheap: the state loss meant a from-scratch provision, six previously-unknown gaps
+in the deploy identity's least-privilege role set, a soft-deleted Key Vault to recover and import,
+and roughly half a day of a pre-demo schedule.
+
+**Why it needs an owner**
+Whether the sweep is intentional policy is not an engineering question. If the sandbox is *meant*
+to be swept, the environment should not be treated as durable and the demo/engagement plan has to
+budget a rebuild each time. If it is not meant to be swept, the environment needs protecting. Only
+the subscription owner can say which.
+
+**Required owner**
+Azure subscription owner (`sub-cbtssandbox-ops-tst`), with whoever administers the sandbox
+sweep policy.
+
+**Required action**
+1. Establish whether a sweep policy exists for this subscription, what it targets, and on what
+   schedule.
+2. If the environment should persist: apply a `CanNotDelete` resource lock to
+   `rg-cna-dev-scus` and `rg-cna-dev-scus-tfstate` at minimum — the state RG especially, since
+   losing it is what turned a redeploy into a rebuild — or request an exclusion from the sweep.
+3. If the environment is legitimately ephemeral: record that in the demo/engagement runbook so a
+   rebuild is planned rather than discovered, and consider whether the tfstate backend should live
+   in a subscription that is not swept.
+
+**Impact if unresolved**
+The next sweep repeats the same half-day recovery, at whatever moment it happens to land. The
+permission gaps are now codified in `scripts/Initialize-CnaGitHubSecrets.ps1`, so a second rebuild
+would be materially faster — but it would still be a rebuild, with a fresh, empty database.
+
+**References**
+- [`CNA-0.90-updates.md`](CNA-0.90-updates.md) → §5 (the full rebuild record)
+- [`TODO.md`](TODO.md) → T-416 (the drift check that detected this and told no one)
+- `.deployment-catalog/dev/33169632082.json` (the rebuild's evidence)
+
+**Recommended next step**
+Ask the sandbox administrator the one question that decides everything else: is
+`sub-cbtssandbox-ops-tst` swept on a schedule, and can these two resource groups be excluded?

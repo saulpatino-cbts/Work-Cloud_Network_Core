@@ -97,14 +97,23 @@ Honest limits found:
 
 ### 2.3 Infra / demo readiness
 
-- Azure dev **exists and was healthy**, but the running containers are on an
+> **Superseded on 2026-08-28 — read §5 first.** The dev environment described below no
+> longer existed by the time this plan was executed: it was deleted out of band around
+> 2026-07-21 (state backend included) and had to be rebuilt from nothing. The bullets
+> here are preserved as the original review snapshot; §5 records what is actually
+> deployed now.
+
+- ~~Azure dev **exists and was healthy**, but the running containers are on an
   **8-week-old build** (deployed 2026-07-02; images built since were never deployed).
-  None of this PR reaches the demo without a redeploy.
+  None of this PR reaches the demo without a redeploy.~~ *(The environment was gone
+  entirely — see §5.)*
 - **13 of 14 workflows run on the self-hosted runner** — if it is offline there is no
   deploy, no fast-redeploy, no key sync. Single biggest operational risk.
-- Recommended redeploy path: merge → `200-build-images` → **`220-fast-redeploy`**
+- ~~Recommended redeploy path: merge → `200-build-images` → **`220-fast-redeploy`**
   (~2 min image swap; avoids the full 211 run, the Key Vault firewall dance, and the
-  unresolved R-007 provider-registration blocker).
+  unresolved R-007 provider-registration blocker).~~ *(`220` requires existing Container
+  Apps to update; with the environment destroyed it failed immediately and the full
+  `000` → `100` → `211` path was required instead — see §5.)*
 - **No docker-compose fallback** for the web stack (compose only runs the Python
   CLI). Local fallback is `npm run dev` + a real Postgres.
 - The `/local-admin` break-glass works against Azure **only if** the
@@ -172,21 +181,105 @@ weight licensing, the self-hosted runner single point of failure, R-007/R-008.
 
 ## 4. Demo-day operational checklist
 
-Before the demo, in order:
+Before the demo, in order. **Steps 1–2 are done as of 2026-08-28 (§5); 3–8 remain and
+all require the live environment.**
 
-1. Confirm the **self-hosted runner is online** (Settings → Actions → Runners).
-2. Merge this PR, then the polish PR; run `200-build-images`, then
-   `220-fast-redeploy` to dev.
+1. ~~Confirm the **self-hosted runner is online** (Settings → Actions → Runners).~~
+   Done — it carried every workflow run on 2026-08-28.
+2. ~~Merge this PR, then the polish PR; run `200-build-images`, then
+   `220-fast-redeploy` to dev.~~ Done, by the longer path §5 describes: everything is
+   merged, `200` published `sha-11eaa7e`, and `211` deployed it to a rebuilt dev.
 3. Hit the dev Front Door URL and `/api/health`; sign in via Entra **and** verify
    `/local-admin` accepts the break-glass password.
+   **URL:** `https://cna-dev-scus-afd-ep-dqh0gxcffjcthpbj.a01.azurefd.net`.
+   The break-glass check matters more than usual now: the environment is new, so
+   confirm `LOCAL_ADMIN_PASSWORD` actually seeded into the rebuilt Key Vault.
 4. Pre-run a full Azure discovery on the demo engagement; confirm findings and
-   metrics populate.
+   metrics populate. **Not optional this time** — the rebuilt environment has a new,
+   empty database, so there is no pre-existing engagement, discovery, or finding
+   anywhere in the platform.
 5. Generate the **Interactive Assessment** deliverable so the Presentation section
    is not an empty state.
 6. Test one copilot chat question against live (exercises the Foundry path).
+   **Highest-risk remaining step.** The deployment evidence records
+   `foundry_private_dns_validation` and `foundry_managed_identity_inference` as
+   `required` — hardcoded markers that no CI step ever flips, meaning the Foundry path
+   is verified by a human or not at all. If chat fails, the fallback is to demo
+   everything else; nothing outside Copilot depends on it.
 7. Set the demo machine's OS theme deliberately (after the polish PR, both modes are
    safe; before it, use dark).
 8. Demo path: Dashboard → Engagement Overview → Inventory → Findings → FinOps →
    Copilot → Report (Book Mode) → Deliverables.
-   **Avoid:** anything CLI, the AWS tab, encyclopedia architecture diagrams, FastAPI
-   `/docs`.
+   **Avoid:** ~~anything CLI, the AWS tab, encyclopedia architecture diagrams,~~ FastAPI
+   `/docs`. *(The CLI, the AWS tab, and the encyclopedia diagrams all became real in the
+   post-demo-scope work in §3 and now ship in the deployed images — they are demoable,
+   though none has been exercised against this live environment yet.)*
+
+---
+
+## 5. Dev environment rebuild and deployment (2026-08-28)
+
+The demo environment described in §2.3 did not exist when the time came to deploy to it.
+This section is the record of what happened and what is standing now.
+
+### 5.1 What was wrong
+
+`350-drift-dev` had been failing every day since **2026-07-21** with
+`ResourceGroupNotFound: rg-cna-dev-scus-tfstate` — the *Terraform state* resource group.
+The workload side was gone too (`220-fast-redeploy` failed with "The containerapp
+'cna-dev-scus-ca-api' does not exist"). No teardown workflow ran in that window, so the
+resource groups were deleted directly in the subscription, out of band — consistent with
+a sandbox cost sweep. The last successful deploy was 2026-07-02.
+
+Because the state backend went with it, recovery was not a redeploy but a from-scratch
+provision: `000-bootstrap-backend` → `100-validate-prereqs` → `211-deploy-azure-split`.
+
+### 5.2 What that exposed: the least-privilege permission model was incomplete
+
+The environment SP's roles are RG-scoped least-privilege (deliberately — see the
+bootstrap script's comments). Every grant it held had been created *against the old
+environment* and died with it, and the first full apply since that shrink surfaced, one
+failure at a time, six things the model never actually covered. All six are now codified
+in `scripts/Initialize-CnaGitHubSecrets.ps1`, so a future rebuild needs **no manual
+commands**:
+
+| Gap | Fix | PR |
+|---|---|---|
+| `211` ran `az provider register` — a subscription-level action the RG-scoped SP cannot perform (`REVIEW.md` → R-007's exact class) | Step verifies registration read-only; all four Terraform roots set `resource_provider_registrations = "none"` | [#166](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/166) |
+| `terraform init` could not read the tfstate storage account (it lives in the `-tfstate` RG, outside the workload RG) | `Storage Account Contributor` scoped to that account | [#167](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/167) |
+| The observability module reads the regional Network Watcher and parents the VNet flow log under it, in Azure's `NetworkWatcherRG` | Ensure that RG + watcher exist; `Network Contributor` scoped to it | [#167](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/167) |
+| Traffic Analytics validates the enabling principal against a wide `*/read` set at **subscription** scope | `Reader` at subscription scope | [#168](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/168) |
+| …and against non-read actions (workspace `sharedkeys/action`, data-collection rules/endpoints) at the same scope | `CNA Traffic Analytics Enabler` custom role, eight actions | [#169](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/169) |
+| Attaching the user-assigned identity to Container Apps needs `userAssignedIdentities/assign/action`, which Managed Identity *Contributor* lacks | `Managed Identity Operator` | [#171](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/171) |
+| The migration step creates a Container Apps **Job** (`Microsoft.App/jobs/*`), a separate resource type | `Container Apps Jobs Contributor` | [#172](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/172) |
+
+Two further blockers were one-time artifacts of the state loss, not permission gaps: two
+`github_actions_environment_variable` resources that outlived the state (deleted so
+Terraform could recreate them with the new Front Door hostname), and the four Key Vault
+secrets that came back with the vault when `recover_soft_deleted_key_vaults` recovered it
+from soft-delete — imported via [#170](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/170)
+rather than deleted, since purge protection would have wedged the names for 90 days.
+
+### 5.3 What is deployed
+
+`211 · Deploy Azure Platform (Split)` run **33169632082**, all jobs green, evidence in
+`.deployment-catalog/dev/33169632082.json`:
+
+- **URL:** `https://cna-dev-scus-afd-ep-dqh0gxcffjcthpbj.a01.azurefd.net`
+- **Images:** `api-`/`web-`/`worker-`/`migrator-sha-11eaa7e` — the build carrying every
+  §3 item (CLI readers, draw.io rendering, AWS end-to-end, portal publishing)
+- **Health:** `healthy`, origin health 100%, private-endpoint approval passed, canary and
+  staged promotion passed
+- **Database:** new and empty; the migrator applied the full schema including the two
+  migrations added in §3 (`20260828000014_aws_credentials`,
+  `20260828000015_portal_publication`)
+
+### 5.4 Standing risks this surfaced
+
+1. **The sweep can recur.** Nothing prevents the same out-of-band deletion. The recovery
+   procedure is now one script plus two workflows, but the environment is not protected —
+   consider a resource lock or an exclusion from whatever sweeps the sandbox.
+2. **`350-drift-dev` was failing daily for five weeks and nobody noticed.** The signal
+   that would have caught the deletion the same day existed and went unread. Drift-check
+   failures need somewhere to land.
+3. **The Foundry path is still unverified** — see §4 step 6.

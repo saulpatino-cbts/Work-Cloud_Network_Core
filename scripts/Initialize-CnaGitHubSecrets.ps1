@@ -1463,6 +1463,71 @@ function Remove-CnaRoleAssignmentIfExists {
     Write-Ok "Removed legacy subscription-scope $RoleName from $AssigneeAppId"
 }
 
+function Confirm-NetworkWatcherAccess {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string]$SubscriptionId,
+        [string]$Location,
+        [string]$EnvClientId
+    )
+
+    Write-Step "Ensuring Network Watcher access for the environment deploy SP"
+    # Azure auto-provisions one Network Watcher per region (NetworkWatcher_<region>
+    # in NetworkWatcherRG) when the first VNet appears. The observability module
+    # reads that watcher and parents the VNet flow log under it, so 211's plan and
+    # apply need Microsoft.Network/networkWatchers read+write in NetworkWatcherRG —
+    # outside the workload RG every env-SP role is scoped to. Ensure the RG and the
+    # regional watcher exist (pre-creating matches Azure's own naming), then grant
+    # Network Contributor scoped to just that RG.
+    $exists = & az group exists --name "NetworkWatcherRG" --subscription $SubscriptionId --output tsv
+    if ($exists -ne "true") {
+        if ($PSCmdlet.ShouldProcess("NetworkWatcherRG", "create resource group")) {
+            & az group create --name "NetworkWatcherRG" --location $Location --subscription $SubscriptionId --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create NetworkWatcherRG." }
+        }
+        Write-Ok "Created NetworkWatcherRG"
+    } else {
+        Write-Ok "NetworkWatcherRG exists"
+    }
+
+    if ($PSCmdlet.ShouldProcess($Location, "enable Network Watcher")) {
+        & az network watcher configure --locations $Location --enabled true --resource-group "NetworkWatcherRG" --subscription $SubscriptionId --output none 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Could not pre-enable Network Watcher for $Location; Azure will auto-create it with the first VNet."
+        } else {
+            Write-Ok "Network Watcher enabled for $Location"
+        }
+    }
+
+    $envObjectId = & az ad sp show --id $EnvClientId --query id --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($envObjectId)) {
+        Write-Warn "Could not resolve environment deploy SP object ID for $EnvClientId. Grant Network Contributor on NetworkWatcherRG manually or re-run."
+        return
+    }
+    $scope = "/subscriptions/$SubscriptionId/resourceGroups/NetworkWatcherRG"
+    $assignmentCount = & az role assignment list `
+        --assignee-object-id $envObjectId `
+        --scope $scope `
+        --subscription $SubscriptionId `
+        --query "[?roleDefinitionName=='Network Contributor'] | length(@)" `
+        --output tsv 2>$null
+    if ($LASTEXITCODE -eq 0 -and $assignmentCount -eq "0") {
+        if ($PSCmdlet.ShouldProcess("NetworkWatcherRG", "assign Network Contributor to environment deploy SP")) {
+            & az role assignment create `
+                --role "Network Contributor" `
+                --assignee-object-id $envObjectId `
+                --assignee-principal-type ServicePrincipal `
+                --scope $scope `
+                --subscription $SubscriptionId `
+                --output none
+            if ($LASTEXITCODE -ne 0) { throw "Failed to assign Network Contributor on NetworkWatcherRG to the environment deploy SP." }
+        }
+        Write-Ok "Assigned Network Contributor on NetworkWatcherRG to environment deploy SP"
+    } else {
+        Write-Ok "Environment deploy SP already has Network Contributor on NetworkWatcherRG"
+    }
+}
+
 function Confirm-TfstateBackendResources {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -1471,7 +1536,8 @@ function Confirm-TfstateBackendResources {
         [string]$ResourceGroupName,
         [string]$StorageAccountName,
         [string]$ContainerName,
-        [string]$ClientId
+        [string]$ClientId,
+        [string]$EnvClientId = ""
     )
 
     Write-Step "Ensuring Terraform backend prerequisites"
@@ -1554,6 +1620,44 @@ function Confirm-TfstateBackendResources {
         }
     } else {
         Write-Warn "Could not resolve service principal object ID for $ClientId. Workflow 000 may need to assign storage RBAC itself."
+    }
+
+    # The ENVIRONMENT deploy SP also needs the tfstate storage account: 211's
+    # plan/apply jobs (and the drift workflows) run under environment:<env> and
+    # `terraform init` must read the account and list its keys for the azurerm
+    # backend. The env SP's roles are RG-scoped to the WORKLOAD resource group,
+    # which does not cover this account in the -tfstate RG — under the old
+    # subscription-wide Contributor this was invisible, and the least-privilege
+    # shrink exposed it (terraform init failed with storageAccounts/read
+    # AuthorizationFailed). Storage Account Contributor scoped to just this
+    # account provides control-plane read + listKeys and nothing broader.
+    if (-not [string]::IsNullOrWhiteSpace($EnvClientId)) {
+        $envObjectId = & az ad sp show --id $EnvClientId --query id --output tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($envObjectId)) {
+            $envAssignmentCount = & az role assignment list `
+                --assignee-object-id $envObjectId `
+                --scope $storageId `
+                --subscription $SubscriptionId `
+                --query "[?roleDefinitionName=='Storage Account Contributor'] | length(@)" `
+                --output tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and $envAssignmentCount -eq "0") {
+                if ($PSCmdlet.ShouldProcess($StorageAccountName, "assign Storage Account Contributor to environment deploy SP")) {
+                    & az role assignment create `
+                        --role "Storage Account Contributor" `
+                        --assignee-object-id $envObjectId `
+                        --assignee-principal-type ServicePrincipal `
+                        --scope $storageId `
+                        --subscription $SubscriptionId `
+                        --output none
+                    if ($LASTEXITCODE -ne 0) { throw "Failed to assign Storage Account Contributor on '$StorageAccountName' to the environment deploy SP." }
+                }
+                Write-Ok "Assigned Storage Account Contributor on tfstate storage to environment deploy SP"
+            } else {
+                Write-Ok "Environment deploy SP already has Storage Account Contributor on tfstate storage"
+            }
+        } else {
+            Write-Warn "Could not resolve environment deploy SP object ID for $EnvClientId. Terraform init in 211 will fail until Storage Account Contributor is granted on '$StorageAccountName' manually."
+        }
     }
 
     return [pscustomobject]@{
@@ -1770,10 +1874,18 @@ if (-not $SkipAzureSetup) {
         "Network Contributor",
         "Storage Account Contributor",
         "Container Apps Contributor",
+        # Container Apps *Jobs* (Microsoft.App/jobs/*) are a separate resource
+        # type from container apps; 211's migration step creates/starts a
+        # Container Apps Job and fails with AuthorizationFailed without this.
+        "Container Apps Jobs Contributor",
         "Container Apps ManagedEnvironments Contributor",
         "Key Vault Contributor",
         "Cognitive Services Contributor",
         "Managed Identity Contributor",
+        # Managed Identity Operator carries userAssignedIdentities/assign/action,
+        # which Contributor does not: attaching the UAI to Container Apps and the
+        # migrator job fails with LinkedAuthorizationFailed without it.
+        "Managed Identity Operator",
         "Log Analytics Contributor",
         "Monitoring Contributor",
         "CDN Profile Contributor",
@@ -1784,6 +1896,37 @@ if (-not $SkipAzureSetup) {
     $envDisplayName = if ($Environment -eq "prod") { "Prod" } else { "Dev" }
     $envAppId = New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - $envDisplayName" `
         -Roles $cnaWorkloadDeployRoles -Scope $workloadResourceGroupScope
+
+    # Subscription-scope Reader on top of the RG-scoped write roles: enabling
+    # Traffic Analytics on the VNet flow log validates the enabling principal
+    # against a wide set of */read actions across network resource types
+    # (learn.microsoft.com/azure/network-watcher/rbac-permissions#traffic-analytics)
+    # and fails with TAUserDoesNotHavePermissions when they are held only at RG
+    # scope. Reader is read-only everywhere; the non-read actions the same doc
+    # table requires (workspace shared keys, data-collection rules/endpoints)
+    # are carried by the custom role below — RG-scoped Log Analytics /
+    # Monitoring Contributor proved insufficient for TA's subscription-scope
+    # check (confirmed empirically on the 2026-08-28 dev rebuild: Reader alone
+    # still failed TAUserDoesNotHavePermissions after propagation).
+    New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - $envDisplayName" `
+        -Roles @("Reader") -Scope $subscriptionScope | Out-Null
+
+    $cnaTaRoleName = "CNA Traffic Analytics Enabler"
+    Confirm-CnaCustomRole -Name $cnaTaRoleName `
+        -Description "Non-read actions Traffic Analytics enablement requires at subscription scope; Reader supplies the reads. See learn.microsoft.com/azure/network-watcher/rbac-permissions#traffic-analytics." `
+        -Actions @(
+            "Microsoft.OperationalInsights/workspaces/read",
+            "Microsoft.OperationalInsights/workspaces/sharedkeys/action",
+            "Microsoft.Insights/dataCollectionRules/read",
+            "Microsoft.Insights/dataCollectionRules/write",
+            "Microsoft.Insights/dataCollectionRules/delete",
+            "Microsoft.Insights/dataCollectionEndpoints/read",
+            "Microsoft.Insights/dataCollectionEndpoints/write",
+            "Microsoft.Insights/dataCollectionEndpoints/delete"
+        ) `
+        -SubscriptionScope $subscriptionScope
+    New-DeployServicePrincipal -DisplayName "CNA Assessment Tool - $envDisplayName" `
+        -Roles @($cnaTaRoleName) -Scope $subscriptionScope | Out-Null
 
     # Shrink from any previous run's subscription-scope grant now that the
     # RG-scoped roles above are in place — otherwise this SP would accumulate
@@ -2041,7 +2184,13 @@ if (-not $SkipAzureSetup) {
         -ResourceGroupName $bootstrapTfstateResourceGroup `
         -StorageAccountName $bootstrapTfstateStorageAccount `
         -ContainerName $bootstrapTfstateContainer `
-        -ClientId $mainAppId
+        -ClientId $mainAppId `
+        -EnvClientId $envAppId
+
+    Confirm-NetworkWatcherAccess `
+        -SubscriptionId $resolvedSubscriptionId `
+        -Location $BootstrapLocation `
+        -EnvClientId $envAppId
 }
 
 if (-not $SkipBootstrapDispatch) {

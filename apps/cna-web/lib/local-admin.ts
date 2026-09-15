@@ -2,7 +2,8 @@ import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 
 // Break-glass local admin password hashing. PBKDF2-HMAC-SHA256 via Node's
 // built-in crypto — no bcrypt/argon2 dependency needed, and the same
-// algorithm/params are reproduced in scripts/Initialize-CnaGitHubSecrets.ps1
+// algorithm/params are reproduced in the appliance repositories'
+// scripts/Initialize-CnaGitHubSecrets.ps1
 // (System.Security.Cryptography.Rfc2898DeriveBytes) so the bootstrap script
 // and this app agree on the stored hash format without sharing code.
 const ALGO = "pbkdf2";

@@ -10,22 +10,24 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
-| [R-001](#r-001--aws-account-and-administrative-access) | AWS account + administrative access for first deploy | AWS account owner | Open |
-| [R-002](#r-002--terraform-s3-state-backend-must-be-created-out-of-band) | Terraform S3 state backend + DynamoDB lock table | AWS account owner | Open |
-| [R-003](#r-003--github-oidc-deploy-role-must-be-wired-into-ci) | GitHub OIDC deploy role wired into CI secrets | Repository admin | Open |
-| [R-004](#r-004--acm-certificates-and-custom-domain-decision) | ACM certificates + custom-domain decision | DNS / domain owner | Open |
-| [R-005](#r-005--amazon-bedrock-model-access-opt-in) | Amazon Bedrock foundation-model access opt-in | AWS account owner | Open |
-| [R-006](#r-006--runtime-secrets-have-no-defaults-and-must-be-supplied) | Runtime secrets supplied at apply time | Security / secret owner | Open |
+| [R-001](#r-001--aws-account-and-administrative-access) | AWS account + administrative access for first deploy | AWS account owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-001); deploy layer moved 2026-09-15 |
+| [R-002](#r-002--terraform-s3-state-backend-must-be-created-out-of-band) | Terraform S3 state backend + DynamoDB lock table | AWS account owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-002); deploy layer moved 2026-09-15 |
+| [R-003](#r-003--github-oidc-deploy-role-must-be-wired-into-ci) | GitHub OIDC deploy role wired into CI secrets | Repository admin | Open — tracked in the AWS appliance's `REVIEW.md` (R-003); deploy layer moved 2026-09-15 |
+| [R-004](#r-004--acm-certificates-and-custom-domain-decision) | ACM certificates + custom-domain decision | DNS / domain owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-004); deploy layer moved 2026-09-15 |
+| [R-005](#r-005--amazon-bedrock-model-access-opt-in) | Amazon Bedrock foundation-model access opt-in | AWS account owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-005); deploy layer moved 2026-09-15 |
+| [R-006](#r-006--runtime-secrets-have-no-defaults-and-must-be-supplied) | Runtime secrets supplied at apply time | Security / secret owner | Open — tracked in the AWS appliance's `REVIEW.md` (R-008); transferred 2026-09-15 |
 | [R-007](#r-007--azure-subscription-resource-provider-registration) | `Microsoft.AlertsManagement` provider registration | Azure subscription owner | Resolved — no longer required |
-| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding |
+| [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding; tracked in the Azure appliance's `REVIEW.md` (R-003); transferred 2026-09-15 |
 | [R-009](#r-009--github-wiki-write-access-for-documentation-migration) | GitHub Wiki write access to publish prepared pages | Repository owner | Open — not blocking |
-| [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open |
+| [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open — tracked in the Azure appliance's `REVIEW.md` (R-004); transferred 2026-09-15 |
 | [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
 | [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
 
 ---
 
 ## R-001 — AWS account and administrative access
+
+> **Moved 2026-09-15.** The Terraform and workflows this blocker gates left the core with `TODO.md` → T-504 and live in the AWS appliance repository, where the blocker is tracked as **R-001** with paths rebased to `infra/terraform/modules/`. This entry is kept for history and for the references below; resolve it there.
 
 **Problem**
 The AWS Terraform under `infra/terraform/providers/aws/` and
@@ -68,6 +70,8 @@ dev + prod together) before any further AWS engineering effort is scheduled.
 
 ## R-002 — Terraform S3 state backend must be created out of band
 
+> **Moved 2026-09-15.** The Terraform and workflows this blocker gates left the core with `TODO.md` → T-504 and live in the AWS appliance repository, where the blocker is tracked as **R-002** with paths rebased to `infra/terraform/modules/`. This entry is kept for history and for the references below; resolve it there.
+
 **Problem**
 Every AWS root uses an empty `backend "s3" {}` block — the same init-time-configuration pattern
 the Azure side uses for `backend "azurerm" {}`. The bucket and lock table must exist before the
@@ -109,6 +113,8 @@ Decide bucket and table naming (the Azure convention is
 
 ## R-003 — GitHub OIDC deploy role must be wired into CI
 
+> **Moved 2026-09-15.** The Terraform and workflows this blocker gates left the core with `TODO.md` → T-504 and live in the AWS appliance repository, where the blocker is tracked as **R-003** with paths rebased to `infra/terraform/modules/`. This entry is kept for history and for the references below; resolve it there.
+
 **Problem**
 The `identity` module provisions the GitHub OIDC provider and a deploy role assumable via
 `AssumeRoleWithWebIdentity`, and exports it as the `github_deploy_role_arn` output. Nothing
@@ -149,6 +155,8 @@ must import it rather than create it — plan for that before the first apply.
 
 ## R-004 — ACM certificates and custom-domain decision
 
+> **Moved 2026-09-15.** The Terraform and workflows this blocker gates left the core with `TODO.md` → T-504 and live in the AWS appliance repository, where the blocker is tracked as **R-004** with paths rebased to `infra/terraform/modules/`. This entry is kept for history and for the references below; resolve it there.
+
 **Problem**
 TLS certificates are taken as **inputs** (`alb_certificate_arn`, `acm_certificate_arn`, both
 defaulting to `null`). The Terraform deliberately does not mint an `aws_acm_certificate`, because
@@ -187,6 +195,8 @@ single CloudFront-default deployment with no certificate work at all.
 
 ## R-005 — Amazon Bedrock model access opt-in
 
+> **Moved 2026-09-15.** The Terraform and workflows this blocker gates left the core with `TODO.md` → T-504 and live in the AWS appliance repository, where the blocker is tracked as **R-005** with paths rebased to `infra/terraform/modules/`. This entry is kept for history and for the references below; resolve it there.
+
 **Problem**
 Amazon Bedrock foundation-model access is granted per account **and** per region through a
 console opt-in. No Terraform resource covers this step.
@@ -220,6 +230,8 @@ multi-hour approval delay for some models, so it should not be discovered late.
 ---
 
 ## R-006 — Runtime secrets have no defaults and must be supplied
+
+> **Transferred 2026-09-15** to the AWS appliance's `REVIEW.md` as **R-008** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 Five runtime inputs are declared `sensitive` with **no defaults** and are intentionally absent
@@ -261,6 +273,8 @@ provisions Secrets Manager entries, so seeding is the closer mirror.
 ---
 
 ## R-007 — Azure subscription resource-provider registration
+
+> **Note 2026-09-15.** The `100-validate-prereqs` provider check and the `211` registration step this entry discusses are Azure appliance workflows now (`TODO.md` → T-504).
 
 **Status: Resolved — nothing is required of the subscription owner.**
 
@@ -312,6 +326,8 @@ operation the deploy identity cannot perform itself.
 ---
 
 ## R-008 — Live Azure beta acceptance sign-off
+
+> **Transferred 2026-09-15** to the Azure appliance's `REVIEW.md` as **R-003** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 The repository is at `0.8.0b0`. Code, Terraform, workflows, and the changelog are aligned on
@@ -400,6 +416,8 @@ merge rather than create.
 ---
 
 ## R-010 — The dev environment has no protection against out-of-band deletion
+
+> **Transferred 2026-09-15** to the Azure appliance's `REVIEW.md` as **R-004** (`TODO.md` → T-507). Resolve it there; this entry is history.
 
 **Problem**
 The entire Azure dev environment — workload resource group *and* the `-tfstate` resource group

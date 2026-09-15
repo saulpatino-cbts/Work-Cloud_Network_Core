@@ -25,7 +25,7 @@ This repository keeps exactly four required documents plus `CLAUDE.md`, and at m
 | [`TODO.md`](TODO.md) | The engineering work queue — every actionable item, phased |
 | [`CLAUDE.md`](CLAUDE.md) | Rules for AI coding agents: what this repository is (the core), the contract with the two appliance repositories, and the conventions agents get wrong |
 | [`CNA-0.90-updates.md`](CNA-0.90-updates.md) | *Optional, temporary* — the one working-document exception to the four required docs: the 0.9.0 pre-demo review, cleanup record, polish plan, and the 2026-08-28 dev rebuild/deployment record (§5); retired when 0.9.0 ships |
-| [GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki) | Architecture, ADRs, runbooks, workflow reference, security posture, deployment guides |
+| [GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki) | Architecture, ADRs, runbooks, workflow reference, security posture, operating notes (deployment guides live with the appliances) |
 
 If you are picking up work on this repository, start with `TODO.md`. If you are waiting on
 someone, check `REVIEW.md`.
@@ -47,15 +47,11 @@ cna/                  Python package, installed as the `cna` CLI
 ├── diagram_engine/   Draw.io generator, future-state model
 ├── delivery_portal/  Client deliverable delivery
 └── cli/              Command-line entry point
-infra/terraform/
-├── environments/azure/{dev,prod}/{platform,workload}/   Azure environment composition
-├── environments/aws/{dev,prod}/{platform,workload}/     AWS environment composition
-├── providers/azure/   Reusable modules: ai, compute, database, identity,
-│                      security, storage, runtime, observability
-└── providers/aws/     The same eight module boundaries, mirrored
-scripts/              Bootstrap, validation, cleanup, and CI helper scripts
+scripts/              Repository guards (documentation model, module graph, shape catalog)
+                      and the headless draw.io wrapper the images use
 tests/                unit/ and integration/
-.github/workflows/    Numbered workflow sequence (see conventions below)
+.github/workflows/    200 build images · 300 test · 310 release · 370 registry cleanup
+.deployment-catalog/  latest-build.json — the build manifest the appliances consume
 .claude/ .agents/ .codex/ .kiro/   Vendored agent configuration — not project source
 ```
 
@@ -86,10 +82,6 @@ provider family: `saas` (Azure OpenAI on Azure, Amazon Bedrock on AWS — provis
 Terraform, authenticated with the workload identity) or `byo-api` (no cloud AI resources; an
 admin pastes an Anthropic and/or OpenAI API key on the **AI Engine** admin page — the only
 secrets ever entered in the app, stored encrypted in the database).
-
-The Terraform under `infra/terraform/` and the deploy workflows still in this repository are the
-source the appliances were cut from and are retired once both appliances are live (see
-[`TODO.md`](TODO.md)).
 
 ---
 
@@ -123,14 +115,12 @@ Lint and test the Python package with `ruff check cna/`, `ruff format --check`, 
 
 ### Deploying an environment
 
-Deployment runs through the numbered GitHub Actions workflows, in band order: bootstrap the
-Terraform backend, validate prerequisites, build images, then deploy. The full step-by-step
-procedure — including the Entra redirect-URI sync and the teardown sequence — is in the Wiki's
-**Deployment Guide**.
-
-Azure is the deployable path today. The AWS Terraform is authored but has never been applied; its
-prerequisites are tracked in [`REVIEW.md`](REVIEW.md) and its remaining work in
-[`TODO.md`](TODO.md).
+Deployment does not happen from this repository. Each appliance repository owns its cloud's
+Terraform, bootstrap, deploy, drift and teardown workflows and documents the procedure in its
+`README.md` → *Operating the appliance*: [Azure](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance) · [AWS](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance). This repository
+only publishes the images they deploy (`200-build-images.yml`). Deployment blockers live in the
+appliances' `REVIEW.md` files; the AWS appliance's deploy stays fail-fast until its account,
+state backend and OIDC role exist (its R-001 – R-003).
 
 ---
 
@@ -138,14 +128,18 @@ prerequisites are tracked in [`REVIEW.md`](REVIEW.md) and its remaining work in
 
 Configuration comes from three places, in this order of authority:
 
-1. **GitHub Secrets and Variables** — the source of truth for deployments. Cloud credentials use
-   OIDC; there are no long-lived keys.
-2. **Azure Key Vault** — runtime secrets for a deployed environment. Workflow `340-sync-keys.yml`
-   can pull them into a short-lived `.env` artifact.
+1. **GitHub Secrets and Variables** — for this repository, only what the build and release
+   workflows need (Docker Hub, the GitHub App for appliance notification). Deployment secrets and
+   variables belong to the appliance repositories, where cloud credentials use OIDC and there are
+   no long-lived keys.
+2. **The appliance's vault** (Azure Key Vault / AWS Secrets Manager) — runtime secrets for a
+   deployed environment, injected by the appliance's Terraform; its `340-sync-keys` workflow can
+   pull them into a short-lived `.env` artifact.
 3. **`.env` / `.env.local`** — local development only, never committed.
 
-`.env.example` at the repository root is the complete inventory: every GitHub secret, every GitHub
-variable, and every local environment variable, each with a one-line description.
+`.env.example` at the repository root is the complete inventory of the runtime environment
+contract — every variable the images read, each with a one-line description and which side
+(appliance Terraform or local `.env`) supplies it.
 `apps/cna-web/.env.example` covers the web application specifically. The Wiki's **Secrets
 Reference** explains each value in full.
 
@@ -160,22 +154,15 @@ Reference** explains each value in full.
   build manifest, the `cna-image-published` dispatch, or the runtime environment contract
   (`CNA_AI_MODE`, `CNA_APPLIANCE_CLOUD`, …) is made in both appliance repositories in the same
   change set — see [`CLAUDE.md`](CLAUDE.md).
-- **Numbered workflows.** `.github/workflows/` uses numeric bands: `000` bootstrap, `100`
-  validation, `200` build and deploy, `300` test, release, and operations. Within a band, the
-  number is stable — reference workflows by filename, not by position. Per-workflow detail is in
-  the Wiki's **Workflows Guide**.
-- **Resource naming.** Azure resources follow `cna-[env]-[region_short]`, with a single workload
-  resource group per environment and a separate resource group for Terraform state.
-- **Split state.** Every environment has a `platform` root and a `workload` root with separate
-  state files. Platform applies first; workload consumes its outputs through explicit variables.
+- **Numbered workflows.** Workflows use numeric bands shared by the core and both appliances:
+  `000` bootstrap, `100` validation, `200` build and deploy, `300` test, release, and operations.
+  The core keeps `200`, `300`, `310` and `370`; the appliances keep the rest. Within a band, the
+  number is stable — reference workflows by filename, not by position, and never renumber.
 - **Never hardcode a value at a call site.** Regions, endpoints, account IDs, and every other
-  environment-specific value is *declared* — as a Terraform variable, a `DiscoveryOptions` field, or
-  a named module-level constant — and resolved at runtime, most specific source first. That is the
-  point of the declared lists: they record what to use later, and they can be overridden. A
-  declared default is a last resort, never an inline literal. Terraform variables carrying values a
-  human must supply take no default at all, so a plan fails rather than applying something
-  plausible-but-wrong.
-- **PowerShell scripts** use Verb-Noun naming (`Initialize-CnaGitHubSecrets.ps1`).
+  environment-specific value is *declared* — as a `DiscoveryOptions` field, a named module-level
+  constant, or a setting — and resolved at runtime, most specific source first. That is the point
+  of the declared lists: they record what to use later, and they can be overridden. A declared
+  default is a last resort, never an inline literal.
 - **All GitHub Actions are pinned to a SHA digest.** `detect-secrets` runs at commit time and in
   CI, and **fails the build** on any finding not recorded in `.secrets.baseline` — which holds only
   hand-audited false positives, never a suppression dump. `gitleaks` also runs in CI but is

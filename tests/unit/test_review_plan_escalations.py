@@ -7,7 +7,8 @@ and :func:`cna.review.assert_escalations_well_formed`.
 The invariant under test (Requirements 1.6, 10.4) is that every
 ``Escalation_Record`` entry carries its owning ``REVIEW.md`` blocker id, no
 fixable entry carries a blocker id, and the escalations cover exactly the
-R-001..R-006, R-008, R-009 consumers this review declares. R-007 is
+R-005 and R-009 consumers this review declares (the AWS and Azure Terraform
+consumers left the core with the deployment layer, TODO.md T-504). R-007 is
 resolved-but-not-closed, so its subject stays entirely out of scope and it is
 *not* an escalation consumer.
 """
@@ -34,17 +35,11 @@ _BLOCKERS = load_blockers()
 
 
 def test_expected_escalation_blocker_set_is_the_declared_consumers():
-    """The declared consumer set is R-001..R-006, R-008, R-009 (not R-007)."""
-    assert EXPECTED_ESCALATION_BLOCKERS == {
-        "R-001",
-        "R-002",
-        "R-003",
-        "R-004",
-        "R-005",
-        "R-006",
-        "R-008",
-        "R-009",
-    }
+    """The declared consumer set is R-005 and R-009 (not R-007)."""
+    assert EXPECTED_ESCALATION_BLOCKERS == {"R-005", "R-009"}
+    # The AWS/Azure Terraform consumers moved to the appliances with the
+    # deployment layer (TODO.md T-504); they are not this repository's escalations.
+    assert not EXPECTED_ESCALATION_BLOCKERS & {"R-001", "R-002", "R-003", "R-004", "R-006", "R-008"}
     # R-007 is resolved-but-not-closed: its subject stays out of scope, so it is
     # never an escalation consumer.
     assert "R-007" not in EXPECTED_ESCALATION_BLOCKERS

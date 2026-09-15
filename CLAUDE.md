@@ -18,10 +18,10 @@ Deployment is not this repository's job. Each cloud has its own customer-facing
 
 The appliances contain only their cloud's Terraform and deploy/update workflows.
 They are structurally identical to each other; a feature lands **once, here**, in
-the images, and both appliances pick it up. Until the migration completes, the
-Terraform under `infra/terraform/` and the numbered deploy workflows (`000`,
-`100`, `211`, `212`, `220`, `320`, `330`, `340`, `350`, `360`) remain here as the
-source the appliances were cut from — see `TODO.md` for the cleanup item.
+the images, and both appliances pick it up. There is no Terraform and no deploy
+workflow in this repository; the core keeps only `200-build-images`,
+`300-test-codebase`, `310-release-version` and `370-registry-cleanup`. A
+deployment fix belongs in the appliance (and its sibling), never here.
 
 ## The core ↔ appliance contract
 
@@ -73,17 +73,17 @@ or record a `TODO.md` item naming them — never leave one side implied.
   release-push document). `scripts/validate_documentation_model.py` enforces
   this in CI. Long-form docs go to the GitHub Wiki. Content determines
   destination, not filename.
-- **Never hardcode a value at a call site.** Declare it (Terraform variable,
-  `DiscoveryOptions` field, module-level constant) and resolve at runtime.
-  Terraform variables a human must supply take no default.
+- **Never hardcode a value at a call site.** Declare it (`DiscoveryOptions`
+  field, module-level constant, setting) and resolve at runtime.
 - **Workflows are numbered in bands** (`000` bootstrap, `100` validation, `200`
   build/deploy, `300` test/release/ops). Numbers are stable across core and
-  both appliances; never renumber, reference by filename.
+  both appliances; never renumber, reference by filename. The core owns `200`,
+  `300`, `310`, `370`; every other number belongs to the appliances.
 - **Every GitHub Action is pinned to a SHA digest.** `detect-secrets` fails the
   build on any finding not in `.secrets.baseline`; `gitleaks` is advisory.
 - **Secrets** travel as GitHub secrets → OIDC / Key Vault / Secrets Manager →
-  `TF_VAR_*` env or container secrets. Never as `-var` on a command line, never
-  in a `workflow_dispatch` input, never committed.
+  container secrets (injected by the appliances' Terraform). Never on a command
+  line, never in a `workflow_dispatch` input, never committed.
 - **Vendored agent configuration** under `.claude/`, `.agents/`, `.codex/`, `.kiro/` is
   not project source and must never contain project-specific facts.
 - Start with `TODO.md` when picking up work; check `REVIEW.md` when blocked on a

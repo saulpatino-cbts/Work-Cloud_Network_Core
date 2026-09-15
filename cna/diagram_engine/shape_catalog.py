@@ -13,6 +13,23 @@ Triple-enforced pinning (matches apps/cna-web/lib/drawio-mcp/allow-list.ts):
 
 If a style violates the allow-list it is dropped at load time with a warning;
 callers fall back to the provided default.
+
+Two icon mechanisms, one per cloud — this is not a style preference, it is what
+draw.io actually renders (verified 2026-08-28 by exporting each entry with the
+headless draw.io CLI and looking at the PNG):
+
+  AWS   `shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.<name>`
+        The aws4 stencil set is real. An unknown <name> renders as a plain
+        coloured square, so every name in aws_shapes.json was probe-rendered.
+
+  Azure `image=img/lib/azure2/<category>/<File_Name>.svg`
+        There is NO mxgraph.azure2 stencil namespace. Styles of the form
+        `shape=mxgraph.azure2.*` silently fall back to a plain blue rectangle —
+        which is what this catalog shipped until 2026-08-28. Azure icons must
+        use the SVG image paths from the official draw.io Azure2 palette.
+
+`is_allowed_style` therefore rejects `shape=mxgraph.azure2.*` outright, so the
+blue-box regression cannot come back unnoticed.
 """
 
 from __future__ import annotations
@@ -26,14 +43,29 @@ logger = logging.getLogger("cna.diagram_engine.shape_catalog")
 
 ALLOWED_LIBS: frozenset[str] = frozenset({"azure2", "aws4"})
 
-_STYLE_PREFIX_RE = re.compile(r"shape=mxgraph\.([a-z0-9]+)\.", re.IGNORECASE)
+_STENCIL_RE = re.compile(r"shape=mxgraph\.([a-z0-9]+)\.", re.IGNORECASE)
+_IMAGE_RE = re.compile(r"image=img/lib/([a-z0-9]+)/", re.IGNORECASE)
+
+# Stencil namespaces that draw.io actually ships. `azure2` is deliberately
+# absent: it does not exist as a stencil set (see module docstring).
+_STENCIL_LIBS: frozenset[str] = frozenset({"aws4"})
 
 _DATA_DIR = Path(__file__).parent / "data"
 
 
 def _lib_of(style: str) -> str | None:
-    m = _STYLE_PREFIX_RE.search(style or "")
-    return m.group(1).lower() if m else None
+    """Return the icon library a style draws from, or None if it draws from none.
+
+    A stencil reference only counts when draw.io ships that stencil set; an
+    image reference counts by its `img/lib/<lib>/` path.
+    """
+    m = _IMAGE_RE.search(style or "")
+    if m:
+        return m.group(1).lower()
+    m = _STENCIL_RE.search(style or "")
+    if m and m.group(1).lower() in _STENCIL_LIBS:
+        return m.group(1).lower()
+    return None
 
 
 def is_allowed_style(style: str) -> bool:

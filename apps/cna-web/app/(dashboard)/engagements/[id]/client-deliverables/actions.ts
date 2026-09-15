@@ -3,7 +3,10 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { generateDeliverableContent } from "@/lib/openai";
+import { after } from "next/server";
+import type { DeliverableContext } from "@/lib/openai";
+import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
+import { uploadDeliverable } from "@/lib/blob";
 import { sanitizeBackendDetail } from "@/lib/summarize-error";
 
 // ─── Multi-subscription topology merge (same pattern as deliverables/actions.ts) ─
@@ -50,11 +53,62 @@ async function getMergedTopologyJson(engagementId: string): Promise<string | nul
 
 // ─── Create Interactive Assessment with AI-generated content ──────────────────
 
+// The interactive assessment is the sectioned comprehensive report, so it goes
+// through the same multi-pass orchestrator the deliverables page uses. That is
+// 12+ AI calls, well past the Front Door / Container Apps ingress timeouts, so
+// the row is created up front with status RUNNING and the generation is handed
+// to next/server after(). The button polls getDeliverableProgress().
+
+async function runInteractiveAssessmentInBackground(
+  deliverableId: string,
+  engagementId: string,
+  ctx: DeliverableContext,
+): Promise<void> {
+  const steps: ProgressUpdate[] = [];
+  const persistProgress = async (update: ProgressUpdate) => {
+    const existing = steps.findIndex((s) => s.stepId === update.stepId);
+    if (existing >= 0) steps[existing] = update;
+    else steps.push(update);
+    await prisma.deliverable
+      .update({
+        where: { id: deliverableId },
+        data: { progressLog: JSON.stringify(steps) },
+      })
+      .catch(() => {}); // progress persistence must never kill the run
+  };
+
+  try {
+    const content = await generateComprehensiveReport(ctx, persistProgress);
+    const fileName = `interactive_assessment-${Date.now()}.md`;
+    const blobPath = await uploadDeliverable(engagementId, fileName, content).catch(() => null);
+    await prisma.deliverable.update({
+      where: { id: deliverableId },
+      data: { content, blobPath, status: "COMPLETED", progressLog: JSON.stringify(steps) },
+    });
+  } catch (err) {
+    console.error("[runInteractiveAssessmentInBackground][error]", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    const label =
+      msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")
+        ? "Generation failed: the web app is missing the required 'Cognitive Services User' access on the active AI resource."
+        : "Generation failed — the error has been logged. Retry, or contact your administrator if it persists.";
+    await prisma.deliverable
+      .update({
+        where: { id: deliverableId },
+        data: {
+          status: "FAILED",
+          progressLog: JSON.stringify([...steps, { stepId: "fatal", label, status: "failed" }]),
+        },
+      })
+      .catch(() => {});
+  }
+}
+
 // Create a single INTERACTIVE_ASSESSMENT deliverable record (replaces existing).
-// Calls the active AI engine to generate a fresh comprehensive HTML assessment every time.
+// Returns as soon as the row exists; generation continues in the background.
 export async function createInteractiveAssessment(
   engagementId: string,
-): Promise<{ error?: string; success?: boolean }> {
+): Promise<{ error?: string; success?: boolean; deliverableId?: string }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
@@ -93,55 +147,49 @@ export async function createInteractiveAssessment(
   const date = new Date().toISOString().split("T")[0];
   const title = `${engagement.clientOrg} — Interactive Assessment — ${date}`;
 
-  let content: string;
-  try {
-    content = await generateDeliverableContent({
-      type: "COMPREHENSIVE_ASSESSMENT",
-      title,
-      clientOrg: engagement.clientOrg,
-      engagementName: engagement.name,
-      findings,
-      topologyJson: mergedTopologyJson,
-      documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
-      customerLogoUrl: null,
-      credentialsInfo: credentials.map((c) => ({
-        label: c.label,
-        platform: c.platform,
-        tenantId: c.tenantId,
-        subscriptionIds: c.subscriptionIds,
-      })),
-      previousAssessments: existingDeliverables.map((d) => ({
-        type: d.type,
-        title: d.title,
-      })),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[generateInteractiveAssessment][error]", err);
-    if (msg.includes("401") || msg.includes("PermissionDenied") || msg.includes("lacks the required")) {
-      return { error: "AI generation failed: the web app is missing the required 'Cognitive Services User' access on the active AI resource." };
-    }
-    return { error: "AI generation failed. Check that the active AI engine is reachable, then try again — the full error has been logged." };
-  }
+  const ctx: DeliverableContext = {
+    type: "COMPREHENSIVE_ASSESSMENT",
+    title,
+    clientOrg: engagement.clientOrg,
+    engagementName: engagement.name,
+    findings,
+    topologyJson: mergedTopologyJson,
+    documents: documents.map((d) => ({ fileName: d.fileName, text: d.parsedText! })),
+    customerLogoUrl: null,
+    credentialsInfo: credentials.map((c) => ({
+      label: c.label,
+      platform: c.platform,
+      tenantId: c.tenantId,
+      subscriptionIds: c.subscriptionIds,
+    })),
+    previousAssessments: existingDeliverables.map((d) => ({
+      type: d.type,
+      title: d.title,
+    })),
+  };
 
-  // Delete any previous interactive assessment and replace with the fresh AI-generated one
+  // Replace any previous interactive assessment with a fresh RUNNING row so the
+  // presentation site stays gated until this generation finishes.
   await prisma.deliverable.deleteMany({
     where: { engagementId, type: "INTERACTIVE_ASSESSMENT" },
   });
 
-  await prisma.deliverable.create({
+  const record = await prisma.deliverable.create({
     data: {
       engagementId,
       type: "INTERACTIVE_ASSESSMENT",
       title,
-      content,
+      status: "RUNNING",
+      progressLog: "[]",
       publishedAt: new Date(),
       publishedBy: session.user.id,
     },
   });
 
+  after(() => runInteractiveAssessmentInBackground(record.id, engagementId, ctx));
+
   revalidatePath(`/engagements/${engagementId}`);
-  return { success: true };
+  return { success: true, deliverableId: record.id };
 }
 
 // Delete a deliverable (any type) — canonical delete used from client-deliverables page

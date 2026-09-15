@@ -35,7 +35,8 @@ RUN pip install --no-cache-dir --prefix=/install \
     "jinja2>=3.1" \
     "httpx>=0.27" \
     "click>=8.1" \
-    "rich>=13.7"
+    "rich>=13.7" \
+    "defusedxml>=0.7.1"
 
 # Install the cna package itself (no heavy extras — no weasyprint/matplotlib/diagrams)
 RUN pip install --no-cache-dir --no-deps --prefix=/install .

@@ -324,3 +324,151 @@ class TestMermaidGenerators:
         topology = AWSTopology(engagement_id="eng-empty", accounts=[])
         mmd = generate_aws_account_hierarchy(topology)
         assert "EMPTY" in mmd or "No accounts" in mmd
+
+
+# ── Service band, subnet typing, label breaks, multi-page merge ─────────────
+#
+# Added 2026-08-28 alongside the Diagram-page wiring. Before that the VNet
+# diagram drew only VNets/subnets/peerings, painted every subnet with the
+# private style, and emitted multi-line labels that html=1 collapsed onto one
+# line.
+
+
+def _sub_with_services() -> AzureSubscriptionTopology:
+    from cna.core.topology_schema import AzureBastionHost, AzureFirewall
+
+    return AzureSubscriptionTopology(
+        subscription_id="sub-1",
+        subscription_name="Prod",
+        tenant_id="tenant-1",
+        vnets=[
+            VNet(
+                id="/v/1",
+                name="vnet-hub",
+                address_space=["10.0.0.0/16"],
+                location="southcentralus",
+                resource_group="rg-net",
+                subscription_id="sub-1",
+                subnets=[
+                    AzureSubnet(
+                        id="/s/1",
+                        name="snet-public",
+                        address_prefix="10.0.1.0/24",
+                        subnet_type=SubnetType.PUBLIC,
+                    ),
+                    AzureSubnet(
+                        id="/s/2",
+                        name="snet-isolated",
+                        address_prefix="10.0.2.0/24",
+                        subnet_type=SubnetType.ISOLATED,
+                    ),
+                ],
+            )
+        ],
+        firewalls=[
+            AzureFirewall(
+                id="/fw/1",
+                name="afw-hub",
+                location="southcentralus",
+                resource_group="rg-net",
+                sku_tier="Standard",
+            )
+        ],
+        bastion_hosts=[
+            AzureBastionHost(
+                id="/b/1",
+                name="bas-hub",
+                location="southcentralus",
+                resource_group="rg-net",
+            )
+        ],
+    )
+
+
+def test_vnet_topology_renders_discovered_network_services():
+    xml = generate_vnet_topology(_sub_with_services())
+    assert "Network services" in xml
+    assert "afw-hub" in xml
+    assert "bas-hub" in xml
+    # Real Azure icons, never the stencil form that renders as a blue box.
+    assert "img/lib/azure2/networking/Firewalls.svg" in xml
+    assert "mxgraph.azure2" not in xml
+
+
+def test_vnet_topology_colours_subnets_by_type():
+    from cna.diagram_engine.drawio_generator import (
+        STYLE_SUBNET_ISOLATED,
+        STYLE_SUBNET_PUBLIC,
+    )
+
+    xml = generate_vnet_topology(_sub_with_services())
+    assert STYLE_SUBNET_PUBLIC in xml
+    assert STYLE_SUBNET_ISOLATED in xml
+
+
+def test_labels_use_escaped_line_breaks():
+    """A raw "<br>" is malformed inside an XML attribute and drops the cell."""
+    import xml.dom.minidom as minidom
+
+    xml = generate_vnet_topology(_sub_with_services())
+    assert "&lt;br&gt;" in xml
+    assert "<br>" not in xml
+    minidom.parseString(xml)  # must stay well-formed
+
+
+def test_service_band_summarises_overflow_instead_of_drawing_every_icon():
+    from cna.core.topology_schema import AzurePrivateEndpoint
+    from cna.diagram_engine.drawio_generator import MAX_ICONS_PER_TYPE
+
+    sub = _sub_with_services()
+    count = MAX_ICONS_PER_TYPE + 3
+    sub.private_endpoints = [
+        AzurePrivateEndpoint(
+            id=f"/pe/{i}",
+            name=f"pe-{i}",
+            location="southcentralus",
+            resource_group="rg",
+            subnet_id="/s/1",
+        )
+        for i in range(count)
+    ]
+    xml = generate_vnet_topology(sub)
+    assert f"pe-{MAX_ICONS_PER_TYPE - 1}" in xml
+    assert f"pe-{MAX_ICONS_PER_TYPE}" not in xml
+    assert "+3 more" in xml
+
+
+def test_subscription_with_no_services_lays_out_unchanged():
+    sub = AzureSubscriptionTopology(
+        subscription_id="sub-2", tenant_id="t", vnets=_sub_with_services().vnets
+    )
+    xml = generate_vnet_topology(sub)
+    assert "Network services" not in xml
+    assert "vnet-hub" in xml
+
+
+def test_merge_diagrams_makes_one_page_per_input():
+    import xml.dom.minidom as minidom
+
+    from cna.diagram_engine.drawio_generator import merge_diagrams
+
+    a = generate_vnet_topology(_sub_with_services())
+    merged = merge_diagrams([("Azure sub-1", a), ("Azure sub-2", a)])
+    minidom.parseString(merged)
+    assert merged.count("<diagram") == 2
+    assert 'name="Azure sub-1"' in merged
+    assert 'name="Azure sub-2"' in merged
+
+
+def test_merge_diagrams_skips_unparseable_pages_and_never_returns_empty():
+    import xml.dom.minidom as minidom
+
+    from cna.diagram_engine.drawio_generator import merge_diagrams
+
+    good = generate_vnet_topology(_sub_with_services())
+    merged = merge_diagrams([("bad", "<not xml"), ("good", good)])
+    assert merged.count("<diagram") == 1
+
+    empty = merge_diagrams([])
+    minidom.parseString(empty)
+    assert "<diagram" in empty

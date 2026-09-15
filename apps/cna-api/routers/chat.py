@@ -37,6 +37,8 @@ from cna.ai_engine.chat_agent import (
     build_grounding_context,
     resolve_ai_mode,
 )
+from cna.api_errors import sanitize_downstream_error
+from cna.api_status import Outcome, status_for
 from cna.core.credential_crypto import CredentialCryptoError, decrypt
 
 logger = logging.getLogger("cna-api.chat")
@@ -193,9 +195,15 @@ def _load_byo_credentials(
 def chat(engagement_id: str, request: ChatRequest) -> dict:
     """Grounded Q&A over the engagement's findings + metrics + topology."""
     if not DATABASE_URL:
-        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            detail="DATABASE_URL not configured",
+        )
     if not request.messages:
-        raise HTTPException(status_code=422, detail="messages must not be empty")
+        raise HTTPException(
+            status_code=status_for(Outcome.INVALID_REQUEST),
+            detail="messages must not be empty",
+        )
 
     messages = [
         {"role": m.role, "content": m.content[:MAX_MESSAGE_CHARS]}
@@ -224,13 +232,20 @@ def chat(engagement_id: str, request: ChatRequest) -> dict:
         )
         result = agent.answer(messages, context)
     except (ChatConfigError, CredentialCryptoError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — surface upstream failures as 502
-        # Full details stay in the server log; callers get a sanitized message.
-        logger.exception("chat completion failed for %s", engagement_id)
+        # Both are operator configuration problems (no engine / no key / bad
+        # encryption key), not caller errors and not upstream failures.
         raise HTTPException(
-            status_code=502,
-            detail="AI engine request failed — see the API logs for details.",
+            status_code=status_for(Outcome.NOT_CONFIGURED), detail=str(exc)
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 — surface upstream failures as 502
+        # Raw AI-engine/SDK detail is logged server-side; the caller gets a
+        # sanitized, category-level message with no raw text (Requirement 2.3).
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"chat completion for {engagement_id}"
+        )
+        raise HTTPException(
+            status_code=status_for(sanitized.outcome),
+            detail=sanitized.client_message,
         ) from exc
 
     return {

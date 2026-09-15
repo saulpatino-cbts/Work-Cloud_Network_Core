@@ -31,6 +31,7 @@ jobs:
   # below because it adds npm audit, a second (migrator) target, and a smoke test.
   build-images:
     runs-on: self-hosted
+    timeout-minutes: 45
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     strategy:
@@ -109,6 +110,7 @@ jobs:
 
   build-web:
     runs-on: self-hosted
+    timeout-minutes: 45
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
@@ -251,6 +253,7 @@ jobs:
 
   publish-build-manifest:
     runs-on: self-hosted
+    timeout-minutes: 10
     needs: [build-images, build-web]
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}

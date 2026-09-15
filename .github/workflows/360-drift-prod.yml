@@ -8,6 +8,12 @@ permissions:
   id-token: write
   contents: read
 
+# Serialize prod drift scans — a manual dispatch shouldn't overlap another
+# in-flight scan against the same prod state.
+concurrency:
+  group: drift-prod
+  cancel-in-progress: false
+
 env:
   TF_IN_AUTOMATION: true
   ARM_USE_OIDC: true
@@ -19,6 +25,7 @@ env:
 jobs:
   drift-detection:
     runs-on: self-hosted
+    timeout-minutes: 20
     environment: prod
     steps:
       - name: Checkout

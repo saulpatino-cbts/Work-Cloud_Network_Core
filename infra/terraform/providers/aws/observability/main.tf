@@ -226,9 +226,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_connections" {
 
 # ─── Alarm notification topic ─────────────────────────────────────────────────
 # Created only when the caller does not supply an existing topic ARN.
+# Server-side encryption is enabled with the customer-managed key when one is
+# supplied; when kms_key_arn is null the topic falls back to the AWS-managed
+# SNS key (alias/aws/sns) so alarm notifications are never stored unencrypted.
 resource "aws_sns_topic" "alarms" {
-  count = var.sns_topic_arn == null ? 1 : 0
-  name  = "${var.name_prefix}-alarms"
+  count             = var.sns_topic_arn == null ? 1 : 0
+  name              = "${var.name_prefix}-alarms"
+  kms_master_key_id = var.kms_key_arn != null ? var.kms_key_arn : "alias/aws/sns"
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-alarms" })
 }

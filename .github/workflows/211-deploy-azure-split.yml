@@ -139,6 +139,7 @@ jobs:
   policy-gates:
     if: inputs.environment != ''
     runs-on: self-hosted
+    timeout-minutes: 15
     outputs:
       manage_diagnostic_settings: ${{ steps.alz_diag.outputs.manage_diagnostic_settings }}
     defaults:
@@ -320,6 +321,7 @@ jobs:
   plan:
     if: inputs.environment != ''
     runs-on: self-hosted
+    timeout-minutes: 30
     needs: policy-gates
     environment: ${{ inputs.environment }}
     defaults:
@@ -709,6 +711,7 @@ jobs:
   apply:
     if: inputs.environment != ''
     runs-on: self-hosted
+    timeout-minutes: 60
     needs: plan
     # Prod apply runs under the 'hub' environment, which has a required-reviewer
     # protection rule (manual approval gate) and a federated credential trusting
@@ -1329,6 +1332,7 @@ jobs:
   verify:
     if: inputs.environment != ''
     runs-on: self-hosted
+    timeout-minutes: 20
     needs: apply
     environment: ${{ inputs.environment }}
     steps:

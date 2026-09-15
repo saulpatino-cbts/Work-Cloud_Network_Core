@@ -160,6 +160,11 @@ resource "aws_lb" "this" {
   security_groups    = [var.alb_security_group_id]
   subnets            = var.public_subnet_ids
 
+  # Strip HTTP headers the ALB considers malformed instead of forwarding them to
+  # the tasks — defends the app tier against request-smuggling / header-injection
+  # attempts. Account-independent hardening (no live resource required).
+  drop_invalid_header_fields = true
+
   tags = merge(var.tags, { Name = "${var.name_prefix}-alb" })
 }
 

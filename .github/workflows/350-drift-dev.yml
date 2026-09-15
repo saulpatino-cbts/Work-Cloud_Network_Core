@@ -9,6 +9,12 @@ permissions:
   id-token: write
   contents: read
 
+# Skip a scheduled drift scan if a prior one (or a manual dispatch) is still
+# running — overlapping drift plans against the same state are redundant.
+concurrency:
+  group: drift-dev
+  cancel-in-progress: false
+
 env:
   TF_IN_AUTOMATION: true
   ARM_USE_OIDC: true
@@ -20,6 +26,7 @@ env:
 jobs:
   drift-detection:
     runs-on: self-hosted
+    timeout-minutes: 20
     environment: dev
     steps:
       - name: Checkout

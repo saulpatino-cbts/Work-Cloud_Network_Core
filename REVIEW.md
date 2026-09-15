@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-08-28
+**Last reviewed:** 2026-09-15
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -20,6 +20,8 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-008](#r-008--live-azure-beta-acceptance-sign-off) | 0.8 beta exit — live Azure acceptance sign-off | Product owner | Open — deploy done 2026-08-28, acceptance outstanding |
 | [R-009](#r-009--github-wiki-write-access-for-documentation-migration) | GitHub Wiki write access to publish prepared pages | Repository owner | Open — not blocking |
 | [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open |
+| [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
+| [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
 
 ---
 
@@ -443,3 +445,86 @@ would be materially faster — but it would still be a rebuild, with a fresh, em
 **Recommended next step**
 Ask the sandbox administrator the one question that decides everything else: is
 `sub-cbtssandbox-ops-tst` swept on a schedule, and can these two resource groups be excluded?
+
+---
+
+## R-011 — Security review of the bring-your-own AI key path and provider egress
+
+**Problem**
+The `byo-api` AI mode (`CHANGELOG.md` → Unreleased) introduces two things that did not exist
+before and that CBTS engineering standards say need a human security review before they carry
+customer traffic:
+
+1. **Admin-entered API keys stored in the application database.** An admin pastes an Anthropic
+   and/or OpenAI key on `/admin/ai-engine`; it is probed against the provider, AES-256-GCM
+   encrypted with the existing `CREDENTIAL_ENCRYPTION_KEY` scheme (`apps/cna-web/lib/crypto.ts`),
+   stored in `AppSetting` (`ai.byo.<provider>.apiKey`), and decrypted server-side only — by the
+   web tier for its own completions and by cna-api (`cna/core/credential_crypto.py`) for chat.
+   Only the last four characters are ever shown back. cna-api therefore receives
+   `CREDENTIAL_ENCRYPTION_KEY` in byo-api deployments, which it did not have before.
+2. **New firewall egress.** The platform root opens `api.anthropic.com` and `api.openai.com` on
+   the Azure Firewall application rule when `ai_mode = byo-api` (nothing changes in `saas`). The
+   AWS roots have no FQDN filter today; whether one should exist is part of the same review.
+
+**Why it needs an owner**
+Encryption-at-rest of third-party credentials, the decryption boundary, key-probe behaviour, and
+outbound allow-list changes are policy decisions, not engineering ones. The implementation is
+complete and tested (Node-generated interop vector, 51 Python + 22 web unit tests), but "complete"
+is not "approved".
+
+**Required owner**
+Security.
+
+**Required action**
+1. Review the key lifecycle: entry (`admin/ai-engine/actions.ts`, admin-only), storage
+   (`lib/ai-byo-credentials.ts`), decryption points (`lib/ai-engine.ts`,
+   `apps/cna-api/routers/chat.py`), and that no path logs, returns, or persists a plaintext key.
+2. Approve or amend the two egress FQDNs and decide whether the AWS appliance needs an equivalent
+   outbound control before its first byo-api deploy.
+3. Confirm the key-probe (a `GET /v1/models` against the provider at save time) is acceptable, or
+   ask for it to be disabled (`setByoApiKey(..., { probe: false })`).
+
+**Impact if unresolved**
+`byo-api` cannot be offered to a customer. `saas` deployments are unaffected — the code path is
+inert when `CNA_AI_MODE` is `saas` or unset.
+
+**References**
+- [`CLAUDE.md`](CLAUDE.md) → AI engine rules
+- [`CHANGELOG.md`](CHANGELOG.md) → Unreleased → Added (first two entries)
+- `.env.example` → GENAI ENGINE MODE + SWITCHING
+
+---
+
+## R-012 — Token for a shared project board across three repositories
+
+**Problem**
+`TODO.md` → T-505 wants one GitHub Project (v2) holding issues and pull requests from the core and
+both appliance repositories, populated automatically by an `add-to-project` workflow in each.
+User-owned Projects v2 are **not** reachable with a GitHub App installation token — the App that
+already backs cross-repository dispatch cannot add items to a user project — so the workflow needs
+either a fine-grained personal access token with `project` scope stored as a secret in three
+repositories, or the repositories moved under an organization where the App can hold the
+`organization_projects` permission.
+
+**Why it needs an owner**
+Creating a long-lived personal token, or reorganizing the repositories under an organization, is
+the repository owner's decision; CBTS standards prefer the short-lived, identity-based option where
+one exists.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Choose one:
+1. Move the three repositories under a GitHub organization, grant the existing App
+   `organization_projects: write`, and use the App token in the `add-to-project` workflows; or
+2. Create a fine-grained PAT with `project` scope (and `issues`/`pull_requests: read` on the three
+   repositories), store it as `PROJECT_BOARD_TOKEN` in each repository, and set a rotation
+   reminder.
+
+**Impact if unresolved**
+Work stays visible per repository only; the appliances' `update-available` issues are not
+aggregated. Nothing else depends on this.
+
+**References**
+- [`TODO.md`](TODO.md) → T-505

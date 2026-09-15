@@ -7,15 +7,15 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-08-17
+**Last reviewed:** 2026-09-15
 
 | Phase | Theme | Items |
 |---|---|---|
 | [Phase 1](#phase-1--critical-fixes) | Critical fixes — repository states something untrue | T-101 – T-104 |
 | [Phase 2](#phase-2--security-improvements) | Security improvements | T-201 – T-204 |
 | [Phase 3](#phase-3--deployment-readiness) | Deployment readiness | T-301 – T-305 |
-| [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-414 |
-| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements | T-501 – T-502 |
+| [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-417 |
+| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-505 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
 
 ---
@@ -1347,6 +1347,24 @@ order; do not reorder it.
 - **Notes for future engineers:** Do not close this by muting the check or by making it tolerate
   a missing backend. The check was right; the delivery was missing.
 
+### T-417 — `npm run lint` in `apps/cna-web` is broken: `next lint` no longer exists
+
+- **Priority:** Medium
+- **Description:** `package.json` still defines `"lint": "next lint"`. Next.js 16 removed the
+  `next lint` command, so `npm run lint` now fails with `Invalid project directory provided, no
+  such directory: .../apps/cna-web/lint` — the CLI treats `lint` as a path. Nothing in CI runs it
+  (workflow 300 lints Python only), so the breakage was invisible; `README.md` → Quick start still
+  advertises the script. There is also no ESLint flat config in `apps/cna-web`, so `eslint` 10
+  cannot run directly either.
+- **Dependencies:** None.
+- **Recommended action:** Add an `eslint.config.mjs` using `eslint-config-next`'s flat config,
+  point the `lint` script at `eslint .`, and add `npm run lint`, `npm run typecheck` and
+  `npm test` (both scripts now exist — `tsc --noEmit` and `vitest run`) to a web job in workflow
+  300 so the web tier has the same fast checks the Python package has.
+- **Status:** Open
+- **Notes for future engineers:** `npm run typecheck` and `npm test` are green today; `next build`
+  also type-checks the app. Use those until the lint script is repaired.
+
 ---
 
 ## Phase 5 — Feature enhancements
@@ -1382,6 +1400,67 @@ order; do not reorder it.
 - **Notes for future engineers:** The CloudFront viewer certificate must be in `us-east-1`
   regardless of deployment region — the repository already declares a `us-east-1` aliased provider
   for the CloudFront-scoped WAF; reuse it.
+
+### T-503 — Bring the two appliance repositories live (repository-owner steps)
+
+- **Priority:** High
+- **Description:** The core now publishes images and notifies appliances
+  (`200-build-images.yml` → `notify-appliances`), and `211`/`212` accept `workflow_call`. The
+  appliance repositories —
+  [`Work-Cloud_Network_Azure_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance)
+  and [`Work-Cloud_Network_AWS_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance)
+  — receive their contents as draft pull requests (Terraform, deploy/update/drift/teardown
+  workflows, `README.md`, `CLAUDE.md`, release catalog). Everything below needs account access the
+  code cannot supply.
+- **Dependencies:** The appliance draft PRs merged to each `main`.
+- **Recommended action:**
+  1. Install the existing GitHub App on both appliance repositories.
+  2. In each appliance: secrets for the cloud OIDC identity (`AZURE_CLIENT_ID` / `AZURE_TENANT_ID`
+     / `AZURE_SUBSCRIPTION_ID`, or `AWS_DEPLOY_ROLE_ARN`), `GH_APP_ID`, `GH_APP_PRIVATE_KEY`,
+     `DOCKERHUB_TOKEN`, and the `CNA_*` runtime secrets `100-validate-prereqs` checks; variables
+     `CORE_REPO` (`saulpatinojr/Work-Cloud_Network_Assessment`), `DOCKERHUB_NAMESPACE`,
+     `AUTO_UPDATE_DEV` (`true`), and the region variables. Create the `dev`, `prod` and `hub`
+     environments with the same required reviewers the core uses.
+  3. In the core: variable `APPLIANCE_REPOS=Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`.
+  4. Azure appliance: run `000-bootstrap-backend` (same backend as today — the state moves, no
+     resources change) and `100-validate-prereqs`, then one `210-deploy` in `saas` mode and confirm
+     the plan shows only the `moved` re-addressing plus in-place Container App env updates.
+  5. Publish one image from the core and confirm the Azure appliance auto-deploys `dev` and opens a
+     prod `update-available` issue.
+- **Status:** Open — blocked on the repository owner
+- **Notes for future engineers:** `git push --dry-run` against an appliance from a Claude Code
+  session fails with "not in this session's authorized repository set" until the repository is
+  added to the session's sources; it is a session-scope limit, not a GitHub permission problem.
+
+### T-504 — Retire the deployment layer from the core once both appliances are live
+
+- **Priority:** Medium
+- **Description:** `infra/terraform/`, the per-cloud workflows (`000`, `100`, `211`, `212`, `220`,
+  `320`, `330`, `340`, `350`, `360`), and `.deployment-catalog/<env>/` remain in the core as the
+  source the appliances were cut from. Two copies drift.
+- **Dependencies:** T-503 complete for both clouds.
+- **Recommended action:** Remove them from the core in one change, drop the Terraform fmt/validate
+  jobs from workflow 300, keep `.deployment-catalog/latest-build.json` (it is the build manifest,
+  part of the contract), and reduce `README.md` → Repository layout / Deploying an environment to
+  point at the appliances.
+- **Status:** Open
+- **Notes for future engineers:** Any fix landed in the core's Terraform or workflows before this
+  item closes must be mirrored into both appliances — `CLAUDE.md` says so, and the appliance
+  `CLAUDE.md` files say the same about their sibling.
+
+### T-505 — One project board across core and both appliances
+
+- **Priority:** Low
+- **Description:** Work items span three repositories; a single GitHub Project (v2) at the owner
+  level can hold issues and pull requests from all of them, and an `add-to-project` workflow in each
+  repository keeps it populated (the appliances' `update-available` issues especially).
+- **Dependencies:** `REVIEW.md` → R-012 (the token decision).
+- **Recommended action:** Create the project, then add a SHA-pinned `actions/add-to-project`
+  workflow to all three repositories triggered on `issues: opened` and `pull_request: opened`, with
+  the token from R-012.
+- **Status:** Blocked on R-012
+- **Notes for future engineers:** User-owned Projects v2 are not reachable with a GitHub App
+  installation token; that is the whole reason R-012 exists.
 
 ---
 

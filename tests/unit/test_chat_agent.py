@@ -292,6 +292,10 @@ def test_answer_grounded_via_mocked_azure_openai(monkeypatch):
 
 # ── answer() with mocked BYO / Bedrock transports ────────────────────────────
 
+# Obviously fictional provider keys for the mocked transports below.
+FAKE_ANTHROPIC = "sk-ant-test"
+FAKE_OPENAI = "sk-o"
+
 
 class _Obj:
     def __init__(self, **kw):
@@ -326,14 +330,14 @@ def test_answer_via_mocked_anthropic(monkeypatch):
 
     ctx = build_grounding_context(ENG, [_finding()])
     agent = GroundedChatAgent(
-        byo_keys={"anthropic": "sk-ant-test"}, byo_models={"anthropic": "claude-test-model"}
+        byo_keys={"anthropic": FAKE_ANTHROPIC}, byo_models={"anthropic": "claude-test-model"}
     )
     result = agent.answer([{"role": "user", "content": "Risky?"}], ctx)
 
     assert result.engine == "anthropic"
     assert result.text == "See AZ-NET-002."
     assert [c.rule_id for c in result.citations] == ["AZ-NET-002"]
-    assert captured["client"]["api_key"] == "sk-ant-test"
+    assert captured["client"]["api_key"] == FAKE_ANTHROPIC
     assert captured["client"]["max_retries"] == 0  # tenacity is the single retry layer
     assert captured["model"] == "claude-test-model"  # AppSetting override wins
     assert "Answer ONLY from the assessment context" in captured["system"]
@@ -355,7 +359,7 @@ def test_anthropic_refusal_surfaces_as_text(monkeypatch):
             )
 
     monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
-    agent = GroundedChatAgent(byo_keys={"anthropic": "sk-ant-test"})
+    agent = GroundedChatAgent(byo_keys={"anthropic": FAKE_ANTHROPIC})
     result = agent.answer([{"role": "user", "content": "?"}], GroundingContext(engagement_id=ENG))
     assert "declined" in result.text
 
@@ -381,12 +385,14 @@ def test_answer_via_mocked_openai(monkeypatch):
 
     ctx = build_grounding_context(ENG, [_finding()])
     # both keys present + stored setting picks openai
-    agent = GroundedChatAgent(engine="openai", byo_keys={"anthropic": "sk-a", "openai": "sk-o"})
+    agent = GroundedChatAgent(
+        engine="openai", byo_keys={"anthropic": "sk-a", "openai": FAKE_OPENAI}
+    )
     result = agent.answer([{"role": "user", "content": "What?"}], ctx)
 
     assert result.engine == "openai"
     assert result.text == "Fix AZ-NET-002."
-    assert captured["client"]["api_key"] == "sk-o"
+    assert captured["client"]["api_key"] == FAKE_OPENAI
     assert captured["model"] == "gpt-test"  # env override when no AppSetting model
     assert captured["messages"][0]["role"] == "system"
     assert captured["messages"][-1] == {"role": "user", "content": "What?"}

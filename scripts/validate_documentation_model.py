@@ -1,16 +1,18 @@
-"""CI script: enforce the four-document documentation model.
+"""CI script: enforce the documentation model.
 
 Closes TODO.md T-603: nothing prevented documentation sprawl from returning.
 Hardened by T-605 – T-608. Runs in CI (repository-guardrails job) and can be
 run locally.
 
 The model (README.md → "Repository conventions"): the repository keeps exactly
-four markdown documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — and
-long-form documentation lives in the GitHub Wiki. Vendored agent configuration
+the four documents — README.md, CHANGELOG.md, REVIEW.md, TODO.md — plus
+CLAUDE.md, the agent-instruction file that states the rules an AI coding agent
+must not infer wrongly (the core ↔ appliance contract above all). Long-form
+documentation lives in the GitHub Wiki. Vendored agent configuration
 (.claude/, .agents/, .codex/) is excluded. Platform-required documents under
 .github/ are permitted.
 
-"Exactly four" is enforced in both directions: a missing required document is a
+The allow-list is enforced in both directions: a missing required document is a
 violation, not just an extra one (T-605).
 
 Candidates come from `git ls-files`, not a filesystem walk, because the rule is
@@ -35,6 +37,7 @@ ALLOWED_ROOT_DOCUMENTS = {
     "CHANGELOG.md",
     "REVIEW.md",
     "TODO.md",
+    "CLAUDE.md",
 }
 
 # Allowed at the root but not required to exist — temporary working documents
@@ -154,7 +157,7 @@ def validate() -> bool:
             print(f"  {name}", file=sys.stderr)
         print(file=sys.stderr)
         print(
-            "The repository keeps exactly four markdown documents. Restore the",
+            "The repository keeps exactly the four documents plus CLAUDE.md. Restore the",
             file=sys.stderr,
         )
         print("missing file(s) rather than deleting the model.", file=sys.stderr)
@@ -163,11 +166,11 @@ def validate() -> bool:
         if missing:
             print(file=sys.stderr)
         print(
-            "Documentation model violation — the repository keeps exactly four",
+            "Documentation model violation — the repository keeps exactly the four",
             file=sys.stderr,
         )
         print(
-            "markdown documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md).",
+            "documents (README.md, CHANGELOG.md, REVIEW.md, TODO.md) plus CLAUDE.md.",
             file=sys.stderr,
         )
         print("Long-form documentation belongs in the GitHub Wiki.", file=sys.stderr)

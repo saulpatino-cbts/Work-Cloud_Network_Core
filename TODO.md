@@ -1542,7 +1542,10 @@ order; do not reorder it.
   `300-validate` workflow runs on the pull request. Then delete both parked branches here
   (`git push origin --delete claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap`).
   `scripts/appliance-kit/build.sh azure|aws` produces the same trees if a rebuild is ever preferred.
-- **Status:** Open — blocked on the repository owner
+- **Status:** Relayed 2026-09-15 — `claude/appliance-bootstrap` exists in both appliance
+  repositories (Azure `ceafcec`, AWS `6f963c4`). Still open: the two draft pull requests and the
+  deletion of the parked branches (the authoring session's git proxy refused the delete; the
+  owner's command above still applies).
 - **Notes for future engineers:** The parked branches are a transport, not a home: the appliance
   content must never be merged into or referenced from the core's `main`.
 

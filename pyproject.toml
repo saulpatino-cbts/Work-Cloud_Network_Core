@@ -116,8 +116,10 @@ target-version = "py311"
 # configuration (Kiro's spec workspace included), not this repo's own source — they aren't held to project lint
 # standards. Kept in sync with EXCLUDED_DIRS in
 # scripts/validate_documentation_model.py and the README "Repository
-# conventions" section (TODO.md T-607).
-extend-exclude = [".claude", ".agents", ".codex", ".kiro"]
+# conventions" section (TODO.md T-607). Markdown is excluded because ruff
+# 0.16 formats Python fenced blocks inside it, and the snippets in TODO.md
+# are prose, not source.
+extend-exclude = [".claude", ".agents", ".codex", ".kiro", "*.md"]
 
 [tool.ruff.lint]
 select = [

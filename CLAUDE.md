@@ -51,8 +51,12 @@ or record a `TODO.md` item naming them — never leave one side implied.
    Terraform: `CNA_AI_MODE` (`saas` | `byo-api`), `CNA_APPLIANCE_CLOUD`
    (`azure` | `aws`), `CNA_AI_ENGINE_DEFAULT`, the SaaS engine variables
    (`AZURE_OPENAI_*` on Azure, `CNA_BEDROCK_*` on AWS), and
-   `CREDENTIAL_ENCRYPTION_KEY` (web always; api in `byo-api`). The authoritative
-   inventory is `.env.example`.
+   `CREDENTIAL_ENCRYPTION_KEY` (web always; api in `byo-api`), and the image-update
+   check inputs the web tier reads (`CNA_WEB_IMAGE`, `CNA_IMAGE_REGISTRY_USERNAME`,
+   `CNA_IMAGE_REGISTRY_TOKEN`, `CNA_APPLIANCE_REPO`, optional
+   `CNA_IMAGE_UPDATE_CHECK_INTERVAL_MINUTES`). `CNA_BUILD_SHA` is baked into every
+   image by `200-build-images.yml`, never injected. The authoritative inventory is
+   `.env.example`.
 
 ## AI engine rules
 

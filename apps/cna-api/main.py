@@ -1204,7 +1204,14 @@ def _finding_model_to_dict(finding: Any) -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "cna-api", "version": "0.2.0"}
+    # CNA_BUILD_SHA is baked into the image by 200-build-images so a deployed
+    # instance can say which core commit it runs (Admin → Updates in the web tier).
+    return {
+        "status": "ok",
+        "service": "cna-api",
+        "version": "0.2.0",
+        "build_sha": os.environ.get("CNA_BUILD_SHA", ""),
+    }
 
 
 # Legacy phase endpoints — honest 501s until the phases are actually wired up.

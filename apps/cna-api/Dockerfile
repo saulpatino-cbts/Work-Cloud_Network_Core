@@ -87,6 +87,12 @@ COPY --chown=cna:cna apps/cna-api/ /app/apps/cna-api/
 # reasoning the web image uses to strip npm.
 RUN python -m pip uninstall -y pip
 
+# Commit the image was built from (200-build-images passes github.sha). The web
+# tier compares it with the newest published build (Admin → Updates); empty
+# for local builds, which report the running build as unknown.
+ARG CNA_BUILD_SHA=
+ENV CNA_BUILD_SHA=${CNA_BUILD_SHA}
+
 USER cna
 
 # Liveness for orchestrators (ECS/AKS/Container Apps): the API answers on 8080

@@ -28,6 +28,12 @@ COPY --chown=cna:cna apps/cna-worker /app/apps/cna-worker
 # reasoning the web image uses to strip npm.
 RUN python -m pip uninstall -y pip
 
+# Commit the image was built from (200-build-images passes github.sha). The web
+# tier compares it with the newest published build (Admin → Updates); empty
+# for local builds, which report the running build as unknown.
+ARG CNA_BUILD_SHA=
+ENV CNA_BUILD_SHA=${CNA_BUILD_SHA}
+
 USER cna
 
 # The worker is a run-once batch process (and a retirement candidate — see spec

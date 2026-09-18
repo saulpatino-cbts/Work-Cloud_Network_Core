@@ -56,6 +56,12 @@ export default async function DashboardLayout({
             >
               AI
             </Link>
+            <Link
+              href="/admin/updates"
+              className="rounded-lg border border-teal-200 bg-teal-50 px-3.5 py-1.5 text-xs font-bold text-teal-700 transition-colors hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-300 dark:hover:bg-teal-900"
+            >
+              Updates
+            </Link>
 
             {/* Avatar + email */}
             <div className="flex items-center gap-2.5">

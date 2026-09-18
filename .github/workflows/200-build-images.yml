@@ -86,6 +86,8 @@ jobs:
         with:
           context: .
           file: ${{ matrix.file }}
+          build-args: |
+            CNA_BUILD_SHA=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -172,6 +174,8 @@ jobs:
           context: apps/cna-web
           file: apps/cna-web/Dockerfile
           target: runner
+          build-args: |
+            CNA_BUILD_SHA=${{ github.sha }}
           push: true
           tags: ${{ steps.meta_web.outputs.tags }}
           labels: ${{ steps.meta_web.outputs.labels }}
@@ -201,6 +205,8 @@ jobs:
           context: apps/cna-web
           file: apps/cna-web/Dockerfile
           target: migrator
+          build-args: |
+            CNA_BUILD_SHA=${{ github.sha }}
           push: true
           tags: ${{ steps.meta_migrator.outputs.tags }}
           labels: ${{ steps.meta_migrator.outputs.labels }}

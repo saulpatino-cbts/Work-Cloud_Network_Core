@@ -32,18 +32,26 @@ def test_findings_are_well_formed_and_in_area():
 
 
 def test_topology_covers_all_core_workflows():
-    """5.1: exactly four workflows, three self-hosted-only + one GitHub-hosted."""
-    assert len(SELF_HOSTED_ONLY_WORKFLOWS) == 3
-    assert len(GITHUB_HOSTED_WORKFLOWS) == 1
+    """5.1: exactly four workflows, all GitHub-hosted since the runner retired."""
+    assert len(SELF_HOSTED_ONLY_WORKFLOWS) == 0
+    assert len(GITHUB_HOSTED_WORKFLOWS) == 4
     assert len(_ALL_WORKFLOWS) == 4
-    # The one GitHub-hosted workflow is the registry-cleanup job by design.
-    assert GITHUB_HOSTED_WORKFLOWS == ("370-registry-cleanup.yml",)
+    assert GITHUB_HOSTED_WORKFLOWS == (
+        "200-build-images.yml",
+        "300-test-codebase.yml",
+        "310-release-version.yml",
+        "370-registry-cleanup.yml",
+    )
     # No workflow is both self-hosted-only and GitHub-hosted.
     assert not set(SELF_HOSTED_ONLY_WORKFLOWS) & set(GITHUB_HOSTED_WORKFLOWS)
 
 
 def test_every_self_hosted_only_workflow_is_flagged_as_a_spof():
-    """5.2: each self-hosted-only workflow gets a SPOF entry with a mitigation."""
+    """5.2: each self-hosted-only workflow gets a SPOF entry with a mitigation.
+
+    The set is empty since the runner retired, so no MEDIUM SPOF entry may
+    remain; the assertion still pins the invariant for a future regression.
+    """
     findings = cicd_findings()
     spof_subjects = {
         f.subject.rsplit("/", 1)[-1]
@@ -62,14 +70,16 @@ def test_every_self_hosted_only_workflow_is_flagged_as_a_spof():
 
 
 def test_github_hosted_workflow_recorded_as_informational_non_spof():
-    """5.2 counter-case: the ubuntu-latest workflow is not a self-hosted SPOF."""
+    """5.2 counter-case: every ubuntu-latest workflow is not a self-hosted SPOF."""
     findings = cicd_findings()
-    informational_spof = [
-        f for f in findings if f.dedup_key == "cicd:self-hosted-spof:370-registry-cleanup.yml"
-    ]
-    assert len(informational_spof) == 1
-    assert informational_spof[0].severity is Severity.INFORMATIONAL
-    assert informational_spof[0].subject.endswith("370-registry-cleanup.yml")
+    for workflow in GITHUB_HOSTED_WORKFLOWS:
+        informational_spof = [
+            f for f in findings if f.dedup_key == f"cicd:self-hosted-spof:{workflow}"
+        ]
+        assert len(informational_spof) == 1, workflow
+        assert informational_spof[0].severity is Severity.INFORMATIONAL
+        assert informational_spof[0].subject.endswith(workflow)
+        assert "ubuntu-latest" in informational_spof[0].proposed_action
 
 
 def test_all_core_workflows_are_covered():

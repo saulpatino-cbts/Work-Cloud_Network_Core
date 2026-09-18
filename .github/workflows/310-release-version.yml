@@ -10,6 +10,11 @@
 #   Actions > General > Workflow permissions: Read and write
 name: "310 · Release CLI Tool"
 
+# Runs on GitHub-hosted runners (ubuntu-latest): the release builds and pushes
+# with the repository secrets and creates the GitHub Release with GITHUB_TOKEN;
+# no private network or cloud credentials are involved. The self-hosted runner
+# the original repository used is retired.
+
 on:
   push:
     tags:
@@ -29,7 +34,7 @@ jobs:
 
   release:
     name: Build, Push, Release
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       REGISTRY: docker.io

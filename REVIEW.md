@@ -22,7 +22,7 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open — tracked in the Azure appliance's `REVIEW.md` (R-004); transferred 2026-09-15 |
 | [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
 | [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
-| [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, runner, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
+| [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
 | [R-014](#r-014--move-the-wiki-and-archive-the-original-repository) | Move the Wiki and archive `Work-Cloud_Network_Assessment` | Repository owner | Open — after R-013 |
 | [R-015](#r-015--decide-the-customer-facing-appliance-repository-names) | Decide the customer-facing appliance repository names (`*_Appliance` vs `*_Assessment`) | Repository owner | Open — not blocking |
 
@@ -556,14 +556,13 @@ aggregated. Nothing else depends on this.
 
 **Problem**
 `TODO.md` → T-509 moved the core into `Work-Cloud_Network_Core`. A new repository has none of the
-configuration the four workflows read: no secrets, no variables, no self-hosted runner, no GitHub
-App installation. Until it does, `200-build-images` cannot publish, `310-release-version` cannot
+configuration the four workflows read: no secrets, no variables, no GitHub App installation. Until it does, `200-build-images` cannot publish, `310-release-version` cannot
 release, and the appliances' `230-image-update` keeps polling the original repository's frozen
 manifest because their `CORE_REPO` variable still says `Work-Cloud_Network_Assessment`.
 
 **Why it needs an owner**
-Repository secrets, variables, runner registration, App installations and branch protection are
-settings only the repository owner can write; none of them can be committed.
+Repository secrets, variables, App installations and branch protection are settings only the
+repository owner can write; none of them can be committed.
 
 **Required owner**
 Repository owner.
@@ -575,8 +574,10 @@ Repository owner.
    (`Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`) with the values the
    original repository uses. Set *Actions → General → Workflow permissions* to *Read and write*
    (`310` and the manifest commit in `200` need it).
-2. Register the self-hosted runner with `Work-Cloud_Network_Core` — `200`, `300` and `310` run on
-   `self-hosted`; until a runner is registered, this repository's pull-request checks queue forever.
+2. No runner to register: every workflow here runs on GitHub-hosted runners (`ubuntu-latest`).
+   The self-hosted runner the original repository used is retired; the appliances' deploy and
+   operations workflows still declare `self-hosted` and are their own decision (see their
+   `README.md` → `scripts/bootstrap-runner.sh`).
 3. Install the GitHub App that backs the cross-repository dispatch on `Work-Cloud_Network_Core` as
    well: `200` uses it to notify the appliances, and each appliance's `230` uses it to read this
    repository's manifest.

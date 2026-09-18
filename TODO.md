@@ -1627,8 +1627,8 @@ order; do not reorder it.
   into `Work-Cloud_Network_Core` with `--allow-unrelated-histories` (the only file on the new side was the
   `LICENSE`), followed by one rename commit; both appliances carry the mirrored repoint; the original
   repository's pull request replaces its tree with a pointer `README.md`/`CLAUDE.md`. The
-  repository-owner steps — secrets and variables on this repository, the GitHub App installation, the
-  self-hosted runner, the `CORE_REPO` flip in both appliances, the Wiki move and the archive — are
+  repository-owner steps — secrets and variables on this repository, the GitHub App installation,
+  the `CORE_REPO` flip in both appliances, the Wiki move and the archive — are
   `REVIEW.md` R-013 and R-014, with the merge order that keeps the appliances' image updates working
   throughout. The appliance repository names are R-015.
 - **Notes for future engineers:** Links of the form

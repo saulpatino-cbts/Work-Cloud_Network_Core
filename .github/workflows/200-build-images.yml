@@ -1,5 +1,11 @@
 name: "200 · Build Container Images"
 
+# Runs on GitHub-hosted runners (ubuntu-latest). Nothing here needs a private
+# network or cloud credentials: images build with buildx (GitHub Actions cache),
+# push to Docker Hub with the repository secret, and the manifest commit and
+# appliance dispatch use GitHub tokens. The self-hosted runner the original
+# repository used is retired; a fresh clone of this repository needs no runner.
+
 on:
   push:
     branches:
@@ -30,7 +36,7 @@ jobs:
   # context, no extra validation) so they run as one matrix. Web is separate
   # below because it adds npm audit, a second (migrator) target, and a smoke test.
   build-images:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -111,7 +117,7 @@ jobs:
           exit-code: true
 
   build-web:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -258,7 +264,7 @@ jobs:
           echo "Smoke test passed (status=$STATUS)"
 
   publish-build-manifest:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build-images, build-web]
     env:
@@ -324,7 +330,7 @@ jobs:
   # The GitHub App must be installed on each of them; the token is scoped to
   # exactly those repositories.
   notify-appliances:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: publish-build-manifest
     if: vars.APPLIANCE_REPOS != ''
     steps:

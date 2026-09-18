@@ -11,14 +11,15 @@ separately by spec task 9.3 — this module deliberately does not record it so t
 two tasks do not double-count. The R-003 escalation for the AWS deploy workflow
 (5.4) left with that workflow and is owned by the AWS appliance's ``REVIEW.md``.
 
-Runner topology (5.2). The self-hosted runner is the *sole* executor for three
-of the four workflows; only ``370-registry-cleanup.yml`` runs on a GitHub-hosted
-runner (``ubuntu-latest``), because the Docker Hub web/API domain WAF-blocks the
-self-hosted VPS IP. Every self-hosted-only workflow is therefore a single point
-of failure: if the one runner is offline, unregistered, or its host is down,
-that workflow cannot execute at all — there is no GitHub-hosted fallback, no
-runner matrix, and no documented failover. Each is recorded as a
-``Remediation_Plan`` entry (design Property 13) carrying a concrete mitigation.
+Runner topology (5.2). Every workflow runs on GitHub-hosted runners
+(``ubuntu-latest``). Until 2026-09-18 the self-hosted runner was the sole
+executor for ``200``, ``300`` and ``310`` and each was recorded as a single
+point of failure (design Property 13); when that runner was retired with the
+move to ``Work-Cloud_Network_Core`` the three workflows moved to GitHub-hosted
+runners, which closed the finding. The classifier and the SPOF record stay so
+a future workflow that pins ``runs-on: self-hosted`` alone is flagged again;
+each GitHub-hosted workflow is recorded as an informational non-SPOF so every
+workflow is still covered.
 
 Best-practice fixes applied in-tree by this task (low-risk, runner-topology
 untouched): added ``timeout-minutes`` to jobs that lacked a runaway-billing
@@ -37,19 +38,20 @@ _AREA = "cicd"
 
 # The workflows whose sole executor is the self-hosted runner (every job
 # declares ``runs-on: self-hosted`` with no GitHub-hosted fallback and no runner
-# matrix). ``370-registry-cleanup.yml`` is deliberately absent: it is the one
-# workflow pinned to ``ubuntu-latest`` (GitHub-hosted), so it is not a
-# self-hosted SPOF. Keep this in sync with a grep over the workflow tree:
+# matrix). Empty since 2026-09-18: the runner was retired and every workflow
+# runs on ``ubuntu-latest``. Keep this in sync with a grep over the workflow
+# tree:
 #   grep -rL 'runs-on: ubuntu' .github/workflows/*.yml
-SELF_HOSTED_ONLY_WORKFLOWS: tuple[str, ...] = (
+SELF_HOSTED_ONLY_WORKFLOWS: tuple[str, ...] = ()
+
+# The GitHub-hosted workflows — recorded so coverage of every workflow is
+# explicit and the "not a SPOF" outcome is captured rather than merely omitted.
+GITHUB_HOSTED_WORKFLOWS: tuple[str, ...] = (
     "200-build-images.yml",
     "300-test-codebase.yml",
     "310-release-version.yml",
+    "370-registry-cleanup.yml",
 )
-
-# The one GitHub-hosted workflow — recorded so coverage of every workflow is
-# explicit and the "not a SPOF" outcome is captured rather than merely omitted.
-GITHUB_HOSTED_WORKFLOWS: tuple[str, ...] = ("370-registry-cleanup.yml",)
 
 # The single self-hosted runner label. A workflow whose executor set is exactly
 # this label — no GitHub-hosted fallback and no runner matrix — is a
@@ -105,23 +107,24 @@ def cicd_findings() -> list[Finding]:
     """Return the Requirement 5.1/5.2 findings recorded for the CI/CD area."""
     findings: list[Finding] = [_spof_finding(workflow) for workflow in SELF_HOSTED_ONLY_WORKFLOWS]
 
-    # 5.2 counter-case: the one GitHub-hosted workflow is not a SPOF against the
+    # 5.2 counter-case: a GitHub-hosted workflow is not a SPOF against the
     # self-hosted runner. Recorded as INFORMATIONAL so the plan reflects that
     # every workflow was audited, not only the flagged ones.
-    findings.append(
-        Finding(
-            area=_AREA,
-            severity=Severity.INFORMATIONAL,
-            proposed_action=(
-                "Verified: 370-registry-cleanup.yml runs on ubuntu-latest "
-                "(GitHub-hosted) by design — the Docker Hub web/API domain "
-                "WAF-blocks the self-hosted VPS IP. It is not a self-hosted "
-                "single point of failure; no runner-topology change needed."
-            ),
-            dedup_key="cicd:self-hosted-spof:370-registry-cleanup.yml",
-            subject=".github/workflows/370-registry-cleanup.yml",
+    for workflow in GITHUB_HOSTED_WORKFLOWS:
+        findings.append(
+            Finding(
+                area=_AREA,
+                severity=Severity.INFORMATIONAL,
+                proposed_action=(
+                    f"Verified: {workflow} runs on ubuntu-latest (GitHub-hosted); "
+                    "no self-hosted runner is involved, so it is not a self-hosted "
+                    "single point of failure and no runner-topology change is "
+                    "needed."
+                ),
+                dedup_key=f"cicd:self-hosted-spof:{workflow}",
+                subject=f".github/workflows/{workflow}",
+            )
         )
-    )
 
     # 5.1 best-practice: least-privilege permissions blocks. All workflows
     # already declare an explicit top-level permissions block, so the

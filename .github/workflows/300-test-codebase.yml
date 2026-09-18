@@ -11,6 +11,11 @@
 #   - Explicit permissions block (principle of least privilege)
 name: "300 · Test Codebase"
 
+# Runs on GitHub-hosted runners (ubuntu-latest): every job is self-contained
+# (setup-python, pip cache, docker) and needs no private network or cloud
+# credentials, so pull requests are checked from day one without registering a
+# runner. The self-hosted runner the original repository used is retired.
+
 on:
   push:
     branches: [main, develop]
@@ -36,7 +41,7 @@ jobs:
   # ------------------------------------------------------------------
   secret-scan:
     name: Secret Scanning
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true  # gitleaks requires paid license on private repos — non-blocking
     steps:
@@ -84,7 +89,7 @@ jobs:
   # (.pre-commit-config.yaml) instead of being restated here and drifting.
   detect-secrets:
     name: Secret Scanning (detect-secrets, gating)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -105,7 +110,7 @@ jobs:
   # ------------------------------------------------------------------
   lint:
     name: Lint & Format
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -128,7 +133,7 @@ jobs:
   # ------------------------------------------------------------------
   test:
     name: Unit Tests (Python ${{ matrix.python-version }})
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [lint]  # secret-scan is non-blocking (continue-on-error)
     strategy:
@@ -179,7 +184,7 @@ jobs:
   # ------------------------------------------------------------------
   repository-guardrails:
     name: Repository Guardrails
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [test]
     steps:
@@ -205,7 +210,7 @@ jobs:
   # ------------------------------------------------------------------
   docker-build:
     name: Docker Build Smoke Test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [test]
     steps:
@@ -228,7 +233,7 @@ jobs:
   # ------------------------------------------------------------------
   pip-audit:
     name: Python Dependency Audit (pip-audit)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint]
     steps:

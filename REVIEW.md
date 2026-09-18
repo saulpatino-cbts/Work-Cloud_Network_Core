@@ -574,10 +574,9 @@ Repository owner.
    (`Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`) with the values the
    original repository uses. Set *Actions → General → Workflow permissions* to *Read and write*
    (`310` and the manifest commit in `200` need it).
-2. No runner to register: every workflow here runs on GitHub-hosted runners (`ubuntu-latest`).
-   The self-hosted runner the original repository used is retired; the appliances' deploy and
-   operations workflows still declare `self-hosted` and are their own decision (see their
-   `README.md` → `scripts/bootstrap-runner.sh`).
+2. No runner to register: every workflow here — and every workflow in both appliances — runs on
+   GitHub-hosted runners (`ubuntu-latest`). The self-hosted runner the original repository used is
+   retired; remove its registration under R-014.
 3. Install the GitHub App that backs the cross-repository dispatch on `Work-Cloud_Network_Core` as
    well: `200` uses it to notify the appliances, and each appliance's `230` uses it to read this
    repository's manifest.

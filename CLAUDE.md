@@ -1,4 +1,4 @@
-# CLAUDE.md — Cloud Network Assessment (core)
+# CLAUDE.md — Cloud Network Core
 
 Instructions for AI coding agents working in this repository. `README.md` is the
 human intro page; this file states the rules an agent must not infer wrongly.
@@ -9,6 +9,12 @@ This is the **core** of the Cloud Network Assessment (CNA) platform: the single
 source of application code — `apps/cna-web`, `apps/cna-api`, `apps/cna-worker`,
 and the `cna` Python package — and the pipeline that builds and publishes their
 container images (`200-build-images.yml` → Docker Hub `<namespace>/cna`).
+
+It is **internal, never customer-facing**: customers consume an appliance, not this
+repository. The project's original repository, `Work-Cloud_Network_Assessment`, held this
+code until 2026-09-18; its history is imported here and it is archived. Never open work
+there — every reference to it that remains in the documents is a historical link to an
+issue or pull request that lives in the archive.
 
 Deployment is not this repository's job. Each cloud has its own customer-facing
 **appliance repository** that deploys and operates these images:

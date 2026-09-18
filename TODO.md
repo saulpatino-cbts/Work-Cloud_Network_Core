@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-09-15
+**Last reviewed:** 2026-09-18
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -15,7 +15,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 2](#phase-2--security-improvements) | Security improvements | T-201 – T-204 |
 | [Phase 3](#phase-3--deployment-readiness) | Deployment readiness | T-301 – T-305 |
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
-| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-508 |
+| [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
 
 ---
@@ -1606,6 +1606,37 @@ order; do not reorder it.
   runtime and `test_review_blockers.py` asserts that R-001 – R-010 are present and that only R-007
   is "Resolved" — keep every `R-0NN` row in the table (with a redirect in the Status cell) rather
   than deleting rows when transferring items under T-507.
+
+### T-509 — Move the core into the dedicated `Work-Cloud_Network_Core` repository
+
+- **Priority:** High
+- **Description:** After T-504 – T-508 the original repository, `Work-Cloud_Network_Assessment`, held
+  only the core — application code, image builds, tests, releases — but still carried the original
+  tool's name, so the split read as "the original tool plus two appliances" rather than the intended
+  topology: **Cloud Network Core** (internal, maintained centrally, never customer-facing) and the
+  **Azure** and **AWS appliances** (the only customer-facing solutions, each consumed by the customers
+  on that cloud). Shared services, workers, images and every other common component are developed
+  once in the core and consumed by both appliances through the images.
+- **Dependencies:** T-504 (deployment layer out of the core), T-506 and T-507 (both appliances live).
+- **Recommended action:** Import the original repository's full history into the new one as a merge
+  (so every commit reference in `CHANGELOG.md` still resolves), update the repository-name references
+  (README badges and Wiki links, `CLAUDE.md`, the Dockerfile source label), repoint both appliances
+  (`CLAUDE.md`, `README.md`, the `CORE_REPO` variable) in linked pull requests, reduce the original
+  repository to a pointer, then archive it.
+- **Status:** Done (engineering side) — 2026-09-18. The original's `main` at `5d3b914` was merged
+  into `Work-Cloud_Network_Core` with `--allow-unrelated-histories` (the only file on the new side was the
+  `LICENSE`), followed by one rename commit; both appliances carry the mirrored repoint; the original
+  repository's pull request replaces its tree with a pointer `README.md`/`CLAUDE.md`. The
+  repository-owner steps — secrets and variables on this repository, the GitHub App installation, the
+  self-hosted runner, the `CORE_REPO` flip in both appliances, the Wiki move and the archive — are
+  `REVIEW.md` R-013 and R-014, with the merge order that keeps the appliances' image updates working
+  throughout. The appliance repository names are R-015.
+- **Notes for future engineers:** Links of the form
+  `github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/NNN` and `/issues/NNN` in `CHANGELOG.md`,
+  `REVIEW.md`, `CNA-0.90-updates.md` and this file are historical and deliberately left pointing at the
+  archived repository, where those threads live. Nothing in the images, the tag scheme, the manifest,
+  the dispatch or the runtime contract changed — the appliances see a different `CORE_REPO`, nothing
+  else.
 
 ---
 

@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-09-15
+**Last reviewed:** 2026-09-18
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -22,6 +22,9 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-010](#r-010--the-dev-environment-has-no-protection-against-out-of-band-deletion) | Dev environment deleted out of band; no protection against a repeat | Azure subscription owner | Open — tracked in the Azure appliance's `REVIEW.md` (R-004); transferred 2026-09-15 |
 | [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
 | [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
+| [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, runner, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
+| [R-014](#r-014--move-the-wiki-and-archive-the-original-repository) | Move the Wiki and archive `Work-Cloud_Network_Assessment` | Repository owner | Open — after R-013 |
+| [R-015](#r-015--decide-the-customer-facing-appliance-repository-names) | Decide the customer-facing appliance repository names (`*_Appliance` vs `*_Assessment`) | Repository owner | Open — not blocking |
 
 ---
 
@@ -546,3 +549,127 @@ aggregated. Nothing else depends on this.
 
 **References**
 - [`TODO.md`](TODO.md) → T-505
+
+---
+
+## R-013 — Bring the core repository live and cut the appliances over to it
+
+**Problem**
+`TODO.md` → T-509 moved the core into `Work-Cloud_Network_Core`. A new repository has none of the
+configuration the four workflows read: no secrets, no variables, no self-hosted runner, no GitHub
+App installation. Until it does, `200-build-images` cannot publish, `310-release-version` cannot
+release, and the appliances' `230-image-update` keeps polling the original repository's frozen
+manifest because their `CORE_REPO` variable still says `Work-Cloud_Network_Assessment`.
+
+**Why it needs an owner**
+Repository secrets, variables, runner registration, App installations and branch protection are
+settings only the repository owner can write; none of them can be committed.
+
+**Required owner**
+Repository owner.
+
+**Required action** — in this order, so the appliances never lose their image source:
+1. On `Work-Cloud_Network_Core` → *Settings*: create the secrets `DOCKERHUB_TOKEN`, `DOCKERHUB_PERSONAL_TOKEN`,
+   `GH_APP_ID`, `GH_APP_PRIVATE_KEY` and the variables `DOCKERHUB_NAMESPACE`,
+   `DOCKERHUB_PERSONAL_USERNAME`, `APPLIANCE_REPOS`
+   (`Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`) with the values the
+   original repository uses. Set *Actions → General → Workflow permissions* to *Read and write*
+   (`310` and the manifest commit in `200` need it).
+2. Register the self-hosted runner with `Work-Cloud_Network_Core` — `200`, `300` and `310` run on
+   `self-hosted`; until a runner is registered, this repository's pull-request checks queue forever.
+3. Install the GitHub App that backs the cross-repository dispatch on `Work-Cloud_Network_Core` as
+   well: `200` uses it to notify the appliances, and each appliance's `230` uses it to read this
+   repository's manifest.
+4. Merge the import pull request here, then run `200 · Build Container Images` once from *Run
+   workflow* so `.deployment-catalog/latest-build.json` on `main` is written by this repository.
+5. In **both** appliances set the variable `CORE_REPO` to `Work-Cloud_Network_Core` and merge their
+   repoint pull requests. From that moment `230` polls this repository.
+6. Apply the same branch protection to `main` here as the original repository had (required check
+   `300 · Test Codebase`, review requirements).
+7. Only now proceed to R-014 — the original repository must keep serving its manifest until step 5
+   is done.
+
+**Impact if unresolved**
+Two repositories claim to be the core; images keep being built from a repository the documents say
+is retired, and the appliances never see a build from the new one.
+
+**References**
+- [`TODO.md`](TODO.md) → T-509
+- `.github/workflows/200-build-images.yml`, `310-release-version.yml`, `370-registry-cleanup.yml`
+  (the secrets and variables each reads are in its header and `vars.*` / `secrets.*` references)
+- Appliances: `README.md` → *Configuration* (`CORE_REPO`), `230-image-update.yml`
+
+---
+
+## R-014 — Move the Wiki and archive the original repository
+
+**Problem**
+The long-form documentation lives in `Work-Cloud_Network_Assessment`'s GitHub Wiki, and that
+repository still exists with the full tree on `main`. Both appliances' documents and this
+repository's `README.md` now link to **this** repository's Wiki, which is empty until the pages move.
+
+**Why it needs an owner**
+A Wiki is a separate git repository that needs write access (the same access `R-009` has been
+waiting on), and archiving a repository is an owner-only setting.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+1. Move the Wiki: `git clone https://github.com/saulpatinojr/Work-Cloud_Network_Assessment.wiki.git`, add
+   `https://github.com/saulpatinojr/Work-Cloud_Network_Core.wiki.git` as a remote and push `master`
+   (create one page in the new Wiki first so the Wiki repository exists). This also closes the
+   destination half of R-009.
+2. Merge the original repository's pointer pull request (it replaces the tree with a `README.md` and
+   `CLAUDE.md` that point here and at the two appliances). Its branch protection may require the
+   `300 · Test Codebase` check, which no longer exists on that branch — relax the rule for that one
+   merge or merge as an administrator.
+3. Archive the original repository (*Settings → Danger Zone → Archive*). Archiving is reversible and
+   keeps the issues, pull requests and history that the documents here still link to. Do **not**
+   delete it: `CHANGELOG.md`, `REVIEW.md` and `CNA-0.90-updates.md` reference its pull requests and
+   issues by number.
+4. Remove the original repository's Actions secrets, variables and runner registration so nothing
+   can build or publish from it again.
+
+**Impact if unresolved**
+A stale full copy of the core remains writable and its scheduled workflows (`370`) keep running
+against Docker Hub; the Wiki links in three repositories point at an empty Wiki.
+
+**References**
+- [`TODO.md`](TODO.md) → T-509, T-601 (the Wiki pages still waiting on R-009)
+- R-009, R-013
+
+---
+
+## R-015 — Decide the customer-facing appliance repository names
+
+**Problem**
+The target topology names the customer-facing solutions the **Azure Assessment** and the **AWS
+Assessment**, but the repositories are `Work-Cloud_Network_Azure_Appliance` and
+`Work-Cloud_Network_AWS_Appliance`. Whether the repositories should be renamed to match is a
+product-naming decision, and a rename touches every cross-reference: the `APPLIANCE_REPOS` variable
+here, the `cna-image-published` dispatch targets, `cna/review/areas/terraform_relocated.py` and its
+tests, `CLAUDE.md`/`README.md` in all three repositories, and the sibling links inside each
+appliance.
+
+**Why it needs an owner**
+Customer-facing names are the owner's call; GitHub redirects the old name for git and web traffic
+but the API dispatch in `200` and the documents must be updated in the same change set.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Choose one:
+1. Keep `*_Appliance` (no change; the documents already describe them as the customer-facing
+   solutions), or
+2. Rename both to `Work-Cloud_Network_Azure_Assessment` / `Work-Cloud_Network_AWS_Assessment` and
+   open a `TODO.md` item here to update `APPLIANCE_REPOS`, the review-engine constants and every
+   document link in the three repositories together.
+
+**Impact if unresolved**
+None operationally; the prose and the repository names disagree.
+
+**References**
+- [`TODO.md`](TODO.md) → T-509
+- `.github/workflows/200-build-images.yml` (`APPLIANCE_REPOS`), `cna/review/areas/terraform_relocated.py`

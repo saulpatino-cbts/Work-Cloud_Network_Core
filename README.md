@@ -1,7 +1,12 @@
-# Cloud Network Assessment (CNA) Platform
+# Cloud Network Core — the Cloud Network Assessment (CNA) platform
 
-[![CI](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/300-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/300-test-codebase.yml)
-[![Release](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/310-release-version.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/actions/workflows/310-release-version.yml)
+[![CI](https://github.com/saulpatinojr/Work-Cloud_Network_Core/actions/workflows/300-test-codebase.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Core/actions/workflows/300-test-codebase.yml)
+[![Release](https://github.com/saulpatinojr/Work-Cloud_Network_Core/actions/workflows/310-release-version.yml/badge.svg)](https://github.com/saulpatinojr/Work-Cloud_Network_Core/actions/workflows/310-release-version.yml)
+
+This repository is the **internal core** of the Cloud Network Assessment platform: the single
+home of the application code and of the pipeline that builds and publishes its container
+images. It is not customer-facing. Customers consume one of the two **appliance** repositories —
+[Azure](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance) or [AWS](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance) — which deploy the images published here.
 
 A CNA-branded, multi-user web platform for cloud network assessments across AWS and Azure.
 Analysts run network discoveries, AI-powered analysis, and generate presentation-ready
@@ -15,7 +20,7 @@ managed edge, backed by PostgreSQL and authenticated via Microsoft Entra ID.
 
 This repository keeps exactly four required documents plus `CLAUDE.md`, and at most one
 *optional* temporary working document during a release push. Everything else lives in the
-[GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki).
+[GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Core/wiki).
 
 | Document | Contains |
 |---|---|
@@ -25,7 +30,7 @@ This repository keeps exactly four required documents plus `CLAUDE.md`, and at m
 | [`TODO.md`](TODO.md) | The engineering work queue — every actionable item, phased |
 | [`CLAUDE.md`](CLAUDE.md) | Rules for AI coding agents: what this repository is (the core), the contract with the two appliance repositories, and the conventions agents get wrong |
 | [`CNA-0.90-updates.md`](CNA-0.90-updates.md) | *Optional, temporary* — the one working-document exception to the four required docs: the 0.9.0 pre-demo review, cleanup record, polish plan, and the 2026-08-28 dev rebuild/deployment record (§5); retired when 0.9.0 ships |
-| [GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/wiki) | Architecture, ADRs, runbooks, workflow reference, security posture, operating notes (deployment guides live with the appliances) |
+| [GitHub Wiki](https://github.com/saulpatinojr/Work-Cloud_Network_Core/wiki) | Architecture, ADRs, runbooks, workflow reference, security posture, operating notes (deployment guides live with the appliances) |
 
 If you are picking up work on this repository, start with `TODO.md`. If you are waiting on
 someone, check `REVIEW.md`.
@@ -59,12 +64,12 @@ tests/                unit/ and integration/
 
 ## Repository topology
 
-CNA is delivered as one **core** repository (this one) and two customer-facing **appliance**
-repositories, one per cloud:
+CNA is delivered as one internal **core** repository (this one) and two customer-facing
+**appliance** repositories, one per cloud:
 
 | Repository | Owns | Does not contain |
 |---|---|---|
-| `Work-Cloud_Network_Assessment` (core) | Application code (`apps/`, `cna/`), container image builds and publishing (`200-build-images.yml`), tests and releases | Customer deployments |
+| `Work-Cloud_Network_Core` (core, this repository) | Application code (`apps/`, `cna/`), container image builds and publishing (`200-build-images.yml`), tests and releases | Customer deployments |
 | [`Work-Cloud_Network_Azure_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance) | Azure Terraform, deploy / update / drift / teardown workflows, the Azure release catalog | Application code, anything AWS |
 | [`Work-Cloud_Network_AWS_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance) | AWS Terraform, the same workflows, the AWS release catalog | Application code, anything Azure |
 
@@ -76,6 +81,11 @@ new image set it commits `.deployment-catalog/latest-build.json` and sends a `re
 appliance also polls the manifest. An appliance auto-deploys new images to `dev` and opens an
 "update available" issue for `prod`, which a human approves through its deploy workflow's
 approval gate. The full contract is in [`CLAUDE.md`](CLAUDE.md).
+
+The project started as a single repository, `Work-Cloud_Network_Assessment`, which held the core
+until 2026-09-18. Its full history is imported here (`TODO.md` → T-509), so commit references in
+`CHANGELOG.md` still resolve; the original repository is retired and archived, kept only for its
+issues and pull requests. New work, issues and pull requests belong here.
 
 Every deploy is run from the appliance's **Run workflow** dialog, where `ai_mode` selects the AI
 provider family: `saas` (Azure OpenAI on Azure, Amazon Bedrock on AWS — provisioned by

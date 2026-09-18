@@ -5,6 +5,11 @@ name: "200 · Build Container Images"
 # push to Docker Hub with the repository secret, and the manifest commit and
 # appliance dispatch use GitHub tokens. The self-hosted runner the original
 # repository used is retired; a fresh clone of this repository needs no runner.
+#
+# First build in a new repository (REVIEW.md R-013 step 4): GitHub registers a
+# workflow only once a push to main touches it, so the import merge alone did
+# not make this one dispatchable. The commit that adds this paragraph is that
+# push; its own run is the first build from this repository.
 
 on:
   push:

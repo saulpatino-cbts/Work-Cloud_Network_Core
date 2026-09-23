@@ -395,7 +395,7 @@ export default async function InventoryPage({ params }: PageProps) {
       {/* ── Header bar ── */}
       <div className="glass flex items-center justify-between p-4">
         <div>
-          <h2 className="label-caps text-navy-300 dark:text-navy-500">Network Inventory</h2>
+          <h2 className="label-caps text-navy-400 dark:text-navy-300">Network Inventory</h2>
           <p className="mt-0.5 text-xs text-navy-400 dark:text-navy-400">
             {subs.length} subscription{subs.length !== 1 ? "s" : ""} · Tenant {topology.tenant_id.slice(0, 8)}…
             {jobDate && <span className="ml-2">· Discovered {new Date(jobDate).toLocaleString()}</span>}
@@ -446,7 +446,7 @@ export default async function InventoryPage({ params }: PageProps) {
                 <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">
                   {s.subscription_name ?? s.subscription_id}
                 </p>
-                <p className="font-mono text-xs text-navy-400 dark:text-navy-500">
+                <p className="font-mono text-xs text-navy-400 dark:text-navy-300">
                   {s.subscription_id.slice(0, 8)}…
                 </p>
               </td>
@@ -555,11 +555,11 @@ export default async function InventoryPage({ params }: PageProps) {
                 <summary className="flex cursor-pointer select-none items-center justify-between rounded-xl px-4 py-2.5 hover:bg-navy-50/40 dark:hover:bg-navy-800/30">
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{nsg.name}</p>
-                    <span className="font-mono text-xs text-navy-400 dark:text-navy-500">{nsg.resource_group}</span>
+                    <span className="font-mono text-xs text-navy-400 dark:text-navy-300">{nsg.resource_group}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="pill-teal">{nsg.security_rules.length} custom rules</span>
-                    <span className="text-xs text-navy-400 dark:text-navy-500">
+                    <span className="text-xs text-navy-400 dark:text-navy-300">
                       {nsg.associated_subnet_ids.length} subnets
                     </span>
                   </div>
@@ -588,7 +588,7 @@ export default async function InventoryPage({ params }: PageProps) {
                               <Mono>{r.source_address_prefix ?? r.source_address_prefixes?.join(", ") ?? "*"}</Mono>
                               <Mono>{r.destination_address_prefix ?? r.destination_address_prefixes?.join(", ") ?? "*"}</Mono>
                               <Mono>{r.destination_port_range ?? r.destination_port_ranges?.join(", ") ?? "*"}</Mono>
-                              <td className="py-1.5 text-navy-400 dark:text-navy-500">{r.description ?? "—"}</td>
+                              <td className="py-1.5 text-navy-400 dark:text-navy-300">{r.description ?? "—"}</td>
                             </tr>
                           ))}
                       </tbody>
@@ -610,11 +610,11 @@ export default async function InventoryPage({ params }: PageProps) {
                 <summary className="flex cursor-pointer select-none items-center justify-between rounded-xl px-4 py-2.5 hover:bg-navy-50/40 dark:hover:bg-navy-800/30">
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{rt.name}</p>
-                    <span className="font-mono text-xs text-navy-400 dark:text-navy-500">{rt.resource_group}</span>
+                    <span className="font-mono text-xs text-navy-400 dark:text-navy-300">{rt.resource_group}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="pill-teal">{rt.routes.length} routes</span>
-                    <span className="text-xs text-navy-400 dark:text-navy-500">
+                    <span className="text-xs text-navy-400 dark:text-navy-300">
                       BGP propagation: {rt.disable_bgp_route_propagation ? "disabled" : "enabled"}
                     </span>
                   </div>
@@ -707,11 +707,11 @@ export default async function InventoryPage({ params }: PageProps) {
                     <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${lb.lb_type === "Internal" ? "bg-navy-100 text-navy-600 dark:bg-navy-700/60 dark:text-navy-300" : "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"}`}>
                       {lb.lb_type}
                     </span>
-                    <span className="text-xs text-navy-400 dark:text-navy-500">{lb.sku_name} · {lb.location}</span>
+                    <span className="text-xs text-navy-400 dark:text-navy-300">{lb.sku_name} · {lb.location}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="pill-teal">{lb.lb_rules?.length ?? 0} rules</span>
-                    <span className="text-xs text-navy-400 dark:text-navy-500">
+                    <span className="text-xs text-navy-400 dark:text-navy-300">
                       zones: {lb.zones?.join(",") || "—"}
                     </span>
                   </div>
@@ -749,10 +749,10 @@ export default async function InventoryPage({ params }: PageProps) {
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{gw.name}</p>
                     <span className="rounded bg-navy-100 px-1.5 py-0.5 text-xs font-semibold text-navy-600 dark:bg-navy-700/60 dark:text-navy-300">{gw.gateway_type}</span>
-                    <span className="text-xs text-navy-400 dark:text-navy-500">{gw.sku_name}</span>
+                    <span className="text-xs text-navy-400 dark:text-navy-300">{gw.sku_name}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-navy-400 dark:text-navy-500">
+                    <span className="text-xs text-navy-400 dark:text-navy-300">
                       ActiveActive: {gw.active_active ? "Yes" : "No"} · BGP: {gw.enable_bgp ? `Yes (ASN ${gw.bgp_asn})` : "No"}
                     </span>
                     <span className="pill-teal">{gw.connections?.length ?? 0} connections</span>
@@ -944,13 +944,13 @@ export default async function InventoryPage({ params }: PageProps) {
                 <tr key={nva.id} className={nva.identification_method === "ip_forwarding" ? "bg-amber-50/30 dark:bg-amber-900/10" : undefined}>
                   <td className="py-2 pr-3">
                     <p className="text-sm font-semibold text-navy-700 dark:text-navy-100">{nva.name}</p>
-                    <p className="text-xs text-navy-400 dark:text-navy-500">{nva.resource_group}</p>
+                    <p className="text-xs text-navy-400 dark:text-navy-300">{nva.resource_group}</p>
                   </td>
                   <td className="py-2 pr-3">
                     {nva.publisher ? (
                       <>
                         <p className="text-xs font-semibold text-navy-700 dark:text-navy-200">{nva.publisher}</p>
-                        <p className="text-xs text-navy-400 dark:text-navy-500">{nva.offer ?? "—"}</p>
+                        <p className="text-xs text-navy-400 dark:text-navy-300">{nva.offer ?? "—"}</p>
                       </>
                     ) : <Dash />}
                   </td>
@@ -1047,7 +1047,7 @@ function InvCard({
   return (
     <div className="glass p-5">
       <div className="mb-4 flex items-center gap-3">
-        <h3 className="label-caps text-navy-300 dark:text-navy-500">{title}</h3>
+        <h3 className="label-caps text-navy-400 dark:text-navy-300">{title}</h3>
         <span className="pill-teal">{count}</span>
         {badge && (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeVariant === "warn" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"}`}>
@@ -1067,7 +1067,7 @@ function THead({ cols }: { cols: string[] }) {
     <thead>
       <tr className="border-b border-navy-100/40 dark:border-navy-700/40">
         {cols.map((c) => (
-          <th key={c} className="pb-2 pr-3 text-left text-xs font-semibold text-navy-400 last:pr-0 dark:text-navy-500">
+          <th key={c} className="pb-2 pr-3 text-left text-xs font-semibold text-navy-400 last:pr-0 dark:text-navy-300">
             {c}
           </th>
         ))}

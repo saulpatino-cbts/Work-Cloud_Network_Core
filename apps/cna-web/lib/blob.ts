@@ -81,6 +81,25 @@ export async function deleteBlob(blobPath: string): Promise<void> {
 }
 
 /**
+ * Delete an entire container by name (e.g. the per-engagement client portal
+ * container `portal-<engagementId>`). Best-effort: a missing container (404) is
+ * treated as success so callers can invoke this during engagement teardown
+ * without knowing whether a portal was ever published (DATA-001 / C6).
+ */
+export async function deleteContainer(containerName: string): Promise<void> {
+  if (!containerName) return;
+  const client = getBlobServiceClient();
+  const containerClient = client.getContainerClient(containerName);
+  try {
+    await containerClient.delete();
+  } catch (err: unknown) {
+    const code = (err as { statusCode?: number })?.statusCode;
+    if (code === 404) return;
+    throw err;
+  }
+}
+
+/**
  * Generate a user-delegation SAS URL for a blob.
  * Returns a time-limited read-only URL valid for ttlHours (default 1 hour).
  */

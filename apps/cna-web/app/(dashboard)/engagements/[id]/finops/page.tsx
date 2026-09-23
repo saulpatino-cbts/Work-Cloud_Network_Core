@@ -285,7 +285,7 @@ export default async function FinOpsPage({ params }: PageProps) {
       </div>
 
       {/* ── Estimate footnote ── */}
-      <p className="text-[11px] text-navy-400 dark:text-navy-500">
+      <p className="text-[11px] text-navy-400 dark:text-navy-300">
         † Estimated from static East-US pay-as-you-go list rates. Confirm against the
         client&apos;s negotiated rates and actual usage before presenting.
       </p>

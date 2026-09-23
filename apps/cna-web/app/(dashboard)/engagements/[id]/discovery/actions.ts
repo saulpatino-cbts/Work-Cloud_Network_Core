@@ -6,6 +6,8 @@ import { decrypt } from "@/lib/crypto";
 import { revalidatePath } from "next/cache";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { dedupeDiscoveryFindings } from "@/lib/dedupe-findings";
+import { apiHeaders } from "@/lib/api-client";
+import { sanitizeBackendDetail } from "@/lib/summarize-error";
 import type { CloudCredential } from "@prisma/client";
 
 // Platform-shaped /discovery/start payload; secrets are decrypted here, at the
@@ -80,7 +82,7 @@ export async function startAllDiscovery(
       const job = jobs[i];
       const res = await fetch(`${apiUrl}/discovery/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(buildStartPayload(cred, job.id, engagementId)),
       });
       if (!res.ok) {
@@ -166,15 +168,22 @@ export async function startDiscovery(
   try {
     const res = await fetch(`${apiUrl}/discovery/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(buildStartPayload(cred, job.id, engagementId)),
     });
 
     if (!res.ok) {
+      // PY-011 / C4: the raw API response body may echo request input (including
+      // secrets) — keep it in the server log only and persist a bounded, sanitised
+      // summary to the job row that the UI renders.
       const body = await res.text();
+      console.error(`[startDiscovery] job ${job.id} API ${res.status}:`, body.slice(0, 500));
       await prisma.discoveryJob.update({
         where: { id: job.id },
-        data: { status: "FAILED", errorMessage: `API error ${res.status}: ${body.slice(0, 300)}` },
+        data: {
+          status: "FAILED",
+          errorMessage: sanitizeBackendDetail(body, `Discovery failed to start (API error ${res.status}).`),
+        },
       });
       return { error: "Failed to start discovery. Check API logs." };
     }

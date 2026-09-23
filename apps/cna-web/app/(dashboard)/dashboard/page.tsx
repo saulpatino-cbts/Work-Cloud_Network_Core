@@ -124,7 +124,7 @@ export default async function DashboardPage() {
                     </svg>
                     <span className="font-semibold text-navy-700 dark:text-navy-100">{eng._count.documents}</span> docs
                   </div>
-                  <p className="ml-auto text-xs text-navy-300 dark:text-navy-500">
+                  <p className="ml-auto text-xs text-navy-400 dark:text-navy-300">
                     {new Date(eng.updatedAt).toLocaleDateString()}
                   </p>
                 </div>

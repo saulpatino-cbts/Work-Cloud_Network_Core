@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { uploadEngagementFile } from "@/lib/blob";
 import { prisma } from "@/lib/prisma";
+import { apiHeaders } from "@/lib/api-client";
 import { revalidatePath } from "next/cache";
 import type { DeliverableType, DocumentType } from "@prisma/client";
 
@@ -251,7 +252,7 @@ export async function generateDiagramFromDiscovery(
   try {
     const res = await fetch(`${apiUrl}/diagrams/${engagementId}/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         client_org: engagement.clientOrg,
         engagement_name: engagement.name,

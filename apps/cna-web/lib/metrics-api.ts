@@ -5,6 +5,7 @@
 // records for the engagement yet.
 // ──────────────────────────────────────────────────────────────────────────────
 
+import { apiHeaders } from "./api-client";
 import type { StatMasterRecord } from "./types/stat-master";
 
 /** Fetch stat-master records for an engagement; null on any failure. */
@@ -16,6 +17,7 @@ export async function getStatMasters(
 
   try {
     const res = await fetch(`${apiUrl}/metrics/${encodeURIComponent(engagementId)}`, {
+      headers: apiHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(5_000),
     });

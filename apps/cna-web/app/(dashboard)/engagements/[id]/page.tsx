@@ -79,7 +79,7 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
     <div className="space-y-5">
       {/* ── Phase stepper ── */}
       <div className="glass p-6">
-        <h2 className="label-caps mb-5 text-navy-300 dark:text-navy-500">
+        <h2 className="label-caps mb-5 text-navy-400 dark:text-navy-300">
           Engagement Progress
         </h2>
         {/* WAI-23: Stepper wrapped in nav and ol for accessibility */}
@@ -188,7 +188,7 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
           {totalFindings > 0 && (
             <div className="glass p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="label-caps text-navy-300 dark:text-navy-500">
+                <h3 className="label-caps text-navy-400 dark:text-navy-300">
                   Findings Breakdown
                 </h3>
                 <Link href={`/engagements/${id}/findings`} className="text-xs font-semibold text-teal-600 hover:underline dark:text-teal-400">
@@ -232,7 +232,7 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
           {base.deliverables.length > 0 && (
             <div className="glass p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="label-caps text-navy-300 dark:text-navy-500">
+                <h3 className="label-caps text-navy-400 dark:text-navy-300">
                   Latest Deliverables
                 </h3>
                 <Link href={`/engagements/${id}/deliverables`} className="text-xs font-semibold text-teal-600 hover:underline dark:text-teal-400">
@@ -267,7 +267,7 @@ export default async function EngagementOverviewPage({ params }: PageProps) {
 
       {/* ── Quick links bento ── */}
       <div>
-        <h2 className="label-caps mb-3 text-navy-300 dark:text-navy-500">
+        <h2 className="label-caps mb-3 text-navy-400 dark:text-navy-300">
           Jump to
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

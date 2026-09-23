@@ -154,7 +154,7 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
         {/* ── Toggle row ── */}
         <div className="flex items-center justify-between border-b border-navy-100/40 px-2 py-2.5 dark:border-navy-700/40">
           {!isCollapsed && (
-            <span className="label-caps pl-1 text-navy-300 dark:text-navy-500" aria-hidden="true">
+            <span className="label-caps pl-1 text-navy-400 dark:text-navy-300" aria-hidden="true">
               Navigation
             </span>
           )}
@@ -193,7 +193,7 @@ export function EngagementSidebar({ engagementId }: { engagementId: string }) {
               ) : (
                 <p
                   className={[
-                    "label-caps truncate px-2 text-navy-300 dark:text-navy-500",
+                    "label-caps truncate px-2 text-navy-400 dark:text-navy-300",
                     gi === 0 ? "pt-1.5" : "pt-3",
                   ].join(" ")}
                   title={`${group.num}. ${group.label}`}

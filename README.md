@@ -108,7 +108,7 @@ npm run db:migrate
 npm run dev          # http://localhost:3000
 ```
 
-Other useful scripts: `npm run build`, `npm run lint`, `npm run db:studio`, `npm run db:generate`.
+Other useful scripts: `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run db:studio`, `npm run db:generate` — the first three plus `npm test` are what `300 · Test Codebase` runs for the web tier.
 
 ### Python CLI, locally
 

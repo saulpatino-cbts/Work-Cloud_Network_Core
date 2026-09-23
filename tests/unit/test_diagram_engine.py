@@ -9,18 +9,22 @@ import pytest
 
 from cna.core.topology_schema import (
     VPC,
+    AWSNetworkFirewall,
     AWSRegionTopology,
     AWSTopology,
+    AWSWAFWebACL,
     AzureSubnet,
     AzureSubscriptionTopology,
     AzureTopology,
     AzureVHub,
     AzureVWan,
+    DirectConnectConnection,
     ManagementGroup,
     Subnet,
     SubnetType,
     TransitGateway,
     VNet,
+    VpnGateway,
 )
 from cna.diagram_engine.drawio_generator import (
     generate_tgw_topology,
@@ -472,3 +476,114 @@ def test_merge_diagrams_skips_unparseable_pages_and_never_returns_empty():
     empty = merge_diagrams([])
     minidom.parseString(empty)
     assert "<diagram" in empty
+
+
+# ── AWS network services band (TODO.md T-418) ───────────────────────────────
+
+
+def _region_with_services() -> AWSRegionTopology:
+    return AWSRegionTopology(
+        account_id="123456789012",
+        region="us-east-1",
+        vpcs=[
+            VPC(
+                id="vpc-abc123",
+                name="prod-vpc",
+                cidr="10.0.0.0/16",
+                subnets=[
+                    Subnet(
+                        id="subnet-a",
+                        name="public-a",
+                        cidr="10.0.1.0/24",
+                        az="us-east-1a",
+                        subnet_type=SubnetType.PUBLIC,
+                    )
+                ],
+            )
+        ],
+        transit_gateways=[
+            TransitGateway(id="tgw-001", name="hub-tgw", owner_account_id="123456789012")
+        ],
+        direct_connect_connections=[
+            DirectConnectConnection(
+                id="dxcon-001",
+                name="dc-to-hq",
+                location="EqDC2",
+                bandwidth="1Gbps",
+                state="available",
+                owner_account_id="123456789012",
+            )
+        ],
+        vpn_gateways=[VpnGateway(id="vgw-001", name="branch-vpn", state="available")],
+        aws_network_firewalls=[
+            AWSNetworkFirewall(
+                firewall_arn="arn:aws:network-firewall:us-east-1:123456789012:firewall/egress",
+                firewall_name="egress-fw",
+                vpc_id="vpc-abc123",
+            )
+        ],
+        waf_web_acls=[
+            AWSWAFWebACL(
+                web_acl_id="acl-001",
+                web_acl_arn="arn:aws:wafv2:us-east-1:123456789012:regional/webacl/edge/acl-001",
+                name="edge-waf",
+            )
+        ],
+    )
+
+
+class TestAwsServicesBand:
+    def test_band_names_every_discovered_service(self):
+        xml = generate_vpc_topology(_region_with_services())
+        assert "Network services — 123456789012 / us-east-1" in xml
+        for name in ("hub-tgw", "dc-to-hq", "branch-vpn", "egress-fw", "edge-waf"):
+            assert name in xml, name
+        for label in (
+            "Transit Gateway",
+            "Direct Connect",
+            "VPN Gateway",
+            "Network Firewall",
+            "WAF Web ACL",
+        ):
+            assert label in xml, label
+
+    def test_band_uses_aws_icons(self):
+        xml = generate_vpc_topology(_region_with_services())
+        for icon in ("transit_gateway", "direct_connect", "vpn_gateway", "network_firewall", "waf"):
+            assert f"mxgraph.aws4.{icon}" in xml, icon
+
+    def test_region_without_services_has_no_band(self, minimal_vpc_region):
+        xml = generate_vpc_topology(minimal_vpc_region)
+        assert "Network services" not in xml
+
+    def test_empty_region_still_shows_its_services(self):
+        region = AWSRegionTopology(
+            account_id="123456789012",
+            region="us-east-1",
+            transit_gateways=[
+                TransitGateway(id="tgw-002", name="lonely-tgw", owner_account_id="123456789012")
+            ],
+        )
+        xml = generate_vpc_topology(region)
+        assert "lonely-tgw" in xml
+        assert "No VPCs found" in xml
+
+    def test_band_is_valid_xml(self):
+        import xml.dom.minidom as minidom
+
+        minidom.parseString(generate_vpc_topology(_region_with_services()))
+
+
+class TestEngagementBundleLayers:
+    def test_bundle_emits_context_and_one_container_per_scope_only(self, minimal_vpc_region):
+        from cna.ai_engine.diagram_authoring import author_engagement_bundle
+        from cna.diagram_engine.c4_layering import C4Layer
+
+        bundle = author_engagement_bundle(
+            "Acme", aws_regions=[minimal_vpc_region], azure_subs=[_sub_with_services()]
+        )
+        layers = [d.layer for d in bundle]
+        assert layers.count(C4Layer.CONTEXT) == 1
+        assert layers.count(C4Layer.CONTAINER) == 2
+        assert C4Layer.COMPONENT not in layers
+        assert len({d.name for d in bundle}) == len(bundle)

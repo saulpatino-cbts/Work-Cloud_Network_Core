@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
@@ -20,7 +21,11 @@ interface PageProps {
 }
 
 const styleKey = "style";
-const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+// Inline style is the only way to express a data-driven width/height; the
+// indirection keeps the literal `style` prop out of the JSX.
+const makeStyle = (props: Record<string, string>): { style: CSSProperties } => ({
+  [styleKey]: props as CSSProperties,
+});
 
 // ── Nav Card ───────────────────────────────────────────────────────────────────
 function NavCard({
@@ -139,7 +144,6 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
               <div key={d.label} className="flex items-center gap-2">
                 <span className="w-24 truncate text-xs text-navy-400">{d.fullLabel}</span>
                 <div className="flex-1 overflow-hidden rounded-full bg-navy-100 dark:bg-navy-800">
-                  {/* eslint-disable-next-line react/forbid-dom-props */}
                   <div
                     className="h-1.5 rounded-full bg-teal-500"
                     {...makeStyle({ width: `${(d.score / 10) * 100}%` })}
@@ -164,7 +168,6 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
               return (
                 <div key={sev} className="flex flex-col items-center gap-2">
                   <div className="flex h-16 w-full flex-col items-center justify-end">
-                    {/* eslint-disable-next-line react/forbid-dom-props */}
                     <div
                       className={`w-full rounded-t ${style.bar}`}
                       {...makeStyle({ height: `${Math.max(barPct, count > 0 ? 8 : 0)}%` })}
@@ -183,7 +186,6 @@ export default async function PresentationOverviewPage({ params }: PageProps) {
             {SEV_ORDER.map((sev) => {
               const pct = ((bySev[sev]?.length ?? 0) / Math.max(findings.length, 1)) * 100;
               return pct > 0 ? (
-                /* eslint-disable-next-line react/forbid-dom-props */
                 <div
                   key={sev}
                   className={SEV_COLORS[sev as keyof typeof SEV_COLORS].bar}

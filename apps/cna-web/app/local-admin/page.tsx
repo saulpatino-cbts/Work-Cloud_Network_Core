@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // Break-glass local admin sign-in. Deliberately unlinked from /auth/signin
@@ -7,6 +8,7 @@ import { useState } from "react";
 // (no username field): there's exactly one local admin identity, so asking
 // for a username would only invite account-name enumeration.
 export default function LocalAdminPage() {
+  const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +26,9 @@ export default function LocalAdminPage() {
       });
 
       if (res.ok) {
-        window.location.assign("/dashboard");
+        // The session cookie is set by the response; a router navigation
+        // re-renders the server components with it.
+        router.push("/dashboard");
         return;
       }
 

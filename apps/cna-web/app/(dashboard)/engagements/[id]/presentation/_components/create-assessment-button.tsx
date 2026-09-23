@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createInteractiveAssessment } from "../../client-deliverables/actions";
 import { getDeliverableProgress } from "../../deliverables/actions";
@@ -27,12 +27,23 @@ export function CreateInteractiveAssessmentButton({
   const [isRunning, setIsRunning] = useState(wasRunning);
   const [steps, setSteps] = useState<Step[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const poll = useCallback(
-    async (id: string) => {
+  // The poll loop lives inside the effect: each tick schedules the next with
+  // a timer the cleanup cancels, so a run can never stack timers, and every
+  // setState happens after an await rather than synchronously in the effect.
+  useEffect(() => {
+    if (!isRunning || !deliverableId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function tick(id: string) {
       const result = await getDeliverableProgress(id);
-      if (!result) return; // row gone or access lost — leave the spinner to the next tick
+      if (cancelled) return;
+      if (!result) {
+        // Row gone or access lost — leave the spinner to the next tick.
+        timer = setTimeout(() => void tick(id), POLL_MS);
+        return;
+      }
       setSteps(result.steps as Step[]);
 
       if (result.status === "COMPLETED") {
@@ -46,19 +57,15 @@ export function CreateInteractiveAssessmentButton({
         setError(fatal?.label ?? "AI generation failed — the full error has been logged.");
         return;
       }
-      timer.current = setTimeout(() => void poll(id), POLL_MS);
-    },
-    [router],
-  );
+      timer = setTimeout(() => void tick(id), POLL_MS);
+    }
 
-  useEffect(() => {
-    if (isRunning && deliverableId) void poll(deliverableId);
+    void tick(deliverableId);
     return () => {
-      if (timer.current) clearTimeout(timer.current);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-    // poll is stable; re-running on every steps update would stack timers
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRunning, deliverableId]);
+  }, [isRunning, deliverableId, router]);
 
   async function handleClick() {
     setError(null);

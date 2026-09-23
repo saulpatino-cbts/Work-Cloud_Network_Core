@@ -1391,9 +1391,27 @@ order; do not reorder it.
   from either cloud, then give the AWS generator its own group list. Separately, either make
   COMPONENT a genuinely denser diagram or drop the layer from the bundle rather than emitting a
   duplicate the caller has to filter.
+- **Status:** Done (2026-09-23), both halves.
+  1. The services band is cloud-neutral: `_service_band_cells(title, groups, y)` takes a list of
+     `(label, style, names)` from either cloud, `_azure_service_groups` feeds it as before, and the
+     new `_aws_service_groups` gives `generate_vpc_topology` its own band — transit gateways,
+     Direct Connect connections, VPN gateways, Network Firewall (both the firewall resources and
+     the legacy policy stubs) and WAF web ACLs, each with its catalogued `aws4` icon
+     (`transit_gateway`, `direct_connect`, `vpn_gateway`, `network_firewall`, `waf`). The ad-hoc
+     "TGW layer" that used to float 500 px below the VPCs is gone; TGWs live in the band. VPC
+     endpoints and Shield are not in `AWSRegionTopology` yet, so they join the list when discovery
+     carries them. A region with no services lays out exactly as before.
+  2. The COMPONENT layer is **dropped from the bundle**, not made denser: `author_engagement_bundle`
+     emits one CONTEXT plus one CONTAINER per scope, and the diagrams router no longer filters a
+     duplicate it knew about. A genuine engineer view (route tables, NSG rules, effective routes —
+     all already in the topology models) is worth its own item when someone wants it; emitting the
+     same XML twice was not it. `C4Layer.COMPONENT` and its audience mapping stay for that day.
+  Tests: `TestAwsServicesBand` (every discovered service named, `aws4` icons present, no band
+  without services, an empty region still shows its TGW, valid XML) and
+  `TestEngagementBundleLayers` in `tests/unit/test_diagram_engine.py`.
 - **Notes for future engineers:** AWS discovery is real (`CHANGELOG` → AWS end-to-end) but the
-  inventory/diagram/FinOps pages remain Azure-shaped, so (1) is part of a wider AWS parity gap,
-  not a diagram-only issue. Do not "fix" the duplicate layer by having the router keep both —
+  inventory/diagram/FinOps pages remain Azure-shaped, so (1) was part of a wider AWS parity gap,
+  not a diagram-only issue. Do not "fix" a duplicate layer by having the router keep both —
   that puts two identical tabs in front of the consultant.
 
 ### T-419 — `npm run lint` in `apps/cna-web` is broken: `next lint` no longer exists
@@ -1410,9 +1428,27 @@ order; do not reorder it.
   point the `lint` script at `eslint .`, and add `npm run lint`, `npm run typecheck` and
   `npm test` (both scripts now exist — `tsc --noEmit` and `vitest run`) to a web job in workflow
   300 so the web tier has the same fast checks the Python package has.
-- **Status:** Open
-- **Notes for future engineers:** `npm run typecheck` and `npm test` are green today; `next build`
-  also type-checks the app. Use those until the lint script is repaired.
+- **Status:** Done (2026-09-23). `apps/cna-web/eslint.config.mjs` is the flat config
+  `eslint-config-next` publishes (`core-web-vitals` + `typescript`) plus one override that lets
+  `prisma/seed-local-admin.js` stay the plain CommonJS script the migrator image needs; the `lint`
+  script is `eslint .`. ESLint is pinned back to the 9.x line: `eslint-config-next` 16.3.1 bundles
+  `eslint-plugin-react` 7.37, which still calls `context.getFilename()` and crashes under ESLint 10.
+  The first run reported 24 errors and 10 warnings, all fixed at the source rather than silenced —
+  five `as any` casts on the `makeStyle` helpers (now typed `{ style: CSSProperties }`), unescaped
+  quotes in JSX text, an unused import, unused `eslint-disable` directives, a `window.location.assign`
+  that is now `router.push`, and four React Compiler findings: a ref written during render
+  (`DrawioEmbed`, now written in an effect), `Date.now()` during render (`connections-panel`, now the
+  `useCoarseNow()` store in `lib/use-clock.ts`), `setState` synchronously inside an effect (the
+  sidebar's collapsed flag is now a `useSyncExternalStore` over `localStorage`; the deliverable
+  progress poller runs inside its effect) and a poll callback that referenced itself before
+  declaration (`create-assessment-button`, now an effect-owned timer chain — which also fixes the
+  spinner that previously stayed forever when one progress read returned nothing). The one
+  remaining warning is `react-hooks/incompatible-library` on TanStack Table's `useReactTable`,
+  which is informational. Workflow `300` gains a `web` job (`npm ci`, `npm run lint`,
+  `npm run typecheck`, `npm test`) on the runner's own Node — no `actions/setup-node` because no
+  repository carries an audited digest for it yet.
+- **Notes for future engineers:** `next build` also type-checks the app. Keep `eslint` on the
+  major `eslint-config-next`'s bundled plugins support; the pin is the config's, not ours.
 
 ---
 
@@ -1718,7 +1754,17 @@ order; do not reorder it.
 - **Recommended action:** Periodically confirm no project-specific documentation has been written
   into either directory. If any appears, classify it by content and move it to `README.md`,
   `CHANGELOG.md`, `REVIEW.md`, `TODO.md`, or the Wiki as the model requires.
-- **Status:** Not started
+- **Status:** Done (2026-09-23) — first pass. A sweep of `.claude/`, `.agents/`, `.codex/` and
+  `.kiro/` for the platform's own names (repositories, tenants, resource groups, image namespace,
+  workflow numbers, `REVIEW.md` ids) found one project-specific tree: `.kiro/specs/production-readiness/`,
+  the Kiro spec (requirements, design, 15 tasks, all complete) of the 2026-09-14 production-hardening
+  review. Everything it produced already lives where the model says — its findings in the three
+  `TODO.md` files (this repository's T-4xx, the appliances' T-106/T-111), its blockers in the
+  `REVIEW.md` files, its outcome in `CHANGELOG.md` — so the spec was removed rather than moved
+  (its proper home is the Wiki, which `REVIEW.md` R-009 keeps closed; git history retains it). The
+  Azure skill references under `.claude/skills/azure-*` mention Foundry and Front Door as Azure
+  services, which is project-neutral knowledge and stays. Re-run the sweep whenever the pack is
+  refreshed: `grep -rIl -iE '<repo names>|<image namespace>|rg-cna|R-0[0-9]{2}' .claude .agents .codex .kiro`.
 - **Notes for future engineers:** The distinction that matters is *project-specific* versus
   *project-neutral*. Project-neutral agent knowledge stays in the pack — it is what lets the pack
   drop into another repository unchanged. Anything naming this platform, its subscriptions, or its

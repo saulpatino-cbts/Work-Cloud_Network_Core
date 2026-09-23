@@ -33,11 +33,9 @@
     "@auth/prisma-adapter": "^2.11.2",
     "@aws-sdk/client-bedrock-runtime": "3.1132.0",
     "@azure/identity": "^4.13.1",
-    "@azure/keyvault-secrets": "^4.11.2",
     "@azure/storage-blob": "^12.33.0",
     "@prisma/client": "^6.3.1",
     "@tanstack/react-table": "^8.21.3",
-    "clsx": "^2.1.1",
     "marked": "^18.0.7",
     "next": "16.3.1",
     "next-auth": "^5.0.0-beta.32",
@@ -47,7 +45,6 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.9.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

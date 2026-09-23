@@ -656,7 +656,20 @@ order; do not reorder it.
 - **Dependencies:** Best done after T-501, which closes the largest scaffold.
 - **Recommended action:** Re-run the sweep once the AWS deploy path is functional. Anything still
   unreferenced at that point is genuinely dead and can be removed with confidence.
-- **Status:** Not started
+- **Status:** Done (2026-09-23) — sweep re-run now that the AWS deploy path is authored (the
+  appliance's `210` is real; T-501/AWS T-101). Tools: `vulture cna apps/cna-api --min-confidence 80`
+  and `knip` over `apps/cna-web`. Removed as genuinely dead: `analysis/run-form.tsx`
+  (`RunAnalysisForm`, unreferenced since the 2026-04-10 feature commit) and three npm dependencies
+  with zero imports (`@azure/keyvault-secrets`, `clsx`, `tailwind-merge`). Classified and kept:
+  `prisma/seed-local-admin.js` and `scripts/filter-shape-index.mjs` (knip cannot see the Dockerfile
+  that runs them); the two unused CLI arguments in `cna/cli/commands/diagram_cmd.py` and the unused
+  `secret_name` in `cna/core/auth.py` (Phase B/C scaffold, marked as such — the item says not to
+  treat those as stale); and knip's 16 unused-export groups (`lib/ai-engine.ts`, `lib/image-update*.ts`,
+  `lib/finops/prices.ts`, `lib/report-sections.ts`, `components/charts/chart-theme.ts`, …), which are
+  module constants and helpers exported for tests and for the features that own them — exporting
+  more than the app imports today is a wiring gap, not dead code, and each belongs to the feature
+  that will consume it. Re-run both tools when a Phase lands; anything the new phase still leaves
+  unreferenced is then dead.
 - **Notes for future engineers:** The sweep confirmed no `TODO`/`FIXME` comment references a
   closed issue, and that the `Phase`/`SCAFFOLD` markers in the source are intentional. Do not
   treat those markers as stale on sight.

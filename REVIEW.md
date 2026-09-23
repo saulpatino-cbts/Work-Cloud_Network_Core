@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-09-18
+**Last reviewed:** 2026-09-23
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -25,6 +25,13 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
 | [R-014](#r-014--move-the-wiki-and-archive-the-original-repository) | Move the Wiki and archive `Work-Cloud_Network_Assessment` | Repository owner | Open — after R-013 |
 | [R-015](#r-015--decide-the-customer-facing-appliance-repository-names) | Decide the customer-facing appliance repository names (`*_Appliance` vs `*_Assessment`) | Repository owner | Open — not blocking |
+| [R-016](#r-016--retire-appscna-worker-and-its-image-service-and-catalog-slot) | Retire `apps/cna-worker` — placeholder deployed as an always-on service in both appliances | Repository owner | Open — v1.0 review finding IMG-003 / ARCH-101 |
+| [R-017](#r-017--stop-publishing-the-cli-image-on-every-push) | Stop building/publishing the CLI image `cna:sha-<7>` (no appliance consumes it) | Repository owner | Open — not blocking |
+| [R-018](#r-018--remove-cnareview-from-the-shipped-package) | Move `cna/review/**` out of the shipped package and API image | Repository owner | Open — not blocking |
+| [R-019](#r-019--diagram-editor-sends-customer-topology-to-embeddiagramsnet) | Diagram editor posts customer topology XML to public `embed.diagrams.net`; no offline path | Product owner / Security | Open — data-governance decision |
+| [R-020](#r-020--aeonik-font-licence-and-oci-licence-label) | Aeonik typeface licence coverage; OCI label `Proprietary` vs Apache-2.0 `LICENSE` | Legal / brand | Open — [VERIFY] |
+| [R-021](#r-021--byo-api-mode-scope-for-10) | Ship 1.0 `saas`-only or complete R-011 first | Product owner / Security | Open |
+| [R-022](#r-022--version-100-release-identity) | Version 1.0.0 identity: withdrawn `[1.0.0]` heading, version strings, first tag | Repository owner | Open — before the first `v*` tag |
 
 ---
 
@@ -673,3 +680,159 @@ None operationally; the prose and the repository names disagree.
 **References**
 - [`TODO.md`](TODO.md) → T-509
 - `.github/workflows/200-build-images.yml` (`APPLIANCE_REPOS`), `cna/review/areas/terraform_relocated.py`
+
+---
+
+## R-016 — Retire `apps/cna-worker` and its image, service and catalog slot
+
+**Problem**
+`apps/cna-worker/main.py` is a 101-line placeholder: it writes a "CNA publish placeholder" HTML
+file for a hard-coded `sample-engagement` and exits. `POST /publish` superseded it
+(`CHANGELOG.md`, "The client-portal publish story is real"). Both appliances still deploy it as an
+always-on service (Azure `modules/compute/main.tf`, AWS `modules/compute/main.tf`), so it exits and
+restarts continuously, its image is built and scanned on every push, and `latest-build.json`,
+`210`, `230`, `350` and `360` all carry a `worker` slot.
+
+**Why it needs an owner**
+Removing it destroys a live Container App in Azure dev and changes the core ↔ appliance contract
+(`images.worker`), which `CLAUDE.md` says is never a unilateral cleanup.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Approve one coordinated change set across the three repositories: delete `apps/cna-worker` and its
+Dockerfile and build job here; remove the worker service, image inputs and catalog fields in both
+appliances.
+
+**Impact if unresolved**
+Wasted compute, a permanently restarting container in every environment, and documentation that
+describes a component that does nothing.
+
+**References**
+- v1.0 review findings IMG-003, ARCH-004, ARCH-101, PY-016
+
+## R-017 — Stop publishing the CLI image on every push
+
+**Problem**
+No appliance references `images.cli` (`grep` over both appliances: zero hits outside
+`320-publish-portal`). It is the largest image (draw.io + Electron + Xvfb) and its root
+`COPY . .` ships `TODO.md`, `REVIEW.md` and `cna/review/**` inside a customer-pullable artifact.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Decide: keep the CLI image as a developer-only local build (`docker-compose.yml` already has it) and
+drop it from `200-build-images.yml`, `310` and the manifest; or keep publishing and fence the build
+context.
+
+**Impact if unresolved**
+Extra build time and scan noise on every push; repository-internal documents in a shipped image.
+
+**References**
+- v1.0 review findings IMG-006, IMG-007, ARCH-102, PROD-004
+
+## R-018 — Remove `cna/review/**` from the shipped package
+
+**Problem**
+`cna/review/**` (3,451 lines) is the repository's production-readiness review engine. No product
+code imports it (`grep 'cna\.review' apps cna scripts` → 0), yet it is installed into the API image
+and its 26 test files consume 54 % of unit-test runtime.
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Approve moving it under `scripts/` (or a separate tooling package) with its tests, so the shipped
+`cna` package contains product code only.
+
+**Impact if unresolved**
+Larger images and slower CI; no customer impact.
+
+**References**
+- v1.0 review findings ARCH-104, PY-014
+
+## R-019 — Diagram editor sends customer topology to `embed.diagrams.net`
+
+**Problem**
+`apps/cna-web/components/diagrams/DrawioEmbed.tsx` iframes the public draw.io embed and posts the
+engagement's `.drawio` XML into it. There is no self-hosted or offline fallback, so an appliance
+without internet egress from the analyst's browser shows a blank editor, and every customer's
+network architecture leaves the appliance boundary to a third party.
+
+**Required owner**
+Product owner (feature) and Security (data governance).
+
+**Required action**
+Choose: self-host draw.io (static bundle served by the web tier, or a container), or document the
+dependency as a customer opt-in with a data-handling statement.
+
+**Impact if unresolved**
+Customers with restricted egress cannot use the Diagram page; customer data-handling questions
+have no answer.
+
+**References**
+- v1.0 review findings UI-002, ARCH-012
+
+## R-020 — Aeonik font licence and OCI licence label
+
+**Problem**
+`apps/cna-web/app/fonts/Aeonik-Regular.ttf` and `cna/report_engine/templates/assets/fonts/` ship a
+commercial typeface as a webfont and embedded in PDFs with no licence file in the repository. The
+OCI image label says `licenses="Proprietary"` while the repository `LICENSE` is Apache-2.0.
+
+**Required owner**
+Legal / brand.
+
+**Required action**
+Confirm the Aeonik licence covers web-serving and PDF embedding for customer deliverables
+[VERIFY]; pick one licence statement for the images and `LICENSE`.
+
+**Impact if unresolved**
+Possible licence non-compliance in a customer-facing artifact.
+
+**References**
+- v1.0 review finding IMG-015
+
+## R-021 — `byo-api` mode scope for 1.0
+
+**Problem**
+Two AI modes × four engines, keys entered in the app UI, and firewall egress to
+`api.anthropic.com` / `api.openai.com`; R-011 (security review of that path) is still open.
+
+**Required owner**
+Product owner and Security.
+
+**Required action**
+Either complete R-011 before 1.0, or ship 1.0 as `saas`-only (managed identity) with `byo-api`
+behind a deploy-time flag.
+
+**Impact if unresolved**
+1.0 carries an unreviewed secret-handling path.
+
+**References**
+- R-011; v1.0 review finding ARCH-106
+
+## R-022 — Version 1.0.0 release identity
+
+**Problem**
+`pyproject.toml` says `0.8.0b0`, `apps/cna-web/package.json` `0.8.0-beta.0`; `CHANGELOG.md`
+already contains `## [1.0.0] - 2026-05-28`, later withdrawn to `[0.8.0-beta]`; the repository has
+no git tags, so `310-release-version` has never run. (The API's hard-coded `0.2.0` was replaced by
+the package metadata version in the v1.0 review.)
+
+**Required owner**
+Repository owner.
+
+**Required action**
+Rename the historical heading (for example `[1.0.0-rc1] — withdrawn`), set the version in
+`pyproject.toml` and `package.json` in one commit, and cut the first `v*` tag only after the
+Critical and High rows of the v1.0 findings register are closed.
+
+**Impact if unresolved**
+A customer cannot tell what "1.0" they run; a new `[1.0.0]` heading would collide.
+
+**References**
+- v1.0 review findings RELEASE-004, DOC-001, DOC-022
+

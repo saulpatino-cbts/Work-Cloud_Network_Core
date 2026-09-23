@@ -7,12 +7,17 @@ everything back to PostgreSQL.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import sys
 import uuid
+from collections.abc import Mapping
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
@@ -20,6 +25,8 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # Ensure the repo root is on the path so `cna` package is importable.
@@ -73,6 +80,7 @@ _GW_HIGH_UTILIZATION_PCT = 80
 # absolute `routers.*` imports resolve in both container and local runs.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from auth import BearerTokenMiddleware  # noqa: E402, I001
 from routers.chat import router as chat_router  # noqa: E402, I001
 from routers.metrics import rebuild_metrics  # noqa: E402
 from routers.metrics import router as metrics_router  # noqa: E402
@@ -80,6 +88,18 @@ from routers.reports import router as reports_router  # noqa: E402
 from routers.diagrams import router as diagrams_router  # noqa: E402
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+# Shared bearer secret the web tier must present (SEC-001). Empty in local dev.
+CNA_API_TOKEN = os.environ.get("CNA_API_TOKEN", "")
+# Set by the appliance Terraform ("azure" | "aws"); empty means local dev.
+CNA_APPLIANCE_CLOUD = os.environ.get("CNA_APPLIANCE_CLOUD", "")
+
+# A RUNNING job whose updatedAt (bumped by every progress line — see _log) is
+# older than this has no live owner and is reaped to FAILED (REL-001 / DATA-003).
+_STALE_JOB_MINUTES = int(os.environ.get("CNA_STALE_JOB_MINUTES", "30"))
+_STALE_JOB_ERROR = (
+    "Discovery stopped reporting progress (the API restarted or the job was "
+    "interrupted). Start discovery again."
+)
 
 if not DATABASE_URL:
     logger.warning(
@@ -87,11 +107,98 @@ if not DATABASE_URL:
         "Jobs, findings, and metrics writes will be silently skipped until it is configured."
     )
 
-app = FastAPI(title="CNA API", version="0.2.0")
+
+def _api_version() -> str:
+    """Report the installed ``cna`` package version, or ``"unknown"``.
+
+    The version is single-sourced from package metadata (pyproject) rather than
+    a literal that drifts from the release. A source checkout with no installed
+    dist reports ``"unknown"`` instead of a stale hardcoded number.
+    """
+    try:
+        return _pkg_version("cna")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _validate_startup_config(env: Mapping[str, str]) -> None:
+    """Fail fast on a misconfigured appliance deployment (PY-001 / SEC-001).
+
+    Appliance mode is signalled by ``CNA_APPLIANCE_CLOUD``. In that mode both a
+    database and the shared API token are mandatory; booting without them puts
+    the API into the silent no-op / unauthenticated states that the audit
+    flagged, so the process refuses to start instead. In local dev (no
+    appliance cloud) an unauthenticated API is allowed with one warning.
+    """
+    appliance = bool(env.get("CNA_APPLIANCE_CLOUD"))
+    token = env.get("CNA_API_TOKEN", "")
+    database_url = env.get("DATABASE_URL", "")
+
+    if appliance and not database_url:
+        raise SystemExit(
+            "DATABASE_URL is not set but CNA_APPLIANCE_CLOUD is — refusing to start. "
+            "The appliance Terraform must inject DATABASE_URL as a container secret."
+        )
+    if appliance and not token:
+        raise SystemExit(
+            "CNA_API_TOKEN is not set but CNA_APPLIANCE_CLOUD is — refusing to start. "
+            "The appliance Terraform must inject CNA_API_TOKEN as a container secret "
+            "on both the api and the web containers."
+        )
+    if not token and not appliance:
+        logger.warning(
+            "CNA_API_TOKEN is not set and CNA_APPLIANCE_CLOUD is unset (local dev) — "
+            "the API will accept UNAUTHENTICATED requests. Never run this way in production."
+        )
+
+
+_validate_startup_config(os.environ)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Reap jobs left RUNNING by a previous process on startup (REL-001).
+
+    Single-replica assumption: the API runs one uvicorn worker, so any RUNNING
+    job older than the stale threshold was orphaned by a restart/crash and has
+    no live owner. Best effort — a reaper failure never blocks startup.
+    """
+    try:
+        reaped = _reap_stale_jobs()
+        if reaped:
+            logger.warning("startup reaper marked %d stale RUNNING job(s) as FAILED", reaped)
+    except Exception:
+        logger.exception("startup stale-job reaper failed")
+    yield
+
+
+app = FastAPI(title="CNA API", version=_api_version(), lifespan=_lifespan)
 app.include_router(metrics_router)
 app.include_router(chat_router)
 app.include_router(reports_router)
 app.include_router(diagrams_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def _handle_validation_error(_request, exc: RequestValidationError) -> JSONResponse:
+    """Return validation errors without the request-body echo (PY-011).
+
+    Pydantic v2 places the offending value in ``input`` and coercion detail in
+    ``ctx``; for discovery requests ``input`` is the whole body, which carries
+    plaintext cloud secrets. Strip both and return only ``loc``/``msg``/``type``.
+    """
+    safe = [{k: v for k, v in err.items() if k not in ("input", "ctx")} for err in exc.errors()]
+    return JSONResponse(
+        status_code=status_for(Outcome.INVALID_REQUEST),
+        content={"detail": safe},
+    )
+
+
+# Enforce the shared bearer secret when it is configured. In local dev
+# (CNA_API_TOKEN unset) no middleware is added — see _validate_startup_config,
+# which already refused to start if that happens in appliance mode.
+if CNA_API_TOKEN:
+    app.add_middleware(BearerTokenMiddleware, token=CNA_API_TOKEN)
 
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -178,6 +285,50 @@ def _advance_engagement_status(engagement_id: str) -> None:
                 (engagement_id,),
             )
         conn.commit()
+
+
+def _reap_stale_jobs(job_id: str | None = None) -> int:
+    """Mark RUNNING jobs whose heartbeat has gone stale as FAILED (REL-001).
+
+    ``updatedAt`` is bumped by every progress line (``_log`` → ``_update_job``),
+    so it doubles as a heartbeat: a RUNNING job that has not written progress in
+    ``_STALE_JOB_MINUTES`` was orphaned by a restart/crash and has no live owner
+    (single-replica assumption). Passing ``job_id`` scopes the reap to one job
+    (used by the job-status endpoint); omitting it reaps every stale job (used by
+    the startup lifespan). Returns the number of rows updated.
+    """
+    if not DATABASE_URL:
+        return 0
+    sql = (
+        'UPDATE "DiscoveryJob" '
+        "SET status = 'FAILED', \"errorMessage\" = %s, "
+        '"completedAt" = NOW(), "updatedAt" = NOW() '
+        "WHERE status = 'RUNNING' "
+        "AND \"updatedAt\" < NOW() - (%s * INTERVAL '1 minute')"
+    )
+    params: list[Any] = [_STALE_JOB_ERROR, _STALE_JOB_MINUTES]
+    if job_id is not None:
+        sql += " AND id = %s"
+        params.append(job_id)
+    with contextlib.closing(_get_db()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            reaped = cur.rowcount
+        conn.commit()
+    return reaped
+
+
+def _check_db_ready() -> bool:
+    """Return True if a ``SELECT 1`` against the database succeeds (PY-008).
+
+    Used by ``/ready`` only. The connection is explicitly closed rather than
+    left to GC (PY-002). Any failure is logged and reported as not-ready.
+    """
+    with contextlib.closing(_get_db()) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+    return True
 
 
 # ─── Topology → Findings mapper ───────────────────────────────────────────────
@@ -1204,14 +1355,42 @@ def _finding_model_to_dict(finding: Any) -> dict:
 
 @app.get("/health")
 def health() -> dict:
+    # Pure liveness probe — no dependency checks (readiness is /ready). Exempt
+    # from bearer auth so orchestrators can probe without the shared secret.
     # CNA_BUILD_SHA is baked into the image by 200-build-images so a deployed
     # instance can say which core commit it runs (Admin → Updates in the web tier).
     return {
         "status": "ok",
         "service": "cna-api",
-        "version": "0.2.0",
+        "version": _api_version(),
         "build_sha": os.environ.get("CNA_BUILD_SHA", ""),
     }
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    """Readiness probe (PY-008): 200 only when the database answers ``SELECT 1``.
+
+    ``/health`` stays a pure liveness signal; this endpoint gates traffic on the
+    dependency the API cannot function without. Exempt from bearer auth.
+    """
+    if not DATABASE_URL:
+        return JSONResponse(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            content={"status": "not_ready", "checks": {"database": "not_configured"}},
+        )
+    try:
+        _check_db_ready()
+    except Exception:
+        logger.exception("readiness check failed")
+        return JSONResponse(
+            status_code=status_for(Outcome.NOT_CONFIGURED),
+            content={"status": "not_ready", "checks": {"database": "unreachable"}},
+        )
+    return JSONResponse(
+        status_code=status_for(Outcome.SUCCESS),
+        content={"status": "ready", "checks": {"database": "ok"}},
+    )
 
 
 # Legacy phase endpoints — honest 501s until the phases are actually wired up.
@@ -1590,6 +1769,9 @@ def get_job_status(job_id: str) -> dict:
             status_code=status_for(Outcome.NOT_CONFIGURED),
             detail="DATABASE_URL not configured",
         )
+    # Reap this job first if its heartbeat has gone stale, so the row read below
+    # reflects the FAILED state rather than a RUNNING spinner forever (REL-001).
+    _reap_stale_jobs(job_id)
     with _get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1704,11 +1886,18 @@ def _run_azure_discovery(request: DiscoveryStartRequest) -> None:
             logger.exception("[job:%s] stat-master rebuild failed", job_id)
 
     except Exception as exc:
+        # Raw exception text can embed tenant/client ids, AAD endpoints, DB host
+        # or a plaintext secret; persist only the sanitized, category-level
+        # message (PY-011). The full detail is logged server-side by the
+        # sanitizer and the logger.exception above.
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"azure discovery job {job_id}"
+        )
         logger.exception("[job:%s] discovery failed", job_id)
         _update_job(
             job_id,
             status="FAILED",
-            errorMessage=str(exc),
+            errorMessage=sanitized.client_message,
             completedAt=datetime.now(UTC),
             progressLog=json.dumps(progress),
         )
@@ -1812,11 +2001,16 @@ def _run_aws_discovery(request: DiscoveryStartRequest) -> None:
         )
 
     except Exception as exc:
+        # Sanitize before persisting — raw boto3/psycopg2 text can carry ARNs,
+        # endpoints, or a plaintext secret into DiscoveryJob.errorMessage (PY-011).
+        sanitized = sanitize_downstream_error(
+            exc, logger=logger, context=f"aws discovery job {job_id}"
+        )
         logger.exception("[job:%s] AWS discovery failed", job_id)
         _update_job(
             job_id,
             status="FAILED",
-            errorMessage=str(exc),
+            errorMessage=sanitized.client_message,
             completedAt=datetime.now(UTC),
             progressLog=json.dumps(progress),
         )

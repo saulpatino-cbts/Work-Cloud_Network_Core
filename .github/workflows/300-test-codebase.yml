@@ -186,11 +186,16 @@ jobs:
       - name: Install dependencies
         # enrichment is required since tests/unit/test_azure_discovery.py exercises
         # the Log Analytics paths by importing azure.monitor.query directly (T-408).
-        run: pip install -e .[dev,enrichment]
+        # api installs fastapi/uvicorn/psycopg2-binary so the apps/cna-api
+        # TestClient tests actually run in CI instead of skipping silently (TEST-001).
+        run: pip install -e .[dev,enrichment,api]
       - name: Run tests with coverage
+        # --cov=apps counts the API/router code the TestClient tests now exercise
+        # in the same gate as the cna package (TEST-001).
         run: |
           pytest tests/unit/ -v --tb=short \
             --cov=cna \
+            --cov=apps \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80

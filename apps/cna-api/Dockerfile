@@ -8,38 +8,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy only what the API needs to avoid pulling in diagram/report deps.
-# The cna package discovery modules only require azure-mgmt-* + pydantic + tenacity.
+# Install the cna package with its API extra. `.[api]` resolves the core
+# dependencies plus fastapi/uvicorn/psycopg2-binary and the three azure-mgmt-*
+# enrichment packages the API exercises, from the single source of truth in
+# pyproject.toml — no hand-written pip list to drift out of sync (PY-021). The
+# heavier deps (diagrams/matplotlib/pandas/weasyprint) come in as core deps;
+# that is accepted and removes the silent enrichment degradation (IMG-010).
 COPY pyproject.toml .
 COPY cna/ cna/
 COPY apps/cna-api/ apps/cna-api/
 
-RUN pip install --no-cache-dir --prefix=/install \
-    "fastapi>=0.115" \
-    "uvicorn[standard]>=0.30" \
-    "pydantic>=2.9" \
-    "psycopg2-binary>=2.9" \
-    "azure-identity>=1.17" \
-    "azure-mgmt-network>=25.0" \
-    "azure-mgmt-resource>=23.2" \
-    "azure-mgmt-subscription>=3.1" \
-    "azure-mgmt-monitor>=6.0" \
-    "azure-mgmt-loganalytics>=13.0" \
-    "azure-mgmt-compute>=30.0" \
-    "azure-storage-blob>=12.19" \
-    "boto3>=1.34" \
-    "openai>=2.45" \
-    "anthropic>=1.5" \
-    "cryptography>=42" \
-    "tenacity>=8.4" \
-    "jinja2>=3.1" \
-    "httpx>=0.27" \
-    "click>=8.1" \
-    "rich>=13.7" \
-    "defusedxml>=0.7.1"
-
-# Install the cna package itself (no heavy extras — no weasyprint/matplotlib/diagrams)
-RUN pip install --no-cache-dir --no-deps --prefix=/install .
+RUN pip install --no-cache-dir --prefix=/install ".[api]"
 
 # ---- drawio fetch stage ----
 # Pinned draw.io desktop release, verified by checksum before it can reach
@@ -73,6 +52,8 @@ COPY --chmod=755 scripts/drawio-headless.sh /usr/local/bin/drawio
 RUN apt-get update \
  && apt-get -y upgrade \
  && apt-get install -y --no-install-recommends /tmp/drawio.deb xvfb xauth libasound2t64 \
+      graphviz libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
+      libharfbuzz0b libgdk-pixbuf-2.0-0 \
  && rm -rf /var/lib/apt/lists/* /tmp/drawio.deb \
  && drawio --version
 

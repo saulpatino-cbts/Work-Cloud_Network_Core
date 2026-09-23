@@ -24,9 +24,12 @@ export function DrawioEmbed({
   onSave?: (xml: string) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  // Keep the latest onSave without re-running the handshake effect.
+  // Keep the latest onSave without re-running the handshake effect. Written
+  // in an effect, never during render (react-hooks/refs).
   const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {

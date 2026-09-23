@@ -129,6 +129,39 @@ jobs:
         run: ruff format --check .
 
   # ------------------------------------------------------------------
+  # 2b. Web tier — lint, type-check, unit tests (TODO.md T-419)
+  # ------------------------------------------------------------------
+  # The same fast checks the Python package gets, for apps/cna-web. Runs on
+  # the runner's own Node (ubuntu-latest ships a current LTS; the image build
+  # in 200 is the authoritative Node 24 run) — actions/setup-node is not used
+  # because every action here is SHA-pinned and none of the three repositories
+  # carries an audited digest for it yet.
+  web:
+    name: Web lint, typecheck & tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/cna-web
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Cache npm
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: web-npm-${{ hashFiles('apps/cna-web/package-lock.json') }}
+      - name: Install
+        run: |
+          node --version
+          npm ci --no-audit --no-fund
+      - name: Lint (eslint, flat config)
+        run: npm run lint
+      - name: Type-check (tsc --noEmit)
+        run: npm run typecheck
+      - name: Unit tests (vitest)
+        run: npm test
+
+  # ------------------------------------------------------------------
   # 3. Unit tests — Python matrix 3.13 + 3.14
   # ------------------------------------------------------------------
   test:

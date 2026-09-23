@@ -113,15 +113,11 @@ def generate_diagram(engagement_id: str, body: GenerateDiagramRequest) -> dict:
     label = body.client_org or body.engagement_name or engagement_id
     bundle = author_engagement_bundle(label, aws_regions=aws_regions, azure_subs=azure_subs)
 
-    # The bundle emits container and component layers with identical XML today
-    # (see diagram_authoring), so taking both would give the consultant two
-    # identical tabs per scope. Keep context + container.
-    pages: list[tuple[str, str]] = []
-    for diagram in bundle:
-        if diagram.layer is C4Layer.COMPONENT:
-            continue
-        tab = "Context" if diagram.layer is C4Layer.CONTEXT else diagram.name
-        pages.append((tab, diagram.xml))
+    # One tab per diagram: "Context", then one container diagram per scope.
+    pages: list[tuple[str, str]] = [
+        ("Context" if diagram.layer is C4Layer.CONTEXT else diagram.name, diagram.xml)
+        for diagram in bundle
+    ]
 
     xml = merge_diagrams(pages)
     return {

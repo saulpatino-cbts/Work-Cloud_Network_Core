@@ -90,6 +90,32 @@ STYLE_TGW = shape_style(
     "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transit_gateway;"
     "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
 )
+# The AWS "Network services" band (TODO.md T-418) — the region-level services
+# discovery already captures but the VPC diagram used to leave off the page.
+STYLE_DX = shape_style(
+    "aws4",
+    "direct_connect",
+    "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.direct_connect;"
+    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+)
+STYLE_VPN_GW = shape_style(
+    "aws4",
+    "vpn_gateway",
+    "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.vpn_gateway;"
+    "fillColor=#8C4FFF;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+)
+STYLE_NETWORK_FIREWALL = shape_style(
+    "aws4",
+    "network_firewall",
+    "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.network_firewall;"
+    "fillColor=#DD344C;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+)
+STYLE_AWS_WAF = shape_style(
+    "aws4",
+    "waf",
+    "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;"
+    "fillColor=#DD344C;strokeColor=#ffffff;fontStyle=1;fontSize=10;",
+)
 
 
 def _azure_fallback(svg: str) -> str:
@@ -298,8 +324,18 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
             "Cannot generate diagram from incomplete data."
         )
 
-    cells = ""
     cursor_x = 40
+
+    # Region-level network services (transit gateways, Direct Connect, VPN
+    # gateways, Network Firewall, WAF) render as a labelled band of AWS icons
+    # above the VPCs — the same band the VNet diagram draws for Azure. A
+    # region with none of them lays out exactly as before.
+    cells, band_h = _service_band_cells(
+        f"Network services — {region_topology.account_id} / {region_topology.region}",
+        _aws_service_groups(region_topology),
+        VPC_Y_START,
+    )
+    vpc_y = VPC_Y_START + (band_h + 40 if band_h else 0)
 
     if not region_topology.vpcs:
         note_id = _cell_id()
@@ -307,7 +343,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
             note_id,
             f"No VPCs found in {region_topology.account_id} / {region_topology.region}",
             40,
-            80,
+            vpc_y,
             400,
             60,
             "text;html=1;strokeColor=none;fillColor=#ffe6cc;align=center;",
@@ -320,7 +356,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         vpc_w, vpc_h = _vpc_dims(subnet_count)
         vpc_id = _cell_id()
         vpc_label = f"{vpc.name or vpc.id}\n{vpc.cidr}" + (" [default]" if vpc.is_default else "")
-        cells += _container_cell(vpc_id, vpc_label, cursor_x, VPC_Y_START, vpc_w, vpc_h, STYLE_VPC)
+        cells += _container_cell(vpc_id, vpc_label, cursor_x, vpc_y, vpc_w, vpc_h, STYLE_VPC)
 
         # Subnets inside VPC container
         for idx, subnet in enumerate(vpc.subnets):
@@ -343,7 +379,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         for igw in vpc.internet_gateways:
             igw_id = _cell_id()
             igw_x = cursor_x + vpc_w // 2 - ICON_W // 2
-            igw_y = VPC_Y_START - ICON_H - 20
+            igw_y = vpc_y - ICON_H - 20
             igw_label = igw.name or igw.id
             cells += _container_cell(igw_id, igw_label, igw_x, igw_y, ICON_W, ICON_H, STYLE_IGW)
             cells += _edge_cell(igw_id, vpc_id)
@@ -353,7 +389,7 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
         # nat_x advances by NAT_X_GAP per gateway so multi-AZ NATs
         # (a common prod pattern) are distinct nodes, not stacked on top of each other.
         nat_base_x = cursor_x + SUBNET_PADDING
-        nat_y = VPC_Y_START + vpc_h + 10
+        nat_y = vpc_y + vpc_h + 10
         for nat_idx, nat in enumerate(vpc.nat_gateways):
             nat_id = _cell_id()
             nat_x = nat_base_x + nat_idx * (ICON_W + NAT_X_GAP)
@@ -363,17 +399,6 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
 
         cursor_x += vpc_w + VPC_X_GAP
 
-    # TGW layer below all VPCs
-    tgw_y = VPC_Y_START + 500
-    tgw_x_start = 40
-    for tgw in region_topology.transit_gateways:
-        tgw_id = _cell_id()
-        tgw_label = f"{tgw.name or tgw.id}\nASN:{tgw.amazon_side_asn or 'N/A'}"
-        cells += _container_cell(
-            tgw_id, tgw_label, tgw_x_start, tgw_y, ICON_W * 2, ICON_H * 2, STYLE_TGW
-        )
-        tgw_x_start += ICON_W * 2 + 60
-
     label = f"VPC Topology — {region_topology.account_id} / {region_topology.region}"
     return _wrap_diagram(cells, label)
 
@@ -381,12 +406,14 @@ def generate_vpc_topology(region_topology: AWSRegionTopology) -> str:
 # ── VNet Topology ──────────────────────────────────────────────────────────
 
 
-# ── Azure subscription network services band ───────────────────────────────
+# ── Network services band (both clouds) ────────────────────────────────────
 #
-# The VNet diagram used to show VNets, subnets and peerings only, which left
-# every firewall, gateway, bastion and load balancer the discovery already
-# captured off the page. These render as a labelled band of real Azure icons
-# above the VNets, so the diagram reflects what was actually found.
+# The VNet and VPC diagrams used to show networks, subnets and peerings only,
+# which left every firewall, gateway, bastion and load balancer the discovery
+# already captured off the page. These render as a labelled band of real
+# cloud icons above the networks, so the diagram reflects what was actually
+# found. The layout is cloud-neutral; each cloud contributes its own list of
+# (label, style, names) groups.
 
 SERVICE_ICON_W = 48
 SERVICE_ICON_H = 48
@@ -420,13 +447,40 @@ def _azure_service_groups(sub: AzureSubscriptionTopology) -> list[tuple[str, str
     return [g for g in groups if g[2]]
 
 
-def _service_band_cells(sub: AzureSubscriptionTopology, y: int) -> tuple[str, int]:
-    """Render the services band at `y`. Returns (cells, band_height).
+def _aws_service_groups(region: AWSRegionTopology) -> list[tuple[str, str, list[str]]]:
+    """Return (label, style, names) per AWS network service type actually present.
 
-    An empty band renders nothing and reports zero height, so a subscription
-    with no discovered network services lays out exactly as before.
+    Transit gateways, Direct Connect, VPN gateways, Network Firewall and WAF
+    are what `AWSRegionTopology` carries today; VPC endpoints and Shield are
+    not discovered yet and join this list when they are.
     """
-    groups = _azure_service_groups(sub)
+    groups: list[tuple[str, str, list[str]]] = [
+        ("Transit Gateway", STYLE_TGW, [t.name or t.id for t in region.transit_gateways]),
+        (
+            "Direct Connect",
+            STYLE_DX,
+            [c.name or c.id for c in region.direct_connect_connections],
+        ),
+        ("VPN Gateway", STYLE_VPN_GW, [g.name or g.id for g in region.vpn_gateways]),
+        (
+            "Network Firewall",
+            STYLE_NETWORK_FIREWALL,
+            [f.firewall_name for f in region.aws_network_firewalls]
+            + [p.name for p in region.network_firewalls],
+        ),
+        ("WAF Web ACL", STYLE_AWS_WAF, [w.name for w in region.waf_web_acls]),
+    ]
+    return [g for g in groups if g[2]]
+
+
+def _service_band_cells(
+    title: str, groups: list[tuple[str, str, list[str]]], y: int
+) -> tuple[str, int]:
+    """Render the services band `title` for `groups` at `y`. Returns (cells, band_height).
+
+    An empty band renders nothing and reports zero height, so a scope with no
+    discovered network services lays out exactly as before.
+    """
     if not groups:
         return "", 0
 
@@ -447,7 +501,7 @@ def _service_band_cells(sub: AzureSubscriptionTopology, y: int) -> tuple[str, in
     band_id = _cell_id()
     cells = _container_cell(
         band_id,
-        f"Network services — {sub.subscription_name or sub.subscription_id}",
+        title,
         40,
         y,
         band_w,
@@ -485,7 +539,11 @@ def generate_vnet_topology(sub_topology: AzureSubscriptionTopology) -> str:
 
     # Subscription-level network services render above the VNets; the VNet row
     # starts below whatever height that band needed.
-    cells, band_h = _service_band_cells(sub_topology, VPC_Y_START)
+    cells, band_h = _service_band_cells(
+        f"Network services — {sub_topology.subscription_name or sub_topology.subscription_id}",
+        _azure_service_groups(sub_topology),
+        VPC_Y_START,
+    )
     vnet_y = VPC_Y_START + (band_h + 40 if band_h else 0)
     cursor_x = 40
 

@@ -72,7 +72,7 @@ export default async function ConnectionsPage({ params }: PageProps) {
         </h2>
         <p className="mb-5 text-sm text-navy-400">
           Each subscription is a separate sync group. Sync pulls a full inventory snapshot;
-          re-sync updates only that subscription's data. Removing a subscription also removes
+          re-sync updates only that subscription&apos;s data. Removing a subscription also removes
           all its findings from the assessment.
         </p>
 

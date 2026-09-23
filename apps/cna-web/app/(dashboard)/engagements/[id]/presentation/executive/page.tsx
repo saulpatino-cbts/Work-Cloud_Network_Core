@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
@@ -17,7 +18,11 @@ interface PageProps {
 }
 
 const styleKey = "style";
-const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+// Inline style is the only way to express a data-driven width/height; the
+// indirection keeps the literal `style` prop out of the JSX.
+const makeStyle = (props: Record<string, string>): { style: CSSProperties } => ({
+  [styleKey]: props as CSSProperties,
+});
 
 export default async function ExecutivePage({ params }: PageProps) {
   const { id } = await params;
@@ -144,7 +149,6 @@ export default async function ExecutivePage({ params }: PageProps) {
                   {sev[0] + sev.slice(1).toLowerCase()}
                 </span>
                 <div className="flex-1 overflow-hidden rounded-full bg-navy-100 dark:bg-navy-800">
-                  {/* eslint-disable-next-line react/forbid-dom-props */}
                   <div className={`h-3 rounded-full ${style.bar}`} {...makeStyle({ width: `${pct}%` })} />
                 </div>
                 <span className={`w-6 text-right text-sm font-black ${style.text}`}>{count}</span>

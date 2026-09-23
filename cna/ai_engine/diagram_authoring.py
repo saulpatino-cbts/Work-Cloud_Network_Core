@@ -1,7 +1,8 @@
 """Diagram authoring orchestrator — produces a C4-layered draw.io bundle.
 
 Inputs: discovered topologies (from cna.core.topology_schema).
-Outputs: list of `C4Diagram` payloads, one per audience layer per scope.
+Outputs: list of `C4Diagram` payloads — one context diagram plus one container
+diagram per discovered scope.
 
 This module is the seam between discovery+analysis (already on-disk) and the
 draw.io render pipeline. It is intentionally synchronous and side-effect free
@@ -54,7 +55,6 @@ def _aws_region_diagrams(aws_regions: list[AWSRegionTopology]) -> list[C4Diagram
             continue
         scope = f"aws-{r.account_id}-{r.region}"
         diagrams.append(C4Diagram(layer=C4Layer.CONTAINER, name=f"container-{scope}", xml=xml))
-        diagrams.append(C4Diagram(layer=C4Layer.COMPONENT, name=f"component-{scope}", xml=xml))
     return diagrams
 
 
@@ -70,7 +70,6 @@ def _azure_sub_diagrams(azure_subs: list[AzureSubscriptionTopology]) -> list[C4D
             continue
         scope = f"azure-{s.subscription_id}"
         diagrams.append(C4Diagram(layer=C4Layer.CONTAINER, name=f"container-{scope}", xml=xml))
-        diagrams.append(C4Diagram(layer=C4Layer.COMPONENT, name=f"component-{scope}", xml=xml))
     return diagrams
 
 
@@ -81,10 +80,15 @@ def author_engagement_bundle(
     *,
     mcp_client: DrawioMCPClient | None = None,
 ) -> list[C4Diagram]:
-    """Produce a context + container + component diagram bundle.
+    """Produce a context + container diagram bundle.
 
     Returns a flat list of C4Diagram objects. Callers iterate and hand each
     one to the existing export pipeline + deliverable manifest.
+
+    The COMPONENT (engineer) layer is deliberately absent: until it draws
+    something the CONTAINER layer does not — route tables, NSG rules and
+    effective routes are the candidates — emitting it would only hand the
+    consultant a second identical tab (TODO.md T-418).
     """
     aws_regions = aws_regions or []
     azure_subs = azure_subs or []
@@ -105,10 +109,7 @@ def author_engagement_bundle(
         )
     ]
 
-    # Container + Component (architect + engineer)
-    # For now the same XML serves both layers — the architect view is the
-    # default summary, the engineer view is the same diagram with future
-    # per-subnet detail toggled on. Splitting these is a follow-up sprint.
+    # Container (architect view), one per discovered scope.
     bundle.extend(_aws_region_diagrams(aws_regions))
     bundle.extend(_azure_sub_diagrams(azure_subs))
 

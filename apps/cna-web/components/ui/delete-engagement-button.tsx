@@ -17,8 +17,8 @@ export function DeleteEngagementButton({
   const [showDialog, setShowDialog] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  const [_, formAction, isPending] = useActionState(
-    async (prevState: any, formData: FormData) => {
+  const [, formAction, isPending] = useActionState(
+    async (prevState: null, formData: FormData) => {
       await deleteEngagement(formData);
       return prevState;
     },
@@ -75,7 +75,7 @@ export function DeleteEngagementButton({
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-navy-800 dark:text-navy-50">Delete Engagement?</h2>
             <p className="text-sm text-navy-400 dark:text-navy-300 font-normal">
-              Are you sure you want to delete <strong className="text-navy-800 dark:text-navy-100">"{engagementName}"</strong>? This will permanently remove all documents, findings, and deliverables. This cannot be undone.
+              Are you sure you want to delete <strong className="text-navy-800 dark:text-navy-100">&quot;{engagementName}&quot;</strong>? This will permanently remove all documents, findings, and deliverables. This cannot be undone.
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <button

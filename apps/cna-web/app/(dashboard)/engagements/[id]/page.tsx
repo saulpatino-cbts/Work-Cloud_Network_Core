@@ -1,10 +1,14 @@
+import type { CSSProperties } from "react";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { StatusBadge } from "@/components/ui/status-badge";
 
 const styleKey = "style";
-const makeStyle = (props: Record<string, string>) => ({ [styleKey]: props }) as any;
+// Inline style is the only way to express a data-driven width/height; the
+// indirection keeps the literal `style` prop out of the JSX.
+const makeStyle = (props: Record<string, string>): { style: CSSProperties } => ({
+  [styleKey]: props as CSSProperties,
+});
 
 interface PageProps {
   params: Promise<{ id: string }>;

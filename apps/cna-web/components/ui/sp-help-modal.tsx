@@ -88,7 +88,7 @@ export function SpHelpModal() {
                 <p className="mt-1">
                   CNA needs access to your Azure environment to discover network
                   topology, NSG rules, VNets, and firewall configurations. A
-                  Service Principal acts like a dedicated "robot user" — it only
+                  Service Principal acts like a dedicated &quot;robot user&quot; — it only
                   gets the permissions you explicitly grant (minimum:{" "}
                   <strong>Network Contributor</strong> on each subscription).
                   No personal account credentials are ever stored.
@@ -113,7 +113,7 @@ export function SpHelpModal() {
                   </li>
                   <li>
                     <strong>Supported account types:</strong> leave as
-                    "Accounts in this organizational directory only"
+                    &quot;Accounts in this organizational directory only&quot;
                   </li>
                   <li>
                     Click <Kbd>Register</Kbd>
@@ -124,7 +124,7 @@ export function SpHelpModal() {
               {/* Step 2 */}
               <Step number={2} title="Copy your Tenant ID and SP Client ID">
                 <p className="mb-2 text-gray-600">
-                  On the app's Overview page you'll see two important values:
+                  On the app&apos;s Overview page you&apos;ll see two important values:
                 </p>
                 <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <FieldRow
@@ -197,7 +197,7 @@ export function SpHelpModal() {
                     <Code>Network Contributor</Code>
                   </li>
                   <li>
-                    <strong>Members:</strong> click "+ Select members" and
+                    <strong>Members:</strong> click &quot;+ Select members&quot; and
                     search for your app registration name (e.g.{" "}
                     <Code>cna-discovery-sp</Code>)
                   </li>

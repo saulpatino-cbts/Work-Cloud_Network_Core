@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 // WAI-01 / W3C-02: aria-hidden on decorative icons; labels conveyed by adjacent text or Link aria-label
 const icon = (d: string) => (
@@ -93,36 +93,47 @@ const NAV_GROUPS: NavGroup[] = [
 
 const STORAGE_KEY = "cna-sidebar-collapsed";
 
+// The collapsed flag lives in localStorage and is read through
+// useSyncExternalStore: the server snapshot is always "expanded", so the
+// first client render matches the HTML and the stored preference applies on
+// hydration without a setState-in-effect (react-hooks/set-state-in-effect).
+const collapsedListeners = new Set<() => void>();
+
+function subscribeCollapsed(callback: () => void) {
+  collapsedListeners.add(callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    collapsedListeners.delete(callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return false; // localStorage not available
+  }
+}
+
+function writeCollapsed(next: boolean) {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(next));
+  } catch {
+    /* ignore */
+  }
+  collapsedListeners.forEach((listener) => listener());
+}
+
 export function EngagementSidebar({ engagementId }: { engagementId: string }) {
   const pathname = usePathname();
   const base = `/engagements/${engagementId}`;
 
-  const [collapsed, setCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "true") setCollapsed(true);
-    } catch {
-      // localStorage not available
-    }
-  }, []);
+  const isCollapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
 
   function toggle() {
-    setCollapsed((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
+    writeCollapsed(!isCollapsed);
   }
-
-  const isCollapsed = mounted ? collapsed : false;
 
   return (
     // WAI-17: aria-label distinguishes this landmark from the header nav

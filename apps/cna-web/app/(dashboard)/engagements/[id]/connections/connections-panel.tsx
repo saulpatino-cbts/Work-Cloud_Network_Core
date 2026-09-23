@@ -8,6 +8,7 @@ import { deleteCloudCredential } from "../cloud-credentials/actions";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { summarizeErrorText } from "@/lib/summarize-error";
+import { useCoarseNow } from "@/lib/use-clock";
 import type { CloudCredential, DiscoveryJob } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,7 +47,11 @@ const ACTIVE_STATUSES = new Set(["QUEUED", "RUNNING"]);
 const POLL_INTERVAL_MS = 3000;
 
 const styleKey = "style";
-const makeStyle = (props: React.CSSProperties) => ({ [styleKey]: props }) as any;
+// Inline style is the only way to express data-driven geometry; the
+// indirection keeps the literal `style` prop out of the JSX.
+const makeStyle = (props: React.CSSProperties): { style: React.CSSProperties } => ({
+  [styleKey]: props,
+});
 
 const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"];
 const SEVERITY_STYLE: Record<string, string> = {
@@ -418,6 +423,7 @@ function CredentialCard({
   initialJobs: JobSummary[];
   engagementId: string;
 }) {
+  const now = useCoarseNow();
   const [runsOpen, setRunsOpen] = useState(false);
   // Live job map: starts from server-rendered data, updated by polling.
   const [liveJobMap, setLiveJobMap] = useState<Map<string, JobSummary>>(
@@ -564,7 +570,8 @@ function CredentialCard({
                   <>
                     Completed {new Date(latestJob.completedAt!).toLocaleDateString()}
                     {latestJob.completedAt &&
-                      Date.now() - new Date(latestJob.completedAt).getTime() < 60_000 && (
+                      now > 0 &&
+                      now - new Date(latestJob.completedAt).getTime() < 60_000 && (
                         <span className="ml-1.5 inline-flex items-center rounded-full bg-teal-50 dark:bg-teal-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-400">
                           ✓ Just completed
                         </span>

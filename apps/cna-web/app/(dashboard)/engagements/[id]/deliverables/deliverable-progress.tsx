@@ -5,7 +5,7 @@
 // The steady 3s poll also keeps the scale-to-zero dev replica alive while the
 // background orchestrator runs.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getDeliverableProgress } from "./actions";
 
@@ -21,26 +21,32 @@ export function DeliverableProgress({ deliverableId }: { deliverableId: string }
   const router = useRouter();
   const [steps, setSteps] = useState<Step[]>([]);
   const [status, setStatus] = useState<string>("RUNNING");
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const poll = useCallback(async () => {
-    const progress = await getDeliverableProgress(deliverableId).catch(() => null);
-    if (!progress) return;
-    setSteps(progress.steps as Step[]);
-    setStatus(progress.status);
-    if (progress.status === "COMPLETED" || progress.status === "FAILED") {
-      if (timer.current) clearInterval(timer.current);
-      router.refresh();
-    }
-  }, [deliverableId, router]);
-
+  // The poll lives inside the effect so every setState happens after an
+  // await (never synchronously in the effect body) and a stale tick from a
+  // previous deliverable can never write into this one.
   useEffect(() => {
-    void poll();
-    timer.current = setInterval(() => void poll(), POLL_MS);
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    async function tick() {
+      const progress = await getDeliverableProgress(deliverableId).catch(() => null);
+      if (cancelled || !progress) return;
+      setSteps(progress.steps as Step[]);
+      setStatus(progress.status);
+      if (progress.status === "COMPLETED" || progress.status === "FAILED") {
+        if (timer) clearInterval(timer);
+        router.refresh();
+      }
+    }
+
+    void tick();
+    timer = setInterval(() => void tick(), POLL_MS);
     return () => {
-      if (timer.current) clearInterval(timer.current);
+      cancelled = true;
+      if (timer) clearInterval(timer);
     };
-  }, [poll]);
+  }, [deliverableId, router]);
 
   const done = steps.filter((s) => s.status === "done" || s.status === "skipped").length;
   const total = 14; // 12 domain sections + executive summary + assembly

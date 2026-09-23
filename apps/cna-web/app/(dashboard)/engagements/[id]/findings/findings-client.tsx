@@ -45,7 +45,11 @@ function extractResourceLabel(title: string, description: string): string {
 }
 
 const styleKey = "style";
-const makeStyle = (props: React.CSSProperties) => ({ [styleKey]: props }) as any;
+// Inline style is the only way to express data-driven geometry; the
+// indirection keeps the literal `style` prop out of the JSX.
+const makeStyle = (props: React.CSSProperties): { style: React.CSSProperties } => ({
+  [styleKey]: props,
+});
 
 /**
  * Within a group, deduplicate findings that share the same resource label

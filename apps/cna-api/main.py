@@ -95,7 +95,31 @@ CNA_APPLIANCE_CLOUD = os.environ.get("CNA_APPLIANCE_CLOUD", "")
 
 # A RUNNING job whose updatedAt (bumped by every progress line — see _log) is
 # older than this has no live owner and is reaped to FAILED (REL-001 / DATA-003).
-_STALE_JOB_MINUTES = int(os.environ.get("CNA_STALE_JOB_MINUTES", "30"))
+
+
+def _parse_stale_job_minutes(raw: str | None) -> int:
+    """Parse ``CNA_STALE_JOB_MINUTES`` as a positive integer.
+
+    A non-integer or non-positive value would either crash import with a bare
+    ``ValueError`` or (for zero / negative) make the reaper fail every RUNNING
+    job on each poll, so both are refused at startup with a clear message.
+    """
+    text = "30" if raw is None or raw.strip() == "" else raw.strip()
+    try:
+        minutes = int(text)
+    except ValueError as exc:
+        raise SystemExit(
+            f"CNA_STALE_JOB_MINUTES must be a positive integer number of minutes, got {text!r}."
+        ) from exc
+    if minutes <= 0:
+        raise SystemExit(
+            f"CNA_STALE_JOB_MINUTES must be greater than zero, got {minutes} — a zero or "
+            "negative threshold would mark every running discovery job as failed."
+        )
+    return minutes
+
+
+_STALE_JOB_MINUTES = _parse_stale_job_minutes(os.environ.get("CNA_STALE_JOB_MINUTES"))
 _STALE_JOB_ERROR = (
     "Discovery stopped reporting progress (the API restarted or the job was "
     "interrupted). Start discovery again."

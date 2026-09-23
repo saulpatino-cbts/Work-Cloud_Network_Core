@@ -333,3 +333,15 @@ def test_health_version_is_not_a_literal(plain_client, api_main):
     version = resp.json()["version"]
     assert version != "0.2.0"  # the old hardcoded literal
     assert version == api_main._api_version()
+
+
+@pytest.mark.parametrize("raw", ["abc", "0", "-5", "1.5"])
+def test_stale_job_minutes_rejects_invalid_values(api_main, raw):
+    with pytest.raises(SystemExit) as excinfo:
+        api_main._parse_stale_job_minutes(raw)
+    assert "CNA_STALE_JOB_MINUTES" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(None, 30), ("", 30), (" 45 ", 45), ("1", 1)])
+def test_stale_job_minutes_accepts_positive_integers(api_main, raw, expected):
+    assert api_main._parse_stale_job_minutes(raw) == expected

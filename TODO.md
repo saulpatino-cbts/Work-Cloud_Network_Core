@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-716 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-717 |
 
 ---
 
@@ -2037,4 +2037,11 @@ removed. Fix each at its call site and add the `/tmp` cleanup to the discovery f
 No CI runs `prisma migrate deploy` (empty DB and v0.8 snapshot), starts the API or migrator images,
 or exercises `210`'s rollback mode. Add a Postgres service job for the migrations, start the
 api/migrator images in `200`'s smoke test, and run `TestRealDrawioExport` inside the API image.
+
+### T-717 — Bound request bodies in cna-api
+The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JSON body to
+`POST /chat/{engagement_id}`; the API parsed all of it before truncating the message to
+`MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
+balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
+declared constant, e.g. 1 MiB, with 413) and a test.
 

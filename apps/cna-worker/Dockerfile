@@ -1,5 +1,5 @@
 # python:3.14-slim digest pinned — see root Dockerfile for the same pattern.
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS builder
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS builder
 
 WORKDIR /build
 COPY pyproject.toml .
@@ -7,7 +7,7 @@ COPY apps/cna-worker apps/cna-worker
 RUN pip install --no-cache-dir --prefix=/install azure-identity azure-storage-blob
 
 # ---- final stage ----
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
 
 # Pending Debian security fixes, so the gating Docker Scout check doesn't
 # fail on base-image debs between digest bumps (same pattern as the root

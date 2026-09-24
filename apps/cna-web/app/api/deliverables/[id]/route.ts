@@ -1,8 +1,30 @@
 import { auth } from "@/lib/auth";
 import { generateSasUrl } from "@/lib/blob";
 import { prisma } from "@/lib/prisma";
+import { escapeHtml, sanitizeHref } from "@/lib/sanitize-href";
 import { marked } from "marked";
+import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+
+// SEC-005: Content-Security-Policy for served deliverable HTML. `default-src
+// 'none'` denies everything not explicitly allowed; the document needs only
+// inline <style> (style-src 'unsafe-inline'), same-origin + data:/https: images
+// (the encyclopedia embeds inline SVG diagrams and a same-origin CBTS logo),
+// and same-origin/data: fonts (the encyclopedia @font-face). Scripts are denied
+// outright except a single per-response nonce used by the Markdown renderer's
+// print button — the legacy encyclopedia HTML carries no scripts, so it gets no
+// script-src at all (SEC-006's SVG <foreignObject> scripts are thereby inert).
+function cspHeader(nonce?: string): string {
+  const scriptSrc = nonce ? ` script-src 'nonce-${nonce}';` : "";
+  return (
+    "default-src 'none';" +
+    " style-src 'unsafe-inline';" +
+    " img-src 'self' data: https:;" +
+    " font-src 'self' data:;" +
+    scriptSrc +
+    " base-uri 'none'; form-action 'none'"
+  );
+}
 
 // ─── Dual-mode document renderer ──────────────────────────────────────────────
 // Renders a Markdown deliverable as one artifact that works both ways:
@@ -20,11 +42,7 @@ function slugify(text: string): string {
     .slice(0, 80);
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function markdownToHtml(title: string, markdown: string): string {
+function markdownToHtml(title: string, markdown: string, nonce: string): string {
   // Neutralize embedded raw HTML while preserving Markdown semantics.
   const safeSource = markdown.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -40,6 +58,15 @@ function markdownToHtml(title: string, markdown: string): string {
     if (n > 0) id = `${id}-${n}`;
     if (depth === 2 || depth === 3) toc.push({ depth, text, id });
     return `<h${depth} id="${id}">${text}</h${depth}>\n`;
+  };
+  // SEC-005: neutralise dangerous link schemes (javascript:, data:text/html, …)
+  // that an LLM could emit from untrusted customer input. The inner text is
+  // re-rendered so inline formatting (bold, code) inside links is preserved.
+  renderer.link = ({ href, title: linkTitle, tokens }) => {
+    const safe = escapeHtml(sanitizeHref(href));
+    const text = renderer.parser.parseInline(tokens);
+    const titleAttr = linkTitle ? ` title="${escapeHtml(linkTitle)}"` : "";
+    return `<a href="${safe}"${titleAttr} rel="noopener noreferrer">${text}</a>`;
   };
 
   const body = marked.parse(safeSource, { renderer, gfm: true, breaks: false }) as string;
@@ -136,13 +163,14 @@ function markdownToHtml(title: string, markdown: string): string {
 <body>
 <div class="toolbar">
   <h1>${escapeHtml(title)}</h1>
-  <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+  <button class="btn-print" id="btn-print" type="button">Print / Save as PDF</button>
 </div>
 ${needsReview ? `<div class="review-banner">⚠ This document contains [VERIFY] and/or [REVIEW REQUIRED] flags — it must be reviewed and approved by the engagement team before client delivery.</div>` : ""}
 <div class="layout">
   <nav class="toc"><div class="toc-title">Contents</div>${tocHtml}</nav>
   <main class="doc">${body}</main>
 </div>
+<script nonce="${nonce}">document.getElementById("btn-print").addEventListener("click",function(){window.print();});</script>
 </body>
 </html>`;
 }
@@ -205,21 +233,26 @@ export async function GET(
     content.trimStart().startsWith("<html");
 
   if (isHtml) {
+    // Legacy/encyclopedia HTML documents carry no scripts — deny script-src
+    // entirely (no nonce) so any embedded/injected script (SEC-006) is inert.
     return new NextResponse(content, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Disposition": "inline",
         "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": cspHeader(),
       },
     });
   }
 
-  const html = markdownToHtml(deliverable.title, content);
+  const nonce = randomBytes(16).toString("base64");
+  const html = markdownToHtml(deliverable.title, content, nonce);
   return new NextResponse(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Disposition": "inline",
       "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": cspHeader(nonce),
     },
   });
 }

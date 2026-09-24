@@ -6,8 +6,9 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { DeliverableContext } from "@/lib/openai";
 import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
-import { uploadDeliverable } from "@/lib/blob";
+import { deleteBlob, uploadDeliverable } from "@/lib/blob";
 import { sanitizeBackendDetail } from "@/lib/summarize-error";
+import { apiHeaders } from "@/lib/api-client";
 
 // ─── Multi-subscription topology merge (same pattern as deliverables/actions.ts) ─
 async function getMergedTopologyJson(engagementId: string): Promise<string | null> {
@@ -206,7 +207,23 @@ export async function deleteDeliverableFromPortal(formData: FormData) {
   });
   if (!member) return;
 
-  await prisma.deliverable.delete({ where: { id: deliverableId } });
+  // SEC-002 / C5: authorise on the target row's engagement. DATA-001 / C6:
+  // delete the backing blob (best-effort) before removing the row so customer
+  // artifacts are not orphaned in object storage.
+  const record = await prisma.deliverable.findFirst({
+    where: { id: deliverableId, engagementId },
+    select: { blobPath: true },
+  });
+  if (!record) return;
+  if (record.blobPath) {
+    try {
+      await deleteBlob(record.blobPath);
+    } catch (err) {
+      console.error(`[deleteDeliverableFromPortal] blob delete failed for ${record.blobPath}; deleting row anyway (orphaned blob):`, err);
+    }
+  }
+
+  await prisma.deliverable.deleteMany({ where: { id: deliverableId, engagementId } });
   revalidatePath(`/engagements/${engagementId}`);
 }
 
@@ -224,7 +241,22 @@ export async function deleteDocument(formData: FormData) {
   });
   if (!member) return;
 
-  await prisma.ingestedDocument.delete({ where: { id: documentId } });
+  // SEC-002 / C5: authorise on the target row's engagement. DATA-001 / C6:
+  // delete the backing blob (best-effort) before removing the row.
+  const record = await prisma.ingestedDocument.findFirst({
+    where: { id: documentId, engagementId },
+    select: { blobPath: true },
+  });
+  if (!record) return;
+  if (record.blobPath) {
+    try {
+      await deleteBlob(record.blobPath);
+    } catch (err) {
+      console.error(`[deleteDocument] blob delete failed for ${record.blobPath}; deleting row anyway (orphaned blob):`, err);
+    }
+  }
+
+  await prisma.ingestedDocument.deleteMany({ where: { id: documentId, engagementId } });
   revalidatePath(`/engagements/${engagementId}`);
 }
 
@@ -256,7 +288,7 @@ export async function publishClientPortal(
   try {
     const res = await fetch(`${apiUrl}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ engagement_id: engagementId, ttl_hours: ttlHours }),
     });
 

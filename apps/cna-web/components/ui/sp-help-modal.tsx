@@ -33,7 +33,7 @@ export function SpHelpModal() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-teal-700 hover:underline"
+        className="text-xs text-teal-700 dark:text-teal-400 hover:underline"
       >
         How do I create these?
       </button>
@@ -43,16 +43,16 @@ export function SpHelpModal() {
         onClose={() => setOpen(false)}
         onClick={handleBackdropClick}
         aria-labelledby="sp-modal-title"
-        className="m-auto w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl border-0 p-0 outline-none backdrop:bg-black/40"
+        className="m-auto w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white dark:bg-navy-900 shadow-2xl border-0 p-0 outline-none backdrop:bg-black/40"
       >
-        <div className="relative z-10 w-full bg-white">
+        <div className="relative z-10 w-full bg-white dark:bg-navy-900">
             {/* Header */}
-            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-6 py-4">
               <div>
-                <h2 id="sp-modal-title" className="text-base font-semibold text-gray-900">
+                <h2 id="sp-modal-title" className="text-base font-semibold text-gray-900 dark:text-navy-50">
                   Creating an Azure Service Principal
                 </h2>
-                <p className="mt-0.5 text-xs text-gray-500">
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-navy-400">
                   A Service Principal lets CNA read your Azure tenant without
                   using a personal account.
                 </p>
@@ -61,7 +61,7 @@ export function SpHelpModal() {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close dialog"
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                className="rounded-lg p-1.5 text-gray-400 dark:text-navy-500 hover:bg-gray-100 dark:hover:bg-navy-800 hover:text-gray-600 dark:hover:text-navy-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
               >
                 <svg
                   className="h-5 w-5"
@@ -80,10 +80,10 @@ export function SpHelpModal() {
             </div>
 
             {/* Body */}
-            <div className="space-y-6 px-6 py-5 text-sm text-gray-700">
+            <div className="space-y-6 px-6 py-5 text-sm text-gray-700 dark:text-navy-200">
 
               {/* What is an SP */}
-              <div className="rounded-lg bg-teal-50 px-4 py-3 text-xs text-teal-900">
+              <div className="rounded-lg bg-teal-50 dark:bg-teal-900/20 px-4 py-3 text-xs text-teal-900 dark:text-teal-200">
                 <p className="font-semibold">Why is this needed?</p>
                 <p className="mt-1">
                   CNA needs access to your Azure environment to discover network
@@ -97,7 +97,7 @@ export function SpHelpModal() {
 
               {/* Step 1 */}
               <Step number={1} title="Register the application in Entra ID">
-                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600">
+                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600 dark:text-navy-300">
                   <li>
                     Open the{" "}
                     <ExternalLink href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade">
@@ -123,10 +123,10 @@ export function SpHelpModal() {
 
               {/* Step 2 */}
               <Step number={2} title="Copy your Tenant ID and SP Client ID">
-                <p className="mb-2 text-gray-600">
+                <p className="mb-2 text-gray-600 dark:text-navy-300">
                   On the app&apos;s Overview page you&apos;ll see two important values:
                 </p>
-                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="space-y-2 rounded-lg border border-gray-200 dark:border-navy-700 bg-gray-50 dark:bg-navy-800/60 p-3">
                   <FieldRow
                     label="Application (client) ID"
                     target="SP Client ID field"
@@ -142,7 +142,7 @@ export function SpHelpModal() {
 
               {/* Step 3 */}
               <Step number={3} title="Create a client secret">
-                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600">
+                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600 dark:text-navy-300">
                   <li>
                     In the left menu select{" "}
                     <strong>Certificates &amp; secrets</strong>
@@ -159,13 +159,13 @@ export function SpHelpModal() {
                   </li>
                   <li>
                     Copy the <strong>Value</strong> column immediately —{" "}
-                    <span className="font-medium text-red-600">
+                    <span className="font-medium text-red-600 dark:text-red-400">
                       it is only shown once.
                     </span>{" "}
                     Paste it into the <strong>SP Client Secret</strong> field.
                   </li>
                 </ol>
-                <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <p className="mt-2 rounded bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                   If you navigate away before copying, you must delete the
                   secret and create a new one. The ID column is not the secret —
                   only the Value column is.
@@ -174,10 +174,10 @@ export function SpHelpModal() {
 
               {/* Step 4 */}
               <Step number={4} title="Grant Network Contributor access to your subscriptions">
-                <p className="mb-2 text-gray-600">
+                <p className="mb-2 text-gray-600 dark:text-navy-300">
                   Repeat for each subscription you want CNA to discover:
                 </p>
-                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600">
+                <ol className="list-decimal space-y-1.5 pl-5 text-gray-600 dark:text-navy-300">
                   <li>
                     Go to{" "}
                     <ExternalLink href="https://portal.azure.com/#view/Microsoft_Azure_Billing/SubscriptionsBlade">
@@ -205,7 +205,7 @@ export function SpHelpModal() {
                     Click <Kbd>Review + assign</Kbd> twice to confirm
                   </li>
                 </ol>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-navy-400">
                   Tip: if you have hundreds of subscriptions, assign Network Contributor at
                   the Management Group level and it propagates to all child
                   subscriptions automatically.
@@ -213,17 +213,17 @@ export function SpHelpModal() {
               </Step>
 
               {/* Minimum permissions callout */}
-              <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs">
-                <p className="mb-1.5 font-semibold text-amber-800">
+              <div className="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-xs">
+                <p className="mb-1.5 font-semibold text-amber-800 dark:text-amber-300">
                   Why Network Contributor and not Reader?
                 </p>
-                <p className="text-amber-700 mb-2">
+                <p className="text-amber-700 dark:text-amber-300 mb-2">
                   Some Azure network APIs (e.g. Virtual Network Gateways) require
                   Network Contributor to enumerate resources across resource groups.
                   CNA only reads — it never creates, modifies, or deletes anything.
                 </p>
-                <p className="font-semibold text-gray-700 mb-1">Key permissions granted by Network Contributor:</p>
-                <ul className="space-y-0.5 text-gray-500">
+                <p className="font-semibold text-gray-700 dark:text-navy-200 mb-1">Key permissions granted by Network Contributor:</p>
+                <ul className="space-y-0.5 text-gray-500 dark:text-navy-400">
                   {[
                     "Microsoft.Network/virtualNetworks/read",
                     "Microsoft.Network/networkSecurityGroups/read",
@@ -242,7 +242,7 @@ export function SpHelpModal() {
               </div>
 
               {/* Microsoft docs link */}
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-navy-400">
                 Microsoft documentation:{" "}
                 <ExternalLink href="https://learn.microsoft.com/en-us/entra/identity-platform/howto-create-service-principal-portal">
                   Create a service principal in the Azure portal
@@ -251,7 +251,7 @@ export function SpHelpModal() {
             </div>
 
             {/* Footer */}
-            <div className="sticky bottom-0 flex justify-end border-t border-gray-200 bg-white px-6 py-3">
+            <div className="sticky bottom-0 flex justify-end border-t border-gray-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-6 py-3">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -283,7 +283,7 @@ function Step({
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-500 text-xs font-bold text-navy-800">
           {number}
         </span>
-        <h3 className="font-semibold text-gray-900">{title}</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-navy-50">{title}</h3>
       </div>
       <div className="ml-8">{children}</div>
     </div>
@@ -301,11 +301,11 @@ function FieldRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-4 text-xs">
-      <span className="font-medium text-gray-700">{label}</span>
-      <span className="text-right text-gray-500">
-        → paste into <span className="font-medium text-gray-800">{target}</span>
+      <span className="font-medium text-gray-700 dark:text-navy-200">{label}</span>
+      <span className="text-right text-gray-500 dark:text-navy-400">
+        → paste into <span className="font-medium text-gray-800 dark:text-navy-100">{target}</span>
         <br />
-        <span className="text-gray-400">{note}</span>
+        <span className="text-gray-500 dark:text-navy-400">{note}</span>
       </span>
     </div>
   );
@@ -313,7 +313,7 @@ function FieldRow({
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] text-gray-700">
+    <code className="rounded bg-gray-100 dark:bg-navy-800 px-1 py-0.5 font-mono text-[11px] text-gray-700 dark:text-navy-200">
       {children}
     </code>
   );
@@ -321,7 +321,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 font-sans text-[11px] text-gray-700">
+    <kbd className="rounded border border-gray-300 dark:border-navy-600 bg-gray-100 dark:bg-navy-800 px-1.5 py-0.5 font-sans text-[11px] text-gray-700 dark:text-navy-200">
       {children}
     </kbd>
   );
@@ -339,7 +339,7 @@ function ExternalLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-teal-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+      className="inline-flex items-center gap-1 text-teal-700 dark:text-teal-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
     >
       {children}
       <span className="sr-only">(opens in new tab)</span>

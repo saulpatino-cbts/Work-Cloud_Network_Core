@@ -144,6 +144,8 @@ model IngestedDocument {
 
   engagement   Engagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   findings     Finding[]
+
+  @@index([engagementId])
 }
 
 enum DocumentType {
@@ -179,6 +181,8 @@ model Finding {
   engagement   Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   document     IngestedDocument? @relation(fields: [documentId], references: [id])
   credential   CloudCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  @@index([engagementId])
 }
 
 enum FindingSeverity {
@@ -249,6 +253,8 @@ model DiscoveryJob {
 
   engagement    Engagement         @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   credential    CloudCredential?   @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  @@index([engagementId])
 }
 
 // ─── Stat Masters (Phase C) ───────────────────────────────────────────────────
@@ -300,6 +306,8 @@ model Deliverable {
   updatedAt       DateTime          @updatedAt
 
   engagement      Engagement        @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId])
 }
 
 enum DeliverableStatus {

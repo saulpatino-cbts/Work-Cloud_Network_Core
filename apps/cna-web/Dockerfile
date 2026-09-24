@@ -44,10 +44,32 @@ RUN apk upgrade --no-cache && apk add --no-cache libc6-compat
 # vendored deps (tar, brace-expansion, undici) — strip it.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
+# Non-root user for the migrator (IMG-002). This container receives the DB-owner
+# connection string and the local-admin hash, so it must not run as uid 0.
+# Mirror the runner stage's uid/gid 1001.
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node prisma/seed-local-admin.js"]
+# `prisma migrate deploy` needs the full Prisma CLI dependency tree, not just the
+# prisma/@prisma/.prisma directories: prisma@6.19.3 depends on @prisma/config
+# (c12, effect, deepmerge-ts, empathic) and @prisma/engines (fetch-engine,
+# get-platform, debug), and npm hoists all of those to the top-level
+# node_modules rather than nesting them under prisma/ or @prisma/. Copying only a
+# subset breaks the CLI at runtime, so copy the whole tree — the security win of
+# IMG-002 is the non-root USER below, which we keep. seed-local-admin.js also
+# needs @prisma/client from this tree.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Small, reviewable entrypoint copied executable, replacing the inline sh -c.
+COPY --chmod=755 prisma/migrate.sh ./prisma/migrate.sh
+
+# Prisma CLI checkpoint telemetry would try to write under $HOME, which the
+# migrator user does not have; disable it explicitly.
+ENV CHECKPOINT_DISABLE=1
+USER nextjs
+
+CMD ["./prisma/migrate.sh"]
 
 # ── Stage 4: runner ──────────────────────────────────────────────────────────
 FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS runner
@@ -98,10 +120,13 @@ USER nextjs
 
 EXPOSE 3000
 
-# Liveness for orchestrators (Container Apps/ECS/AKS): the Next.js server
-# answers on $PORT once ready. Uses node (no curl in the runtime image).
+# Liveness for orchestrators (Container Apps/ECS/AKS): probe the purpose-built
+# /api/health endpoint rather than "/", which triggers a full auth() DB session
+# lookup and RSC render on every check (IMG-009). Pass on status < 500 so a 503
+# (DB down) still counts as "process alive" for liveness. Uses node (no curl in
+# the runtime image).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
 
 # server.js lives at /app/app/server.js due to outputFileTracingRoot path mirroring.
 CMD ["node", "app/server.js"]

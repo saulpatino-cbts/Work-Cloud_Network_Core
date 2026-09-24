@@ -46,7 +46,7 @@ export default function SignInPage() {
         </form>
       </div>
 
-      <p className="mt-6 text-xs text-navy-300 dark:text-navy-500">
+      <p className="mt-6 text-xs text-navy-400 dark:text-navy-300">
         CBTS Internal Platform · Restricted Access
       </p>
     </div>

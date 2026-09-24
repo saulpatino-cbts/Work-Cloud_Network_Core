@@ -278,10 +278,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">Tenant ID</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-azure-tenant-id">Tenant ID</label>
                 <input
                   type="text"
-                  value={tenantId}
+                  id="cred-azure-tenant-id" value={tenantId}
                   onChange={(e) => setTenantId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   autoComplete="off"
@@ -289,10 +289,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">SP Client ID</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-azure-sp-client-id">SP Client ID</label>
                 <input
                   type="text"
-                  value={spClientId}
+                  id="cred-azure-sp-client-id" value={spClientId}
                   onChange={(e) => setSpClientId(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   autoComplete="off"
@@ -300,10 +300,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">SP Client Secret</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-azure-sp-client-secret">SP Client Secret</label>
                 <input
                   type="password"
-                  value={spClientSecret}
+                  id="cred-azure-sp-client-secret" value={spClientSecret}
                   onChange={(e) => setSpClientSecret(e.target.value)}
                   placeholder="••••••••••••••••"
                   autoComplete="new-password"
@@ -372,7 +372,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
             <div className="flex gap-2">
               <input
                 type="text"
-                value={manualName}
+                id="cred-azure-sub-name" aria-label="Subscription name" value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Subscription name"
                 autoComplete="off"
@@ -381,7 +381,7 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
               <div className="flex flex-1 flex-col">
                 <input
                   type="text"
-                  value={manualSubId}
+                  id="cred-azure-sub-id" aria-label="Subscription ID" value={manualSubId}
                   onChange={(e) => { setManualSubId(e.target.value); setManualSubIdError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addManual()}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -470,10 +470,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
             <p className="label-caps mb-3 text-navy-400">Authentication</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">Access Key ID</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-access-key-id">Access Key ID</label>
                 <input
                   type="text"
-                  value={awsAccessKeyId}
+                  id="cred-aws-access-key-id" value={awsAccessKeyId}
                   onChange={(e) => setAwsAccessKeyId(e.target.value)}
                   placeholder="AKIA…"
                   autoComplete="off"
@@ -481,10 +481,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">Secret Access Key</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-secret-access-key">Secret Access Key</label>
                 <input
                   type="password"
-                  value={awsSecretAccessKey}
+                  id="cred-aws-secret-access-key" value={awsSecretAccessKey}
                   onChange={(e) => setAwsSecretAccessKey(e.target.value)}
                   placeholder="••••••••••••••••"
                   autoComplete="new-password"
@@ -492,10 +492,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">Read-only Role ARN</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-role-arn">Read-only Role ARN</label>
                 <input
                   type="text"
-                  value={awsRoleArn}
+                  id="cred-aws-role-arn" value={awsRoleArn}
                   onChange={(e) => setAwsRoleArn(e.target.value)}
                   placeholder="arn:aws:iam::123456789012:role/CNA-ReadOnly"
                   autoComplete="off"
@@ -503,12 +503,12 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-external-id">
                   External ID <span className="font-normal text-navy-500">(optional)</span>
                 </label>
                 <input
                   type="text"
-                  value={awsExternalId}
+                  id="cred-aws-external-id" value={awsExternalId}
                   onChange={(e) => setAwsExternalId(e.target.value)}
                   placeholder="cna-engagement"
                   autoComplete="off"
@@ -528,10 +528,10 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
             <p className="label-caps mb-3 text-navy-400">Scope</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">Connection label</label>
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-label">Connection label</label>
                 <input
                   type="text"
-                  value={awsLabel}
+                  id="cred-aws-label" value={awsLabel}
                   onChange={(e) => setAwsLabel(e.target.value)}
                   placeholder="ACME Corp AWS Org"
                   autoComplete="off"
@@ -539,12 +539,12 @@ export function CredentialForm({ engagementId }: { engagementId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300">
+                <label className="block text-sm font-medium text-navy-400 dark:text-navy-300" htmlFor="cred-aws-regions">
                   Regions <span className="font-normal text-navy-500">(comma-separated; empty = all enabled)</span>
                 </label>
                 <input
                   type="text"
-                  value={awsRegions}
+                  id="cred-aws-regions" value={awsRegions}
                   onChange={(e) => setAwsRegions(e.target.value)}
                   placeholder="us-east-1, eu-west-1"
                   autoComplete="off"

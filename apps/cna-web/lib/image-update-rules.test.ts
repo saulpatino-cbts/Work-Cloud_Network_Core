@@ -32,6 +32,18 @@ describe("parseImageReference", () => {
     });
   });
 
+  it("parses the appliances' pinned tag@digest form and keeps the component tag", () => {
+    const digest = "sha256:" + "ab".repeat(32);
+    expect(parseImageReference(`docker.io/acme/cna:web-sha-abc1234@${digest}`)).toEqual({
+      registry: "docker.io",
+      repository: "acme/cna",
+      tag: "web-sha-abc1234",
+      digest,
+    });
+    expect(parseImageReference(`docker.io/acme/cna@${digest}`)?.tag).toBe("");
+    expect(parseImageReference("docker.io/acme/cna:web-sha-abc1234@sha256:abc")).toBeNull();
+  });
+
   it("defaults registry and tag the way docker does", () => {
     expect(parseImageReference("acme/cna")).toEqual({
       registry: "docker.io",

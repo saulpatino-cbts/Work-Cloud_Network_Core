@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { DeliverableType } from "@prisma/client";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { apiHeaders } from "@/lib/api-client";
 
 // ─── Multi-subscription topology merge ────────────────────────────────────────
 // Each CloudCredential is one subscription sync group. We take the latest
@@ -253,7 +254,7 @@ export async function generateDeliverable(
     try {
       const res = await fetch(`${apiUrl}/reports/${engagementId}/encyclopedia`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           edition: ENCYCLOPEDIA_EDITIONS[type],
           client_org: engagement.clientOrg,
@@ -509,32 +510,20 @@ export async function deleteDeliverable(formData: FormData) {
   });
   if (!member) return;
 
-  const record = await prisma.deliverable.findUnique({
-    where: { id: deliverableId },
+  // SEC-002 / C5: authorise on the target row's engagement. Scope the lookup and
+  // the delete by engagementId so a member of one engagement cannot delete
+  // another engagement's deliverable by supplying a mismatched id.
+  const record = await prisma.deliverable.findFirst({
+    where: { id: deliverableId, engagementId },
     select: { blobPath: true },
   });
-  if (record?.blobPath) {
+  if (!record) return;
+  if (record.blobPath) {
     await deleteBlob(record.blobPath);
   }
 
-  await prisma.deliverable.delete({ where: { id: deliverableId } });
+  await prisma.deliverable.deleteMany({ where: { id: deliverableId, engagementId } });
   revalidatePath(`/engagements/${engagementId}`);
-}
-
-export async function cleanupExpiredDeliverables(engagementId: string): Promise<number> {
-  const cutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000);
-  const expired = await prisma.deliverable.findMany({
-    where: { engagementId, createdAt: { lt: cutoff } },
-  });
-  let deleted = 0;
-  for (const d of expired) {
-    if (d.blobPath) {
-      await deleteBlob(d.blobPath);
-    }
-    await prisma.deliverable.delete({ where: { id: d.id } });
-    deleted++;
-  }
-  return deleted;
 }
 
 // ─── Publish assessment ────────────────────────────────────────────────────────
@@ -552,10 +541,15 @@ export async function publishDeliverable(formData: FormData) {
   });
   if (!member) return;
 
-  await prisma.deliverable.update({
-    where: { id: deliverableId },
+  // SEC-002 / C5: scope the publish to {id, engagementId} so a member cannot
+  // publish another engagement's draft deliverable to a client portal. If the
+  // deliverable does not belong to this engagement, nothing is updated and the
+  // engagement status is left unchanged.
+  const published = await prisma.deliverable.updateMany({
+    where: { id: deliverableId, engagementId },
     data: { publishedAt: new Date(), publishedBy: session.user.id },
   });
+  if (published.count === 0) return;
 
   await prisma.engagement.update({
     where: { id: engagementId },

@@ -55,7 +55,11 @@ export default function LocalAdminPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <label htmlFor="local-admin-password" className="sr-only">
+            Password
+          </label>
           <input
+            id="local-admin-password"
             type="password"
             name="password"
             autoComplete="current-password"
@@ -63,6 +67,7 @@ export default function LocalAdminPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
+            aria-label="Password"
             className="w-full rounded border border-navy-200 bg-white/60 px-3 py-2 text-sm text-navy-800 dark:border-navy-700 dark:bg-navy-900/60 dark:text-navy-50"
           />
 

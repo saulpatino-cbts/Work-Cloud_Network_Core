@@ -1,10 +1,12 @@
 # Dependabot — automated dependency updates
-# Covers: Python packages (pip), GitHub Actions, Docker base images
+# Covers: Python packages (pip), GitHub Actions, Docker base images (all four
+# Dockerfiles), npm (cna-web). Minor/patch updates are grouped per ecosystem.
 #
 # PR strategy:
 #   - Python: weekly, grouped by ecosystem, auto-assign to saulpatinojr
 #   - Actions: weekly, grouped — keeps CI action SHAs current
-#   - Docker: weekly — keeps base image digest current
+#   - Docker: weekly — keeps base image digests current in /, apps/cna-api,
+#     apps/cna-worker, apps/cna-web
 
 version: 2
 updates:
@@ -37,6 +39,10 @@ updates:
           - "pytest*"
           - "ruff"
           - "coverage"
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -56,9 +62,15 @@ updates:
         patterns:
           - "*"
 
-  # Docker
+  # Docker — every Dockerfile, not only the root one. Dependabot's docker
+  # updater scans the listed directories only, so the api/worker/web images
+  # were previously unwatched and their pinned base digests went stale.
   - package-ecosystem: docker
-    directory: "/"
+    directories:
+      - "/"
+      - "/apps/cna-api"
+      - "/apps/cna-worker"
+      - "/apps/cna-web"
     schedule:
       interval: weekly
       day: monday
@@ -69,6 +81,11 @@ updates:
     labels:
       - dependencies
       - docker
+    groups:
+      docker-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   # npm — cna-web (Next.js 15, next-auth, Prisma, Azure SDKs)
   # Previously uncovered — next-auth beta and all Node.js dependencies
@@ -112,3 +129,7 @@ updates:
           - "prisma"
           - "@prisma/*"
           - "@auth/prisma-adapter"
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch

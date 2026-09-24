@@ -1,5 +1,5 @@
 # python:3.14-slim digest pinned — see root Dockerfile for the same pattern.
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS builder
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS builder
 
 WORKDIR /build
 
@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir --prefix=/install ".[api]"
 # Pinned draw.io desktop release, verified by checksum before it can reach
 # the final image. Used headlessly (see scripts/drawio-headless.sh) so the
 # encyclopedia report's diagram SVGs render instead of silently degrading.
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS drawio-fetch
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS drawio-fetch
 
 ARG DRAWIO_VERSION=31.3.2
 ARG DRAWIO_SHA256=725453f32ef7f2f63f8b50b374857a5c312e2aaabcf221cb0600332741ae1094
@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
   && echo "${DRAWIO_SHA256}  /tmp/drawio.deb" | sha256sum -c -
 
 # ---- final stage ----
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
 
 # Non-root user — uid/gid 1001 (matches root Dockerfile's cna user).
 RUN groupadd --gid 1001 cna \

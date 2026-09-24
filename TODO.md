@@ -1950,7 +1950,13 @@ Each item names the register finding; the evidence (file:line) is in the finding
 from the same review are `REVIEW.md` → R-016 – R-022.
 
 ### T-701 — Deploy by digest in both appliances (RELEASE-001)
-`200-build-images` now records `digests{}` (`docker.io/<ns>/cna@sha256:…`) next to `images{}` in
+- **Status:** Done 2026-09-24 — Azure appliance PR #11 and AWS appliance PR #15 (merged); the
+  contract note landed here in PR #37. `230` composes `docker.io/<ns>/cna:<role>-sha-<7>@sha256:<64>`
+  from `images{}` + `digests{}` and passes all four images (new `migrator_image` input) to `210`,
+  which refuses empty or floating references; `220`, `350`/`360` and `100` no longer depend on
+  `*-latest`. Rollback carries `previous_migrator_image` through `workflow_call` only (GitHub caps
+  `workflow_dispatch` at ten inputs) and otherwise resolves the migrator from the release catalog.
+- **Original description:** `200-build-images` now records `digests{}` (`docker.io/<ns>/cna@sha256:…`) next to `images{}` in
 `.deployment-catalog/latest-build.json`. `210-deploy` in both appliances still resolves images by
 mutable tag and unconditionally uses `migrator-latest`. Add a `migrator_image` input, fail on any
 `*-latest` reference, and deploy the `@sha256:` reference from the manifest; `230` forwards

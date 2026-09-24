@@ -1,5 +1,5 @@
 # ── Stage 1: deps ────────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS deps
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS deps
 WORKDIR /app
 
 # Install native build tools (needed by some optional Prisma packages).
@@ -9,7 +9,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 
 # ── Stage 2: builder ─────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -31,7 +31,7 @@ RUN npm run build
 # Standalone image used exclusively to run `prisma migrate deploy` once per
 # deployment (via workflow 210). Keeping CLI deps out of the runtime image avoids
 # chasing Prisma's transitive dep tree (effect, fast-check, etc.) across upgrades.
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS migrator
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS migrator
 WORKDIR /app
 
 # apk upgrade pulls pending Alpine security fixes (e.g. the 2026-08 OpenSSL
@@ -72,7 +72,7 @@ USER nextjs
 CMD ["./prisma/migrate.sh"]
 
 # ── Stage 4: runner ──────────────────────────────────────────────────────────
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS runner
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS runner
 WORKDIR /app
 
 # See the migrator stage: pending Alpine security fixes for base-image apks.

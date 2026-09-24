@@ -39,9 +39,13 @@ or record a `TODO.md` item naming them — never leave one side implied.
    immutable tags plus floating `*-latest`; the CLI image is `cna:sha-<7>` /
    `cna:latest`.
 2. **`.deployment-catalog/latest-build.json`** — fields `sha_tag`, `commit`,
-   `built_at`, `run_id`, `images{cli,api,worker,web,migrator}`. Written and
-   committed by `200-build-images.yml`; read by the appliances' image-update
-   workflow.
+   `built_at`, `run_id`, `images{cli,api,worker,web,migrator}` (immutable tags)
+   and `digests{cli,api,worker,web,migrator}` (`docker.io/<ns>/cna@sha256:<64>`).
+   Written and committed by `200-build-images.yml` after every image passed the
+   vulnerability gate; read by the appliances' image-update workflow, which
+   deploys the combined form `docker.io/<ns>/cna:<role>-sha-<7>@sha256:<64>` —
+   tag for people and for the web tier's image-update check, digest as the
+   authoritative pull. Floating `*-latest` tags are never deployed.
 3. **`repository_dispatch` event `cna-image-published`** with the manifest as
    `client_payload`, sent by `200-build-images.yml` to every repository listed in
    the `APPLIANCE_REPOS` variable (comma-separated names under this owner). It is

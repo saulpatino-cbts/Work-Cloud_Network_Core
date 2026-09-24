@@ -23,7 +23,7 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-011](#r-011--security-review-of-the-bring-your-own-ai-key-path-and-provider-egress) | Security review: bring-your-own AI key handling + firewall egress to Anthropic/OpenAI | Security | Open — before the first `byo-api` deploy |
 | [R-012](#r-012--token-for-a-shared-project-board-across-three-repositories) | Token type for a shared project board (PAT vs GitHub App / organization) | Repository owner | Open — not blocking |
 | [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
-| [R-014](#r-014--move-the-wiki-and-archive-the-original-repository) | Move the Wiki and archive `Work-Cloud_Network_Assessment` | Repository owner | Open — after R-013 |
+| [R-014](#r-014--move-the-wiki-and-delete-the-original-repository) | Move the Wiki, then delete `Work-Cloud_Network_Assessment` | Repository owner | Open — pre-deletion checklist; engineering checks done 2026-09-24 |
 | [R-015](#r-015--decide-the-customer-facing-appliance-repository-names) | Decide the customer-facing appliance repository names (`*_Appliance` vs `*_Assessment`) | Repository owner | Open — not blocking |
 
 ---
@@ -63,7 +63,7 @@ before a customer engagement.
   security, storage)
 - `infra/terraform/environments/aws/{dev,prod}/{platform,workload}/`
 - `.github/workflows/212-deploy-aws-split.yml`
-- Tracking issue [#110](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/issues/110)
+- Tracking issue #110 in the original repository (deleted — R-014)
 
 **Recommended next step**
 Name the account owner and confirm the target region and environment count (dev-only first, or
@@ -601,43 +601,73 @@ is retired, and the appliances never see a build from the new one.
 
 ---
 
-## R-014 — Move the Wiki and archive the original repository
+## R-014 — Move the Wiki and delete the original repository
 
 **Problem**
-The long-form documentation lives in `Work-Cloud_Network_Assessment`'s GitHub Wiki, and that
-repository still exists with the full tree on `main`. Both appliances' documents and this
-repository's `README.md` now link to **this** repository's Wiki, which is empty until the pages move.
+The original repository, `Work-Cloud_Network_Assessment`, is retired: its tree has been a pointer
+since 2026-09-21 (its pull request #178) and the owner has decided to **delete** it rather than
+archive it. Deletion also removes its issues, pull requests, releases, Wiki and the legacy GHCR
+packages, so anything the platform still needs from it has to live in this repository or in one of
+the two appliances first.
+
+**What engineering verified (2026-09-24)**
+- *Files.* All 8,857 paths at its last full commit (`5d3b914`) are in this repository's history —
+  `5d3b914` is an ancestor of `main`. 8,851 are on `main` byte-for-byte or superseded by later edits
+  here; the other 6 were removed deliberately: `.kiro/specs/production-readiness/*` (#20, vendored-pack
+  sweep) and `apps/cna-web/app/(dashboard)/engagements/[id]/analysis/run-form.tsx` (#21, dead-code
+  sweep; nothing imported it). The deployment layer had already moved to the appliances (T-504 – T-508).
+- *Branches.* Only `main` and the pointer branch exist; no unmerged work.
+- *Issues and pull requests.* None open. Closed threads are cited in this repository's documents by
+  number only; those citations are historical and are not expected to resolve.
+- *Releases and tags.* `v0.1.0` and `v0.8.0` — both commits are on `main` here and their content is
+  `CHANGELOG.md` → 0.1.0 and 0.8.0-beta. The tags are **not** recreated here: a `v*.*.*` push
+  triggers `310-release-version`, which would rebuild and republish an old commit.
+- *Container images.* The appliances pull `docker.io/<namespace>/cna:*-sha-*`; the Azure appliance's
+  live catalog entry is on Docker Hub. The GHCR packages those two releases named
+  (`ghcr.io/saulpatinojr/Work-Cloud_Network_Assessment`, `ghcr.io/saulpatinojr/MVP-Cloud_Network_Assessment`)
+  are used by nothing current; the Azure catalog archives from run `24168247436` to `24585307176`
+  name them and become non-restorable, which is accepted.
+- *Actions secrets and variables.* The set the original's workflows consumed (`DOCKERHUB_NAMESPACE`,
+  `DOCKERHUB_TOKEN`, `DOCKERHUB_PERSONAL_USERNAME`, `DOCKERHUB_PERSONAL_TOKEN`, `APPLIANCE_REPOS`,
+  `GH_APP_ID`, `GH_APP_PRIVATE_KEY`) is exactly the set this repository's workflows consume — R-013.
+- *Wiki.* Not verifiable from the engineering side (a Wiki is a separate git repository that needs
+  write access, R-009); step 1 below.
 
 **Why it needs an owner**
-A Wiki is a separate git repository that needs write access (the same access `R-009` has been
-waiting on), and archiving a repository is an owner-only setting.
+The Wiki move needs write access, repository settings and cloud identity federation can only be read
+by an admin, and deleting a repository is owner-only and final after GitHub's 90-day restore window.
 
 **Required owner**
 Repository owner.
 
-**Required action**
+**Required action** — in this order; the deletion is last
 1. Move the Wiki: `git clone https://github.com/saulpatinojr/Work-Cloud_Network_Assessment.wiki.git`, add
    `https://github.com/saulpatinojr/Work-Cloud_Network_Core.wiki.git` as a remote and push `master`
-   (create one page in the new Wiki first so the Wiki repository exists). This also closes the
-   destination half of R-009.
-2. Merge the original repository's pointer pull request (it replaces the tree with a `README.md` and
-   `CLAUDE.md` that point here and at the two appliances). Its branch protection may require the
-   `300 · Test Codebase` check, which no longer exists on that branch — relax the rule for that one
-   merge or merge as an administrator.
-3. Archive the original repository (*Settings → Danger Zone → Archive*). Archiving is reversible and
-   keeps the issues, pull requests and history that the documents here still link to. Do **not**
-   delete it: `CHANGELOG.md`, `REVIEW.md` and `CNA-0.90-updates.md` reference its pull requests and
-   issues by number.
-4. Remove the original repository's Actions secrets, variables and runner registration so nothing
-   can build or publish from it again.
+   (create one page in the new Wiki first so the Wiki repository exists). Confirm the page count
+   matches. This also closes the destination half of R-009.
+2. Set `CORE_REPO` to `Work-Cloud_Network_Core` in **both** appliances (Azure R-005, AWS R-009) and
+   run `230 · Image Update` once in each. After the deletion the old value fails with a 404.
+3. Make `DOCKERHUB_NAMESPACE` visible to this repository's Actions and run `200 · Build Container
+   Images` once (R-013 step 4). Every run so far has failed on that variable, so no manifest has been
+   published from here yet.
+4. Open <https://github.com/saulpatinojr?tab=packages>. If either legacy GHCR package must survive,
+   retag it to Docker Hub before the deletion; otherwise let it go with the repository.
+5. Remove the original repository's Actions secrets, variables, environments and any runner
+   registration. In Azure and AWS, delete the federated identity credentials / OIDC role trust
+   entries whose subject names `repo:saulpatinojr/Work-Cloud_Network_Assessment:*` — they are orphaned.
+6. Confirm nothing you still need is owned by that repository: a repository-level project board,
+   a GitHub App installation scoped to it, or Dependabot alerts (T-204 now re-triages on this
+   repository's Security tab).
+7. Delete it: *Settings → Danger Zone → Delete this repository*. GitHub can restore a deleted
+   repository for 90 days.
 
 **Impact if unresolved**
-A stale full copy of the core remains writable and its scheduled workflows (`370`) keep running
-against Docker Hub; the Wiki links in three repositories point at an empty Wiki.
+The pointer repository lingers with its secrets and variables still set; nothing breaks, but the
+documents in three repositories say it is gone.
 
 **References**
 - [`TODO.md`](TODO.md) → T-509, T-601 (the Wiki pages still waiting on R-009)
-- R-009, R-013
+- R-009, R-013; Azure appliance R-005, AWS appliance R-009
 
 ---
 

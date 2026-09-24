@@ -227,7 +227,8 @@ Each one actively misleads an engineer or a workflow run.
   (`apps/cna-web/package.json`).
 - **Dependencies:** None.
 - **Recommended action:** Open
-  [the Dependabot alerts page](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/security/dependabot),
+  [this repository's Dependabot alerts page](https://github.com/saulpatinojr/Work-Cloud_Network_Core/security/dependabot)
+  (the original repository's page is gone with that repository — `REVIEW.md` → R-014),
   triage each of the 8 alerts, and record the outcome here — patch, pin, or an explicit accepted-risk
   note with a reason. Prioritise anything reachable from the web platform's request path. Check
   whether `.github/dependabot.yml` covers both ecosystems (`pip` and `npm`) and both lockfiles; if
@@ -1680,10 +1681,10 @@ order; do not reorder it.
   the `CORE_REPO` flip in both appliances, the Wiki move and the archive — are
   `REVIEW.md` R-013 and R-014, with the merge order that keeps the appliances' image updates working
   throughout. The appliance repository names are R-015.
-- **Notes for future engineers:** Links of the form
-  `github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/NNN` and `/issues/NNN` in `CHANGELOG.md`,
-  `REVIEW.md`, `CNA-0.90-updates.md` and this file are historical and deliberately left pointing at the
-  archived repository, where those threads live. Nothing in the images, the tag scheme, the manifest,
+- **Notes for future engineers:** The original repository is deleted, not archived (`REVIEW.md` →
+  R-014 records what was verified first). Issue and pull-request numbers of the form `#NNN` that
+  refer to it in `CHANGELOG.md`, `REVIEW.md`, `CNA-0.90-updates.md` and this file are historical
+  citations of threads that no longer exist; they were links and are now plain numbers. Nothing in the images, the tag scheme, the manifest,
   the dispatch or the runtime contract changed — the appliances see a different `CORE_REPO`, nothing
   else.
 

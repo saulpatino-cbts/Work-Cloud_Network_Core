@@ -84,8 +84,9 @@ approval gate. The full contract is in [`CLAUDE.md`](CLAUDE.md).
 
 The project started as a single repository, `Work-Cloud_Network_Assessment`, which held the core
 until 2026-09-18. Its full history is imported here (`TODO.md` → T-509), so commit references in
-`CHANGELOG.md` still resolve; the original repository is retired and archived, kept only for its
-issues and pull requests. New work, issues and pull requests belong here.
+`CHANGELOG.md` still resolve; the original repository is retired and being deleted (`REVIEW.md`
+→ R-014), so its issue and pull-request numbers in the documents are historical references only.
+New work, issues and pull requests belong here.
 
 Every deploy is run from the appliance's **Run workflow** dialog, where `ai_mode` selects the AI
 provider family: `saas` (Azure OpenAI on Azure, Amazon Bedrock on AWS — provisioned by

@@ -12,9 +12,9 @@ container images (`200-build-images.yml` → Docker Hub `<namespace>/cna`).
 
 It is **internal, never customer-facing**: customers consume an appliance, not this
 repository. The project's original repository, `Work-Cloud_Network_Assessment`, held this
-code until 2026-09-18; its history is imported here and it is archived. Never open work
-there — every reference to it that remains in the documents is a historical link to an
-issue or pull request that lives in the archive.
+code until 2026-09-18; its complete history is imported here and the repository is being
+deleted (`REVIEW.md` R-014). Never open work there. Its issue and pull-request numbers survive
+in the documents as historical references only — they name threads that no longer exist.
 
 Deployment is not this repository's job. Each cloud has its own customer-facing
 **appliance repository** that deploys and operates these images:

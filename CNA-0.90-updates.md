@@ -245,20 +245,22 @@ commands**:
 
 | Gap | Fix | PR |
 |---|---|---|
-| `211` ran `az provider register` — a subscription-level action the RG-scoped SP cannot perform (`REVIEW.md` → R-007's exact class) | Step verifies registration read-only; all four Terraform roots set `resource_provider_registrations = "none"` | [#166](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/166) |
-| `terraform init` could not read the tfstate storage account (it lives in the `-tfstate` RG, outside the workload RG) | `Storage Account Contributor` scoped to that account | [#167](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/167) |
-| The observability module reads the regional Network Watcher and parents the VNet flow log under it, in Azure's `NetworkWatcherRG` | Ensure that RG + watcher exist; `Network Contributor` scoped to it | [#167](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/167) |
-| Traffic Analytics validates the enabling principal against a wide `*/read` set at **subscription** scope | `Reader` at subscription scope | [#168](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/168) |
-| …and against non-read actions (workspace `sharedkeys/action`, data-collection rules/endpoints) at the same scope | `CNA Traffic Analytics Enabler` custom role, eight actions | [#169](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/169) |
-| Attaching the user-assigned identity to Container Apps needs `userAssignedIdentities/assign/action`, which Managed Identity *Contributor* lacks | `Managed Identity Operator` | [#171](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/171) |
-| The migration step creates a Container Apps **Job** (`Microsoft.App/jobs/*`), a separate resource type | `Container Apps Jobs Contributor` | [#172](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/172) |
+| `211` ran `az provider register` — a subscription-level action the RG-scoped SP cannot perform (`REVIEW.md` → R-007's exact class) | Step verifies registration read-only; all four Terraform roots set `resource_provider_registrations = "none"` | #166 |
+| `terraform init` could not read the tfstate storage account (it lives in the `-tfstate` RG, outside the workload RG) | `Storage Account Contributor` scoped to that account | #167 |
+| The observability module reads the regional Network Watcher and parents the VNet flow log under it, in Azure's `NetworkWatcherRG` | Ensure that RG + watcher exist; `Network Contributor` scoped to it | #167 |
+| Traffic Analytics validates the enabling principal against a wide `*/read` set at **subscription** scope | `Reader` at subscription scope | #168 |
+| …and against non-read actions (workspace `sharedkeys/action`, data-collection rules/endpoints) at the same scope | `CNA Traffic Analytics Enabler` custom role, eight actions | #169 |
+| Attaching the user-assigned identity to Container Apps needs `userAssignedIdentities/assign/action`, which Managed Identity *Contributor* lacks | `Managed Identity Operator` | #171 |
+| The migration step creates a Container Apps **Job** (`Microsoft.App/jobs/*`), a separate resource type | `Container Apps Jobs Contributor` | #172 |
 
 Two further blockers were one-time artifacts of the state loss, not permission gaps: two
 `github_actions_environment_variable` resources that outlived the state (deleted so
 Terraform could recreate them with the new Front Door hostname), and the four Key Vault
 secrets that came back with the vault when `recover_soft_deleted_key_vaults` recovered it
-from soft-delete — imported via [#170](https://github.com/saulpatinojr/Work-Cloud_Network_Assessment/pull/170)
-rather than deleted, since purge protection would have wedged the names for 90 days.
+from soft-delete — imported via #170
+rather than deleted, since purge protection would have wedged the names for 90 days. (The
+pull-request numbers in this section are the original repository's, `Work-Cloud_Network_Assessment`,
+which is deleted — core `REVIEW.md` → R-014.)
 
 ### 5.3 What is deployed
 

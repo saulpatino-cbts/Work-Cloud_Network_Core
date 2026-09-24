@@ -2,8 +2,9 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { encrypt } from "@/lib/crypto";
 import { sanitizeBackendDetail } from "@/lib/summarize-error";
+import { apiHeaders } from "@/lib/api-client";
 import { revalidatePath } from "next/cache";
 
 // ─── Add credential ───────────────────────────────────────────────────────────
@@ -143,16 +144,26 @@ export async function deleteCloudCredential(
     });
     if (!member) return { error: "Access denied." };
 
+    // SEC-002 / C5: authorise on the *target row's* engagement, not the
+    // caller-supplied engagementId alone. Confirm the credential actually
+    // belongs to the engagement the caller is a member of before mutating it,
+    // and scope every downstream delete/update by that engagementId too.
+    const cred = await prisma.cloudCredential.findFirst({
+      where: { id: credentialId, engagementId },
+      select: { id: true },
+    });
+    if (!cred) return { error: "Credential not found." };
+
     // Delete all discovery findings tied to this subscription before removing the credential
-    await prisma.finding.deleteMany({ where: { credentialId, aiGenerated: false } });
+    await prisma.finding.deleteMany({ where: { credentialId, engagementId, aiGenerated: false } });
 
     // Null out credentialId on any discovery jobs referencing this credential
     // before deleting to satisfy the FK constraint on older DB migrations.
     await prisma.discoveryJob.updateMany({
-      where: { credentialId },
+      where: { credentialId, engagementId },
       data: { credentialId: null },
     });
-    await prisma.cloudCredential.delete({ where: { id: credentialId } });
+    await prisma.cloudCredential.deleteMany({ where: { id: credentialId, engagementId } });
 
     return { deleted: true };
   } catch {
@@ -216,24 +227,6 @@ export async function testAzureConnection(params: {
         "Could not validate the credentials against Azure. Verify the Tenant ID, SP Client ID, and SP Client Secret, then try again.",
     };
   }
-}
-
-// ─── Decrypt helper (used by discovery action) ───────────────────────────────
-
-export async function getDecryptedCredential(credentialId: string, userId: string) {
-  const cred = await prisma.cloudCredential.findUnique({
-    where: { id: credentialId },
-    include: { engagement: { include: { members: true } } },
-  });
-  if (!cred) return null;
-
-  const isMember = cred.engagement.members.some((m) => m.userId === userId);
-  if (!isMember) return null;
-
-  return {
-    ...cred,
-    spSecret: cred.spSecretEnc ? decrypt(cred.spSecretEnc) : null,
-  };
 }
 
 // ─── Add AWS credential ──────────────────────────────────────────────────────
@@ -322,7 +315,7 @@ export async function testAwsConnection(params: {
   try {
     const res = await fetch(`${apiUrl}/discovery/test-connection-aws`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         role_arn: roleArn,
         external_id: externalId || null,

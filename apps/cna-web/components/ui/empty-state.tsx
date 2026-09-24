@@ -10,7 +10,7 @@ function DefaultIcon() {
     <svg
       aria-hidden="true"
       focusable="false"
-      className="h-6 w-6 text-navy-400 dark:text-navy-500"
+      className="h-6 w-6 text-navy-400 dark:text-navy-300"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -57,7 +57,7 @@ export function EmptyState({
       )}
       <p className="text-sm font-semibold text-navy-600 dark:text-navy-300">{title}</p>
       {children && (
-        <p className="mx-auto mt-1 max-w-md text-xs text-navy-400 dark:text-navy-500">{children}</p>
+        <p className="mx-auto mt-1 max-w-md text-xs text-navy-400 dark:text-navy-300">{children}</p>
       )}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>

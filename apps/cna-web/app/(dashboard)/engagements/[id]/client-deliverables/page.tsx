@@ -134,7 +134,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
 
       {/* ── Interactive Assessment ── */}
       <section className="space-y-2">
-        <h2 className="label-caps text-navy-300 dark:text-navy-500">Interactive Assessment</h2>
+        <h2 className="label-caps text-navy-400 dark:text-navy-300">Interactive Assessment</h2>
         {interactiveAssessment ? (
           <div className="glass flex items-center justify-between gap-4 p-5">
             <div className="flex items-center gap-4">
@@ -211,7 +211,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Published assessments ── */}
       {publishedAssessments.length > 0 && (
         <section className="space-y-2">
-          <h2 className="label-caps text-navy-300 dark:text-navy-500">
+          <h2 className="label-caps text-navy-400 dark:text-navy-300">
             Published Assessments — {publishedAssessments.length}
           </h2>
           {publishedAssessments.map((d) => {
@@ -268,7 +268,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Draft assessments ── */}
       {draftAssessments.length > 0 && (
         <section className="space-y-2">
-          <h2 className="label-caps text-navy-300 dark:text-navy-500">Drafts — {draftAssessments.length}</h2>
+          <h2 className="label-caps text-navy-400 dark:text-navy-300">Drafts — {draftAssessments.length}</h2>
           <div className="glass p-4">
             <ul className="divide-y divide-navy-100/30 dark:divide-navy-700/30">
               {draftAssessments.map((d) => (
@@ -302,7 +302,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Uploaded Documents ── */}
       {engagement.documents.length > 0 && (
         <section className="space-y-2">
-          <h2 className="label-caps text-navy-300 dark:text-navy-500">Uploaded Documents — {engagement.documents.length}</h2>
+          <h2 className="label-caps text-navy-400 dark:text-navy-300">Uploaded Documents — {engagement.documents.length}</h2>
           <div className="glass divide-y divide-navy-700/30">
             {engagement.documents.map((doc) => (
               <div key={doc.id} className="flex items-center justify-between gap-4 px-5 py-3.5">

@@ -176,6 +176,7 @@ export function ChatPanel({ engagementId }: { engagementId: string }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about findings, traffic risks, costs…"
+          aria-label="Ask the assessment copilot a question"
           disabled={loading}
           className="flex-1 rounded-xl glass-sm px-4 py-2.5 text-sm text-navy-800 dark:text-warmgray-100 placeholder:text-navy-400 dark:placeholder:text-warmgray-400 focus:outline-none focus:ring-2 focus:ring-teal-400/50 disabled:opacity-60"
         />

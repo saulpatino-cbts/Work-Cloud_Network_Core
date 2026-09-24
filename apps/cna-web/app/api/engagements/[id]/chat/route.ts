@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sanitizeBackendDetail } from "@/lib/summarize-error";
+import { apiHeaders } from "@/lib/api-client";
 import { NextResponse } from "next/server";
 
 // Proxy to the cna-api chat router (Phase G). Auth + membership are enforced
@@ -56,7 +57,7 @@ export async function POST(
   try {
     const res = await fetch(`${apiUrl}/chat/${encodeURIComponent(id)}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ messages }),
       cache: "no-store",
       signal: AbortSignal.timeout(90_000),

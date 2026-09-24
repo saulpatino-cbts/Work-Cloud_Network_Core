@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-09-18
+**Last reviewed:** 2026-09-23
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,6 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-717 |
 
 ---
 
@@ -1937,3 +1938,110 @@ order; do not reorder it.
 - **Notes for future engineers:** `git ls-files` also fixes the reverse hole — a file that is
   committed but sits under a directory someone later adds to `EXCLUDED_DIRS` stops being checked.
   Note `subprocess` triggers ruff's `S603`, which `pyproject.toml` already ignores repository-wide.
+
+---
+
+## Phase 7 — Version 1.0 follow-ups
+
+Open engineering rows from the 2026-09-23 v1.0 productization review (the register's Critical /
+High rows that were not closed in that change set, plus the Medium rows with a clear owner here).
+Each item names the register finding; the evidence (file:line) is in the finding. Human decisions
+from the same review are `REVIEW.md` → R-016 – R-022.
+
+### T-701 — Deploy by digest in both appliances (RELEASE-001)
+`200-build-images` now records `digests{}` (`docker.io/<ns>/cna@sha256:…`) next to `images{}` in
+`.deployment-catalog/latest-build.json`. `210-deploy` in both appliances still resolves images by
+mutable tag and unconditionally uses `migrator-latest`. Add a `migrator_image` input, fail on any
+`*-latest` reference, and deploy the `@sha256:` reference from the manifest; `230` forwards
+`digests{}`. Shared change — both appliances in one change set.
+
+### T-702 — Python lockfile and pinned floors (PY-020, IMG-004)
+0 of the package's dependency specifiers are pinned and there is no lockfile, so an immutable
+`sha-<7>` image is not reproducible (today's resolution accepts `openai 3.x` against a `>=2.45`
+floor). Generate a lock (`uv lock` / `pip-compile` with hashes) consumed by all three Python
+Dockerfiles, and drop `apt-get -y upgrade` from the final stages once Dependabot's docker coverage
+(added in this review) keeps the base digests fresh.
+
+### T-703 — Sign images and verify provenance in the appliances (RELEASE-003, IMG-012)
+`200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
+published digest (cosign keyless with the workflow OIDC identity) and have `210` verify the
+signature and the SLSA provenance subject before deploying.
+
+### T-704 — API database connection handling (PY-002)
+`apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
+progress line (dozens per job). Introduce one connection pool (`psycopg2.pool` or a per-job
+connection passed to `_log`) and close connections deterministically.
+
+### T-705 — Blocking I/O in `async def` handlers (PY-003)
+`test_connection`, `test_connection_aws` and `start_discovery` perform blocking SDK and database
+calls inside `async def`, stalling the event loop and the liveness probe. Make them plain `def`
+(FastAPI runs them in the threadpool) or move the blocking work to `run_in_threadpool`.
+
+### T-706 — Durable job execution (DATA-003, DATA-004, DATA-008, REL-008)
+Discovery and deliverable generation run in the request-serving processes. The stale-job reaper
+added in this review turns dead jobs into `FAILED`; it does not prevent partial writes, duplicate
+submissions (no `QUEUED → RUNNING` conditional update, no unique constraint) or lost work on a
+redeploy. Design the durable path (queue + worker, or a `heartbeatAt` lease with conditional
+transitions) and make the multi-step persistence in `_run_*_discovery` transactional.
+
+### T-707 — Versioned credential-encryption keyring (DATA-006)
+`lib/crypto.ts` / `cna/core/credential_crypto.py` use one static `CREDENTIAL_ENCRYPTION_KEY` and
+the ciphertext carries no key id, so rotation makes every stored cloud credential and BYO AI key
+undecryptable at once. Prefix ciphertext with a key id, accept a keyring, add a re-encrypt job.
+
+### T-708 — Audit trail and token-at-rest hygiene (DATA-009)
+No table records who deleted an engagement, changed a credential or saved an AI key; NextAuth
+`Account.{access_token,refresh_token,id_token}` are stored in plaintext. Add an `AuditEvent` table
+written by every admin/destructive action and encrypt or drop the OAuth token columns.
+
+### T-709 — Cloud-aware core for AWS engagements (UX-001, ARCH-015, ARCH-109)
+Inventory, diagram and FinOps pages, remediation links (`learn.microsoft.com`), the SP help modal
+and `summarize-error.ts` are Azure-shaped; `POST /publish` hard-codes `AzureBlobDeployer`. Branch
+on `CNA_APPLIANCE_CLOUD` / the credential platform and add the S3 path (the CLI's `s3_deployer.py`
+exists) so the AWS appliance can upload documents and publish portals.
+
+### T-710 — Align the storage-account variable name (ARCH-003)
+The API reads `AZURE_STORAGE_ACCOUNT_NAME` (`apps/cna-api/main.py`); the Azure appliance injects
+`CNA_STORAGE_ACCOUNT_NAME`, so in-app portal publish always returns 503. Pick one name in
+`.env.example` and mirror the appliance.
+
+### T-711 — Regenerate the runtime environment inventory (DOC-003, DOC-002, PROD-003)
+`.env.example` declares ~11 variables nothing reads and omits ~12 that are read (including the
+contract variable `CREDENTIAL_ENCRYPTION_KEY`); `apps/cna-web/.env.example` covers 8 of the 34
+names the web tier reads. Generate both from a grep of `os.environ` / `process.env` and add a
+guard test that fails on drift.
+
+### T-712 — Local-admin limiter and break-glass parity (SEC-004, ARCH-010)
+`app/api/local-admin/route.ts` keys its limiter on `x-azure-clientip`, which is absent on AWS and
+spoofable off Front Door, and the limiter is per replica. Key on the edge-provided client IP for
+each cloud (`CNA_APPLIANCE_CLOUD`), or move the limit to the database.
+
+### T-713 — Deliverable and diagram HTML injection (SEC-006)
+draw.io `html=1` labels are single-escaped and the encyclopedia embeds the exported SVG with
+`| safe`; customer strings (resource names, tags, NSG descriptions) can carry markup into the PDF
+and the Electron renderer. Escape label text for HTML and XML both, and add a test with a hostile
+resource name.
+
+### T-714 — Prune dead modules (PY-014)
+26 `cna.*` modules are imported by nothing (`modules.{container,dns,hybrid,iam,landingzone,
+zerotrust}`, `report_engine.knowledge_transfer`, every `*.diagrams.*`, `core.observed_state_validator`,
+…). Delete them or wire them; pair with `REVIEW.md` → R-018 for `cna/review`.
+
+### T-715 — Retry layer and timeout budgets (PY-006, REL-003, REL-004, REL-005)
+`with_retry` catches only `CNARateLimitError`, which nothing raises; the Bedrock client has no
+botocore `Config` timeout; the AI budget (~210 s) exceeds the web abort (90 s); the draw.io
+`subprocess.run(timeout=60)` kills `xvfb-run` and orphans Electron; `mkdtemp` directories are never
+removed. Fix each at its call site and add the `/tmp` cleanup to the discovery finalisers.
+
+### T-716 — Migration and image smoke tests in CI (TEST-108, TEST-109)
+No CI runs `prisma migrate deploy` (empty DB and v0.8 snapshot), starts the API or migrator images,
+or exercises `210`'s rollback mode. Add a Postgres service job for the migrations, start the
+api/migrator images in `200`'s smoke test, and run `TestRealDrawioExport` inside the API image.
+
+### T-717 — Bound request bodies in cna-api
+The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JSON body to
+`POST /chat/{engagement_id}`; the API parsed all of it before truncating the message to
+`MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
+balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
+declared constant, e.g. 1 MiB, with 413) and a test.
+

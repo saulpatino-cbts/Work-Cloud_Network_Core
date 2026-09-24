@@ -84,6 +84,22 @@ enrichment = [
     "mcp>=2.0.0,<3",                          # Azure/AWS MCP recommendation clients
 ]
 
+# The cna-api image's runtime dependencies. These are NOT core library deps
+# (the CLI never imports FastAPI), so they live in their own extra rather than
+# in `dependencies`. The API Dockerfile installs `.[api]`, which also pulls the
+# core deps, so the image no longer drifts from a hand-written pip list (PY-021).
+# The three azure-mgmt-* packages are the enrichment paths the API actually
+# exercises at discovery time and must be present in the image; the rest of the
+# enrichment extra remains optional.
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "psycopg2-binary>=2.9",
+    "azure-mgmt-monitor>=6.0.2,<7",
+    "azure-mgmt-loganalytics>=14.0.0,<15",
+    "azure-mgmt-compute>=38.2.0,<39",
+]
+
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)

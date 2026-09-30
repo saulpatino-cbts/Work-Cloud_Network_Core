@@ -1,6 +1,7 @@
 # Dependabot — automated dependency updates
-# Covers: Python packages (pip), GitHub Actions, Docker base images (all four
-# Dockerfiles), npm (cna-web). Minor/patch updates are grouped per ecosystem.
+# Covers: Python packages (uv — pyproject.toml + uv.lock), GitHub Actions,
+# Docker base images (all four Dockerfiles, including the `COPY --from` uv
+# binary), npm (cna-web). Minor/patch updates are grouped per ecosystem.
 #
 # PR strategy:
 #   - Python: weekly, grouped by ecosystem, auto-assign to saulpatinojr
@@ -11,8 +12,11 @@
 version: 2
 updates:
 
-  # Python dependencies
-  - package-ecosystem: pip
+  # Python dependencies — the `uv` ecosystem, not `pip`: the resolution lives in
+  # uv.lock (TODO.md T-702) and every Python image installs from it, so an
+  # update must move pyproject.toml and uv.lock together or 300-test-codebase's
+  # `uv lock --check` fails the PR.
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: weekly

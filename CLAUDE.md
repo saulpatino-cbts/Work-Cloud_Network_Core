@@ -89,6 +89,13 @@ or record a `TODO.md` item naming them — never leave one side implied.
   destination, not filename.
 - **Never hardcode a value at a call site.** Declare it (`DiscoveryOptions`
   field, module-level constant, setting) and resolve at runtime.
+- **Python dependencies are locked.** `uv.lock` is the resolution every Python
+  image installs (`uv export --locked` + `--require-hashes`); after editing a
+  dependency, extra or dependency group in `pyproject.toml`, run `uv lock` and
+  commit both files — `300-test-codebase` fails on drift. Never edit `uv.lock`
+  by hand, never add a package to a Dockerfile with a bare `pip install`, and
+  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a Docker Scout
+  finding on a base-image package is fixed by Dependabot's digest bump.
 - **Workflows are numbered in bands** (`000` bootstrap, `100` validation, `200`
   build/deploy, `300` test/release/ops). Numbers are stable across core and
   both appliances; never renumber, reference by filename. The core owns `200`,

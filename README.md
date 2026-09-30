@@ -124,6 +124,10 @@ cna --help
 
 Lint and test the Python package with `ruff check cna/`, `ruff format --check`, and `pytest`.
 
+The container images do not resolve dependencies at build time: they install the resolution
+committed in `uv.lock` with hash checking. After changing a dependency in `pyproject.toml`, run
+`uv lock` (uv ≥ 0.12.21) and commit the updated lock alongside it — CI fails when the two disagree.
+
 ### Deploying an environment
 
 Deployment does not happen from this repository. Each appliance repository owns its cloud's

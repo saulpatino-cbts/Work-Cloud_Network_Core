@@ -1963,7 +1963,19 @@ mutable tag and unconditionally uses `migrator-latest`. Add a `migrator_image` i
 `digests{}`. Shared change — both appliances in one change set.
 
 ### T-702 — Python lockfile and pinned floors (PY-020, IMG-004)
-0 of the package's dependency specifiers are pinned and there is no lockfile, so an immutable
+- **Status:** Done 2026-09-30 — `uv.lock` (145 packages, universal, hashed) is committed and every
+  Python Dockerfile installs from it: `uv export --locked` (fails on drift) → `uv pip install
+  --require-hashes --no-deps --prefix=/install`, the `cna` wheel built with `--no-build-isolation`
+  against a hash-checked `build` dependency group, and the worker's two SDKs from a `worker`
+  group instead of an unpinned `pip install`. uv enters the builder stage as a digest-pinned
+  `COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:…` and never reaches a final image. `300 ·
+  Test Codebase` gains a `lockfile` job (`uv lock --check` + a hash-checked dry-run of the cli /
+  api / worker / build sets on cp314) and `pip-audit` now audits the locked export; Dependabot's
+  Python ecosystem is `uv`. `apt-get -y upgrade` / `apk upgrade` are gone from all final stages
+  and the base digests are current (`python:3.14-slim@sha256:51dafde8…`,
+  `node:24-alpine@sha256:ebfe2f90…`); a Scout finding on a base package is now fixed by the
+  Dependabot digest bump. The `>=` floors in `pyproject.toml` stay as floors — the lock is the pin.
+- **Original description:** 0 of the package's dependency specifiers are pinned and there is no lockfile, so an immutable
 `sha-<7>` image is not reproducible (today's resolution accepts `openai 3.x` against a `>=2.45`
 floor). Generate a lock (`uv lock` / `pip-compile` with hashes) consumed by all three Python
 Dockerfiles, and drop `apt-get -y upgrade` from the final stages once Dependabot's docker coverage

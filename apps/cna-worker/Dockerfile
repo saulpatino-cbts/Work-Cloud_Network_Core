@@ -1,18 +1,21 @@
-# python:3.14-slim digest pinned — see root Dockerfile for the same pattern.
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS builder
+# python:3.14-slim digest pinned 2026-09-30 — see root Dockerfile for the same pattern.
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS builder
 
 WORKDIR /build
-COPY pyproject.toml .
-COPY apps/cna-worker apps/cna-worker
-RUN pip install --no-cache-dir --prefix=/install azure-identity azure-storage-blob
+
+# The worker installs no package of its own — only the two Azure SDKs
+# apps/cna-worker/main.py imports, resolved from the `worker` dependency group
+# in uv.lock (TODO.md T-702) so they are the same versions the CLI and API
+# images carry, hash-checked, instead of an unpinned `pip install`. uv stays in
+# the builder stage; see the root Dockerfile for the pattern.
+COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv export --locked --only-group worker --no-emit-project -o /tmp/requirements.txt \
+ && uv pip install --system --no-cache --require-hashes --no-deps --prefix=/install -r /tmp/requirements.txt \
+ && rm -f /tmp/requirements.txt
 
 # ---- final stage ----
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5
-
-# Pending Debian security fixes, so the gating Docker Scout check doesn't
-# fail on base-image debs between digest bumps (same pattern as the root
-# and API Dockerfiles).
-RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
 
 # Non-root user — uid/gid 1001 (matches root Dockerfile's cna user).
 RUN groupadd --gid 1001 cna \

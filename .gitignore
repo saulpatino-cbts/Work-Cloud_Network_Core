@@ -35,6 +35,9 @@ apps/cna-web/.env*.local
 # Build artifacts — should not be committed
 cna.egg-info/
 *.egg-info/
+# setuptools build output (a local `pip install --no-build-isolation .` leaves it behind)
+build/
+dist/
 apps/cna-web/tsconfig.tsbuildinfo
 
 # Operational logs and payloads — contain runtime data, not source

@@ -1,4 +1,9 @@
 # python:3.14-slim digest pinned 2026-09-30 — see root Dockerfile for the same pattern.
+# uv, as a stage rather than an inline `COPY --from=<image>`: Dependabot's docker
+# updater only reads `FROM` lines, so this is the line its weekly bump moves.
+# Keep the version in step with the `uv==` pins in 300-test-codebase.yml.
+FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
+
 FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS builder
 
 WORKDIR /build
@@ -8,7 +13,7 @@ WORKDIR /build
 # in uv.lock (TODO.md T-702) so they are the same versions the CLI and API
 # images carry, hash-checked, instead of an unpinned `pip install`. uv stays in
 # the builder stage; see the root Dockerfile for the pattern.
-COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 RUN uv export --locked --only-group worker --no-emit-project -o /tmp/requirements.txt \
  && uv pip install --system --no-cache --require-hashes --no-deps --prefix=/install -r /tmp/requirements.txt \

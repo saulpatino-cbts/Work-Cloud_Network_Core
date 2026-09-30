@@ -1967,10 +1967,12 @@ mutable tag and unconditionally uses `migrator-latest`. Add a `migrator_image` i
   Python Dockerfile installs from it: `uv export --locked` (fails on drift) → `uv pip install
   --require-hashes --no-deps --prefix=/install`, the `cna` wheel built with `--no-build-isolation`
   against a hash-checked `build` dependency group, and the worker's two SDKs from a `worker`
-  group instead of an unpinned `pip install`. uv enters the builder stage as a digest-pinned
-  `COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:…` and never reaches a final image. `300 ·
-  Test Codebase` gains a `lockfile` job (`uv lock --check` + a hash-checked dry-run of the cli /
-  api / worker / build sets on cp314) and `pip-audit` now audits the locked export; Dependabot's
+  group instead of an unpinned `pip install`. uv enters the builder stage from a digest-pinned
+  `FROM ghcr.io/astral-sh/uv:0.12.21@sha256:… AS uv` stage (a `FROM` line, so Dependabot's docker
+  updater bumps it — it does not read `COPY --from=<image>`) and never reaches a final image.
+  `300 · Test Codebase` gains a `lockfile` job (`uv lock --check` + a real hash-verified install
+  of the cli / api / worker / build sets into a throwaway prefix on cp314) and `pip-audit` now
+  audits the locked export; Dependabot's
   Python ecosystem is `uv`. `apt-get -y upgrade` / `apk upgrade` are gone from all final stages
   and the base digests are current (`python:3.14-slim@sha256:51dafde8…`,
   `node:24-alpine@sha256:ebfe2f90…`); a Scout finding on a base package is now fixed by the

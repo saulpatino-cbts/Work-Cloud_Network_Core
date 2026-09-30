@@ -135,10 +135,11 @@ worker = [
 # uv.lock is the single resolution every Python image installs from
 # (`uv export --locked` → `uv pip install --require-hashes`); 300-test-codebase
 # fails when it drifts from this file (`uv lock --check`). Regenerate with
-# `uv lock` after editing any dependency above. The floor is the version whose
-# lock format CI and the Dockerfiles pin; a newer uv reads it unchanged.
-[tool.uv]
-required-version = ">=0.12.21"
+# `uv lock` after editing any dependency above. The uv version is pinned where
+# it runs — the `FROM ghcr.io/astral-sh/uv:<version>@sha256:…` stage in each
+# Python Dockerfile and the `uv==<version>` steps in 300-test-codebase.yml —
+# not here: a `[tool.uv] required-version` floor would break Dependabot's uv
+# updater, which runs its own bundled uv (older than the one pinned here).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

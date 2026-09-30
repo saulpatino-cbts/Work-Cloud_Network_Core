@@ -1,7 +1,9 @@
 # Dependabot — automated dependency updates
 # Covers: Python packages (uv — pyproject.toml + uv.lock), GitHub Actions,
-# Docker base images (all four Dockerfiles, including the `COPY --from` uv
-# binary), npm (cna-web). Minor/patch updates are grouped per ecosystem.
+# Docker base images (every `FROM` in all four Dockerfiles, including the
+# `FROM ghcr.io/astral-sh/uv:… AS uv` stage the Python images copy uv from —
+# Dependabot does not read `COPY --from=<image>`), npm (cna-web). Minor/patch
+# updates are grouped per ecosystem.
 #
 # PR strategy:
 #   - Python: weekly, grouped by ecosystem, auto-assign to saulpatinojr

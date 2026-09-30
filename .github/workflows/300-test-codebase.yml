@@ -272,12 +272,15 @@ jobs:
   # ------------------------------------------------------------------
   # Every Python image installs from uv.lock, so a pyproject.toml edit that is
   # not followed by `uv lock` would fail the image builds on main. Catch it
-  # here, on the PR, and prove the three install sets the Dockerfiles export
-  # still resolve to hash-checked wheels for the image interpreter (cp314
-  # linux) — the same `uv export` / `uv pip install --require-hashes` commands
-  # the Dockerfiles run, minus the download. uv is version-pinned to the release
-  # the Dockerfiles copy in (`ghcr.io/astral-sh/uv:0.12.21`), so the check and
-  # the build read the lock identically.
+  # here, on the PR, and prove the install sets the Dockerfiles export still
+  # install as hash-checked wheels for the image interpreter (cp314 linux) — the
+  # same `uv export` / `uv pip install --require-hashes` commands the
+  # Dockerfiles run, into a throwaway prefix. A real install, not `--dry-run`:
+  # dry-run only proves a hash is *present*; the hash is verified, and a
+  # missing cp314 wheel is noticed, only when the file is fetched. uv is
+  # version-pinned to the release the Dockerfiles' `uv` stage copies in
+  # (`ghcr.io/astral-sh/uv:0.12.21`), so the check and the build read the lock
+  # identically.
   lockfile:
     name: Python Lockfile Consistency
     runs-on: ubuntu-latest
@@ -287,19 +290,25 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+      - name: Cache uv wheels
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: lockfile-uv-${{ hashFiles('uv.lock') }}
       - name: Install uv
         run: pip install "uv==0.12.21"
       - name: uv.lock matches pyproject.toml
         run: uv lock --check
-      - name: Every image install set resolves from the lock with hashes
+      - name: Every image install set installs from the lock with verified hashes
         run: |
           set -euo pipefail
           # (label, export flags) — one line per Python Dockerfile plus the build group.
           while IFS='|' read -r label flags; do
             echo "::group::${label}"
             # shellcheck disable=SC2086  # flags are a deliberate word list
-            uv export --locked --no-emit-project ${flags} -o "/tmp/${label}.txt"
-            uv pip install --system --dry-run --require-hashes --no-deps -r "/tmp/${label}.txt"
+            uv export --locked --no-emit-project ${flags} -o "${RUNNER_TEMP}/${label}.txt"
+            uv pip install --system --require-hashes --no-deps \
+              --prefix "${RUNNER_TEMP}/prefix-${label}" -r "${RUNNER_TEMP}/${label}.txt"
             echo "::endgroup::"
           done <<'SETS'
           cli|--no-default-groups

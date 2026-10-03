@@ -1984,7 +1984,19 @@ Dockerfiles, and drop `apt-get -y upgrade` from the final stages once Dependabot
 (added in this review) keeps the base digests fresh.
 
 ### T-703 — Sign images and verify provenance in the appliances (RELEASE-003, IMG-012)
-`200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
+- **Status:** Done 2026-10-03 — `200` signs every digest after its gates with cosign keyless
+  (`scripts/ci/sign_image.sh`: `cosign sign` + `cosign attest --type slsaprovenance02` with
+  BuildKit's own provenance predicate, `builder.id` asserted to be the run) under
+  `https://github.com/<owner>/<core>/.github/workflows/200-build-images.yml@refs/heads/main`. Both
+  appliances gain `scripts/ci/verify_image_signature.sh`, run by `210` on all four images before
+  the plan and by `220` on every image named: `cosign verify` (exact identity + issuer),
+  `cosign verify-attestation --type slsaprovenance02`, subject digest = deployed digest,
+  `predicate.builder.id` under `https://github.com/<owner>/<core>/actions/runs/`. The identity is
+  the appliance variable `IMAGE_SIGNING_IDENTITY` (checked by `100`; appliance `REVIEW.md` entry
+  for the roll-out order — pre-T-703 digests, rollback targets included, do not verify). Shared
+  cosign release `v3.1.3`, installer `sigstore/cosign-installer@6f9f177` (v4.1.2), in all three.
+  Appliance PRs: Azure / AWS `work/adoring-cerf-9c6avz`.
+- **Original description:** `200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
 published digest (cosign keyless with the workflow OIDC identity) and have `210` verify the
 signature and the SLSA provenance subject before deploying.
 
@@ -2065,4 +2077,12 @@ The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JS
 `MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
 balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
 declared constant, e.g. 1 MiB, with 413) and a test.
+
+### T-718 — Prune orphaned signature tags in `370-registry-cleanup`
+T-703 stores each image's cosign signature and attestation as `sha256-<digest>.sig` /
+`sha256-<digest>.att` tags beside it on Docker Hub. `370` matches only the `*-sha-*` component
+tags, so it never deletes them — correct while the image lives, but once `370` removes an image's
+last tag its `.sig`/`.att` tags stay behind forever. Extend `370` to delete a `.sig`/`.att` tag
+whose `sha256-<digest>` has no remaining image tag (`docker manifest inspect` of the digest fails),
+behind the same `dry_run` input.
 

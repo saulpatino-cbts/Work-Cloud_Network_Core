@@ -120,7 +120,9 @@ jobs:
           fi
 
           # Component name -> SHA-tag regex (matches the sha_prefix values in
-          # 200-build-images.yml).
+          # 200-build-images.yml). cosign's `sha256-<digest>.sig` / `.att` tags
+          # (T-703) match none of these and are never deleted here; the ones
+          # orphaned when their image's last tag goes are TODO.md T-718.
           declare -A COMPONENT_PATTERNS=(
             ["cli"]="^sha-[0-9a-f]+$"
             ["api"]="^api-sha-[0-9a-f]+$"

@@ -19,6 +19,14 @@ name: "200 · Build Container Images"
 # and Docker Hub garbage-collects it. The tag names, the `latest-build.json`
 # fields and the `cna-image-published` payload are unchanged; the manifest
 # additionally records `digests{}` so the appliances can pin by digest.
+#
+# Signing (TODO.md T-703). Once an image has passed its gates, the build job
+# signs the digest with cosign — keyless, under this workflow's OIDC identity
+# (`id-token: write`, nothing stored in the repository) — and attaches BuildKit's
+# SLSA provenance as a cosign attestation (scripts/ci/sign_image.sh). The
+# appliances refuse to deploy a digest that does not verify against this
+# workflow's identity, so a tag re-pointed on Docker Hub, or an image pushed with
+# the registry credential from anywhere else, cannot be rolled out.
 
 on:
   push:
@@ -32,6 +40,7 @@ on:
       - apps/cna-web/**
       - cna/**
       - scripts/drawio-headless.sh
+      - scripts/ci/sign_image.sh
       - pyproject.toml
       - uv.lock  # every Python image installs from it (TODO.md T-702)
       - .github/workflows/200-build-images.yml
@@ -49,8 +58,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # cosign release that signs every image; both appliances verify with the same
+  # release (COSIGN_VERSION in their 210/220). Bump the three together.
+  COSIGN_VERSION: v3.1.3
+
 # No workflow-wide grants: each job declares the least it needs below. The build
-# jobs run third-party actions and must not hold a write token.
+# jobs run third-party actions and must not hold a write token (`id-token` lets
+# cosign request a certificate for this run's identity; it grants nothing in
+# this repository).
 permissions: {}
 
 jobs:
@@ -68,6 +84,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      id-token: write
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     outputs:
@@ -117,6 +134,11 @@ jobs:
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
       # The tag list computed here is NOT applied by the build step below; it is
       # handed to `tag-images`, which applies it only after every image has
       # passed its scan. The labels are baked into the image now.
@@ -160,6 +182,13 @@ jobs:
           only-fixed: true
           exit-code: true
 
+      # Sign only what Scout accepted, and only by digest: the signature is what
+      # the appliances verify before a deploy (scripts/ci/sign_image.sh).
+      - name: Sign and attest ${{ matrix.name }} image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: scripts/ci/sign_image.sh "docker.io/${DOCKERHUB_NAMESPACE}/cna@${DIGEST}"
+
       - name: Record ${{ matrix.name }} digest and tag list for tag-images
         id: digest
         env:
@@ -186,6 +215,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      id-token: write
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     outputs:
@@ -213,6 +243,11 @@ jobs:
             echo "::error::DOCKERHUB_NAMESPACE variable is required."
             exit 1
           fi
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
 
       # Tag lists here are handed to `tag-images` and applied only after every
       # image has passed its scan (see the CLI/API/Worker job above).
@@ -332,6 +367,17 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed (status=$STATUS)"
+
+      # Both digests have now passed Scout and web its smoke test; sign them by
+      # digest (scripts/ci/sign_image.sh) — same gate as the CLI/API/Worker job.
+      - name: Sign and attest Web and Migrator images
+        env:
+          DIGEST_WEB: ${{ steps.build_web.outputs.digest }}
+          DIGEST_MIGRATOR: ${{ steps.build_migrator.outputs.digest }}
+        run: |
+          set -euo pipefail
+          scripts/ci/sign_image.sh "docker.io/${DOCKERHUB_NAMESPACE}/cna@${DIGEST_WEB}"
+          scripts/ci/sign_image.sh "docker.io/${DOCKERHUB_NAMESPACE}/cna@${DIGEST_MIGRATOR}"
 
       - name: Record Web and Migrator digests and tag lists for tag-images
         id: digest

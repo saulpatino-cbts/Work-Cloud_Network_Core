@@ -2,7 +2,7 @@
 # uv, as a stage rather than an inline `COPY --from=<image>`: Dependabot's docker
 # updater only reads `FROM` lines, so this is the line its weekly bump moves.
 # Keep the version in step with the `uv==` pins in 300-test-codebase.yml.
-FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc AS uv
 
 FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS builder
 

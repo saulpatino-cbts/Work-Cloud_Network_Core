@@ -123,3 +123,16 @@ or record a `TODO.md` item naming them — never leave one side implied.
   not project source and must never contain project-specific facts.
 - Start with `TODO.md` when picking up work; check `REVIEW.md` when blocked on a
   human decision.
+- **Working a backlog item** follows `.claude/orchestration/workflows.md` → W12
+  (trigger skill `work-backlog-item`): spec → a specialist implements → a
+  *different* agent verifies adversarially → findings folded → checks → docs →
+  draft PR; humans merge. Definition of done in this repository, on the final
+  tree: `ruff check .` and `ruff format --check .`; `pytest tests/unit/
+  --cov=cna --cov=apps --cov-fail-under=80`; `actionlint` on every changed
+  workflow; `pre-commit run detect-secrets --all-files`, staging the baseline
+  file it relocates; `scripts/validate_documentation_model.py`;
+  `uv lock --check` when `pyproject.toml` changed; `npm run lint`,
+  `npm run typecheck` and `npm test` in `apps/cna-web` when it changed. A
+  change to contract items 1–5 above lands in both appliances in the same
+  change set, byte-identical in the shared files. Never merge, never
+  `terraform apply`, never flip `ai_mode`.

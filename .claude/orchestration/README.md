@@ -12,7 +12,7 @@ offensive engagement hands its findings to the defensive and DFIR agents.
 |---|---|
 | [`routing.md`](routing.md) | Deciding **which** specialist handles a request — includes disambiguation for the pairs that genuinely overlap |
 | [`handoffs.md`](handoffs.md) | Passing work **between** agents — the contract each pair owes the next |
-| [`workflows.md`](workflows.md) | The request needs **several** agents in sequence — seven named workflows with their gates |
+| [`workflows.md`](workflows.md) | The request needs **several** agents in sequence — twelve named workflows with their gates, including W12, the backlog-item-to-pull-request loop every repository change goes through |
 
 ## The short version
 

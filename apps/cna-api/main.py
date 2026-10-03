@@ -1693,8 +1693,13 @@ class TestConnectionRequest(BaseModel):
 
 
 @app.post("/discovery/test-connection")
-async def test_connection(request: TestConnectionRequest) -> dict:
-    """Validate SP credentials against the Azure tenant."""
+def test_connection(request: TestConnectionRequest) -> dict:
+    """Validate SP credentials against the Azure tenant.
+
+    Plain ``def`` on purpose (T-705): the Azure SDK calls below block, and a
+    blocking call inside ``async def`` stalls the event loop — and with it the
+    liveness probe. FastAPI runs a sync handler in its threadpool instead.
+    """
     try:
         from azure.identity import ClientSecretCredential
         from azure.mgmt.subscription import SubscriptionClient
@@ -1728,8 +1733,11 @@ class AwsTestConnectionRequest(BaseModel):
 
 
 @app.post("/discovery/test-connection-aws")
-async def test_connection_aws(request: AwsTestConnectionRequest) -> dict:
-    """Validate AWS keys and prove the CNA read-only role can be assumed."""
+def test_connection_aws(request: AwsTestConnectionRequest) -> dict:
+    """Validate AWS keys and prove the CNA read-only role can be assumed.
+
+    Plain ``def`` on purpose (T-705): boto3 blocks; see ``test_connection``.
+    """
     try:
         import boto3  # lazy: keeps Azure-only deployments importable without boto3
 
@@ -1783,9 +1791,9 @@ class DiscoveryStartRequest(BaseModel):
 
 
 @app.post("/discovery/start")
-async def start_discovery(
-    request: DiscoveryStartRequest, background_tasks: BackgroundTasks
-) -> dict:
+def start_discovery(request: DiscoveryStartRequest, background_tasks: BackgroundTasks) -> dict:
+    # Plain ``def`` on purpose (T-705): the job-row writes below block on the
+    # database; a sync handler runs in the threadpool, off the event loop.
     if request.platform.upper() == "AWS":
         if not request.aws_role_arn:
             raise HTTPException(

@@ -50,6 +50,8 @@ cloud spend, and not generic platform work:
 | API routes, workers, database, integrations | [`backend-engineer`](../agents/backend-engineer.md) |
 | React components, UI, user experience | [`frontend-engineer`](../agents/frontend-engineer.md) |
 | This repo's Terraform, deployments, CI/CD, monitoring | [`infrastructure-engineer`](../agents/infrastructure-engineer.md) |
+| "Work the next backlog item" / "next up T-nnn" / "close T-nnn" | [`workflows.md`](workflows.md) → **W12** — one of the three above implements, a *different* agent verifies; trigger skill [`work-backlog-item`](../skills/work-backlog-item/SKILL.md) |
+| "Review this change set" / "verify before I merge" | The W12 verifier for the area (table in W12); never the agent that wrote it |
 
 ### Platform-engineering agents
 
@@ -233,6 +235,8 @@ before dispatching:
    you get advice the org cannot use. See [`../doctrine/crawl-walk-run.md`](../doctrine/crawl-walk-run.md).
 5. **Name the audience.** Every agent shapes output differently for Engineering, Finance,
    Procurement, and Leadership.
+6. **Author ≠ verifier.** Any change bound for a pull request is verified by an agent that did
+   not write it — see W12 in [`workflows.md`](workflows.md).
 
 ## Related
 

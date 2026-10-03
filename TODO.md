@@ -2021,7 +2021,12 @@ progress line (dozens per job). Introduce one connection pool (`psycopg2.pool` o
 connection passed to `_log`) and close connections deterministically.
 
 ### T-705 — Blocking I/O in `async def` handlers (PY-003)
-`test_connection`, `test_connection_aws` and `start_discovery` perform blocking SDK and database
+- **Status:** Done 2026-10-03 — the three handlers are plain `def` (FastAPI runs them in its
+  threadpool), each with a comment saying why. `tests/unit/test_cna_api_async_handlers.py` pins
+  them as sync and adds a structural guard over every route this repository defines (`main.py`
+  and `routers/*`): an `async def` endpoint must contain an `await`, otherwise it can only be
+  blocking the loop. No other handler in the API was async.
+- **Original description:** `test_connection`, `test_connection_aws` and `start_discovery` perform blocking SDK and database
 calls inside `async def`, stalling the event loop and the liveness probe. Make them plain `def`
 (FastAPI runs them in the threadpool) or move the blocking work to `run_in_threadpool`.
 

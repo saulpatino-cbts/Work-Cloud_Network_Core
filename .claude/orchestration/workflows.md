@@ -309,6 +309,70 @@ stops and asks whenever the authorization context is not clear.
 
 ---
 
+## W12 — Backlog item to reviewed pull request
+
+**Trigger:** "Work the next backlog item", "next up T-nnn", "close T-nnn".
+**Owner:** the session orchestrator. Specialists author and verify; **the same agent never does
+both** for one change.
+**Ends at:** a draft pull request per repository, with the human gates named in its body. The
+workflow never merges, never applies infrastructure, never flips a live setting.
+
+```
+0. Select and scope         → orchestrator           (TODO.md item; REVIEW.md for blockers)
+1. Specify                  → orchestrator           (files, contract impact, sibling repos, done criteria)
+2. Implement                → repo-engineering specialist, routed by area
+3. Verify, adversarially    → a DIFFERENT specialist (author ≠ verifier)
+4. Fold the findings        → the implementer; re-verify only what changed
+5. Run the declared checks  → orchestrator           (the repository's root CLAUDE.md lists them)
+6. Record                   → CHANGELOG, TODO status, REVIEW entry if a human decision is owed,
+                              CLAUDE.md if a convention or a cross-repository contract changed
+7. Deliver                  → commit, push, draft PR per repository, siblings linked — then stop
+```
+
+**Gates — each is a precondition, not a checkpoint:**
+- **0→1:** the item is open and no `REVIEW.md` entry blocks it. If a human decision is owed,
+  write the entry and stop; do not implement around it.
+- **1→2:** the spec names every file, every sibling repository that must change in the same
+  change set, the acceptance checks, and what the implementer may **not** touch.
+- **2→3:** the implementer hands over the *implementer → verifier* envelope
+  ([`handoffs.md`](handoffs.md)) — the diff, the claims the change makes (including every number
+  in its documentation), the commands run with results, and what could not be run and why.
+- **3→4:** the verifier returns numbered findings with severity, evidence and a concrete fix,
+  and a verdict. A verifier edits nothing.
+- **4→5:** no BLOCKER remains; every SHOULD-FIX is fixed or recorded as a TODO item with a
+  reason. Nits are judgment.
+- **5→6:** every declared check is green on the final tree, not on an earlier one.
+- **6→7:** every documentation claim matches the diff (counts, defaults, file names). A claim
+  the diff does not deliver is a defect, not prose.
+- **7:** commit after verification, never before; one commit per logical change; the PR body
+  carries the verification evidence, what was *not* run, and each human gate marked
+  `[REVIEW REQUIRED]`.
+
+**Choosing the verifier.** Pick for the failure mode, not for availability:
+
+| Implementer | Verifier | Because |
+|---|---|---|
+| [`backend-engineer`](../agents/backend-engineer.md) | [`python-engineer`](../agents/python-engineer.md) or [`security-engineer`](../agents/security-engineer.md) | Semantics and concurrency, or trust boundaries |
+| [`python-engineer`](../agents/python-engineer.md) | [`backend-engineer`](../agents/backend-engineer.md) | Call-site behaviour over tooling correctness |
+| [`infrastructure-engineer`](../agents/infrastructure-engineer.md) | [`security-engineer`](../agents/security-engineer.md) or [`docker-expert`](../agents/docker-expert.md) | Supply chain, identity, image contents |
+| [`docker-expert`](../agents/docker-expert.md) | [`security-engineer`](../agents/security-engineer.md) | What the image ships, not how it builds |
+| [`frontend-engineer`](../agents/frontend-engineer.md) | [`backend-engineer`](../agents/backend-engineer.md) | Authorization and data flow behind the UI |
+| any documentation change | [`documentation-curator`](../agents/documentation-curator.md) | Placement, cross-references, truthfulness |
+
+**Rules that have earned their place:**
+- **Fail closed.** A check that cannot run here (no daemon, no registry, no API) is reported
+  as *not run*, with the step that will run it first, never as passed.
+- **Mirrored repositories move together.** When the root `CLAUDE.md` declares a sibling,
+  shared files are edited once and copied byte-identically; the delivery step diffs the
+  siblings' hunks before pushing.
+- **The host decides what is blocked, the human decides what happens.** If the host cannot
+  push, open a PR or reach a repository, the workflow says exactly which step and hands the
+  human the exact actions, in order — it does not route around the block.
+- **Order of merge is part of the deliverable.** When one repository's change must land before
+  another's can work, the PR bodies and the `REVIEW.md` entry say so.
+
+---
+
 ## Composition rules
 
 1. **Sequential unless proven independent.** W3 parallelizes because the tracks touch different

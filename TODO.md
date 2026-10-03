@@ -2015,7 +2015,7 @@ signature and the SLSA provenance subject before deploying.
   `CNA_DB_POOL_TIMEOUT_SECONDS` for one of `CNA_DB_POOL_MAX` connections gets a 503 with
   `Retry-After` (new `Outcome.UNAVAILABLE`) rather than a 41st connection on the server. Both
   variables are optional with code defaults (10 / 10; `.env.example`); the appliances inject
-  nothing new. 19 tests in `tests/unit/test_cna_api_db_pool.py`.
+  nothing new. 18 tests (23 parametrised cases) in `tests/unit/test_cna_api_db_pool.py`.
 - **Original description:** `apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
 progress line (dozens per job). Introduce one connection pool (`psycopg2.pool` or a per-job
 connection passed to `_log`) and close connections deterministically.

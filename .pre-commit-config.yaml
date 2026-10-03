@@ -33,7 +33,12 @@ repos:
         # more. Excluding it meant a real credential pasted into the template
         # would never be caught; its three placeholder findings are recorded in
         # the baseline instead, which still catches anything new.
-        exclude: ^(\.claude|\.agents|\.codex|\.kiro|\.deployment-catalog)/
+        #
+        # `uv.lock` is the Python resolution (TODO.md T-702): thousands of
+        # sha256 wheel hashes that are public PyPI data, not secrets, and every
+        # one trips the hex-entropy detector. Excluded on the same grounds as
+        # `.deployment-catalog/` above.
+        exclude: ^(\.claude|\.agents|\.codex|\.kiro|\.deployment-catalog)/|^uv\.lock$
 
   # --- Python linting ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -58,6 +63,9 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=500']
+        # uv.lock is ~800 KB of generated resolution data and grows with the
+        # dependency tree; it is the one file allowed past the limit.
+        exclude: ^uv\.lock$
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: no-commit-to-branch

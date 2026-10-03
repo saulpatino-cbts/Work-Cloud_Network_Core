@@ -8,8 +8,14 @@
 #   6. HEALTHCHECK added (required for ECS/AKS task definitions)
 #   7. .dockerignore referenced — see .dockerignore in repo root
 
-# python:3.14-slim digest pinned 2026-08-28 (refreshed for the 2026-08 OpenSSL DSA)
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS builder
+# python:3.14-slim digest pinned 2026-09-30. Dependabot's docker ecosystem watches
+# every Dockerfile and bumps this line; nothing else keeps base-image debs current.
+# uv, as a stage rather than an inline `COPY --from=<image>`: Dependabot's docker
+# updater only reads `FROM` lines, so this is the line its weekly bump moves.
+# Keep the version in step with the `uv==` pins in 300-test-codebase.yml.
+FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
+
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS builder
 
 ARG CNA_VERSION=dev
 WORKDIR /build
@@ -19,16 +25,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+# Every Python image installs from uv.lock (TODO.md T-702): `uv export --locked`
+# fails the build if the lock has drifted from pyproject.toml, and
+# `--require-hashes` makes the install byte-for-byte the resolution that was
+# reviewed. uv is copied in as a pinned, digest-verified binary and stays in
+# the builder stage only. Dependencies first (cacheable layer), then the
+# package itself with `--no-build-isolation` so the build backend is the
+# hash-checked `build` group rather than whatever pip would fetch unpinned.
+COPY --from=uv /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv export --locked --no-default-groups --no-emit-project -o /tmp/requirements.txt \
+ && uv pip install --system --no-cache --require-hashes --no-deps --prefix=/install -r /tmp/requirements.txt \
+ && uv export --locked --only-group build -o /tmp/build-requirements.txt \
+ && uv pip install --system --no-cache --require-hashes --no-deps -r /tmp/build-requirements.txt
 COPY cna/ cna/
-RUN pip install --no-cache-dir --prefix=/install .
+RUN uv pip install --system --no-cache --no-deps --no-build-isolation --prefix=/install . \
+ && rm -f /tmp/requirements.txt /tmp/build-requirements.txt
 
 # ---- drawio fetch stage ----
 # Pinned draw.io desktop release, verified by checksum before it can reach
 # the final image. The export pipeline (cna/diagram_engine/export_pipeline.py)
 # degrades to XML-only output without it — its own warning promises the CLI
 # is available "inside the Docker container", which is made true here.
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS drawio-fetch
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS drawio-fetch
 
 ARG DRAWIO_VERSION=31.3.2
 ARG DRAWIO_SHA256=725453f32ef7f2f63f8b50b374857a5c312e2aaabcf221cb0600332741ae1094
@@ -40,7 +59,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
   && echo "${DRAWIO_SHA256}  /tmp/drawio.deb" | sha256sum -c -
 
 # ---- final stage ----
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
 
 ARG CNA_VERSION=dev
 LABEL org.opencontainers.image.title="CNA Platform" \
@@ -49,10 +68,11 @@ LABEL org.opencontainers.image.title="CNA Platform" \
       org.opencontainers.image.source="https://github.com/saulpatinojr/Work-Cloud_Network_Core" \
       org.opencontainers.image.licenses="Proprietary"
 
-# System deps for diagram generation (runtime only). The `upgrade` pulls
-# pending Debian security fixes (e.g. the 2026-08 OpenSSL DSA) so the gating
-# Docker Scout check doesn't fail on base-image debs between digest bumps.
-RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends \
+# System deps for diagram generation (runtime only). No `apt-get upgrade`:
+# the image must be the pinned base digest plus these packages, nothing that
+# depends on the day it was built. When Docker Scout fails on a base-image
+# deb, the fix is the Dependabot digest bump, not a rebuild (TODO.md T-702).
+RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz libcairo2 libpango-1.0-0 \
     libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
     && rm -rf /var/lib/apt/lists/*

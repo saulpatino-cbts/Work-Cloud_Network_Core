@@ -33,6 +33,7 @@ on:
       - cna/**
       - scripts/drawio-headless.sh
       - pyproject.toml
+      - uv.lock  # every Python image installs from it (TODO.md T-702)
       - .github/workflows/200-build-images.yml
   workflow_dispatch:
 

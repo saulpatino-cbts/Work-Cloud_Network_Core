@@ -8,6 +8,7 @@
 #   - ruff jobs split: check + format are separate steps with annotations
 #   - module-dependency-check now also runs on PRs (was push-only)
 #   - Job timeout-minutes set on every job (prevent runaway billing)
+#   - uv.lock consistency gate + pip-audit of the locked resolution (T-702)
 #   - Explicit permissions block (principle of least privilege)
 name: "300 · Test Codebase"
 
@@ -267,7 +268,57 @@ jobs:
           echo "OK: running as $USER"
 
   # ------------------------------------------------------------------
-  # 6. Python dependency vulnerability audit
+  # 6. Python lockfile consistency (TODO.md T-702)
+  # ------------------------------------------------------------------
+  # Every Python image installs from uv.lock, so a pyproject.toml edit that is
+  # not followed by `uv lock` would fail the image builds on main. Catch it
+  # here, on the PR, and prove the install sets the Dockerfiles export still
+  # install as hash-checked wheels for the image interpreter (cp314 linux) — the
+  # same `uv export` / `uv pip install --require-hashes` commands the
+  # Dockerfiles run, into a throwaway prefix. A real install, not `--dry-run`:
+  # dry-run only proves a hash is *present*; the hash is verified, and a
+  # missing cp314 wheel is noticed, only when the file is fetched. uv is
+  # version-pinned to the release the Dockerfiles' `uv` stage copies in
+  # (`ghcr.io/astral-sh/uv:0.12.21`), so the check and the build read the lock
+  # identically.
+  lockfile:
+    name: Python Lockfile Consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Cache uv wheels
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: lockfile-uv-${{ hashFiles('uv.lock') }}
+      - name: Install uv
+        run: pip install "uv==0.12.21"
+      - name: uv.lock matches pyproject.toml
+        run: uv lock --check
+      - name: Every image install set installs from the lock with verified hashes
+        run: |
+          set -euo pipefail
+          # (label, export flags) — one line per Python Dockerfile plus the build group.
+          while IFS='|' read -r label flags; do
+            echo "::group::${label}"
+            # shellcheck disable=SC2086  # flags are a deliberate word list
+            uv export --locked --no-emit-project ${flags} -o "${RUNNER_TEMP}/${label}.txt"
+            uv pip install --system --require-hashes --no-deps \
+              --prefix "${RUNNER_TEMP}/prefix-${label}" -r "${RUNNER_TEMP}/${label}.txt"
+            echo "::endgroup::"
+          done <<'SETS'
+          cli|--no-default-groups
+          api|--no-default-groups --extra api
+          worker|--only-group worker
+          build|--only-group build
+          SETS
+
+  # ------------------------------------------------------------------
+  # 7. Python dependency vulnerability audit
   # ------------------------------------------------------------------
   pip-audit:
     name: Python Dependency Audit (pip-audit)
@@ -283,11 +334,17 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-audit-${{ hashFiles('pyproject.toml') }}
-      - name: Install pip-audit
-        run: pip install pip-audit
-      - name: Run pip-audit
+          key: pip-audit-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+      - name: Install pip-audit and uv
+        run: pip install pip-audit "uv==0.12.21"
+      - name: Audit the locked resolution
+        # Audits exactly what the images ship (TODO.md T-702): the lock exported
+        # with every extra, so the api/enrichment/dev sets are covered in one
+        # pass, hash-pinned so pip-audit audits the locked versions rather than
+        # re-resolving the floors. `--strict` fails on any dependency it cannot
+        # look up instead of skipping it.
         run: |
-          pip-audit --requirement <(pip install -e . --dry-run -q 2>&1 | grep "^Requirement\|^Would install" | sed 's/.*Would install //;s/ /\n/g' || true) \
-            || pip-audit -r <(pip install -e .[dev] -q --dry-run 2>&1 | grep "^Would install" | sed 's/.*Would install //;s/ /\n/g') \
-            || (pip install -e .[dev] -q && pip-audit)
+          set -euo pipefail
+          uv export --locked --no-emit-project --no-default-groups \
+            --extra api --extra enrichment --extra dev -o /tmp/locked.txt
+          pip-audit --strict --require-hashes -r /tmp/locked.txt

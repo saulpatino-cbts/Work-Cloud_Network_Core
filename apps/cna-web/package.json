@@ -55,7 +55,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.0.0",
-    "eslint": "^9.39.5",
+    "eslint": "^10.11.0",
     "eslint-config-next": "16.3.6",
     "postcss": "^8.5.23",
     "prisma": "^6.3.1",

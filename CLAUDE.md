@@ -127,12 +127,16 @@ or record a `TODO.md` item naming them — never leave one side implied.
   (trigger skill `work-backlog-item`): spec → a specialist implements → a
   *different* agent verifies adversarially → findings folded → checks → docs →
   draft PR; humans merge. Definition of done in this repository, on the final
-  tree: `ruff check .` and `ruff format --check .`; `pytest tests/unit/
-  --cov=cna --cov=apps --cov-fail-under=80`; `actionlint` on every changed
-  workflow; `pre-commit run detect-secrets --all-files`, staging the baseline
-  file it relocates; `scripts/validate_documentation_model.py`;
-  `uv lock --check` when `pyproject.toml` changed; `npm run lint`,
-  `npm run typecheck` and `npm test` in `apps/cna-web` when it changed. A
+  tree — the gates `300-test-codebase` runs: `ruff check .` and
+  `ruff format --check .`; `pytest tests/unit/ --cov=cna --cov=apps
+  --cov-fail-under=80`; `pre-commit run detect-secrets --all-files` (the hook
+  rewrites line numbers in `.secrets.baseline` — stage it and re-run);
+  `scripts/validate_documentation_model.py`, `scripts/validate_module_deps.py`
+  and `scripts/validate_shape_catalog.py`; `uv lock --check` and `pip-audit
+  --strict --require-hashes` on the locked export when `pyproject.toml` or
+  `uv.lock` changed; `npm run lint`, `npm run typecheck` and `npm test` in
+  `apps/cna-web` when it changed. Local only (not CI gates): `actionlint` on
+  every changed workflow; the Docker build smoke test runs in CI alone. A
   change to contract items 1–5 above lands in both appliances in the same
-  change set, byte-identical in the shared files. Never merge, never
-  `terraform apply`, never flip `ai_mode`.
+  change set, byte-identical in the shared files. Never merge; when the session
+  also holds an appliance checkout, never `terraform apply` or flip `ai_mode`.

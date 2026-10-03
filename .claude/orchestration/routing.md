@@ -50,7 +50,7 @@ cloud spend, and not generic platform work:
 | API routes, workers, database, integrations | [`backend-engineer`](../agents/backend-engineer.md) |
 | React components, UI, user experience | [`frontend-engineer`](../agents/frontend-engineer.md) |
 | This repo's Terraform, deployments, CI/CD, monitoring | [`infrastructure-engineer`](../agents/infrastructure-engineer.md) |
-| "Work the next backlog item" / "next up T-nnn" / "close T-nnn" | [`workflows.md`](workflows.md) → **W12** — one of the three above implements, a *different* agent verifies; trigger skill [`work-backlog-item`](../skills/work-backlog-item/SKILL.md) |
+| "Work the next backlog item" / "next up T-nnn" / "close T-nnn" | [`workflows.md`](workflows.md) → **W12** — the specialist routed for the area implements (the three above, or `python-engineer` / `docker-expert`), a *different* agent verifies; trigger skill [`work-backlog-item`](../skills/work-backlog-item/SKILL.md) |
 | "Review this change set" / "verify before I merge" | The W12 verifier for the area (table in W12); never the agent that wrote it |
 
 ### Platform-engineering agents

@@ -29,13 +29,16 @@ from cna.core.stat_masters import StatMasterRecord, build_stat_masters
 
 logger = logging.getLogger("cna-api.metrics")
 
+import db  # noqa: E402, I001 — apps/cna-api is on sys.path (see main.py)
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
 def _get_db():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    # Pooled connection with ``with conn:`` transaction semantics (T-704).
+    return db.connection(DATABASE_URL)
 
 
 # Prisma MetricRecord column ↔ StatMasterRecord field mapping

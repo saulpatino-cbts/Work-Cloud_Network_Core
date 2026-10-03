@@ -7,7 +7,6 @@ everything back to PostgreSQL.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
@@ -81,6 +80,7 @@ _GW_HIGH_UTILIZATION_PCT = 80
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auth import BearerTokenMiddleware  # noqa: E402, I001
+import db  # noqa: E402, I001
 from routers.chat import router as chat_router  # noqa: E402, I001
 from routers.metrics import rebuild_metrics  # noqa: E402
 from routers.metrics import router as metrics_router  # noqa: E402
@@ -193,7 +193,11 @@ async def _lifespan(_app: FastAPI):
             logger.warning("startup reaper marked %d stale RUNNING job(s) as FAILED", reaped)
     except Exception:
         logger.exception("startup stale-job reaper failed")
-    yield
+    try:
+        yield
+    finally:
+        # Return every pooled connection to the server on shutdown (T-704).
+        db.close_all()
 
 
 app = FastAPI(title="CNA API", version=_api_version(), lifespan=_lifespan)
@@ -201,6 +205,21 @@ app.include_router(metrics_router)
 app.include_router(chat_router)
 app.include_router(reports_router)
 app.include_router(diagrams_router)
+
+
+@app.exception_handler(db.PoolTimeout)
+async def _handle_pool_timeout(_request, exc: db.PoolTimeout) -> JSONResponse:
+    """503 when no pooled database connection frees up in time (T-704).
+
+    The pool is bounded so a burst cannot exhaust the database server; a caller
+    that waits past the budget is told to retry rather than handed a 500.
+    """
+    logger.warning("database connection pool timeout: %s", exc)
+    return JSONResponse(
+        status_code=status_for(Outcome.UNAVAILABLE),
+        content={"detail": "database busy; retry shortly"},
+        headers={"Retry-After": "2"},
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -229,7 +248,12 @@ if CNA_API_TOKEN:
 
 
 def _get_db():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    """A pooled connection with ``with conn:`` transaction semantics (T-704).
+
+    Every call site is ``with _get_db() as conn:``; the connection commits on a
+    clean exit, rolls back on an exception, and returns to the pool either way.
+    """
+    return db.connection(DATABASE_URL)
 
 
 def _update_job(job_id: str, **kwargs: Any) -> None:
@@ -334,7 +358,7 @@ def _reap_stale_jobs(job_id: str | None = None) -> int:
     if job_id is not None:
         sql += " AND id = %s"
         params.append(job_id)
-    with contextlib.closing(_get_db()) as conn:
+    with _get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             reaped = cur.rowcount
@@ -345,10 +369,11 @@ def _reap_stale_jobs(job_id: str | None = None) -> int:
 def _check_db_ready() -> bool:
     """Return True if a ``SELECT 1`` against the database succeeds (PY-008).
 
-    Used by ``/ready`` only. The connection is explicitly closed rather than
-    left to GC (PY-002). Any failure is logged and reported as not-ready.
+    Used by ``/ready`` only. The connection comes from the pool and goes back
+    to it (PY-002); a dead one is discarded there. Any failure is logged and
+    reported as not-ready.
     """
-    with contextlib.closing(_get_db()) as conn:
+    with _get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
             cur.fetchone()

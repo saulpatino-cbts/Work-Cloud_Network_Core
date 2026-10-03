@@ -120,7 +120,12 @@ jobs:
           fi
 
           # Component name -> SHA-tag regex (matches the sha_prefix values in
-          # 200-build-images.yml).
+          # 200-build-images.yml). cosign (T-703) stores each image's signature
+          # and attestation as OCI referrers of its digest — on a registry
+          # without the Referrers API, under a `sha256-<digest>` index tag.
+          # Neither form matches these patterns, so nothing here can delete a
+          # signature; the referrers orphaned when an image's last tag goes are
+          # TODO.md T-718.
           declare -A COMPONENT_PATTERNS=(
             ["cli"]="^sha-[0-9a-f]+$"
             ["api"]="^api-sha-[0-9a-f]+$"

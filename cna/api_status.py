@@ -57,6 +57,7 @@ class Outcome(Enum):
     NOT_IMPLEMENTED = "not_implemented"  # 501 — the phase is not wired up yet
     DOWNSTREAM_ERROR = "downstream_error"  # 502 — a downstream SDK/service failed
     NOT_CONFIGURED = "not_configured"  # 503 — a required dependency is unconfigured
+    UNAVAILABLE = "unavailable"  # 503 — a dependency is configured but momentarily saturated
     INTERNAL_ERROR = "internal_error"  # 500 — an unexpected server-side failure
 
 
@@ -70,6 +71,7 @@ _STATUS: dict[Outcome, int] = {
     Outcome.NOT_IMPLEMENTED: 501,
     Outcome.DOWNSTREAM_ERROR: 502,
     Outcome.NOT_CONFIGURED: 503,
+    Outcome.UNAVAILABLE: 503,
     Outcome.INTERNAL_ERROR: 500,
 }
 

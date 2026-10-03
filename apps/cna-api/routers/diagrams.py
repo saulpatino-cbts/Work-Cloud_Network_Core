@@ -19,8 +19,6 @@ import os
 import sys
 from pathlib import Path
 
-import psycopg2
-import psycopg2.extras
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -34,13 +32,16 @@ from cna.diagram_engine.drawio_generator import merge_diagrams
 
 logger = logging.getLogger("cna-api.diagrams")
 
+import db  # noqa: E402, I001 — apps/cna-api is on sys.path (see main.py)
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 router = APIRouter(prefix="/diagrams", tags=["diagrams"])
 
 
 def _get_db():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    # Pooled connection with ``with conn:`` transaction semantics (T-704).
+    return db.connection(DATABASE_URL)
 
 
 class GenerateDiagramRequest(BaseModel):

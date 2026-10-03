@@ -61,6 +61,17 @@ or record a `TODO.md` item naming them — never leave one side implied.
    `CNA_IMAGE_UPDATE_CHECK_INTERVAL_MINUTES`). `CNA_BUILD_SHA` is baked into every
    image by `200-build-images.yml`, never injected. The authoritative inventory is
    `.env.example`.
+5. **Image signatures and provenance.** `200-build-images.yml` signs every
+   published digest with cosign, keyless, under its own OIDC identity
+   `https://github.com/<owner>/<this repo>/.github/workflows/200-build-images.yml@refs/heads/main`
+   (issuer `https://token.actions.githubusercontent.com`), and attaches
+   BuildKit's SLSA v0.2 provenance as a cosign attestation (type
+   `slsaprovenance02`, `predicate.builder.id` = the run URL). Both appliances
+   verify all three — signature, attestation, builder — before any deploy
+   (`210`, `220`) against their `IMAGE_SIGNING_IDENTITY` variable. Renaming or
+   moving this repository, this workflow file, or its default branch changes
+   the identity and breaks every appliance until that variable is updated; the
+   cosign release (`COSIGN_VERSION`) is pinned identically in all three.
 
 ## AI engine rules
 

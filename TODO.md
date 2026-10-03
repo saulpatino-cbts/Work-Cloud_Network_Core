@@ -1984,12 +1984,39 @@ Dockerfiles, and drop `apt-get -y upgrade` from the final stages once Dependabot
 (added in this review) keeps the base digests fresh.
 
 ### T-703 — Sign images and verify provenance in the appliances (RELEASE-003, IMG-012)
-`200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
+- **Status:** Done 2026-10-03 — `200` signs every digest after its gates with cosign keyless
+  (`scripts/ci/sign_image.sh`: `cosign sign` + `cosign attest --type slsaprovenance02` with
+  BuildKit's own provenance predicate, `builder.id` asserted to be the run) under
+  `https://github.com/<owner>/<core>/.github/workflows/200-build-images.yml@refs/heads/main`. Both
+  appliances gain `scripts/ci/verify_image_signature.sh`, run by `210` on all four images before
+  the plan and by `220` on every image named: `cosign verify` (exact identity + issuer),
+  `cosign verify-attestation --type slsaprovenance02`, subject digest = deployed digest,
+  `predicate.builder.id` under `https://github.com/<owner>/<core>/actions/runs/`. The identity is
+  the appliance variable `IMAGE_SIGNING_IDENTITY` (checked by `100`; appliance `REVIEW.md` entry
+  for the roll-out order — pre-T-703 digests, rollback targets included, do not verify). Shared
+  cosign release `v3.1.3`, installer `sigstore/cosign-installer@6f9f177` (v4.1.2), in all three.
+  The verifier accepts either proof of signing time cosign 3 supports — a Sigstore TSA signed
+  timestamp (`--use-signed-timestamps`, what Rekor v2 requires) or Rekor v1's integrated
+  timestamp — so the appliances keep verifying when Sigstore's signing config moves to Rekor v2.
+  Appliance change on the same branch name in both appliance repositories.
+- **Original description:** `200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
 published digest (cosign keyless with the workflow OIDC identity) and have `210` verify the
 signature and the SLSA provenance subject before deploying.
 
 ### T-704 — API database connection handling (PY-002)
-`apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
+- **Status:** Done 2026-10-03 — `apps/cna-api/db.py` owns one `psycopg2.pool.ThreadedConnectionPool`
+  per process behind a bounded-wait semaphore; `db.connection(dsn)` is the only way the API gets a
+  connection: psycopg2's `with conn:` semantics (commit on clean exit, rollback on exception), the
+  connection returned to the pool in every case and discarded if the server closed it. Every
+  `_get_db()` in `main.py` and the four routers delegates to it (a test asserts no
+  `psycopg2.connect(` call site remains outside `db.py`); `_log()` therefore reuses one pooled
+  connection per progress line instead of leaking one. The pool is lazy (no connection on import,
+  `/health` or in tests) and closed by the lifespan on shutdown. A caller that waits past
+  `CNA_DB_POOL_TIMEOUT_SECONDS` for one of `CNA_DB_POOL_MAX` connections gets a 503 with
+  `Retry-After` (new `Outcome.UNAVAILABLE`) rather than a 41st connection on the server. Both
+  variables are optional with code defaults (10 / 10; `.env.example`); the appliances inject
+  nothing new. 18 tests (23 parametrised cases) in `tests/unit/test_cna_api_db_pool.py`.
+- **Original description:** `apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
 progress line (dozens per job). Introduce one connection pool (`psycopg2.pool` or a per-job
 connection passed to `_log`) and close connections deterministically.
 
@@ -2065,4 +2092,14 @@ The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JS
 `MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
 balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
 declared constant, e.g. 1 MiB, with 413) and a test.
+
+### T-718 — Prune orphaned signatures and attestations in `370-registry-cleanup`
+T-703 stores each image's cosign signature and provenance attestation as OCI referrers of the
+image digest (cosign 3's default bundle format; on a registry without the Referrers API they hang
+off a `sha256-<digest>` index tag). `370` matches only the `*-sha-*` component tags, so it never
+deletes them — correct while the image lives, but once `370` removes an image's last tag its
+referrers stay behind forever. Extend `370` to remove the referrers of a digest that no longer has
+an image tag (`cosign clean --type all` on the digest, or deleting its `sha256-<digest>` index tag
+when that is how Docker Hub stores them — confirm on the first signed build which form Docker Hub
+uses), behind the same `dry_run` input.
 

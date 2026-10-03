@@ -278,6 +278,14 @@ class _FakeConn:
         self.committed = False
         self.closed = False
 
+    # Call sites use ``with _get_db() as conn:`` — the pooled context manager
+    # (T-704) yields the connection; the fake stands in for both.
+    def __enter__(self) -> _FakeConn:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
     def cursor(self) -> _FakeCursor:
         return self.cursor_obj
 
@@ -296,7 +304,8 @@ def test_reap_stale_jobs_issues_failed_update(api_main, monkeypatch):
     reaped = api_main._reap_stale_jobs()
 
     assert reaped == 1
-    assert fake.committed and fake.closed
+    # The connection is pooled (T-704): committed here, returned by db.connection.
+    assert fake.committed
     sql, params = fake.cursor_obj.executed[0]
     assert "UPDATE" in sql and "'FAILED'" in sql
     assert "'RUNNING'" in sql

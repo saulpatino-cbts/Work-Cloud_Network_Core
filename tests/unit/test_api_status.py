@@ -31,6 +31,7 @@ _SERVER_ERROR_OUTCOMES = {
     Outcome.NOT_IMPLEMENTED,
     Outcome.DOWNSTREAM_ERROR,
     Outcome.NOT_CONFIGURED,
+    Outcome.UNAVAILABLE,
     Outcome.INTERNAL_ERROR,
 }
 

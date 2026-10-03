@@ -21,8 +21,6 @@ import os
 import sys
 from pathlib import Path
 
-import psycopg2
-import psycopg2.extras
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -42,6 +40,8 @@ from cna.api_status import Outcome, status_for
 from cna.core.credential_crypto import CredentialCryptoError, decrypt
 
 logger = logging.getLogger("cna-api.chat")
+
+import db  # noqa: E402, I001 — apps/cna-api is on sys.path (see main.py)
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
@@ -67,7 +67,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 def _get_db():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    # Pooled connection with ``with conn:`` transaction semantics (T-704).
+    return db.connection(DATABASE_URL)
 
 
 class ChatMessage(BaseModel):

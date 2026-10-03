@@ -2004,7 +2004,19 @@ published digest (cosign keyless with the workflow OIDC identity) and have `210`
 signature and the SLSA provenance subject before deploying.
 
 ### T-704 — API database connection handling (PY-002)
-`apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
+- **Status:** Done 2026-10-03 — `apps/cna-api/db.py` owns one `psycopg2.pool.ThreadedConnectionPool`
+  per process behind a bounded-wait semaphore; `db.connection(dsn)` is the only way the API gets a
+  connection: psycopg2's `with conn:` semantics (commit on clean exit, rollback on exception), the
+  connection returned to the pool in every case and discarded if the server closed it. Every
+  `_get_db()` in `main.py` and the four routers delegates to it (a test asserts no
+  `psycopg2.connect(` call site remains outside `db.py`); `_log()` therefore reuses one pooled
+  connection per progress line instead of leaking one. The pool is lazy (no connection on import,
+  `/health` or in tests) and closed by the lifespan on shutdown. A caller that waits past
+  `CNA_DB_POOL_TIMEOUT_SECONDS` for one of `CNA_DB_POOL_MAX` connections gets a 503 with
+  `Retry-After` (new `Outcome.UNAVAILABLE`) rather than a 41st connection on the server. Both
+  variables are optional with code defaults (10 / 10; `.env.example`); the appliances inject
+  nothing new. 19 tests in `tests/unit/test_cna_api_db_pool.py`.
+- **Original description:** `apps/cna-api` opens a new psycopg2 connection per call and never closes it; `_log()` opens one per
 progress line (dozens per job). Introduce one connection pool (`psycopg2.pool` or a per-job
 connection passed to `_log`) and close connections deterministically.
 

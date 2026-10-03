@@ -1995,7 +1995,10 @@ Dockerfiles, and drop `apt-get -y upgrade` from the final stages once Dependabot
   the appliance variable `IMAGE_SIGNING_IDENTITY` (checked by `100`; appliance `REVIEW.md` entry
   for the roll-out order — pre-T-703 digests, rollback targets included, do not verify). Shared
   cosign release `v3.1.3`, installer `sigstore/cosign-installer@6f9f177` (v4.1.2), in all three.
-  Appliance PRs: Azure / AWS `work/adoring-cerf-9c6avz`.
+  The verifier accepts either proof of signing time cosign 3 supports — a Sigstore TSA signed
+  timestamp (`--use-signed-timestamps`, what Rekor v2 requires) or Rekor v1's integrated
+  timestamp — so the appliances keep verifying when Sigstore's signing config moves to Rekor v2.
+  Appliance change on the same branch name in both appliance repositories.
 - **Original description:** `200` emits unsigned BuildKit SBOM/provenance attestations; nothing verifies them. Sign every
 published digest (cosign keyless with the workflow OIDC identity) and have `210` verify the
 signature and the SLSA provenance subject before deploying.
@@ -2078,11 +2081,13 @@ The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JS
 balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
 declared constant, e.g. 1 MiB, with 413) and a test.
 
-### T-718 — Prune orphaned signature tags in `370-registry-cleanup`
-T-703 stores each image's cosign signature and attestation as `sha256-<digest>.sig` /
-`sha256-<digest>.att` tags beside it on Docker Hub. `370` matches only the `*-sha-*` component
-tags, so it never deletes them — correct while the image lives, but once `370` removes an image's
-last tag its `.sig`/`.att` tags stay behind forever. Extend `370` to delete a `.sig`/`.att` tag
-whose `sha256-<digest>` has no remaining image tag (`docker manifest inspect` of the digest fails),
-behind the same `dry_run` input.
+### T-718 — Prune orphaned signatures and attestations in `370-registry-cleanup`
+T-703 stores each image's cosign signature and provenance attestation as OCI referrers of the
+image digest (cosign 3's default bundle format; on a registry without the Referrers API they hang
+off a `sha256-<digest>` index tag). `370` matches only the `*-sha-*` component tags, so it never
+deletes them — correct while the image lives, but once `370` removes an image's last tag its
+referrers stay behind forever. Extend `370` to remove the referrers of a digest that no longer has
+an image tag (`cosign clean --type all` on the digest, or deleting its `sha256-<digest>` index tag
+when that is how Docker Hub stores them — confirm on the first signed build which form Docker Hub
+uses), behind the same `dry_run` input.
 

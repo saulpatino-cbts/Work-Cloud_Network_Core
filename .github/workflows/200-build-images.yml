@@ -64,9 +64,10 @@ env:
   COSIGN_VERSION: v3.1.3
 
 # No workflow-wide grants: each job declares the least it needs below. The build
-# jobs run third-party actions and must not hold a write token (`id-token` lets
-# cosign request a certificate for this run's identity; it grants nothing in
-# this repository).
+# jobs run third-party actions and must not hold a write token. `id-token:
+# write` lets cosign request a certificate for this run's identity; it grants
+# nothing in this repository, but every action in those two jobs could mint an
+# OIDC token as this workflow — keep their list short and SHA-pinned.
 permissions: {}
 
 jobs:

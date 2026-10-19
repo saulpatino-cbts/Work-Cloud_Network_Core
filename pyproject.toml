@@ -93,7 +93,7 @@ enrichment = [
 # enrichment extra remains optional.
 api = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
+    "uvicorn[standard]>=0.54.0",
     "psycopg2-binary>=2.9",
     "azure-mgmt-monitor>=6.0.2,<7",
     "azure-mgmt-loganalytics>=14.0.0,<15",

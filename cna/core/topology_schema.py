@@ -285,6 +285,93 @@ class AWSSecurityFinding(BaseModel):
     first_observed_at: str | None = None
 
 
+# ── AWS surpass-Azure collectors (BUILD-01) ────────────────────────────────
+# New depth collectors on top of topology discovery: CloudWatch metrics,
+# VPC flow-log analysis, Transit Gateway route analysis, Cost Explorer, and the
+# flagship Reachability Analyzer. All observed-state only (DD-002); all
+# defaulted so checkpoints written before these fields existed still
+# deserialise.
+
+
+class AWSNetworkMetric(BaseModel):
+    """One CloudWatch metric datapoint set for a network resource (C1)."""
+
+    resource_id: str
+    resource_type: str  # e.g. "nat-gateway", "transit-gateway", "load-balancer", "vpn"
+    namespace: str  # e.g. "AWS/NATGateway"
+    metric_name: str  # e.g. "BytesOutToDestination"
+    statistic: str  # e.g. "Sum", "Average"
+    unit: str = ""
+    value: float | None = None  # aggregate over the window; None when no data
+    window_hours: int = 24
+    note: str = ""  # e.g. "no datapoints" / "metric unavailable"
+
+
+class AWSFlowLogSummary(BaseModel):
+    """Summary of VPC flow-log traffic for one VPC (C2 — surpass).
+
+    When flow logs are not enabled, `enabled=False` and this record IS the gap
+    finding (DD-002: observed state — the gap is a fact, not an inference).
+    """
+
+    vpc_id: str
+    enabled: bool = False
+    log_destination_type: str = ""  # "cloud-watch-logs" | "s3" | ""
+    top_talkers: list[str] = Field(default_factory=list)  # "src -> dst (bytes)"
+    rejected_connections: int = 0
+    cross_az_flows: int = 0
+    note: str = ""
+
+
+class AWSTGWRoute(BaseModel):
+    destination_cidr: str
+    state: str  # "active" | "blackhole" | ...
+    route_type: str = ""  # "static" | "propagated"
+    attachment_id: str | None = None
+
+
+class AWSTGWRouteAnalysis(BaseModel):
+    """Transit Gateway route-table analysis for one TGW (C3 — surpass)."""
+
+    transit_gateway_id: str
+    route_table_id: str
+    routes: list[AWSTGWRoute] = Field(default_factory=list)
+    blackhole_count: int = 0
+    overlapping_cidrs: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class AWSNetworkCost(BaseModel):
+    """Cost Explorer network-attributable spend for one account + window (C4 — surpass).
+
+    Cost is a static estimate — render with [VERIFY] (mirrors
+    Finding.est_monthly_cost_usd convention).
+    """
+
+    account_id: str
+    window_days: int  # 30 | 60 | 90
+    currency: str = "USD"
+    total_cost: float = 0.0
+    by_usage_type: dict[str, float] = Field(default_factory=dict)  # e.g. {"NatGateway-Hours": 12.3}
+    note: str = ""
+
+
+class AWSReachabilityPath(BaseModel):
+    """One Reachability Analyzer path result (C6 — FLAGSHIP surpass).
+
+    The path analysis resource is created, read, then torn down; this record is
+    the observed result only. `reachable=None` means the analysis could not run
+    (unavailable/denied) — a logged gap, not a failure.
+    """
+
+    name: str
+    source: str  # resource id or description
+    destination: str
+    reachable: bool | None = None
+    blocking_component: str | None = None  # the hop that blocks when not reachable
+    note: str = ""
+
+
 class AWSRegionTopology(BaseModel):
     account_id: str
     region: str
@@ -296,6 +383,11 @@ class AWSRegionTopology(BaseModel):
     aws_network_firewalls: list[AWSNetworkFirewall] = Field(default_factory=list)
     waf_web_acls: list[AWSWAFWebACL] = Field(default_factory=list)
     security_findings: list[AWSSecurityFinding] = Field(default_factory=list)
+    # BUILD-01 surpass collectors (all observed-state, all optional).
+    network_metrics: list[AWSNetworkMetric] = Field(default_factory=list)
+    flow_log_summaries: list[AWSFlowLogSummary] = Field(default_factory=list)
+    tgw_route_analyses: list[AWSTGWRouteAnalysis] = Field(default_factory=list)
+    reachability_paths: list[AWSReachabilityPath] = Field(default_factory=list)
     discovery_blocked: bool = False
     block_reason: str | None = None
 
@@ -305,6 +397,8 @@ class AWSTopology(BaseModel):
     engagement_id: str
     accounts: list[AWSAccount] = Field(default_factory=list)
     regions: list[AWSRegionTopology] = Field(default_factory=list)
+    # Cost is account-level (one Cost Explorer call per account, not per region).
+    network_costs: list[AWSNetworkCost] = Field(default_factory=list)
     management_account_id: str | None = None
     organization_id: str | None = None
 

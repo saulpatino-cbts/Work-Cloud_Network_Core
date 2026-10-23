@@ -1,0 +1,68 @@
+# CodeRabbit configuration — Cloud Network Core
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+#
+# Core is the application + image build. The most important review concern here
+# is the core <-> appliance contract: a change to the runtime contract, image
+# tag/catalog schema, signing identity, or AI-engine rules changes BOTH
+# appliances and must notify them (see CLAUDE.md "Cross-repo change
+# notification"). CodeRabbit is asked to flag those as cross-repo-impacting.
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  # Path-scoped review guidance tuned to this repo's real conventions.
+  path_instructions:
+    - path: "cna/**/*.py"
+      instructions: >
+        Python assessment engine. Enforce observed-state-only (DD-002: report
+        only discovered facts, never inferences). Recommendations must come from
+        MCP/vendor sources (DD-003), not invented prose. No hardcoded values at
+        call sites — model ids, regions and endpoints are settings/defaults.
+        Discovery code must use cna.core.throttle (with_retry, PaginationCursor,
+        concurrency limits) and degrade gracefully with coverage logging. All
+        customer-account access is read-only. Never log or persist a decrypted
+        credential or BYO AI key.
+    - path: "apps/cna-web/**"
+      instructions: >
+        Next.js web tier. The AI-engine selection rules in
+        lib/ai-engine-rules.ts are pinned by a shared vector table and must stay
+        in lock-step with cna/ai_engine/chat_agent.py and both tests. Credential
+        crypto (lib/crypto.ts) must stay byte-compatible with
+        cna/core/credential_crypto.py. Preserve accessible semantics.
+    - path: ".github/workflows/**"
+      instructions: >
+        Every GitHub Action must be pinned to a full commit SHA, never a tag.
+        Secrets never reach a run: block unquoted and never appear as a
+        workflow_dispatch input or on a command line. Workflow numbers are
+        stable across all three repos — never renumber. Changes to
+        200-build-images (tag scheme, catalog schema, signing identity,
+        cna-image-published dispatch) are CROSS-REPO CONTRACT changes: flag that
+        BOTH appliances must be notified.
+    - path: "**/Dockerfile*"
+      instructions: >
+        Python deps are locked via uv.lock (uv export --locked --require-hashes).
+        No bare pip install, no apt-get/apk upgrade in a final stage. The uv
+        version is pinned in the FROM uv stage.
+  tools:
+    ruff:
+      enabled: true
+    markdownlint:
+      enabled: true
+    actionlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    gitleaks:
+      enabled: true
+
+chat:
+  auto_reply: true

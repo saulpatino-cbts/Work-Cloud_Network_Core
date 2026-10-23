@@ -1415,3 +1415,76 @@ class TestExplicitCredentials:
             discovery.run()
 
         session_cls.assert_called_once_with()
+
+
+# ── BUILD-01 surpass-depth orchestration ───────────────────────────────────
+
+
+class TestSurpassDepthOrchestration:
+    """_discover_region wiring of the BUILD-01 depth collectors (default off)."""
+
+    def _patch_topology_collectors(self, discovery):
+        """Make the topology collectors return minimal data via patching."""
+        from unittest.mock import patch
+
+        return patch.multiple(
+            discovery,
+            _collect_vpcs=lambda *a, **k: [],
+            _collect_tgws=lambda *a, **k: [],
+            _collect_dx=lambda *a, **k: [],
+            _collect_vpn_gateways=lambda *a, **k: [],
+            _collect_network_firewalls=lambda *a, **k: [],
+            _collect_waf_web_acls=lambda *a, **k: [],
+        )
+
+    def test_depth_off_by_default_skips_collectors(self, discovery):
+        # Default options: collect_surpass_depth is False.
+        assert discovery.opts.collect_surpass_depth is False
+        discovery._mgmt_session.client = MagicMock()
+        with self._patch_topology_collectors(discovery):
+            with patch.object(discovery, "_collect_surpass_depth") as depth:
+                topo = discovery._discover_region(discovery._mgmt_session, "123456789012", "us-east-1")
+        depth.assert_not_called()
+        assert topo.network_metrics == []
+
+    def test_depth_on_invokes_collector(self, store):
+        opts = DiscoveryOptions(
+            org_role_arn="arn:aws:iam::123456789012:role/CNA-ReadOnly",
+            regions=["us-east-1"],
+            collect_surpass_depth=True,
+        )
+        d = AWSDiscovery(store=store, options=opts)
+        d._mgmt_session = MagicMock()
+        with self._patch_topology_collectors(d):
+            with patch.object(d, "_collect_surpass_depth") as depth:
+                d._discover_region(d._mgmt_session, "123456789012", "us-east-1")
+        depth.assert_called_once()
+
+    def test_depth_collector_fault_does_not_lose_topology(self, store):
+        """A depth-collector exception degrades (warns) but keeps the region's topology."""
+        from cna.core.topology_schema import VPC
+
+        opts = DiscoveryOptions(
+            org_role_arn="arn:aws:iam::123456789012:role/CNA-ReadOnly",
+            regions=["us-east-1"],
+            collect_surpass_depth=True,
+        )
+        d = AWSDiscovery(store=store, options=opts)
+        session = MagicMock()
+        # cloudwatch client raises -> the C1 branch warns and continues.
+        session.client.side_effect = lambda svc, **k: (_ for _ in ()).throw(RuntimeError("boom")) if svc == "cloudwatch" else MagicMock()
+        d._mgmt_session = session
+        one_vpc = VPC(id="vpc-1", name="v", cidr="10.0.0.0/16")
+        with patch.multiple(
+            d,
+            _collect_vpcs=lambda *a, **k: [one_vpc],
+            _collect_tgws=lambda *a, **k: [],
+            _collect_dx=lambda *a, **k: [],
+            _collect_vpn_gateways=lambda *a, **k: [],
+            _collect_network_firewalls=lambda *a, **k: [],
+            _collect_waf_web_acls=lambda *a, **k: [],
+        ):
+            topo = d._discover_region(session, "123456789012", "us-east-1")
+        # topology survived despite the metrics fault
+        assert [v.id for v in topo.vpcs] == ["vpc-1"]
+        assert topo.discovery_blocked is False

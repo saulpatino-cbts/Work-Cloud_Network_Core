@@ -112,6 +112,14 @@ class DiscoveryOptions:
     access_key_id: str | None = None
     secret_access_key: str | None = None
     session_token: str | None = None
+    # BUILD-01 surpass-depth collectors (CloudWatch metrics, flow-log analysis,
+    # TGW route analysis) run after topology when this is True. Off by default
+    # so existing discovery behaviour is unchanged until a caller opts in.
+    collect_surpass_depth: bool = False
+    # Optional CloudWatch metric-spec override (list[aws_metrics.MetricSpec]);
+    # None uses aws_metrics.DEFAULT_METRICS. Typed as a plain list to avoid an
+    # import cycle with the metrics module.
+    metric_specs: list | None = None
 
 
 class AWSDiscovery:
@@ -250,6 +258,13 @@ class AWSDiscovery:
                 session, account_id, region
             )
             topo.waf_web_acls = self._collect_waf_web_acls(session, account_id, region)
+            # BUILD-01 surpass-depth collectors (metrics, flow-log analysis, TGW
+            # route analysis). Each degrades to its own records/notes and never
+            # fails the region; reachability (C6, billable) is opt-in and run by
+            # the caller, not here. Guarded so a depth-collector fault never
+            # loses the topology already collected above.
+            if self.opts.collect_surpass_depth:
+                self._collect_surpass_depth(session, ec2, topo, account_id, region)
         except botocore.exceptions.ClientError as e:
             code = e.response["Error"]["Code"]
             msg = e.response["Error"]["Message"]
@@ -265,6 +280,64 @@ class AWSDiscovery:
             topo.block_reason = f"Unexpected API error: {code} — {msg}"
 
         return topo
+
+    def _collect_surpass_depth(
+        self, session, ec2, topo: AWSRegionTopology, account_id: str, region: str
+    ) -> None:
+        """Run the BUILD-01 depth collectors and attach results to `topo`.
+
+        Metrics (C1), flow-log analysis (C2) and TGW route analysis (C3). Each
+        is wrapped so a single collector fault degrades that capability with a
+        logged warning rather than losing the region. Reachability (C6) is not
+        run here — it creates billable resources and is invoked explicitly.
+        """
+        from cna.modules.network.discovery.aws_cost import AWSNetworkCost  # noqa: F401 (type ref)
+        from cna.modules.network.discovery.aws_metrics import AWSMetricsCollector, _Target
+        from cna.modules.network.discovery.aws_network_depth import (
+            FlowLogAnalyzer,
+            TransitGatewayRouteAnalyzer,
+        )
+
+        # C1 — metrics for NAT gateways, TGWs and (region) load balancers.
+        try:
+            targets: list[_Target] = []
+            for vpc in topo.vpcs:
+                for nat in getattr(vpc, "nat_gateways", []) or []:
+                    targets.append(_Target("nat-gateway", nat.id, nat.id))
+            for tgw in topo.transit_gateways:
+                targets.append(_Target("transit-gateway", tgw.id, tgw.id))
+            if targets:
+                cw = session.client("cloudwatch", region_name=region)
+                collector = AWSMetricsCollector(
+                    cw, account_id, region, metric_specs=self.opts.metric_specs
+                )
+                topo.network_metrics = collector.collect(targets)
+        except Exception as e:  # depth collector must not lose the region
+            logger.warning("[%s/%s] metrics collection degraded: %s", account_id, region, e)
+
+        # C2 — flow-log analysis per VPC.
+        try:
+            vpc_ids = [v.id for v in topo.vpcs]
+            if vpc_ids:
+                logs = session.client("logs", region_name=region)
+                topo.flow_log_summaries = FlowLogAnalyzer(
+                    ec2, logs, account_id, region
+                ).analyze(vpc_ids)
+        except Exception as e:
+            logger.warning("[%s/%s] flow-log analysis degraded: %s", account_id, region, e)
+
+        # C3 — TGW route analysis (route tables discovered from the TGWs).
+        try:
+            rt_map: dict[str, str] = {}
+            for tgw in topo.transit_gateways:
+                for rt_id in getattr(tgw, "route_table_ids", []) or []:
+                    rt_map[rt_id] = tgw.id
+            if rt_map:
+                topo.tgw_route_analyses = TransitGatewayRouteAnalyzer(
+                    ec2, account_id, region
+                ).analyze(rt_map)
+        except Exception as e:
+            logger.warning("[%s/%s] TGW route analysis degraded: %s", account_id, region, e)
 
     def _collect_vpcs(self, ec2, account_id: str, region: str) -> list[VPC]:
         vpcs = []

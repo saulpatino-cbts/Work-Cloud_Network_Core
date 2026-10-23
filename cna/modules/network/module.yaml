@@ -24,6 +24,22 @@ required_permissions:
     - directconnect:DescribeConnections
     - directconnect:DescribeVirtualInterfaces
     - networkmanager:GetNetworkTopology
+    # BUILD-01 surpass-depth collectors (read-only, plus the one bounded
+    # create/delete pair for the Reachability Analyzer flagship).
+    - cloudwatch:GetMetricStatistics          # C1 network metrics
+    - cloudwatch:GetMetricData                # C1 (batch form)
+    - ec2:DescribeFlowLogs                    # C2 flow-log analysis
+    - logs:StartQuery                         # C2 CloudWatch Logs Insights (bounded)
+    - logs:GetQueryResults                    # C2
+    - ec2:SearchTransitGatewayRoutes          # C3 TGW route analysis
+    - ce:GetCostAndUsage                      # C4 Cost Explorer (30/60/90-day, bounded)
+    # C6 FLAGSHIP Reachability Analyzer — creates and then DELETES a billable
+    # path+analysis per tested pair (teardown is mandatory and automatic).
+    - ec2:CreateNetworkInsightsPath
+    - ec2:StartNetworkInsightsAnalysis
+    - ec2:DescribeNetworkInsightsAnalyses
+    - ec2:DeleteNetworkInsightsAnalysis
+    - ec2:DeleteNetworkInsightsPath
   azure:
     - Microsoft.Network/virtualNetworks/read
     - Microsoft.Network/virtualNetworks/subnets/read

@@ -132,9 +132,7 @@ class ObsidianVaultRenderer:
 
     # ---------------------------------------------------------------- writers
 
-    def _write_readme(
-        self, vault_dir: Path, report: FindingsReport, frameworks: set[str]
-    ) -> None:
+    def _write_readme(self, vault_dir: Path, report: FindingsReport, frameworks: set[str]) -> None:
         """The entry note — doubles as the knowledge-transfer how-to-read guide."""
         lines: list[str] = []
         lines.append("# Cloud Network Assessment — Knowledge Vault")
@@ -154,7 +152,9 @@ class ObsidianVaultRenderer:
         lines.append("")
         lines.append("## What is here")
         lines.append("")
-        lines.append(f"- **Findings** ({report.total_count}) — one note each, in `{_FINDINGS_DIR}/`.")
+        lines.append(
+            f"- **Findings** ({report.total_count}) — one note each, in `{_FINDINGS_DIR}/`."
+        )
         lines.append(f"- **Topology** — the resources findings affect, in `{_RESOURCES_DIR}/`.")
         lines.append(f"- **Recommendations** — how to fix each finding, in `{_RECS_DIR}/`.")
         lines.append(f"- **Frameworks** — the standards findings map to, in `{_FRAMEWORKS_DIR}/`.")
@@ -186,7 +186,7 @@ class ObsidianVaultRenderer:
             lines: list[str] = []
             # front-matter
             lines.append("---")
-            lines.append(f"type: finding")
+            lines.append("type: finding")
             lines.append(f"severity: {f.severity.value}")
             if f.platform:
                 lines.append(f"cloud: {f.platform}")
@@ -242,7 +242,9 @@ class ObsidianVaultRenderer:
             if f.est_monthly_cost_usd is not None:
                 lines.append("## Estimated cost impact")
                 lines.append("")
-                lines.append(f"- ${f.est_monthly_cost_usd:,.2f}/month **[VERIFY]** (static estimate)")
+                lines.append(
+                    f"- ${f.est_monthly_cost_usd:,.2f}/month **[VERIFY]** (static estimate)"
+                )
                 lines.append("")
             # Framework links
             if fw_names:
@@ -266,7 +268,15 @@ class ObsidianVaultRenderer:
                 for i, f in enumerate(report.findings)
                 if rid == f.resource_id or rid in (f.affected_resources or [])
             ]
-            lines = ["---", "type: resource", f"resource_id: {_yaml_scalar(rid)}", "---", "", f"# {rid}", ""]
+            lines = [
+                "---",
+                "type: resource",
+                f"resource_id: {_yaml_scalar(rid)}",
+                "---",
+                "",
+                f"# {rid}",
+                "",
+            ]
             if referencing:
                 lines.append("## Findings affecting this resource")
                 lines.append("")

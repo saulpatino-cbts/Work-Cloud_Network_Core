@@ -61,7 +61,9 @@ DEFAULT_METRICS: tuple[MetricSpec, ...] = (
     MetricSpec("transit-gateway", "AWS/TransitGateway", "BytesIn", "TransitGateway", "Sum"),
     MetricSpec("transit-gateway", "AWS/TransitGateway", "BytesOut", "TransitGateway", "Sum"),
     MetricSpec("load-balancer", "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "Sum"),
-    MetricSpec("load-balancer", "AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "Sum"),
+    MetricSpec(
+        "load-balancer", "AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "Sum"
+    ),
     MetricSpec("vpn", "AWS/VPN", "TunnelState", "VpnId", "Minimum"),
 )
 

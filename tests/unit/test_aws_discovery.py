@@ -1443,7 +1443,9 @@ class TestSurpassDepthOrchestration:
         discovery._mgmt_session.client = MagicMock()
         with self._patch_topology_collectors(discovery):
             with patch.object(discovery, "_collect_surpass_depth") as depth:
-                topo = discovery._discover_region(discovery._mgmt_session, "123456789012", "us-east-1")
+                topo = discovery._discover_region(
+                    discovery._mgmt_session, "123456789012", "us-east-1"
+                )
         depth.assert_not_called()
         assert topo.network_metrics == []
 
@@ -1472,7 +1474,9 @@ class TestSurpassDepthOrchestration:
         d = AWSDiscovery(store=store, options=opts)
         session = MagicMock()
         # cloudwatch client raises -> the C1 branch warns and continues.
-        session.client.side_effect = lambda svc, **k: (_ for _ in ()).throw(RuntimeError("boom")) if svc == "cloudwatch" else MagicMock()
+        session.client.side_effect = lambda svc, **k: (
+            (_ for _ in ()).throw(RuntimeError("boom")) if svc == "cloudwatch" else MagicMock()
+        )
         d._mgmt_session = session
         one_vpc = VPC(id="vpc-1", name="v", cidr="10.0.0.0/16")
         with patch.multiple(

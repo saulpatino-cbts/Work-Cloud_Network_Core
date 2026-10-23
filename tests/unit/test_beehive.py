@@ -10,22 +10,21 @@ from __future__ import annotations
 import json
 import re
 import zipfile
-from pathlib import Path
 
 from cna.core.topology_schema import (
     VPC,
-    AWSRegionTopology,
     AWSReachabilityPath,
+    AWSRegionTopology,
     AWSTopology,
     AzureSubscriptionTopology,
     AzureTopology,
+    PeeringState,
     SecurityGroup,
     SecurityGroupRule,
     Subnet,
     VNet,
     VNetPeering,
     VpcPeeringConnection,
-    PeeringState,
 )
 from cna.report_engine.beehive import (
     BeehiveRenderer,
@@ -36,19 +35,33 @@ from cna.report_engine.beehive import (
 
 def _aws_topology() -> AWSTopology:
     sg = SecurityGroup(
-        id="sg-1", vpc_id="vpc-a",
-        rules=[SecurityGroupRule(direction="ingress", protocol="tcp", from_port=443, to_port=443,
-                                 cidr_ranges=["10.0.0.0/8"])],
+        id="sg-1",
+        vpc_id="vpc-a",
+        rules=[
+            SecurityGroupRule(
+                direction="ingress",
+                protocol="tcp",
+                from_port=443,
+                to_port=443,
+                cidr_ranges=["10.0.0.0/8"],
+            )
+        ],
     )
     vpc = VPC(
-        id="vpc-a", name="prod", cidr="10.0.0.0/16",
+        id="vpc-a",
+        name="prod",
+        cidr="10.0.0.0/16",
         subnets=[Subnet(id="subnet-1", cidr="10.0.1.0/24", az="us-east-1a")],
         security_groups=[sg],
         peering_connections=[
             VpcPeeringConnection(
-                id="pcx-1", requester_vpc_id="vpc-a", requester_account_id="111111111111",
-                requester_region="us-east-1", accepter_vpc_id="vnet-x",
-                accepter_account_id="222222222222", accepter_region="us-east-1",
+                id="pcx-1",
+                requester_vpc_id="vpc-a",
+                requester_account_id="111111111111",
+                requester_region="us-east-1",
+                accepter_vpc_id="vnet-x",
+                accepter_account_id="222222222222",
+                accepter_region="us-east-1",
                 state=PeeringState.ACTIVE,
             )
         ],
@@ -59,14 +72,28 @@ def _aws_topology() -> AWSTopology:
 
 def _azure_topology() -> AzureTopology:
     vnet = VNet(
-        id="/subscriptions/sub-1/vnet-y", name="hub", location="eastus", resource_group="rg",
-        subscription_id="sub-1", address_space=["10.1.0.0/16"],
-        peerings=[VNetPeering(id="peer-1", name="to-spoke", remote_vnet_id="/subscriptions/sub-2/vnet-z",
-                              remote_subscription_id="sub-2", peering_state="Connected",
-                              allow_forwarded_traffic=False, allow_gateway_transit=False,
-                              use_remote_gateways=False)],
+        id="/subscriptions/sub-1/vnet-y",
+        name="hub",
+        location="eastus",
+        resource_group="rg",
+        subscription_id="sub-1",
+        address_space=["10.1.0.0/16"],
+        peerings=[
+            VNetPeering(
+                id="peer-1",
+                name="to-spoke",
+                remote_vnet_id="/subscriptions/sub-2/vnet-z",
+                remote_subscription_id="sub-2",
+                peering_state="Connected",
+                allow_forwarded_traffic=False,
+                allow_gateway_transit=False,
+                use_remote_gateways=False,
+            )
+        ],
     )
-    sub = AzureSubscriptionTopology(subscription_id="sub-1", subscription_name="s", tenant_id="t", vnets=[vnet])
+    sub = AzureSubscriptionTopology(
+        subscription_id="sub-1", subscription_name="s", tenant_id="t", vnets=[vnet]
+    )
     return AzureTopology(engagement_id="eng", tenant_id="t", subscriptions=[sub])
 
 
@@ -90,13 +117,17 @@ class TestGraphBuild:
     def test_cross_account_peering_edge(self):
         g = build_network_graph(aws=_aws_topology())
         peers = [e for e in g.edges if e.kind == "peering"]
-        assert any(e.src == "aws:111111111111:vpc-a" and e.dst == "aws:222222222222:vnet-x" for e in peers)
+        assert any(
+            e.src == "aws:111111111111:vpc-a" and e.dst == "aws:222222222222:vnet-x" for e in peers
+        )
 
     def test_azure_cross_subscription_peering(self):
         g = build_network_graph(azure=_azure_topology())
         peers = [e for e in g.edges if e.kind == "peering"]
         # edge from sub-1's vnet to sub-2's remote vnet (cross-source)
-        assert any(e.src.startswith("azure:sub-1:") and e.dst.startswith("azure:sub-2:") for e in peers)
+        assert any(
+            e.src.startswith("azure:sub-1:") and e.dst.startswith("azure:sub-2:") for e in peers
+        )
 
     def test_mixed_cloud_in_one_graph(self):
         g = build_network_graph(aws=_aws_topology(), azure=_azure_topology())
@@ -115,7 +146,9 @@ class TestObservedOnly:
     def test_reachable_edge_only_from_c6(self):
         aws = _aws_topology()
         aws.regions[0].reachability_paths = [
-            AWSReachabilityPath(name="web->rds", source="eni-a", destination="eni-b", reachable=True)
+            AWSReachabilityPath(
+                name="web->rds", source="eni-a", destination="eni-b", reachable=True
+            )
         ]
         g = build_network_graph(aws=aws)
         reach = [e for e in g.edges if e.kind == "reachable"]
@@ -160,24 +193,44 @@ class TestRenderer:
 class TestPipelineModes:
     def _report(self, review_complete=True):
         from datetime import UTC, datetime
+
         from cna.core.findings_schema import FindingsReport
-        return FindingsReport(engagement_id="eng", findings=[], total_count=0, critical_count=0,
-                              high_count=0, medium_count=0, low_count=0,
-                              review_complete=review_complete, generated_at=datetime.now(UTC).isoformat())
+
+        return FindingsReport(
+            engagement_id="eng",
+            findings=[],
+            total_count=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            review_complete=review_complete,
+            generated_at=datetime.now(UTC).isoformat(),
+        )
 
     def _store_with_topology(self, tmp_path):
         from cna.core.persistence import EngagementStore
+
         store = EngagementStore(data_dir=tmp_path, engagement_id="eng")
-        store.write_discovery_checkpoint("eng", "aws", "111111111111",
-                                         _aws_topology().regions[0].model_dump())
+        store.write_discovery_checkpoint(
+            "eng", "aws", "111111111111", _aws_topology().regions[0].model_dump()
+        )
         return store
 
     def test_both_mode_emits_two_obsidian_records(self, tmp_path):
         from cna.report_engine.render_pipeline import RenderOptions, RenderPipeline
+
         store = self._store_with_topology(tmp_path)
-        opts = RenderOptions(render_html_preview=False, render_executive=False, render_technical=False,
-                             render_pptx=False, render_regional_en=False, render_obsidian=True,
-                             obsidian_mode="both", output_dir=tmp_path / "out")
+        opts = RenderOptions(
+            render_html_preview=False,
+            render_executive=False,
+            render_technical=False,
+            render_pptx=False,
+            render_regional_en=False,
+            render_obsidian=True,
+            obsidian_mode="both",
+            output_dir=tmp_path / "out",
+        )
         manifest = RenderPipeline(store, opts).run(self._report())
         obs = [r for r in manifest.records if r.format == "obsidian"]
         assert len(obs) == 2
@@ -187,9 +240,17 @@ class TestPipelineModes:
     def test_beehive_without_topology_skips_cleanly(self, tmp_path):
         from cna.core.persistence import EngagementStore
         from cna.report_engine.render_pipeline import RenderOptions, RenderPipeline
+
         store = EngagementStore(data_dir=tmp_path, engagement_id="eng")  # no checkpoints
-        opts = RenderOptions(render_html_preview=False, render_executive=False, render_technical=False,
-                             render_pptx=False, render_regional_en=False, render_obsidian=True,
-                             obsidian_mode="beehive", output_dir=tmp_path / "out")
+        opts = RenderOptions(
+            render_html_preview=False,
+            render_executive=False,
+            render_technical=False,
+            render_pptx=False,
+            render_regional_en=False,
+            render_obsidian=True,
+            obsidian_mode="beehive",
+            output_dir=tmp_path / "out",
+        )
         manifest = RenderPipeline(store, opts).run(self._report())
         assert [r for r in manifest.records if r.format == "obsidian"] == []

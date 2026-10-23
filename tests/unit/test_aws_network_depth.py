@@ -36,8 +36,12 @@ class TestTGWRouteAnalysis:
         ec2 = MagicMock()
         ec2.search_transit_gateway_routes.return_value = {
             "Routes": [
-                {"DestinationCidrBlock": "10.0.0.0/16", "State": "active", "Type": "static",
-                 "TransitGatewayAttachments": [{"TransitGatewayAttachmentId": "tgw-attach-1"}]},
+                {
+                    "DestinationCidrBlock": "10.0.0.0/16",
+                    "State": "active",
+                    "Type": "static",
+                    "TransitGatewayAttachments": [{"TransitGatewayAttachmentId": "tgw-attach-1"}],
+                },
                 {"DestinationCidrBlock": "10.0.1.0/24", "State": "active", "Type": "propagated"},
                 {"DestinationCidrBlock": "192.168.0.0/16", "State": "blackhole"},
             ]
@@ -59,7 +63,10 @@ class TestTGWRouteAnalysis:
         assert "AccessDenied" in a.note
 
     def test_overlap_helper_ignores_invalid(self):
-        assert _find_overlaps(["not-a-cidr", "10.0.0.0/8", "10.1.0.0/16"]) == ["10.0.0.0/8", "10.1.0.0/16"]
+        assert _find_overlaps(["not-a-cidr", "10.0.0.0/8", "10.1.0.0/16"]) == [
+            "10.0.0.0/8",
+            "10.1.0.0/16",
+        ]
 
 
 # ── C2: flow-log analysis ───────────────────────────────────────────────────
@@ -90,9 +97,13 @@ class TestFlowLogAnalysis:
         logs = MagicMock()
         logs.start_query.return_value = {"queryId": "q1"}
         logs.get_query_results.return_value = {
-            "results": [[{"field": "srcAddr", "value": "10.0.0.1"},
-                         {"field": "dstAddr", "value": "10.0.0.2"},
-                         {"field": "c", "value": "99"}]]
+            "results": [
+                [
+                    {"field": "srcAddr", "value": "10.0.0.1"},
+                    {"field": "dstAddr", "value": "10.0.0.2"},
+                    {"field": "c", "value": "99"},
+                ]
+            ]
         }
         s = FlowLogAnalyzer(ec2, logs, "acct", "us-east-1").analyze(["vpc-1"])[0]
         assert s.enabled is True
@@ -114,11 +125,24 @@ class TestCost:
     def test_only_network_usage_types_counted(self):
         ce = MagicMock()
         ce.get_cost_and_usage.return_value = {
-            "ResultsByTime": [{"Groups": [
-                {"Keys": ["USE1-NatGateway-Hours"], "Metrics": {"UnblendedCost": {"Amount": "12.50", "Unit": "USD"}}},
-                {"Keys": ["USE1-DataTransfer-Out-Bytes"], "Metrics": {"UnblendedCost": {"Amount": "3.00", "Unit": "USD"}}},
-                {"Keys": ["USE1-BoxUsage:t3.micro"], "Metrics": {"UnblendedCost": {"Amount": "100.00", "Unit": "USD"}}},
-            ]}]
+            "ResultsByTime": [
+                {
+                    "Groups": [
+                        {
+                            "Keys": ["USE1-NatGateway-Hours"],
+                            "Metrics": {"UnblendedCost": {"Amount": "12.50", "Unit": "USD"}},
+                        },
+                        {
+                            "Keys": ["USE1-DataTransfer-Out-Bytes"],
+                            "Metrics": {"UnblendedCost": {"Amount": "3.00", "Unit": "USD"}},
+                        },
+                        {
+                            "Keys": ["USE1-BoxUsage:t3.micro"],
+                            "Metrics": {"UnblendedCost": {"Amount": "100.00", "Unit": "USD"}},
+                        },
+                    ]
+                }
+            ]
         }
         r = AWSCostCollector(ce, "acct", window_days=(30,)).collect()[0]
         assert r.total_cost == 15.5  # EC2 box usage excluded
@@ -154,7 +178,9 @@ def _reachable_ec2(status="succeeded", found=True):
 class TestReachabilityFlagship:
     def test_reachable_path(self):
         ec2 = _reachable_ec2(found=True)
-        r = ReachabilityAnalyzer(ec2, "acct", "us-east-1").analyze([("web->api", "eni-a", "eni-b")])[0]
+        r = ReachabilityAnalyzer(ec2, "acct", "us-east-1").analyze(
+            [("web->api", "eni-a", "eni-b")]
+        )[0]
         assert r.reachable is True
         assert r.note == "reachable"
 
@@ -162,18 +188,25 @@ class TestReachabilityFlagship:
         ec2 = _reachable_ec2(found=False)
         ec2.describe_network_insights_analyses.return_value = {
             "NetworkInsightsAnalyses": [
-                {"Status": "succeeded", "NetworkPathFound": False,
-                 "ForwardPathComponents": [{"Component": {"Id": "sg-block"}}]}
+                {
+                    "Status": "succeeded",
+                    "NetworkPathFound": False,
+                    "ForwardPathComponents": [{"Component": {"Id": "sg-block"}}],
+                }
             ]
         }
-        r = ReachabilityAnalyzer(ec2, "acct", "us-east-1").analyze([("web->api", "eni-a", "eni-b")])[0]
+        r = ReachabilityAnalyzer(ec2, "acct", "us-east-1").analyze(
+            [("web->api", "eni-a", "eni-b")]
+        )[0]
         assert r.reachable is False
         assert r.blocking_component == "sg-block"
 
     def test_teardown_always_runs_on_success(self):
         ec2 = _reachable_ec2()
         ReachabilityAnalyzer(ec2, "acct", "us-east-1").analyze([("p", "s", "d")])
-        ec2.delete_network_insights_analysis.assert_called_once_with(NetworkInsightsAnalysisId="nia-1")
+        ec2.delete_network_insights_analysis.assert_called_once_with(
+            NetworkInsightsAnalysisId="nia-1"
+        )
         ec2.delete_network_insights_path.assert_called_once_with(NetworkInsightsPathId="nip-1")
 
     def test_teardown_runs_even_when_analysis_errors_midway(self):

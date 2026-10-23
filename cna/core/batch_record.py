@@ -19,7 +19,6 @@ Design (see .kiro/specs/batch-offline-import/):
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -147,7 +146,7 @@ def _encrypt(plaintext: bytes, passphrase: str) -> bytes:
 def _decrypt(blob: bytes, passphrase: str) -> bytes:
     if not blob.startswith(_ENC_MAGIC):
         raise BatchRecordError("record is not an encrypted CNA batch record")
-    body = blob[len(_ENC_MAGIC):]
+    body = blob[len(_ENC_MAGIC) :]
     salt, nonce, ct = body[:16], body[16:28], body[28:]
     key = _derive_key(passphrase, salt)
     try:
@@ -179,7 +178,9 @@ def export_batch_record(
     if not disc_dir.exists():
         raise BatchRecordError(f"no discovery checkpoints for engagement '{engagement_id}'")
 
-    manifest = BatchManifest(exported_at=datetime.now(UTC).isoformat(), label=label, encrypted=encrypt)
+    manifest = BatchManifest(
+        exported_at=datetime.now(UTC).isoformat(), label=label, encrypted=encrypt
+    )
     members: dict[str, bytes] = {}  # arcname -> bytes
 
     for ckpt in sorted(disc_dir.glob("*.json")):
@@ -276,7 +277,9 @@ def import_batch_record(
                 raise BatchRecordError(f"manifest lists {entry.filename} but it is missing")
             raw = zf.read(arc)
             if _sha256(raw) != entry.sha256:
-                raise BatchRecordError(f"checksum mismatch for {entry.filename} (tampered/truncated)")
+                raise BatchRecordError(
+                    f"checksum mismatch for {entry.filename} (tampered/truncated)"
+                )
             if entry.platform not in _PLATFORM_MODELS:
                 raise BatchRecordError(f"unknown platform '{entry.platform}' in record")
             data = json.loads(raw)
@@ -287,7 +290,7 @@ def import_batch_record(
         disc_dir = store.engagement_dir(engagement_id) / store.DISCOVERY_DIR
         disc_dir.mkdir(parents=True, exist_ok=True)
         result = ImportResult()
-        for entry, raw, data in validated:
+        for entry, raw, _data in validated:
             target = disc_dir / entry.filename
             if target.exists():
                 existing = target.read_bytes()

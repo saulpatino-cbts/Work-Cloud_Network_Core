@@ -40,9 +40,7 @@ def nat_target():
 class TestDefaults:
     def test_default_metric_set_applied_when_no_override(self, nat_target):
         cw = MagicMock()
-        cw.get_metric_statistics.return_value = {
-            "Datapoints": [{"Sum": 1000.0, "Unit": "Bytes"}]
-        }
+        cw.get_metric_statistics.return_value = {"Datapoints": [{"Sum": 1000.0, "Unit": "Bytes"}]}
         c = AWSMetricsCollector(cw, "123456789012", "us-east-1")
         results = c.collect([nat_target])
         # DEFAULT_METRICS has two nat-gateway specs -> two results for this target.
@@ -59,7 +57,9 @@ class TestOverride:
     def test_configurable_override_replaces_defaults(self, nat_target):
         cw = MagicMock()
         cw.get_metric_statistics.return_value = {"Datapoints": [{"Average": 7.0, "Unit": "Count"}]}
-        spec = MetricSpec("nat-gateway", "AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", "Average")
+        spec = MetricSpec(
+            "nat-gateway", "AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", "Average"
+        )
         c = AWSMetricsCollector(cw, "acct", "us-east-1", metric_specs=[spec])
         results = c.collect([nat_target])
         assert len(results) == 1
@@ -88,7 +88,9 @@ class TestObservedStateHonesty:
 
 
 class TestGracefulDegradation:
-    @pytest.mark.parametrize("code", ["AccessDenied", "AccessDeniedException", "ResourceNotFoundException"])
+    @pytest.mark.parametrize(
+        "code", ["AccessDenied", "AccessDeniedException", "ResourceNotFoundException"]
+    )
     def test_not_enabled_codes_degrade_without_raising(self, nat_target, code):
         cw = MagicMock()
         cw.get_metric_statistics.side_effect = _client_error(code)
@@ -114,9 +116,9 @@ class TestReadOnly:
         called = {name for name, _, _ in cw.mock_calls}
         # Every CloudWatch method touched must be a read (get_*/list_*/describe_*).
         assert called
-        assert all(
-            m.split(".")[0].startswith(("get_", "list_", "describe_")) for m in called
-        ), f"non-read CloudWatch call: {called}"
+        assert all(m.split(".")[0].startswith(("get_", "list_", "describe_")) for m in called), (
+            f"non-read CloudWatch call: {called}"
+        )
 
 
 class TestNoTargets:

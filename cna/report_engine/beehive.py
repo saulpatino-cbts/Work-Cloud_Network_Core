@@ -96,22 +96,38 @@ def _build_aws(graph: NetworkGraph, aws) -> None:
             vpc_nid = _aws_node_id(acct, vpc.id)
             graph.add_node(
                 GraphNode(
-                    id=vpc_nid, kind="network", name=vpc.name or vpc.id, source_id=acct,
-                    cloud="aws", cidrs=[vpc.cidr, *vpc.secondary_cidrs],
+                    id=vpc_nid,
+                    kind="network",
+                    name=vpc.name or vpc.id,
+                    source_id=acct,
+                    cloud="aws",
+                    cidrs=[vpc.cidr, *vpc.secondary_cidrs],
                 )
             )
             for subnet in vpc.subnets:
                 sn_nid = _aws_node_id(acct, subnet.id)
                 graph.add_node(
-                    GraphNode(id=sn_nid, kind="subnet", name=subnet.name or subnet.id,
-                              source_id=acct, cloud="aws", cidrs=[subnet.cidr])
+                    GraphNode(
+                        id=sn_nid,
+                        kind="subnet",
+                        name=subnet.name or subnet.id,
+                        source_id=acct,
+                        cloud="aws",
+                        cidrs=[subnet.cidr],
+                    )
                 )
                 graph.add_edge(GraphEdge(src=vpc_nid, dst=sn_nid, kind="contains", source_id=acct))
             for nat in vpc.nat_gateways:
                 ng = _aws_node_id(acct, nat.id)
                 graph.add_node(
-                    GraphNode(id=ng, kind="gateway", name=nat.name or nat.id, source_id=acct,
-                              cloud="aws", ips=[nat.public_ip] if getattr(nat, "public_ip", None) else [])
+                    GraphNode(
+                        id=ng,
+                        kind="gateway",
+                        name=nat.name or nat.id,
+                        source_id=acct,
+                        cloud="aws",
+                        ips=[nat.public_ip] if getattr(nat, "public_ip", None) else [],
+                    )
                 )
                 graph.add_edge(GraphEdge(src=vpc_nid, dst=ng, kind="contains", source_id=acct))
             # security-group allowances -> sg-allow edges carrying ports + CIDRs
@@ -122,14 +138,27 @@ def _build_aws(graph: NetworkGraph, aws) -> None:
                     port = _port_label(rule.protocol, rule.from_port, rule.to_port)
                     for cidr in rule.cidr_ranges or []:
                         graph.add_edge(
-                            GraphEdge(src=f"cidr:{cidr}", dst=vpc_nid, kind="sg-allow",
-                                      ports=[port], cidr=cidr, source_id=acct)
+                            GraphEdge(
+                                src=f"cidr:{cidr}",
+                                dst=vpc_nid,
+                                kind="sg-allow",
+                                ports=[port],
+                                cidr=cidr,
+                                source_id=acct,
+                            )
                         )
-                        graph.add_node(GraphNode(id=f"cidr:{cidr}", kind="endpoint", name=cidr, cidrs=[cidr]))
+                        graph.add_node(
+                            GraphNode(id=f"cidr:{cidr}", kind="endpoint", name=cidr, cidrs=[cidr])
+                        )
                     if rule.source_sg_id:
                         graph.add_edge(
-                            GraphEdge(src=_aws_node_id(acct, rule.source_sg_id), dst=vpc_nid,
-                                      kind="sg-allow", ports=[port], source_id=acct)
+                            GraphEdge(
+                                src=_aws_node_id(acct, rule.source_sg_id),
+                                dst=vpc_nid,
+                                kind="sg-allow",
+                                ports=[port],
+                                source_id=acct,
+                            )
                         )
             # peerings (incl. cross-account) -> peering edges
             for p in vpc.peering_connections:
@@ -139,20 +168,37 @@ def _build_aws(graph: NetworkGraph, aws) -> None:
         # TGW route analysis (BUILD-01 C3), when present
         for tra in getattr(region, "tgw_route_analyses", []) or []:
             tgw_nid = _aws_node_id(acct, tra.transit_gateway_id)
-            graph.add_node(GraphNode(id=tgw_nid, kind="gateway", name=tra.transit_gateway_id,
-                                     source_id=acct, cloud="aws"))
+            graph.add_node(
+                GraphNode(
+                    id=tgw_nid,
+                    kind="gateway",
+                    name=tra.transit_gateway_id,
+                    source_id=acct,
+                    cloud="aws",
+                )
+            )
             for route in tra.routes:
                 if route.attachment_id:
                     graph.add_edge(
-                        GraphEdge(src=tgw_nid, dst=_aws_node_id(acct, route.attachment_id),
-                                  kind="tgw", cidr=route.destination_cidr, source_id=acct)
+                        GraphEdge(
+                            src=tgw_nid,
+                            dst=_aws_node_id(acct, route.attachment_id),
+                            kind="tgw",
+                            cidr=route.destination_cidr,
+                            source_id=acct,
+                        )
                     )
         # reachability (BUILD-01 C6) -> the only live-verified edges
         for rp in getattr(region, "reachability_paths", []) or []:
             if rp.reachable:
                 graph.add_edge(
-                    GraphEdge(src=_aws_node_id(acct, rp.source), dst=_aws_node_id(acct, rp.destination),
-                              kind="reachable", source_id=acct, observed=True)
+                    GraphEdge(
+                        src=_aws_node_id(acct, rp.source),
+                        dst=_aws_node_id(acct, rp.destination),
+                        kind="reachable",
+                        source_id=acct,
+                        observed=True,
+                    )
                 )
 
 
@@ -162,14 +208,26 @@ def _build_azure(graph: NetworkGraph, azure) -> None:
         for vnet in getattr(sub, "vnets", []) or []:
             vnet_nid = _azure_node_id(sid, vnet.id)
             graph.add_node(
-                GraphNode(id=vnet_nid, kind="network", name=vnet.name, source_id=sid,
-                          cloud="azure", cidrs=list(vnet.address_space or []))
+                GraphNode(
+                    id=vnet_nid,
+                    kind="network",
+                    name=vnet.name,
+                    source_id=sid,
+                    cloud="azure",
+                    cidrs=list(vnet.address_space or []),
+                )
             )
             for subnet in vnet.subnets:
                 sn_nid = _azure_node_id(sid, subnet.id)
                 graph.add_node(
-                    GraphNode(id=sn_nid, kind="subnet", name=subnet.name, source_id=sid,
-                              cloud="azure", cidrs=[subnet.address_prefix] if subnet.address_prefix else [])
+                    GraphNode(
+                        id=sn_nid,
+                        kind="subnet",
+                        name=subnet.name,
+                        source_id=sid,
+                        cloud="azure",
+                        cidrs=[subnet.address_prefix] if subnet.address_prefix else [],
+                    )
                 )
                 graph.add_edge(GraphEdge(src=vnet_nid, dst=sn_nid, kind="contains", source_id=sid))
             for p in getattr(vnet, "peerings", []) or []:
@@ -182,11 +240,18 @@ def _build_azure(graph: NetworkGraph, azure) -> None:
                 if getattr(rule, "direction", "").lower() not in ("inbound", "ingress"):
                     continue
                 proto = getattr(rule, "protocol", "-1")
-                port = getattr(rule, "destination_port_range", None) or getattr(rule, "to_port", None)
+                port = getattr(rule, "destination_port_range", None) or getattr(
+                    rule, "to_port", None
+                )
                 label = f"{str(proto).lower()}/{port}" if port else f"{str(proto).lower()}/all"
                 graph.add_edge(
-                    GraphEdge(src=f"nsg:{getattr(nsg, 'id', getattr(nsg, 'name', 'nsg'))}",
-                              dst=f"azure:{sid}", kind="nsg-allow", ports=[label], source_id=sid)
+                    GraphEdge(
+                        src=f"nsg:{getattr(nsg, 'id', getattr(nsg, 'name', 'nsg'))}",
+                        dst=f"azure:{sid}",
+                        kind="nsg-allow",
+                        ports=[label],
+                        source_id=sid,
+                    )
                 )
 
 
@@ -226,8 +291,11 @@ def _complete_edge_endpoints(graph: NetworkGraph) -> None:
                 cloud = parts[0] if parts and parts[0] in ("aws", "azure") else ""
                 graph.add_node(
                     GraphNode(
-                        id=endpoint, kind="external", name=parts[-1] if parts else endpoint,
-                        source_id=source_id, cloud=cloud,
+                        id=endpoint,
+                        kind="external",
+                        name=parts[-1] if parts else endpoint,
+                        source_id=source_id,
+                        cloud=cloud,
                     )
                 )
                 known.add(endpoint)
@@ -273,8 +341,10 @@ class BeehiveRenderer:
         ]
         for n in graph.nodes:
             if n.kind == "network":
-                lines.append(f"- {wikilink(slug(n.id), n.name or n.id)} "
-                             f"({n.cloud}, {n.source_id}) {', '.join(n.cidrs)}")
+                lines.append(
+                    f"- {wikilink(slug(n.id), n.name or n.id)} "
+                    f"({n.cloud}, {n.source_id}) {', '.join(n.cidrs)}"
+                )
         write_note(vault / "README.md", lines)
 
     def _write_network_notes(self, vault: Path, graph: NetworkGraph) -> None:
@@ -304,7 +374,7 @@ class BeehiveRenderer:
                     ports = f" ports: {', '.join(e.ports)}" if e.ports else ""
                     lines.append(f"- {e.kind} -> {wikilink(slug(e.dst))}{ports}")
                 lines.append("")
-            target = (d if node.kind in ("network", "subnet") else nd)
+            target = d if node.kind in ("network", "subnet") else nd
             write_note(target / f"{slug(node.id)}.md", lines)
 
     def _write_connection_notes(self, vault: Path, graph: NetworkGraph) -> None:

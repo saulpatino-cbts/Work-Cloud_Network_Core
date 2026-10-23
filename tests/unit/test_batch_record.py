@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from cna.core.batch_record import (
-    BATCH_RECORD_SCHEMA_VERSION,
     BatchRecordError,
     export_batch_record,
     import_batch_record,
@@ -30,7 +29,9 @@ def _store(tmp_path: Path) -> EngagementStore:
 
 
 def _write_checkpoint(store, eng, platform, data) -> Path:
-    return store.write_discovery_checkpoint(eng, platform, data.get("account_id") or data["subscription_id"], data)
+    return store.write_discovery_checkpoint(
+        eng, platform, data.get("account_id") or data["subscription_id"], data
+    )
 
 
 def _aws_ckpt(account_id="123456789012", region="us-east-1", discovered_at="2026-10-01T00:00:00Z"):
@@ -38,7 +39,12 @@ def _aws_ckpt(account_id="123456789012", region="us-east-1", discovered_at="2026
 
 
 def _azure_ckpt(sub_id="sub-1", tenant="ten-1", discovered_at="2026-10-01T00:00:00Z"):
-    return {"subscription_id": sub_id, "subscription_name": "s", "tenant_id": tenant, "discovered_at": discovered_at}
+    return {
+        "subscription_id": sub_id,
+        "subscription_name": "s",
+        "tenant_id": tenant,
+        "discovered_at": discovered_at,
+    }
 
 
 class TestRoundTrip:
@@ -80,7 +86,7 @@ class TestIdempotencyAndConflict:
         assert second.imported == []
         assert second.skipped == ["123456789012"]
         # exactly one checkpoint on disk
-        disc = (tmp_path / "dst" / "eng-b" / "discovery")
+        disc = tmp_path / "dst" / "eng-b" / "discovery"
         assert len(list(disc.glob("aws_*.json"))) == 1
 
     def test_newer_wins_on_conflict(self, tmp_path):
@@ -91,7 +97,9 @@ class TestIdempotencyAndConflict:
         rec = export_batch_record(src, "eng-a", None, tmp_path / "rec.zip")
         result = import_batch_record(dst, "eng-b", rec, conflict="newest")
         assert result.replaced == ["123456789012"]
-        loaded = json.loads((tmp_path / "dst" / "eng-b" / "discovery" / "aws_123456789012.json").read_text())
+        loaded = json.loads(
+            (tmp_path / "dst" / "eng-b" / "discovery" / "aws_123456789012.json").read_text()
+        )
         assert loaded["discovered_at"] == "2026-10-01T00:00:00Z"
 
     def test_older_does_not_replace(self, tmp_path):
@@ -182,9 +190,11 @@ class TestEncryption:
     def test_encrypt_roundtrip(self, tmp_path):
         src = _store(tmp_path / "src")
         _write_checkpoint(src, "eng-a", "aws", _aws_ckpt())
-        rec = export_batch_record(src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="pw")
-        # not a plain zip
-        with pytest.raises(Exception):
+        rec = export_batch_record(
+            src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="pw"
+        )
+        # encrypted: the magic-prefixed blob is not a valid zip
+        with pytest.raises(zipfile.BadZipFile):
             zipfile.ZipFile(rec)
         dst = _store(tmp_path / "dst")
         result = import_batch_record(dst, "eng-b", rec, passphrase="pw")
@@ -193,7 +203,9 @@ class TestEncryption:
     def test_wrong_passphrase_fails(self, tmp_path):
         src = _store(tmp_path / "src")
         _write_checkpoint(src, "eng-a", "aws", _aws_ckpt())
-        rec = export_batch_record(src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="right")
+        rec = export_batch_record(
+            src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="right"
+        )
         dst = _store(tmp_path / "dst")
         with pytest.raises(BatchRecordError):
             import_batch_record(dst, "eng-b", rec, passphrase="wrong")
@@ -201,7 +213,9 @@ class TestEncryption:
     def test_encrypted_without_passphrase_refused(self, tmp_path):
         src = _store(tmp_path / "src")
         _write_checkpoint(src, "eng-a", "aws", _aws_ckpt())
-        rec = export_batch_record(src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="pw")
+        rec = export_batch_record(
+            src, "eng-a", None, tmp_path / "rec.enc", encrypt=True, passphrase="pw"
+        )
         dst = _store(tmp_path / "dst")
         with pytest.raises(BatchRecordError):
             import_batch_record(dst, "eng-b", rec)

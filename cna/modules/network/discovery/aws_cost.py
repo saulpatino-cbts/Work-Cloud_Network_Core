@@ -95,9 +95,7 @@ class AWSCostCollector:
                 usage_type = (group.get("Keys") or [""])[0]
                 if not _is_network_usage(usage_type):
                     continue
-                amount = float(
-                    group.get("Metrics", {}).get("UnblendedCost", {}).get("Amount", 0.0)
-                )
+                amount = float(group.get("Metrics", {}).get("UnblendedCost", {}).get("Amount", 0.0))
                 by_type[usage_type] = round(by_type.get(usage_type, 0.0) + amount, 4)
                 total += amount
                 unit = group.get("Metrics", {}).get("UnblendedCost", {}).get("Unit")

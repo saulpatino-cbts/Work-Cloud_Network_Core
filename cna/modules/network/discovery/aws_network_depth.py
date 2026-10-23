@@ -79,7 +79,9 @@ class TransitGatewayRouteAnalyzer:
         for r in resp.get("Routes", []):
             cidr = r.get("DestinationCidrBlock", "")
             state = r.get("State", "")
-            attach = (r.get("TransitGatewayAttachments") or [{}])[0].get("TransitGatewayAttachmentId")
+            attach = (r.get("TransitGatewayAttachments") or [{}])[0].get(
+                "TransitGatewayAttachmentId"
+            )
             analysis.routes.append(
                 AWSTGWRoute(
                     destination_cidr=cidr,

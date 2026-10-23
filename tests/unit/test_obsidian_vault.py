@@ -26,7 +26,6 @@ from cna.core.findings_schema import (
 )
 from cna.report_engine.obsidian_vault import ObsidianVaultRenderer, _slug
 
-
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
 
@@ -55,7 +54,11 @@ def _make_finding(
             FrameworkMapping(framework="AWS Well-Architected", version="2024", pillar="Reliability")
         ],
         recommendations=(
-            [FindingRecommendation(source="AWS MCP", text="Enable flow logs", reference_url="https://x")]
+            [
+                FindingRecommendation(
+                    source="AWS MCP", text="Enable flow logs", reference_url="https://x"
+                )
+            ]
             if recs
             else []
         ),
@@ -64,10 +67,14 @@ def _make_finding(
 
 
 def _make_report(findings=None, *, review_complete: bool = True) -> FindingsReport:
-    findings = findings if findings is not None else [
-        _make_finding("critical"),
-        _make_finding("high", "AWS-NET-002", cost=42.5),
-    ]
+    findings = (
+        findings
+        if findings is not None
+        else [
+            _make_finding("critical"),
+            _make_finding("high", "AWS-NET-002", cost=42.5),
+        ]
+    )
     return FindingsReport(
         engagement_id="eng-test-001",
         findings=findings,
@@ -225,10 +232,10 @@ class TestZipAndPipeline:
 
 class TestIsolation:
     def test_writes_only_under_output_path(self, tmp_path):
-        before = {p for p in tmp_path.rglob("*")}
+        before = set(tmp_path.rglob("*"))
         zip_path = tmp_path / "sub" / "eng_vault.zip"
         ObsidianVaultRenderer().render(report=_make_report(), output_path=zip_path)
-        after = {p for p in tmp_path.rglob("*")}
+        after = set(tmp_path.rglob("*"))
         new = after - before
         # every newly created path is under tmp_path/sub
         assert new, "nothing was written"

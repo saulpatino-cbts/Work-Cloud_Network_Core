@@ -320,9 +320,9 @@ class AWSDiscovery:
             vpc_ids = [v.id for v in topo.vpcs]
             if vpc_ids:
                 logs = session.client("logs", region_name=region)
-                topo.flow_log_summaries = FlowLogAnalyzer(
-                    ec2, logs, account_id, region
-                ).analyze(vpc_ids)
+                topo.flow_log_summaries = FlowLogAnalyzer(ec2, logs, account_id, region).analyze(
+                    vpc_ids
+                )
         except Exception as e:
             logger.warning("[%s/%s] flow-log analysis degraded: %s", account_id, region, e)
 

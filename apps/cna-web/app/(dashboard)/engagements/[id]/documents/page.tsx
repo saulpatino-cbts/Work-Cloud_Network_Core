@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_UI_NOTE } from "@/lib/storage";
 import { UploadDocumentForm } from "./upload-form";
 
 interface PageProps {
@@ -58,6 +59,10 @@ export default async function DocumentsPage({ params }: PageProps) {
   if (!engagement) notFound();
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
+
+  // CR-CORE-01 / AWS-F-04: document upload needs blob storage (Azure-only
+  // today), so hide the upload form on an AWS appliance.
+  const storageAvailable = isBlobStorageAvailable();
 
   // hasTopology is needed to show the "Generate from live data" button on templates
   let hasTopology = false;
@@ -135,7 +140,14 @@ export default async function DocumentsPage({ params }: PageProps) {
           Upload compliance frameworks, architecture notes, NSG exports, or route tables.
           Text files are parsed and used as context for AI Analysis.
         </p>
-        <UploadDocumentForm engagementId={id} />
+        {storageAvailable ? (
+          <UploadDocumentForm engagementId={id} />
+        ) : (
+          <p className="rounded-lg border border-navy-700/40 bg-navy-50 dark:bg-navy-800/20 px-4 py-3 text-sm text-navy-500">
+            Document upload is {STORAGE_UNAVAILABLE_UI_NOTE.toLowerCase()} — file storage is not
+            configured for this deployment yet.
+          </p>
+        )}
       </section>
     </div>
   );

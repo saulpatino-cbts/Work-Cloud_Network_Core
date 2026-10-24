@@ -2048,6 +2048,24 @@ and `summarize-error.ts` are Azure-shaped; `POST /publish` hard-codes `AzureBlob
 on `CNA_APPLIANCE_CLOUD` / the credential platform and add the S3 path (the CLI's `s3_deployer.py`
 exists) so the AWS appliance can upload documents and publish portals.
 
+- **Web-tier storage — findings-only degradation shipped (CR-CORE-01 / AWS-F-04).** The web tier
+  (`apps/cna-web/lib/blob.ts`) implements the five blob functions (`uploadEngagementFile`,
+  `uploadDeliverable`, `deleteBlob`, `deleteContainer`, `generateSasUrl`) for Azure Blob Storage
+  only, so on an AWS appliance document upload, deliverable/diagram blobs and the client portal
+  used to throw raw Azure errors (`AZURE_STORAGE_ACCOUNT_NAME is not set`). Those three features
+  now degrade gracefully on AWS instead of crashing: a single `isBlobStorageAvailable()` helper
+  (`apps/cna-web/lib/storage.ts`, keyed off `CNA_APPLIANCE_CLOUD` via the existing
+  `normalizeApplianceCloud` helper) gates every call site — the API route returns HTTP 501 with a
+  clean JSON body, the server actions return a clean error, and the upload/download/publish UI
+  controls are hidden with a short "Not available on this appliance" note. Azure behaviour is
+  unchanged. The assessment and findings UI stay fully functional on AWS.
+- **Remaining "full parity" work (this item):** add an S3 storage abstraction selected by
+  `CNA_APPLIANCE_CLOUD` — add the `@aws-sdk/client-s3` dependency and an S3 implementation of the
+  same five blob functions, using presigned URLs as the SAS-URL equivalent for `generateSasUrl` —
+  and switch the API's `POST /publish` off the hard-coded `AzureBlobDeployer` onto the same
+  cloud-selected path, so the AWS appliance can actually upload documents and publish portals
+  rather than only disabling those features.
+
 ### T-710 — Align the storage-account variable name (ARCH-003)
 The API reads `AZURE_STORAGE_ACCOUNT_NAME` (`apps/cna-api/main.py`); the Azure appliance injects
 `CNA_STORAGE_ACCOUNT_NAME`, so in-app portal publish always returns 503. Pick one name in

@@ -11,10 +11,12 @@ interface LatestPublication {
 
 export function PortalPublishPanel({
   engagementId,
+  storageAvailable,
   hasPublishedDeliverables,
   latestPublication,
 }: {
   engagementId: string;
+  storageAvailable: boolean;
   hasPublishedDeliverables: boolean;
   latestPublication: LatestPublication | null;
 }) {
@@ -79,23 +81,32 @@ export function PortalPublishPanel({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handlePublish}
-          disabled={isPublishing || !hasPublishedDeliverables}
-          title={
-            hasPublishedDeliverables
-              ? undefined
-              : "Publish at least one deliverable first"
-          }
-          className="inline-flex items-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isPublishing
-            ? "Publishing…"
-            : latestPublication
-              ? "Re-publish portal"
-              : "Publish portal"}
-        </button>
+        {/* CR-CORE-01 / AWS-F-04: the portal upload uses blob storage (Azure-only
+            today). On AWS, show a short disabled-state note instead of a button
+            that would fail. */}
+        {storageAvailable ? (
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={isPublishing || !hasPublishedDeliverables}
+            title={
+              hasPublishedDeliverables
+                ? undefined
+                : "Publish at least one deliverable first"
+            }
+            className="inline-flex items-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isPublishing
+              ? "Publishing…"
+              : latestPublication
+                ? "Re-publish portal"
+                : "Publish portal"}
+          </button>
+        ) : (
+          <span className="inline-flex items-center rounded-lg border border-navy-700/40 bg-navy-50 px-4 py-2 text-sm font-medium text-navy-500 dark:bg-navy-800/20">
+            Not available on this appliance
+          </span>
+        )}
       </div>
 
       {result?.error && (

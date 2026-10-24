@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DiagramForms } from "./diagram-forms";
 import { DiagramEditor } from "./diagram-editor";
 import { GenerateDiagramButton } from "./generate-diagram-button";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_UI_NOTE } from "@/lib/storage";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,6 +32,10 @@ export default async function DiagramPage({ params }: PageProps) {
 
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
+
+  // CR-CORE-01 / AWS-F-04: generating, saving and uploading diagrams all write
+  // to blob storage (Azure-only today), so disable those controls on AWS.
+  const storageAvailable = isBlobStorageAvailable();
 
   // Latest saved diagram source (editor saves and .drawio uploads both store
   // the XML in parsedText) — loaded back into the embedded editor.
@@ -68,13 +73,20 @@ export default async function DiagramPage({ params }: PageProps) {
           the editor&apos;s Save button writes changes straight back into this engagement.
           Exported artifacts (.png/.svg/.pdf) can be uploaded below.
         </p>
-        <div className="mb-4">
-          <GenerateDiagramButton engagementId={id} />
-        </div>
+        {storageAvailable ? (
+          <div className="mb-4">
+            <GenerateDiagramButton engagementId={id} />
+          </div>
+        ) : (
+          <p className="mb-4 rounded-lg border border-navy-700/40 bg-navy-50 dark:bg-navy-800/20 px-4 py-3 text-sm text-navy-500">
+            Diagram generation, saving and uploads are {STORAGE_UNAVAILABLE_UI_NOTE.toLowerCase()} —
+            these write to file storage, which is not configured for this deployment yet.
+          </p>
+        )}
         <DiagramEditor engagementId={id} initialXml={latestSource?.parsedText ?? ""} />
       </section>
 
-      <DiagramForms engagementId={id} />
+      {storageAvailable && <DiagramForms engagementId={id} />}
 
       <section className="glass p-5">
         <div className="mb-3 flex items-center justify-between">

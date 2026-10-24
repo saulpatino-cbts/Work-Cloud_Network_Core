@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadEngagementFile } from "@/lib/blob";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_MESSAGE } from "@/lib/storage";
 import { analyzeEngagement, type AnalysisFocus } from "@/lib/openai";
 import { revalidatePath } from "next/cache";
 import type { DocumentType } from "@prisma/client";
@@ -202,6 +203,9 @@ export async function uploadDocument(
 ): Promise<{ error?: string; success?: boolean }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // CR-CORE-01 / AWS-F-04: document upload needs blob storage, Azure-only today.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;
   const docType = formData.get("docType") as string | null;

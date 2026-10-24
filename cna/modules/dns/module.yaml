@@ -3,7 +3,11 @@ version: 1.0.0-stub
 display_name: DNS Architecture Assessment
 status: available_not_installed
 description: >
-  Maps DNS trust boundaries, Route 53 Resolver rules, private
-  hosted zone scope, and DNS exfiltration risk indicators.
+  PLANNED — not yet implemented. This is an empty placeholder package
+  (only __init__.py); it ships no discovery or analysis code today and
+  performs no cloud API calls. When built, it will map DNS trust
+  boundaries, Route 53 Resolver rules, private hosted zone scope, and
+  DNS exfiltration risk indicators. The shipping assessment surface is
+  the network and security modules across AWS and Azure.
 install_command: cna module install dns
 depends_on: [network]

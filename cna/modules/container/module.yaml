@@ -3,7 +3,11 @@ version: 1.0.0-stub
 display_name: Container & Serverless Network Assessment
 status: available_not_installed
 description: >
-  Assesses EKS/AKS pod network policies, Lambda/Functions
-  VPC configurations, service mesh, and API Gateway exposure.
+  PLANNED — not yet implemented. This is an empty placeholder package
+  (only __init__.py); it ships no discovery or analysis code today and
+  performs no cloud API calls. When built, it will assess EKS/AKS pod
+  network policies, Lambda/Functions VPC configurations, service mesh,
+  and API Gateway exposure. The shipping assessment surface is the
+  network and security modules across AWS and Azure.
 install_command: cna module install container
 depends_on: [network, security]

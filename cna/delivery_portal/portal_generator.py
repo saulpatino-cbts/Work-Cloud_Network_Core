@@ -37,6 +37,9 @@ CONTENT_TYPES: dict[str, str] = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".html": "text/html; charset=utf-8",
     ".json": "application/json",
+    # The Obsidian vault (BUILD-02) ships as a .zip; the portal uploads one per
+    # engagement and must set its content type like every other deliverable.
+    ".zip": "application/zip",
 }
 
 

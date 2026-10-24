@@ -5,6 +5,7 @@ import Link from "next/link";
 import { deleteDeliverableFromPortal, deleteDocument } from "./actions";
 import { ConfirmSubmitButton } from "@/components/ui/confirm-submit-button";
 import { PortalPublishPanel } from "./portal-publish-panel";
+import { isBlobStorageAvailable } from "@/lib/storage";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -70,6 +71,11 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
+  // CR-CORE-01 / AWS-F-04: the client portal publish and the interactive
+  // assessment both need blob storage (Azure-only today). Disable those
+  // controls on an AWS appliance; the rest of the page stays functional.
+  const storageAvailable = isBlobStorageAvailable();
+
   const interactiveAssessment = engagement.deliverables.find((d) => d.type === "INTERACTIVE_ASSESSMENT");
   const assessments = engagement.deliverables.filter((d) => d.type !== "INTERACTIVE_ASSESSMENT");
   const publishedAssessments = assessments.filter((d) => d.publishedAt !== null);
@@ -107,6 +113,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Client portal (external, time-limited share) ── */}
       <PortalPublishPanel
         engagementId={id}
+        storageAvailable={storageAvailable}
         hasPublishedDeliverables={hasPublishedDeliverables}
         latestPublication={
           latestPublication
@@ -195,15 +202,19 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
             <div>
               <p className="font-medium text-navy-400 dark:text-navy-300">No interactive assessment created</p>
               <p className="mt-0.5 text-sm text-navy-500">
-                Generate one to enable the presentation site and share it with clients.
+                {storageAvailable
+                  ? "Generate one to enable the presentation site and share it with clients."
+                  : "Not available on this appliance — the interactive assessment needs file storage, which is not configured for this deployment yet."}
               </p>
             </div>
-            <Link
-              href={`/engagements/${id}/presentation`}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-teal-700/50 px-4 py-2 text-sm font-semibold text-teal-700 dark:text-teal-400 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/20"
-            >
-              Create →
-            </Link>
+            {storageAvailable && (
+              <Link
+                href={`/engagements/${id}/presentation`}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-teal-700/50 px-4 py-2 text-sm font-semibold text-teal-700 dark:text-teal-400 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/20"
+              >
+                Create →
+              </Link>
+            )}
           </div>
         )}
       </section>

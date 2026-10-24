@@ -3,8 +3,11 @@ version: 1.0.0-stub
 display_name: Identity & Access Management Assessment
 status: available_not_installed
 description: >
-  Assesses IAM roles, policies, privilege escalation paths,
-  service account sprawl, and workload identity configurations.
-  Complements the network module for full Zero Trust coverage.
+  PLANNED — not yet implemented. This is an empty placeholder package
+  (only __init__.py); it ships no discovery or analysis code today and
+  performs no cloud API calls. When built, it will assess IAM roles,
+  policies, privilege escalation paths, service account sprawl, and
+  workload identity configurations. The shipping assessment surface is
+  the network and security modules across AWS and Azure.
 install_command: cna module install iam
 depends_on: [network, security]

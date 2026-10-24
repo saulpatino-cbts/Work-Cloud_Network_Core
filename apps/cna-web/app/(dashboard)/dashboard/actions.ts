@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteBlob, deleteContainer } from "@/lib/blob";
+import { isBlobStorageAvailable } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -80,19 +81,24 @@ export async function deleteEngagement(formData: FormData) {
     ...deliverables.map((d) => d.blobPath),
   ].filter((p): p is string => Boolean(p));
 
-  for (const blobPath of blobPaths) {
-    try {
-      await deleteBlob(blobPath);
-    } catch (err) {
-      console.error(`[deleteEngagement] blob delete failed for ${blobPath} (orphaned):`, err);
+  // CR-CORE-01 / AWS-F-04: only Azure writes blobs/containers, so there is
+  // nothing to clean up on AWS — skip the storage calls so the engagement still
+  // deletes instead of logging raw Azure-storage errors for every artifact.
+  if (isBlobStorageAvailable()) {
+    for (const blobPath of blobPaths) {
+      try {
+        await deleteBlob(blobPath);
+      } catch (err) {
+        console.error(`[deleteEngagement] blob delete failed for ${blobPath} (orphaned):`, err);
+      }
     }
-  }
 
-  // The per-engagement client-portal container (see cna-api /publish).
-  try {
-    await deleteContainer(`portal-${engagementId}`);
-  } catch (err) {
-    console.error(`[deleteEngagement] portal container delete failed for portal-${engagementId} (orphaned):`, err);
+    // The per-engagement client-portal container (see cna-api /publish).
+    try {
+      await deleteContainer(`portal-${engagementId}`);
+    } catch (err) {
+      console.error(`[deleteEngagement] portal container delete failed for portal-${engagementId} (orphaned):`, err);
+    }
   }
 
   await prisma.engagement.delete({ where: { id: engagementId } });

@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { uploadEngagementFile } from "@/lib/blob";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_MESSAGE } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 import { apiHeaders } from "@/lib/api-client";
 import { revalidatePath } from "next/cache";
@@ -27,6 +28,9 @@ export async function saveDiagramSource(
 ): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // CR-CORE-01 / AWS-F-04: diagram files are uploaded to blob storage, Azure-only today.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;
   const file = formData.get("sourceFile") as File | null;
@@ -91,6 +95,9 @@ export async function saveDiagramXml(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
   if (!engagementId) return { error: "Engagement is required." };
+
+  // CR-CORE-01 / AWS-F-04: saved diagram XML is written to blob storage, Azure-only today.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const isMember = await ensureMembership(engagementId, session.user.id);
   if (!isMember) return { error: "Access denied." };
@@ -160,6 +167,9 @@ export async function uploadDiagramExport(
 ): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
+
+  // CR-CORE-01 / AWS-F-04: diagram exports are uploaded to blob storage, Azure-only today.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;
   const file = formData.get("exportFile") as File | null;
@@ -234,6 +244,10 @@ export async function generateDiagramFromDiscovery(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
   if (!engagementId) return { error: "Engagement is required." };
+
+  // CR-CORE-01 / AWS-F-04: the generated diagram is persisted via saveDiagramXml
+  // (blob storage, Azure-only today) — bail out before the API call on AWS.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const isMember = await ensureMembership(engagementId, session.user.id);
   if (!isMember) return { error: "Access denied." };

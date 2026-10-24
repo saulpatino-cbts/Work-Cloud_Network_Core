@@ -51,6 +51,8 @@ class RenderOptions:
     render_regional_ja: bool = False  # requires ja_review_complete=True
     render_encyclopedia: bool = False  # six-chapter encyclopedia report (Phase D)
     encyclopedia_edition: str = "expanded"  # "condensed" | "expanded"
+    render_obsidian: bool = False  # Obsidian vault (BUILD-02); off by default
+    obsidian_mode: str = "findings"  # "findings" | "beehive" | "both"
     ja_review_complete: bool = False
     skip_pdf: bool = False  # HTML-only mode, no PDF toolchain required
     output_dir: Path | None = None  # defaults to store deliverables dir
@@ -99,6 +101,30 @@ class RenderPipeline:
                 f"review_complete=False. Run `cna review complete "
                 f"--engagement-id {self.engagement_id}` before generating reports."
             )
+
+    def _load_network_graph(self):
+        """Build the beehive NetworkGraph from the engagement's topology.
+
+        Returns None when neither an AWS nor an Azure topology exists for the
+        engagement (a findings-only engagement), so the pipeline can skip the
+        beehive without failing. Spans every discovery checkpoint the store
+        holds, so one customer's multiple subscriptions/accounts — including any
+        added by the batch offline import — are unified in one graph.
+        """
+        from cna.report_engine.beehive import build_network_graph
+
+        aws = azure = None
+        try:
+            aws = self.store.load_aws_topology(self.engagement_id)
+        except FileNotFoundError:
+            pass
+        try:
+            azure = self.store.load_azure_topology(self.engagement_id)
+        except FileNotFoundError:
+            pass
+        if aws is None and azure is None:
+            return None
+        return build_network_graph(aws=aws, azure=azure)
 
     def _enforce_ja_gate(self) -> None:
         """DD-015: Block JA report if native speaker review not complete."""
@@ -244,6 +270,46 @@ class RenderPipeline:
                 )
             )
             logger.info("[%s] Regional JA written: %s", engagement_id, pdf_path)
+
+        if self.opts.render_obsidian:
+            # Obsidian vault (BUILD-02). Needs no PDF toolchain, so it is not
+            # gated by skip_pdf. Two modes: the findings vault, the network-flow
+            # beehive, or both. Each produces a zip the portal ships.
+            mode = self.opts.obsidian_mode
+            if mode in ("findings", "both"):
+                from cna.report_engine.obsidian_vault import ObsidianVaultRenderer
+
+                zip_path = out / self._filename("vault", "zip")
+                ObsidianVaultRenderer().render(report=report, output_path=zip_path)
+                self._manifest.add(
+                    DeliverableRecord(
+                        label="Obsidian Findings Vault",
+                        path=str(zip_path),
+                        format="obsidian",
+                        lang="en",
+                    )
+                )
+                logger.info("[%s] Obsidian findings vault written: %s", engagement_id, zip_path)
+            if mode in ("beehive", "both"):
+                graph = self._load_network_graph()
+                if graph is None:
+                    logger.info(
+                        "[%s] Beehive requested but no topology found — skipping.", engagement_id
+                    )
+                else:
+                    from cna.report_engine.beehive import BeehiveRenderer
+
+                    zip_path = out / self._filename("beehive", "zip")
+                    BeehiveRenderer().render(graph, zip_path)
+                    self._manifest.add(
+                        DeliverableRecord(
+                            label="Obsidian Beehive",
+                            path=str(zip_path),
+                            format="obsidian",
+                            lang="en",
+                        )
+                    )
+                    logger.info("[%s] Obsidian beehive written: %s", engagement_id, zip_path)
 
         # Write manifest to store for Phase F portal
         self.store.write_deliverable_manifest(

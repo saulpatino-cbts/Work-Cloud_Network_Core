@@ -6,6 +6,7 @@ import { deleteDeliverable } from "./actions";
 import { GenerateDeliverableForm } from "./generate-form";
 import { DeliverableProgress } from "./deliverable-progress";
 import { ConfirmSubmitButton } from "@/components/ui/confirm-submit-button";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_UI_NOTE } from "@/lib/storage";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -78,6 +79,10 @@ export default async function AssessmentsPage({ params }: PageProps) {
 
   const { deliverables, findings } = engagement;
 
+  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage
+  // (Azure-only today), so disable generation and downloads on an AWS appliance.
+  const storageAvailable = isBlobStorageAvailable();
+
   let needsResync = false;
   try {
     const [credentials, completedJobs] = await Promise.all([
@@ -128,7 +133,14 @@ export default async function AssessmentsPage({ params }: PageProps) {
             </p>
           </div>
         )}
-        <GenerateDeliverableForm engagementId={id} />
+        {storageAvailable ? (
+          <GenerateDeliverableForm engagementId={id} />
+        ) : (
+          <p className="rounded-lg border border-navy-700/40 bg-navy-50 dark:bg-navy-800/20 px-4 py-3 text-sm text-navy-500">
+            Assessment generation is {STORAGE_UNAVAILABLE_UI_NOTE.toLowerCase()} — generated reports
+            are saved to file storage, which is not configured for this deployment yet.
+          </p>
+        )}
       </div>
 
       {/* ── Generated Assessments ── */}

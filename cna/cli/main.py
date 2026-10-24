@@ -3,6 +3,7 @@ from rich.console import Console
 
 from cna import __version__
 from cna.cli.analyze import analyze
+from cna.cli.batch import batch_group
 from cna.cli.commands import diagram_cmd, module_cmd
 from cna.cli.discover import discover
 from cna.cli.init import init
@@ -30,6 +31,7 @@ cli.add_command(analyze)
 cli.add_command(review_group)
 cli.add_command(report_group)
 cli.add_command(publish_group)
+cli.add_command(batch_group)
 # Still stubs: the diagram and module engines have no CLI wiring yet.
 cli.add_command(diagram_cmd.diagram)
 cli.add_command(module_cmd.module)

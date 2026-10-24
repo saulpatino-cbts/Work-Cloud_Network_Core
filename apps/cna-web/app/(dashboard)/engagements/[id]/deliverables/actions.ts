@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteBlob, uploadDeliverable } from "@/lib/blob";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_MESSAGE } from "@/lib/storage";
 import { generateDeliverableContent } from "@/lib/openai";
 import type { DeliverableContext, DeliverableType as OpenAIDeliverableType } from "@/lib/openai";
 import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
@@ -197,6 +198,10 @@ export async function generateDeliverable(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
+  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage,
+  // Azure-only today — disable generation cleanly on AWS.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
+
   // OWA-02: Rate limit deliverable generation (5 requests per 60s)
   const isAllowed = await checkRateLimit(session.user.id, "generateDeliverable");
   if (!isAllowed) {
@@ -365,6 +370,10 @@ export async function generateAllAssessments(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
+  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage,
+  // Azure-only today — disable generation cleanly on AWS.
+  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
+
   // OWA-02: Rate limit generating all assessments (5 requests per 60s)
   const isAllowed = await checkRateLimit(session.user.id, "generateAllAssessments");
   if (!isAllowed) {
@@ -518,7 +527,10 @@ export async function deleteDeliverable(formData: FormData) {
     select: { blobPath: true },
   });
   if (!record) return;
-  if (record.blobPath) {
+  // CR-CORE-01 / AWS-F-04: only Azure writes blobs, so only Azure can delete
+  // them. On AWS there is no blob to remove — skip the call so the row still
+  // deletes instead of hitting a raw Azure-storage error.
+  if (record.blobPath && isBlobStorageAvailable()) {
     await deleteBlob(record.blobPath);
   }
 

@@ -29,6 +29,33 @@ workflow in this repository; the core keeps only `200-build-images`,
 `300-test-codebase`, `310-release-version` and `370-registry-cleanup`. A
 deployment fix belongs in the appliance (and its sibling), never here.
 
+## Cross-repo change notification (mandatory)
+
+The CNA platform is three repositories under `saulpatino-cbts`: this **core**,
+the **AWS appliance**, and the **Azure appliance**. Any change here that touches
+the core ↔ appliance contract below, the runtime contract, the image/catalog
+schema, or anything both appliances consume **MUST notify BOTH appliances** — a
+core change reaches both clouds. Notification is not optional and not implied:
+
+1. Write a handover note to **each** appliance's `.reports/change-reports/`
+   describing the change, why it matters to that appliance, and the exact action
+   it needs (numbered steps). Whoever works an appliance does the same back
+   toward the core and the sibling.
+2. Surface the item on the shared board, **CNA Total Workboard**
+   (`https://github.com/users/saulpatino-cbts/projects/1`), and record it in the
+   cross-repo register `Work-Cloud_Network_Core/.reports/FINDINGS-REGISTER.md`.
+3. Then do the mirror itself (link the sibling PRs) or record a `TODO.md` item
+   naming the repos and the exact change.
+
+The direction of notification: **core → both appliances**; **one appliance →
+the sibling appliance AND the core** when the change is shared-surface. Never
+land a shared change in one repo silently.
+
+> Board write note: the board is owned by the `saulpatino-cbts` *user* account.
+> The `cna-workboard-bot` GitHub App can create issues but **cannot** write a
+> user-owned Projects v2 board; board writes use the owner's own token. See
+> `.reports/FINDINGS-REGISTER.md` for the full constraint.
+
 ## The core ↔ appliance contract
 
 Changing any of the following changes both appliances. Mirror the change into

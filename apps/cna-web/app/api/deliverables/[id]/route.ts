@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { generateSasUrl } from "@/lib/blob";
+import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_MESSAGE } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 import { escapeHtml, sanitizeHref } from "@/lib/sanitize-href";
 import { marked } from "marked";
@@ -220,6 +221,12 @@ export async function GET(
       return new NextResponse("No content available for this deliverable.", {
         status: 404,
       });
+    }
+    // CR-CORE-01 / AWS-F-04: serving blob-backed content needs a SAS URL, which
+    // only the Azure path implements. On AWS, return a clean 501 instead of
+    // letting the Azure SDK throw "AZURE_STORAGE_ACCOUNT_NAME is not set".
+    if (!isBlobStorageAvailable()) {
+      return NextResponse.json({ error: STORAGE_UNAVAILABLE_MESSAGE }, { status: 501 });
     }
     const sasUrl = await generateSasUrl(deliverable.blobPath, 1);
     return NextResponse.redirect(sasUrl, { status: 302 });

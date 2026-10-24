@@ -244,6 +244,40 @@ parallel, then the purple-team re-run verifies both.
 
 ---
 
+## Contracts for repository engineering
+
+W12 ([`workflows.md`](workflows.md)) separates the agent that writes a change from the agent that
+verifies it. The two envelopes below are what makes that separation worth having.
+
+### implementer → verifier
+
+| Field | Why the verifier needs it |
+|---|---|
+| Where the change is (repository, branch, staged or committed, a diff file) | So the review is of *this* tree and nothing else |
+| The claims, enumerated — every behaviour the change says it has, every number and file name its documentation states | The verifier checks claims against the diff; an unstated claim cannot be checked |
+| Commands run, with their results | So they are re-run, not trusted |
+| What could **not** be run here, and why | So the verifier rates the residual risk instead of assuming coverage |
+| Where the implementer thinks it is weakest, and the attacks it already tried | The verifier starts past them |
+| Tools and fixtures available (venvs, binaries, stub harnesses) | So verification is reproducible in the same environment |
+
+The envelope ends with the one instruction that keeps the roles honest: *do not edit any
+repository file; report only.*
+
+### verifier → implementer
+
+| Field | Why |
+|---|---|
+| Numbered findings, each with a severity — `BLOCKER`, `SHOULD-FIX`, `NIT`, `OK` | Severity decides the gate; a wall of prose does not |
+| Evidence per finding — the command and its output, or `file:line` | A finding without evidence is an opinion |
+| The concrete fix per finding | So folding it in is mechanical |
+| What was checked and found correct, with evidence | So the implementer knows what not to re-verify |
+| One-line verdict — `PASS`, `PASS WITH NITS`, `FAIL` | The gate reads this line |
+
+**Blocking rule:** a `FAIL` or any open `BLOCKER` returns the change to the implementer. The
+verifier does not fix it, and the orchestrator does not merge around it.
+
+---
+
 ## Rules
 
 1. **State the cost column.** Every time. No exceptions.

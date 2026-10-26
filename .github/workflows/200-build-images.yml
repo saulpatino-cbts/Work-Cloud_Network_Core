@@ -128,6 +128,18 @@ jobs:
             exit 1
           fi
 
+      # TEMPORARY diagnostic (remove after the OIDC ruleset is confirmed): print
+      # the exact `sub` claim GitHub issues for this run, so the Docker Hub
+      # connection ruleset can be set to match it verbatim. The `sub` is an
+      # identifier, not a secret; the token itself is never printed.
+      - name: "TEMP print OIDC subject claim"
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://hub.docker.com" | jq -r '.value')
+          SUB=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | { cat; echo; } | base64 -d 2>/dev/null | jq -r '.sub')
+          echo "OIDC sub claim = ${SUB}"
+          echo "::notice::OIDC sub claim = ${SUB}"
+
       # Keyless OIDC login: GitHub mints a short-lived OIDC token for this run
       # (needs `id-token: write`), Docker Hub validates it against the connection
       # whose ruleset trusts this repo, and issues a scoped, short-lived token.

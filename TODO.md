@@ -1520,7 +1520,7 @@ order; do not reorder it.
   2. In each appliance: secrets for the cloud OIDC identity (`AZURE_CLIENT_ID` / `AZURE_TENANT_ID`
      / `AZURE_SUBSCRIPTION_ID`, or `AWS_DEPLOY_ROLE_ARN`), `GH_APP_ID`, `GH_APP_PRIVATE_KEY`,
      `DOCKERHUB_TOKEN`, and the `CNA_*` runtime secrets `100-validate-prereqs` checks; variables
-     `CORE_REPO` (`saulpatino-cbts/Work-Cloud_Network_Assessment`), `DOCKERHUB_NAMESPACE`,
+     `CORE_REPO` (`saulpatino-cbts/Work-Cloud_Network_Core`), `DOCKERHUB_NAMESPACE`,
      `AUTO_UPDATE_DEV` (`true`), and the region variables. Create the `dev`, `prod` and `hub`
      environments with the same required reviewers the core uses.
   3. In the core: variable `APPLIANCE_REPOS=Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`.

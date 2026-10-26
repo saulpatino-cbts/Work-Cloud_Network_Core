@@ -129,7 +129,7 @@ jobs:
           fi
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -175,7 +175,7 @@ jobs:
       # daemon, so docker/scout-action could otherwise silently fall back to a
       # stale locally-cached image and scan the wrong content entirely.
       - name: Docker Scout — fail on fixable critical/high CVEs
-        uses: docker/scout-action@221e7f4860634eeb1579e3bd7ca232e577bd1864  # v1.26.0
+        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
           command: cves
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build.outputs.digest }}
@@ -232,7 +232,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -303,7 +303,7 @@ jobs:
       # above: no tag exists yet, and a floating-tag reference could resolve
       # against a stale locally-cached image instead of the one just pushed.
       - name: Docker Scout — fail on fixable critical/high CVEs (Web)
-        uses: docker/scout-action@221e7f4860634eeb1579e3bd7ca232e577bd1864  # v1.26.0
+        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
           command: cves
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_web.outputs.digest }}
@@ -327,7 +327,7 @@ jobs:
           cache-from: type=gha
 
       - name: Docker Scout — fail on fixable critical/high CVEs (Migrator)
-        uses: docker/scout-action@221e7f4860634eeb1579e3bd7ca232e577bd1864  # v1.26.0
+        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
           command: cves
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_migrator.outputs.digest }}
@@ -432,7 +432,7 @@ jobs:
           fi
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}

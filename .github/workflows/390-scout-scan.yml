@@ -63,10 +63,18 @@ jobs:
           # helper-image pulls (same reason as 200-build-images).
           scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@pull
 
-      # Report fixable critical/high CVEs for this published tag. `exit-code` is
-      # only turned on when the operator asked for a hard signal; by default the
-      # step always succeeds and the findings live in the job summary + logs.
+      # Report fixable critical/high CVEs for this published tag.
+      #
+      # continue-on-error: this workflow authenticates with the same keyless OIDC
+      # identity as 200-build-images, and Docker Scout's backend may reject it
+      # with "user githubactions not entitled to use Docker Scout" — Scout
+      # entitlement is tied to a Docker account/subscription, which the ephemeral
+      # OIDC identity does not carry. If that happens, this step reports the
+      # entitlement error in its log and the job stays green rather than becoming
+      # a permanently-red check. If/when a Scout-entitled identity is wired here,
+      # remove continue-on-error so the report is authoritative.
       - name: "Docker Scout — report CVEs (${{ matrix.tag }})"
+        continue-on-error: true
         uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
           command: cves

@@ -11,14 +11,20 @@ name: "200 · Build Container Images"
 # not make this one dispatchable. The commit that adds this paragraph is that
 # push; its own run is the first build from this repository.
 #
-# Publish order (scan before tag). Every image is pushed to Docker Hub **by
-# digest only** (no tag), scanned by Docker Scout at that digest, and only when
-# all five images have passed does the `tag-images` job attach the immutable
-# `*-sha-<7>` and floating `*-latest` tags. A failed scan therefore never moves
-# a tag; the untagged digest it leaves behind is inert (nothing resolves to it)
-# and Docker Hub garbage-collects it. The tag names, the `latest-build.json`
-# fields and the `cna-image-published` payload are unchanged; the manifest
-# additionally records `digests{}` so the appliances can pin by digest.
+# Publish order (build + sign, then tag). Every image is pushed to Docker Hub
+# **by digest only** (no tag), signed, and only when all five images are built
+# does the `tag-images` job attach the immutable `*-sha-<7>` and floating
+# `*-latest` tags. An untagged digest left behind by a failed run is inert
+# (nothing resolves to it) and Docker Hub garbage-collects it. The tag names, the
+# `latest-build.json` fields and the `cna-image-published` payload are unchanged;
+# the manifest additionally records `digests{}` so the appliances can pin by
+# digest.
+#
+# Vulnerability scanning is intentionally NOT in this workflow. Docker Scout's
+# backend features require a Scout-entitled Docker identity, which the keyless
+# OIDC identity this workflow authenticates as does not have. The separate
+# `390-scout-scan` workflow owns CVE reporting over the published images. Keeping
+# Scout out of here lets the whole build/push/tag path stay keyless.
 #
 # Signing (TODO.md T-703). Once an image has passed its gates, the build job
 # signs the digest with cosign — keyless, under this workflow's OIDC identity
@@ -183,30 +189,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scout by digest, not by a mutable tag: no tag exists yet for this build,
-      # and buildx --push never loads the image into the runner's local Docker
-      # daemon, so docker/scout-action could otherwise silently fall back to a
-      # stale locally-cached image and scan the wrong content entirely.
-      #
-      # This is a REGRESSION gate, not an absolute gate: `compare ... to-latest`
-      # with `exit-on: vulnerability` fails only when this build INTRODUCES new
-      # fixable critical/high CVEs versus the currently-published `latest`. It no
-      # longer blocks on CVEs the published images already carry (those are tracked
-      # and remediated by the separate 390-scout-scan workflow), so a release is
-      # never blocked by inherited base-image CVEs, but can never regress either.
-      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
-        with:
-          command: compare
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build.outputs.digest }}
-          to-latest: true
-          organization: ${{ env.DOCKERHUB_NAMESPACE }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-on: vulnerability
+      # Vulnerability scanning is handled out-of-band by the 390-scout-scan
+      # workflow, not here: Docker Scout's backend features require a
+      # Scout-entitled Docker identity, which the keyless OIDC identity this
+      # workflow logs in as does not have ("user githubactions not entitled to
+      # use Docker Scout"). Keeping Scout out of the build/push path lets 200
+      # stay fully keyless; 390 owns CVE reporting over the published images.
 
-      # Sign only what Scout accepted, and only by digest: the signature is what
-      # the appliances verify before a deploy (scripts/ci/sign_image.sh).
+      # Sign by digest: the signature is what the appliances verify before a
+      # deploy (scripts/ci/sign_image.sh).
       - name: Sign and attest ${{ matrix.name }} image
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -331,21 +322,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scout by digest — see the comment on the CLI/API/Worker Scout step
-      # above: no tag exists yet, and a floating-tag reference could resolve
-      # against a stale locally-cached image instead of the one just pushed.
-      # Regression gate (see the CLI/API/Worker Scout step above): fail only on
-      # newly introduced fixable critical/high CVEs vs. the published `latest`.
-      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs (Web)
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
-        with:
-          command: compare
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_web.outputs.digest }}
-          to-latest: true
-          organization: ${{ env.DOCKERHUB_NAMESPACE }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-on: vulnerability
+      # Vulnerability scanning for the web image is handled by 390-scout-scan
+      # (see the CLI/API/Worker note above): Scout's backend needs a
+      # Scout-entitled identity that keyless OIDC does not have.
 
       - name: Build and push Migrator image by digest
         id: build_migrator
@@ -362,18 +341,7 @@ jobs:
           sbom: true
           cache-from: type=gha
 
-      # Regression gate (see the CLI/API/Worker Scout step above): fail only on
-      # newly introduced fixable critical/high CVEs vs. the published `latest`.
-      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs (Migrator)
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
-        with:
-          command: compare
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_migrator.outputs.digest }}
-          to-latest: true
-          organization: ${{ env.DOCKERHUB_NAMESPACE }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-on: vulnerability
+      # Migrator image CVE scanning is handled by 390-scout-scan (see above).
 
       - name: Smoke test — /api/health returns 200
         env:

@@ -55,7 +55,7 @@ cna/                  Python package, installed as the `cna` CLI
 scripts/              Repository guards (documentation model, module graph, shape catalog)
                       and the headless draw.io wrapper the images use
 tests/                unit/ and integration/
-.github/workflows/    200 build images · 300 test · 310 release · 370 registry cleanup
+.github/workflows/    200 build images · 300 test · 310 release · 370 registry cleanup · 390 scan images
 .deployment-catalog/  latest-build.json — the build manifest the appliances consume
 .claude/ .agents/ .codex/ .kiro/   Vendored agent configuration — not project source
 ```

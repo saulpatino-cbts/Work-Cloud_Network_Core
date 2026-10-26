@@ -2131,14 +2131,37 @@ uses), behind the same `dry_run` input.
 
 ### T-719 — CVE visibility after Docker Scout left `200`
 `200` no longer scans: Docker Scout's backend rejects the keyless OIDC identity ("user githubactions
-not entitled to use Docker Scout"). `390-scout-scan` is now the only CVE report, but it has never
-run (a scheduled or dispatchable workflow must exist on the default branch first) and its one step is
-`continue-on-error`, so an entitlement rejection leaves the job green with an empty report. Until
-this is closed no published image is CVE-checked anywhere. After `390`'s first run on main read the
-step log; if Scout rejects the identity, replace it with a scanner that needs no Docker entitlement
-(Trivy or Grype against the pushed digest, using the unscoped OIDC login `390` now has), decide
-whether `tag-images` should gate on it, and drop `continue-on-error`. Both appliances' docs must say
-a deployed digest is signed, not CVE-checked, until then (`REVIEW.md` decision for the owner).
+not entitled to use Docker Scout"). The stand-in `390-scout-scan` had never run and its one step was
+`continue-on-error`, so an entitlement rejection would have left the job green with an empty report:
+no published image was CVE-checked anywhere.
+- **Status:** the visibility gap is closed in code, **not yet in practice** — see the OPEN item below.
+  `390-scan-images` (Anchore Grype through `anchore/scan-action`; no Docker entitlement, no stored
+  credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
+  `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
+  dispatch. A fixable HIGH or CRITICAL finding fails the check; there is no `continue-on-error`; each
+  image gets a job-summary table and a code-scanning category; each digest's signature and provenance
+  are re-verified with cosign against the identity the appliances trust. Tests:
+  `tests/unit/test_resolve_scan_targets.py`, `test_grype_report.py`, `test_verify_published_image.py`
+  and `test_scan_workflow.py`.
+- **OPEN — verify on the first main run.** `390` cannot run before it is on the default branch, so
+  none of this has been executed by GitHub. After merge, make a main publish of `200` (or dispatch it
+  from main), then dispatch `390` from main once, and check: (1) Docker Hub accepts the OIDC login for
+  `390`'s workflow identity (a `workflow_run` or `schedule` token has never been exchanged); (2) Grype
+  pulls the private digests with `registry:` and the unscoped login, and its database downloads;
+  (3) the policy step reads the JSON report and the job summary renders; (4) the SARIF uploads and
+  appears as one category per image (`grype-<key>`) in code scanning, within its size limits; (5)
+  `cosign verify` and `verify-attestation` pass for all five digests, which is the evidence that the
+  appliances' `210`/`220` verification will pass; (6) the `workflow_run` wiring: a successful main run
+  of `200` starts exactly one scan, and a branch dispatch of `200` starts none. Until the first main
+  publish lands, `390` skips on the schedule and fails on `workflow_run` or dispatch with "Nothing to
+  scan".
+- Still a design decision (unchanged): `390` runs after `200` has published and tagged, so it detects
+  and cannot stop a deploy. Gating needs a scan of the digest between build and tag in `200`, or a
+  check in the appliances' `210`/`220`. Both appliances' docs must say a deployed digest is signed and
+  scanned after publish, not gated on the scan (`REVIEW.md` decision for the owner).
+- Owner to weigh: this repository is public, so the job summary and logs of `390` name unpatched
+  packages in images the appliances run. Code scanning alerts are visible to fewer people than the
+  summary; shorten or drop the summary table if that is not acceptable.
 
 ### T-720 — Move provenance to SLSA v1, in core and both appliances together
 BuildKit ≥ 0.28 defaults to SLSA v1.0 (`runDetails.builder.id`). `200` pins `provenance:

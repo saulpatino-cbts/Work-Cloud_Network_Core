@@ -8,8 +8,8 @@ import { useMemo, useState } from "react";
 import {
   createColumnHelper,
   flexRender,
-  getCoreRowModel,
-  useReactTable,
+  tableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import {
   STAT_DIMENSIONS,
@@ -21,6 +21,11 @@ import {
   type StatMeasure,
 } from "@/lib/types/stat-master";
 import { pivot, pivotToCsv, distinctValues, type PivotFilter, type PivotRow } from "@/lib/pivot";
+
+// TanStack Table v9 requires an explicit, stable `features` object. The grid only
+// renders the always-included core row model (no sorting, filtering or
+// pagination), so no features are registered.
+const features = tableFeatures({});
 
 const selectCls =
   "rounded-lg border border-navy-200 bg-white px-2 py-1.5 text-xs font-medium text-navy-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-navy-700 dark:bg-navy-800/60 dark:text-navy-100";
@@ -62,8 +67,9 @@ export function PivotGrid({
     isCost ? `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : v.toLocaleString();
 
   const columns = useMemo(() => {
-    const helper = createColumnHelper<PivotRow>();
-    return [
+    const helper = createColumnHelper<typeof features, PivotRow>();
+    // v9: `columns()` preserves each column's own TValue inference in a mixed array.
+    return helper.columns([
       helper.accessor("key", {
         id: "__row",
         header: DIMENSION_LABELS[rowDim],
@@ -91,14 +97,14 @@ export function PivotGrid({
             }),
           ]
         : []),
-    ];
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result.columns, rowDim, measure, isCost]);
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data: result.rows,
     columns,
-    getCoreRowModel: getCoreRowModel(),
   });
 
   function addFilter(value: string) {
@@ -229,7 +235,7 @@ export function PivotGrid({
             <tbody className="divide-y divide-navy-700/30">
               {table.getRowModel().rows.map((row) => (
                 <tr key={row.id}>
-                  {row.getVisibleCells().map((cell, i) => (
+                  {row.getAllCells().map((cell, i) => (
                     <td key={cell.id} className={`py-2 ${i === 0 ? "pr-4 text-left" : "pl-4 text-right"} text-navy-300`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

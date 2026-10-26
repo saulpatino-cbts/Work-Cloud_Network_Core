@@ -658,8 +658,26 @@ jobs:
     # private key and the dispatch calls use that token.
     permissions: {}
     steps:
+      # The dispatch is a fast path only (the appliances also poll the committed
+      # manifest), so missing App credentials must be a visible warning, not a red
+      # run after the images were already tagged and the manifest committed. Only
+      # the presence of each secret is exposed to this step, never its value.
+      - name: Check GitHub App credentials
+        id: creds
+        env:
+          HAS_APP_ID: ${{ secrets.GH_APP_ID != '' }}
+          HAS_APP_KEY: ${{ secrets.GH_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_APP_ID" = "true" ] && [ "$HAS_APP_KEY" = "true" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GH_APP_ID / GH_APP_PRIVATE_KEY are not configured, so the push-based cna-image-published dispatch is skipped; the appliances pick the images up from the committed manifest on their next poll."
+          fi
+
       - name: Generate GitHub App token (appliance repositories only)
         id: app-token
+        if: steps.creds.outputs.present == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
         with:
           client-id: ${{ secrets.GH_APP_ID }}
@@ -668,6 +686,7 @@ jobs:
           repositories: ${{ vars.APPLIANCE_REPOS }}
 
       - name: Send cna-image-published to each appliance
+        if: steps.creds.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           OWNER: ${{ github.repository_owner }}

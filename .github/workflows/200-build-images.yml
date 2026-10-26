@@ -187,7 +187,12 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: true
+          # Pin SLSA v0.2: BuildKit >= 0.28 defaults to v1 (`runDetails.builder.id`),
+          # but the appliances verify `slsaprovenance02` and `predicate.builder.id`
+          # (CLAUDE.md contract item 5), and sign_image.sh attests that type. The
+          # action still appends `builder-id=<run URL>`. Moving to v1 is a
+          # core + both appliances change, not a workflow tweak.
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -341,7 +346,7 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_web.outputs.labels }}
-          provenance: true
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -361,7 +366,7 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_migrator.outputs.labels }}
-          provenance: true
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
 

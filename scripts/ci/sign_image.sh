@@ -57,6 +57,14 @@ if ! jq -e '
   echo "::error::No BuildKit provenance found on ${REF} (is provenance: true set on its build step?)." >&2
   exit 1
 fi
+# The appliances verify `slsaprovenance02` and read predicate.builder.id. BuildKit
+# >= 0.28 defaults to SLSA v1 (predicate.runDetails.builder.id), so 200 pins
+# `provenance: version=v0.2` on every build step. If that pin is ever lost, stop
+# here with the real cause rather than attest a v1 predicate under the v0.2 type.
+if jq -e 'has("runDetails")' "$WORK/predicate.json" > /dev/null; then
+  echo "::error::${REF} carries a SLSA v1 provenance predicate (runDetails.builder.id) but the appliances verify slsaprovenance02; set 'provenance: version=v0.2' on its build step." >&2
+  exit 1
+fi
 BUILDER_ID="$(jq -r '.builder.id // empty' "$WORK/predicate.json")"
 if [[ "$BUILDER_ID" != "$EXPECTED_BUILDER_PREFIX"* ]]; then
   echo "::error::Provenance builder.id '${BUILDER_ID}' does not name this run (expected prefix ${EXPECTED_BUILDER_PREFIX}); refusing to attest." >&2

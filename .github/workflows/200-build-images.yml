@@ -151,6 +151,14 @@ jobs:
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
+          # Scope the OIDC credential to pushes of our own repo only. The token
+          # the ruleset issues is scoped to hybridcloudworks/cna, so using it for
+          # ALL registry traffic breaks buildx's pull of public helper images
+          # (e.g. docker/buildkit-syft-scanner for the SBOM) with
+          # "401 ... insufficient scopes". `scope` writes the creds to the buildx
+          # config for pushes only; base/helper pulls use the default anonymous
+          # credentials. Requires Buildx >= 0.31.0 (setup-buildx v4.4.1 is newer).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@push
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
@@ -256,6 +264,14 @@ jobs:
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
+          # Scope the OIDC credential to pushes of our own repo only. The token
+          # the ruleset issues is scoped to hybridcloudworks/cna, so using it for
+          # ALL registry traffic breaks buildx's pull of public helper images
+          # (e.g. docker/buildkit-syft-scanner for the SBOM) with
+          # "401 ... insufficient scopes". `scope` writes the creds to the buildx
+          # config for pushes only; base/helper pulls use the default anonymous
+          # credentials. Requires Buildx >= 0.31.0 (setup-buildx v4.4.1 is newer).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@push
 
       - name: Validate Docker Hub namespace
         run: |
@@ -459,6 +475,14 @@ jobs:
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
+          # Scope the OIDC credential to pushes of our own repo only. The token
+          # the ruleset issues is scoped to hybridcloudworks/cna, so using it for
+          # ALL registry traffic breaks buildx's pull of public helper images
+          # (e.g. docker/buildkit-syft-scanner for the SBOM) with
+          # "401 ... insufficient scopes". `scope` writes the creds to the buildx
+          # config for pushes only; base/helper pulls use the default anonymous
+          # credentials. Requires Buildx >= 0.31.0 (setup-buildx v4.4.1 is newer).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@push
 
       - name: Tag every scanned digest
         env:

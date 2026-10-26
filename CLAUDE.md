@@ -26,8 +26,9 @@ The appliances contain only their cloud's Terraform and deploy/update workflows.
 They are structurally identical to each other; a feature lands **once, here**, in
 the images, and both appliances pick it up. There is no Terraform and no deploy
 workflow in this repository; the core keeps only `200-build-images`,
-`300-test-codebase`, `310-release-version` and `370-registry-cleanup`. A
-deployment fix belongs in the appliance (and its sibling), never here.
+`300-test-codebase`, `310-release-version`, `370-registry-cleanup` and
+`390-scan-images`. A deployment fix belongs in the appliance (and its sibling),
+never here.
 
 ## Cross-repo change notification (mandatory)
 
@@ -70,12 +71,17 @@ or record a `TODO.md` item naming them — never leave one side implied.
    and `digests{cli,api,worker,web,migrator}` (`docker.io/<ns>/cna@sha256:<64>`).
    Written and committed by `200-build-images.yml` (main only) after every image was
    built, pushed by digest, signed and attested. `200` runs **no vulnerability
-   scan** — Docker Scout's backend needs an entitlement its keyless OIDC login lacks —
-   so a listed digest is signed, not CVE-checked; `390-scout-scan` reports CVEs and
-   gates nothing. Read by the appliances' image-update workflow, which
-   deploys the combined form `docker.io/<ns>/cna:<role>-sha-<7>@sha256:<64>` —
-   tag for people and for the web tier's image-update check, digest as the
-   authoritative pull. Floating `*-latest` tags are never deployed.
+   scan** — Docker Scout's backend needs an entitlement its keyless OIDC login lacks.
+   `390-scan-images` scans every digest in this manifest with Grype after each main
+   publish (and weekly) and fails on a fixable HIGH or CRITICAL finding, but it runs
+   *after* `200` has published and tagged, so it detects rather than gates: it
+   cannot stop a deploy. It also re-verifies each digest's signature and provenance
+   against the identity item 5 describes, so it reads this manifest's `digests{}`
+   — a change to that key or its form is a change to `390` too. Read by the
+   appliances' image-update workflow, which deploys the combined form
+   `docker.io/<ns>/cna:<role>-sha-<7>@sha256:<64>` — tag for people and for the
+   web tier's image-update check, digest as the authoritative pull. Floating
+   `*-latest` tags are never deployed.
 3. **`repository_dispatch` event `cna-image-published`** with the manifest as
    `client_payload`, sent by `200-build-images.yml` to every repository listed in
    the `APPLIANCE_REPOS` variable (comma-separated names under this owner). It is
@@ -101,7 +107,8 @@ or record a `TODO.md` item naming them — never leave one side implied.
    (`210`, `220`) against their `IMAGE_SIGNING_IDENTITY` variable. Renaming or
    moving this repository, this workflow file, or its default branch changes
    the identity and breaks every appliance until that variable is updated; the
-   cosign release (`COSIGN_VERSION`) is pinned identically in all three.
+   cosign release (`COSIGN_VERSION`) is pinned identically in all three, and
+   again in `390-scan-images` (four pins to bump together).
 
 ## AI engine rules
 
@@ -135,15 +142,16 @@ or record a `TODO.md` item naming them — never leave one side implied.
   dependency, extra or dependency group in `pyproject.toml`, run `uv lock` and
   commit both files — `300-test-codebase` fails on drift. Never edit `uv.lock`
   by hand, never add a package to a Dockerfile with a bare `pip install`, and
-  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a Docker Scout
-  finding on a base-image package is fixed by Dependabot's digest bump. The uv
+  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a
+  `390-scan-images` (Grype) finding on a base-image package is fixed by
+  Dependabot's digest bump. The uv
   version is pinned in the `FROM ghcr.io/astral-sh/uv:… AS uv` stage of each
   Python Dockerfile and the `uv==` steps of `300-test-codebase.yml`; when
   Dependabot bumps the stage, move the workflow pins with it.
 - **Workflows are numbered in bands** (`000` bootstrap, `100` validation, `200`
   build/deploy, `300` test/release/ops). Numbers are stable across core and
   both appliances; never renumber, reference by filename. The core owns `200`,
-  `300`, `310`, `370`; every other number belongs to the appliances.
+  `300`, `310`, `370`, `390`; every other number belongs to the appliances.
 - **Every GitHub Action is pinned to a SHA digest.** `detect-secrets` fails the
   build on any finding not in `.secrets.baseline`; `gitleaks` is advisory.
 - **Secrets** travel as GitHub secrets → OIDC / Key Vault / Secrets Manager →

@@ -2131,14 +2131,53 @@ uses), behind the same `dry_run` input.
 
 ### T-719 — CVE visibility after Docker Scout left `200`
 `200` no longer scans: Docker Scout's backend rejects the keyless OIDC identity ("user githubactions
-not entitled to use Docker Scout"). `390-scout-scan` is now the only CVE report, but it has never
-run (a scheduled or dispatchable workflow must exist on the default branch first) and its one step is
-`continue-on-error`, so an entitlement rejection leaves the job green with an empty report. Until
-this is closed no published image is CVE-checked anywhere. After `390`'s first run on main read the
-step log; if Scout rejects the identity, replace it with a scanner that needs no Docker entitlement
-(Trivy or Grype against the pushed digest, using the unscoped OIDC login `390` now has), decide
-whether `tag-images` should gate on it, and drop `continue-on-error`. Both appliances' docs must say
-a deployed digest is signed, not CVE-checked, until then (`REVIEW.md` decision for the owner).
+not entitled to use Docker Scout"). The stand-in `390-scout-scan` had never run and its one step was
+`continue-on-error`, so an entitlement rejection would have left the job green with an empty report:
+no published image was CVE-checked anywhere.
+- **Status:** the visibility gap is closed in code, **not yet in practice** — see the OPEN item below.
+  `390-scan-images` (Anchore Grype through `anchore/scan-action`; no Docker entitlement, no stored
+  credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
+  `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
+  dispatch. A fixable HIGH or CRITICAL finding fails the check; there is no `continue-on-error`; each
+  image gets a job-summary table and a code-scanning category; each digest's cosign signature and
+  SLSA provenance are checked against the identity the appliances trust (this does not run the
+  appliances' own verify scripts). Tests:
+  `tests/unit/test_resolve_scan_targets.py`, `test_grype_report.py`, `test_verify_published_image.py`
+  and `test_scan_workflow.py`.
+- **Verified on 2026-10-26 by a branch-only copy of this workflow** (run 40327208460 on a throwaway
+  `push`-triggered branch, since deleted), against the digests then in the manifest: target
+  resolution; the Docker Hub OIDC login (it also works from a non-default branch's `push` run); Grype
+  pulling the private digests with `registry:` and the unscoped login, and its database download;
+  both Grype passes, with the SARIF generated (about 2 MB for the api image); the policy step reading
+  the JSON report and checking `source.target.repoDigests` (it is
+  `index.docker.io/<ns>/cna@sha256:<digest>` for a by-digest reference); `cosign verify` and
+  `verify-attestation` passing for all five digests under cosign v3.1.3. It also found 15 fixable
+  HIGH/CRITICAL findings in the published `cli`, `api` and `worker` images (web and migrator were
+  clean): Python 3.14.7 and OpenSSL 3.5.7-1~deb13u2 in the pinned `python:3.14-slim` base, cleared
+  by bumping that digest.
+- **OPEN — still unverified until the first run on main**, because a `workflow_run`, `schedule` or
+  `workflow_dispatch` workflow must exist on the default branch first: (1) Docker Hub accepting the
+  OIDC login for a `workflow_run` or `schedule` token (only a `push` token has been exchanged);
+  (2) the SARIF upload: that code scanning accepts it and shows one category per image
+  (`grype-<key>`); (3) the `workflow_run` wiring: a successful main run of `200` starts exactly one
+  scan, and a branch dispatch of `200` starts none. After merge, dispatch `390` from main once; the
+  next main publish of `200` should then start a scan by itself. If a run ever finds the placeholder
+  manifest, or one without `digests{}`, it skips on the schedule and fails on `workflow_run` or
+  dispatch with "Nothing to scan".
+- The cosign output shape those runs printed is `attestation shape: dsse-envelope`, which matters for
+  the appliances: see T-723.
+- **Maintenance:** `GRYPE_VERSION` in `390-scan-images.yml` (v0.118.0, the default of the pinned
+  `anchore/scan-action` v7.4.2) is pinned because the action fetches Grype's installer by release tag
+  inside a job that holds an OIDC token and a Docker Hub credential. Dependabot cannot see it: bump it
+  deliberately, with the action and from Grype's release notes (v0.121.0 was the latest release on
+  2026-10-26).
+- Still a design decision (unchanged): `390` runs after `200` has published and tagged, so it detects
+  and cannot stop a deploy. Gating needs a scan of the digest between build and tag in `200`, or a
+  check in the appliances' `210`/`220`. Both appliances' docs must say a deployed digest is signed and
+  scanned after publish, not gated on the scan (`REVIEW.md` decision for the owner).
+- Owner to weigh: this repository is public, so the job summary and logs of `390` name unpatched
+  packages in images the appliances run. Code scanning alerts are visible to fewer people than the
+  summary; shorten or drop the summary table if that is not acceptable.
 
 ### T-720 — Move provenance to SLSA v1, in core and both appliances together
 BuildKit ≥ 0.28 defaults to SLSA v1.0 (`runDetails.builder.id`). `200` pins `provenance:
@@ -2169,3 +2208,14 @@ set (re-running the failed jobs completes it). Tag every `*-sha-<7>` first and t
 last, retry transient errors, then compare each tag's resolved digest with the recorded one. Also: a
 re-run of an old failed `main` run rebuilds that old commit and would move `*-latest` and the manifest
 backwards; skip publication when `github.sha` is no longer the tip of `main`.
+
+### T-723 — The AWS appliance's `verify_image_signature.sh` cannot parse cosign's attestation output
+Observed on 2026-10-26 (the `390` branch probe, run 40327208460, cosign v3.1.3):
+`cosign verify-attestation` prints one **DSSE envelope** per line (`payload` is the base64 in-toto
+statement), not bare statements. `Work-Cloud_Network_Azure_Appliance/scripts/ci/verify_image_signature.sh`
+decodes `.payload`; `Work-Cloud_Network_AWS_Appliance/scripts/ci/verify_image_signature.sh` assumes bare
+statements and filters on a top-level `.predicateType`, so against a real attestation it finds none
+and would refuse every deploy (`210`/`220`). The two copies `CLAUDE.md` calls byte-identical have also
+diverged on digest handling (AWS requires `@sha256`, Azure only warns). In the AWS appliance: decode
+the envelope as Azure does, decide the digest policy once, restore byte-identity, and prove it by
+running the script against a real digest published from this repository.

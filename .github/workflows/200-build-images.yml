@@ -23,8 +23,8 @@ name: "200 · Build Container Images"
 # Vulnerability scanning is intentionally NOT in this workflow. Docker Scout's
 # backend features require a Scout-entitled Docker identity, which the keyless
 # OIDC identity this workflow authenticates as does not have. The separate
-# `390-scout-scan` workflow owns CVE reporting over the published images. Keeping
-# Scout out of here lets the whole build/push/tag path stay keyless.
+# `390-scan-images` workflow (Grype, no entitlement) scans the published digests
+# after every main publish. Keeping scanning out of here keeps this path keyless.
 #
 # Signing (TODO.md T-703). Once an image has passed its gates, the build job
 # signs the digest with cosign — keyless, under this workflow's OIDC identity
@@ -67,7 +67,7 @@ concurrency:
 
 env:
   # cosign release that signs every image; both appliances verify with the same
-  # release (COSIGN_VERSION in their 210/220). Bump the three together.
+  # release (COSIGN_VERSION in their 210/220), as does 390. Bump all four together.
   COSIGN_VERSION: v3.1.3
 
 # No workflow-wide grants: each job declares the least it needs below. The build
@@ -198,12 +198,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Vulnerability scanning is handled out-of-band by the 390-scout-scan
+      # Vulnerability scanning is handled out-of-band by the 390-scan-images
       # workflow, not here: Docker Scout's backend features require a
       # Scout-entitled Docker identity, which the keyless OIDC identity this
       # workflow logs in as does not have ("user githubactions not entitled to
-      # use Docker Scout"). Keeping Scout out of the build/push path lets 200
-      # stay fully keyless; 390 owns CVE reporting over the published images.
+      # use Docker Scout"). 390 scans every published digest with Grype after
+      # each main publish, so 200 stays fully keyless (and cannot gate on it).
 
       # Second login, after the last Buildx step of this job and WITHOUT `scope`.
       # The scoped credential above is written to the Buildx config and is
@@ -352,7 +352,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Vulnerability scanning for the web image is handled by 390-scout-scan
+      # Vulnerability scanning for the web image is handled by 390-scan-images
       # (see the CLI/API/Worker note above): Scout's backend needs a
       # Scout-entitled identity that keyless OIDC does not have.
 
@@ -371,7 +371,7 @@ jobs:
           sbom: true
           cache-from: type=gha
 
-      # Migrator image CVE scanning is handled by 390-scout-scan (see above).
+      # Migrator image CVE scanning is handled by 390-scan-images (see above).
 
       # Second login, after the last Buildx step of this job and WITHOUT `scope`.
       # The scoped credential above is written to the Buildx config and is

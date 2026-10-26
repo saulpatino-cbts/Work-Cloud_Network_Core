@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Scan one container image with Docker Scout for fixable CRITICAL/HIGH CVEs.
 #
-# This is the LOCAL companion to the Docker Scout gate in 200-build-images.yml.
-# That workflow scans every image by digest before it is tagged or signed, with:
+# This is a LOCAL developer helper. CI no longer runs Docker Scout: it needs a Docker
+# account entitled to Scout, which the keyless OIDC identity of 200-build-images does
+# not have. CI scans the published digests with Anchore Grype instead, after every
+# main publish (390-scan-images.yml). This script applies the same policy, fixable
+# critical/high findings fail, with Docker Scout from a machine signed in to an
+# entitled Docker account:
 #
 #     only-severities: critical,high   only-fixed: true   exit-code: true
 #
-# This script runs the exact same check from a developer machine, so you can
-# scan an image you built locally — or any published digest — and get the same
-# pass/fail decision CI would, without pushing first.
+# so you can scan an image you built locally, or any published digest, before pushing.
+# It is a different scanner and vulnerability database from 390's, so the findings
+# can differ; 390 is the check of record.
 #
 # Usage:
 #   scripts/ci/scout_scan.sh <image-ref>
@@ -18,8 +22,8 @@
 #   scripts/ci/scout_scan.sh docker.io/<namespace>/cna@sha256:<64>   # a digest
 #
 # Exit code: 0 = no fixable critical/high CVEs; non-zero = Scout found some
-# (or a prerequisite is missing). Mirrors the CI gate's exit-code behavior so
-# this script is safe to use in a pre-push hook or a Makefile target.
+# (or a prerequisite is missing). Mirrors the policy of 390's gate so this script
+# is safe to use in a pre-push hook or a Makefile target.
 #
 # Prerequisites:
 #   - Docker Desktop / Engine running.

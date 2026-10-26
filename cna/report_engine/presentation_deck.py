@@ -93,7 +93,7 @@ class PresentationDeckBuilder:
             subtitle_text=(
                 f"Engagement: {report.engagement_id}\n"
                 f"Generated: {report.generated_at}\n"
-                "Prepared by: Saul Patino Jr. | AWS SAP | Azure SAE"
+                "Prepared by: CBTS"
             ),
         )
 

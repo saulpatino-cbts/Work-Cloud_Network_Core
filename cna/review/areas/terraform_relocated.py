@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from cna.review.model import Finding, Severity
 
-AZURE_APPLIANCE = "saulpatinojr/Work-Cloud_Network_Azure_Appliance"
-AWS_APPLIANCE = "saulpatinojr/Work-Cloud_Network_AWS_Appliance"
+AZURE_APPLIANCE = "saulpatino-cbts/Work-Cloud_Network_Azure_Appliance"
+AWS_APPLIANCE = "saulpatino-cbts/Work-Cloud_Network_AWS_Appliance"
 
 
 def terraform_relocated_findings() -> list[Finding]:

@@ -160,7 +160,7 @@ _PORTAL_TEMPLATE = """\
 </table>
 
 <footer>
-  Prepared by Saul Patino Jr. — AWS SA Professional | Azure Solutions Architect Expert<br>
+  Prepared by CBTS<br>
   Engagement data will be permanently deleted 90 days after delivery per data handling policy.
 </footer>
 </body>

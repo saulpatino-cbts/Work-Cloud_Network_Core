@@ -220,7 +220,7 @@ Each one actively misleads an engineer or a workflow run.
 - **Priority:** High
 - **Category:** Security / dependencies
 - **Description:** Pushing a branch during the 2026-08-17 review returned a GitHub advisory notice:
-  *"GitHub found 8 vulnerabilities on saulpatinojr/Work-Cloud_Network_Assessment's default branch
+  *"GitHub found 8 vulnerabilities on saulpatino-cbts/Work-Cloud_Network_Assessment's default branch
   (7 high, 1 moderate)."* Nothing in `TODO.md` or `REVIEW.md` tracks dependency vulnerabilities, so
   these are currently unowned. The individual advisories were not readable from the review
   environment (no Dependabot access), so the affected packages and ecosystems are unconfirmed —
@@ -228,7 +228,7 @@ Each one actively misleads an engineer or a workflow run.
   (`apps/cna-web/package.json`).
 - **Dependencies:** None.
 - **Recommended action:** Open
-  [this repository's Dependabot alerts page](https://github.com/saulpatinojr/Work-Cloud_Network_Core/security/dependabot)
+  [this repository's Dependabot alerts page](https://github.com/saulpatino-cbts/Work-Cloud_Network_Core/security/dependabot)
   (the original repository's page is gone with that repository — `REVIEW.md` → R-014),
   triage each of the 8 alerts, and record the outcome here — patch, pin, or an explicit accepted-risk
   note with a reason. Prioritise anything reachable from the web platform's request path. Check
@@ -1342,7 +1342,7 @@ order; do not reorder it.
 - **Priority:** High
 - **Category:** Operational safety
 - **Description:** `350-drift-dev.yml` runs on a schedule and failed **every day from 2026-07-21
-  to 2026-08-28** with `ResourceGroupNotFound: rg-cna-dev-scus-tfstate`. That failure was the
+  to 2026-08-28** with `ResourceGroupNotFound: rg-cna-<env>-<region_short>-tfstate`. That failure was the
   first and clearest evidence that the dev environment had been deleted out of band, including its
   Terraform state backend — the single fact that would have changed the plan for the 0.9.0 demo
   work, five weeks before anyone discovered it by trying to deploy (`CNA-0.90-updates.md` §5).
@@ -1507,8 +1507,8 @@ order; do not reorder it.
 - **Description:** The core now publishes images and notifies appliances
   (`200-build-images.yml` → `notify-appliances`), and `211`/`212` accept `workflow_call`. The
   appliance repositories —
-  [`Work-Cloud_Network_Azure_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance)
-  and [`Work-Cloud_Network_AWS_Appliance`](https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance)
+  [`Work-Cloud_Network_Azure_Appliance`](https://github.com/saulpatino-cbts/Work-Cloud_Network_Azure_Appliance)
+  and [`Work-Cloud_Network_AWS_Appliance`](https://github.com/saulpatino-cbts/Work-Cloud_Network_AWS_Appliance)
   — receive their contents as draft pull requests (Terraform, deploy/update/drift/teardown
   workflows, `README.md`, `CLAUDE.md`, release catalog). `scripts/appliance-kit/build.sh azure|aws`
   regenerates either tree from this checkout at any time (it clones the appliance repository,
@@ -1520,7 +1520,7 @@ order; do not reorder it.
   2. In each appliance: secrets for the cloud OIDC identity (`AZURE_CLIENT_ID` / `AZURE_TENANT_ID`
      / `AZURE_SUBSCRIPTION_ID`, or `AWS_DEPLOY_ROLE_ARN`), `GH_APP_ID`, `GH_APP_PRIVATE_KEY`,
      `DOCKERHUB_TOKEN`, and the `CNA_*` runtime secrets `100-validate-prereqs` checks; variables
-     `CORE_REPO` (`saulpatinojr/Work-Cloud_Network_Assessment`), `DOCKERHUB_NAMESPACE`,
+     `CORE_REPO` (`saulpatino-cbts/Work-Cloud_Network_Assessment`), `DOCKERHUB_NAMESPACE`,
      `AUTO_UPDATE_DEV` (`true`), and the region variables. Create the `dev`, `prod` and `hub`
      environments with the same required reviewers the core uses.
   3. In the core: variable `APPLIANCE_REPOS=Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`.
@@ -1593,9 +1593,9 @@ order; do not reorder it.
 
   ```bash
   git fetch origin claude/appliance-azure-bootstrap claude/appliance-aws-bootstrap
-  git push https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance.git \
+  git push https://github.com/saulpatino-cbts/Work-Cloud_Network_Azure_Appliance.git \
     origin/claude/appliance-azure-bootstrap:refs/heads/claude/appliance-bootstrap
-  git push https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance.git \
+  git push https://github.com/saulpatino-cbts/Work-Cloud_Network_AWS_Appliance.git \
     origin/claude/appliance-aws-bootstrap:refs/heads/claude/appliance-bootstrap
   ```
 

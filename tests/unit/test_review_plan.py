@@ -102,10 +102,10 @@ def test_coverage_terraform_areas_point_at_the_appliances():
     """Requirement 4.1: the Terraform areas are represented by their relocation records."""
     tokens = _all_subject_tokens(build_remediation_plan())
     assert any(
-        token.startswith("saulpatinojr/Work-Cloud_Network_AWS_Appliance:") for token in tokens
+        token.startswith("saulpatino-cbts/Work-Cloud_Network_AWS_Appliance:") for token in tokens
     )
     assert any(
-        token.startswith("saulpatinojr/Work-Cloud_Network_Azure_Appliance:") for token in tokens
+        token.startswith("saulpatino-cbts/Work-Cloud_Network_Azure_Appliance:") for token in tokens
     )
 
 

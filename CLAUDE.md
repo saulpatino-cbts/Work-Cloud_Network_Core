@@ -19,8 +19,8 @@ in the documents as historical references only — they name threads that no lon
 Deployment is not this repository's job. Each cloud has its own customer-facing
 **appliance repository** that deploys and operates these images:
 
-- Azure: <https://github.com/saulpatinojr/Work-Cloud_Network_Azure_Appliance>
-- AWS: <https://github.com/saulpatinojr/Work-Cloud_Network_AWS_Appliance>
+- Azure: <https://github.com/saulpatino-cbts/Work-Cloud_Network_Azure_Appliance>
+- AWS: <https://github.com/saulpatino-cbts/Work-Cloud_Network_AWS_Appliance>
 
 The appliances contain only their cloud's Terraform and deploy/update workflows.
 They are structurally identical to each other; a feature lands **once, here**, in

@@ -1,17 +1,22 @@
 name: "390 · Scout Scan (published images)"
 
 # Standalone, NON-BLOCKING vulnerability report for the images already published
-# to Docker Hub. This is the companion to the regression gate in
-# 200-build-images: 200 refuses to publish an image that INTRODUCES new fixable
-# critical/high CVEs, while this workflow reports the CVEs the published images
-# already carry, so base-image / OS-package remediation can be tracked and
-# prioritised over time without blocking releases.
+# to Docker Hub. 200-build-images runs NO vulnerability scan (Docker Scout's
+# backend needs a Scout-entitled identity, which its keyless OIDC login does not
+# have), so this workflow is the only CVE visibility over the published images:
+# it reports the CVEs they carry so base-image / OS-package remediation can be
+# tracked and prioritised over time. It does not gate a release.
 #
 # It never fails the build pipeline. By default it reports (job summary + logs);
 # set the `fail_on_critical` input to true in a manual run if you want an
 # explicit red/green signal for a remediation push.
 #
 # Auth is keyless OIDC, exactly like 200-build-images (no stored token).
+#
+# UNVERIFIED: this file has never run (a workflow_dispatch/schedule workflow must
+# exist on the default branch first), and the Scout step below is continue-on-
+# error, so an entitlement rejection leaves the job green with an empty report.
+# Read the step log after the first run; see TODO.md T-719.
 
 on:
   schedule:
@@ -56,12 +61,17 @@ jobs:
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
         env:
           DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than a slow scan: a pull after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          # Pull-only is enough here; scope keeps the OIDC token off the public
-          # helper-image pulls (same reason as 200-build-images).
-          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@pull
+          # No `scope`: a scoped login is written to the Buildx config and is
+          # invisible to everything that is not Buildx. The Scout step below pulls
+          # the image itself, not through Buildx, so a scoped credential would give
+          # it none and the private repository would answer 401. This job runs no
+          # Buildx build, so there is no public helper-image pull to protect.
 
       # Report fixable critical/high CVEs for this published tag.
       #

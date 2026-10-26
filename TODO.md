@@ -2128,3 +2128,34 @@ an image tag (`cosign clean --type all` on the digest, or deleting its `sha256-<
 when that is how Docker Hub stores them — confirm on the first signed build which form Docker Hub
 uses), behind the same `dry_run` input.
 
+
+### T-719 — CVE visibility after Docker Scout left `200`
+`200` no longer scans: Docker Scout's backend rejects the keyless OIDC identity ("user githubactions
+not entitled to use Docker Scout"). `390-scout-scan` is now the only CVE report, but it has never
+run (a scheduled or dispatchable workflow must exist on the default branch first) and its one step is
+`continue-on-error`, so an entitlement rejection leaves the job green with an empty report. Until
+this is closed no published image is CVE-checked anywhere. After `390`'s first run on main read the
+step log; if Scout rejects the identity, replace it with a scanner that needs no Docker entitlement
+(Trivy or Grype against the pushed digest, using the unscoped OIDC login `390` now has), decide
+whether `tag-images` should gate on it, and drop `continue-on-error`. Both appliances' docs must say
+a deployed digest is signed, not CVE-checked, until then (`REVIEW.md` decision for the owner).
+
+### T-720 — Move provenance to SLSA v1, in core and both appliances together
+BuildKit ≥ 0.28 defaults to SLSA v1.0 (`runDetails.builder.id`). `200` pins `provenance:
+version=v0.2` because the appliances run `cosign verify-attestation --type slsaprovenance02` and read
+`predicate.builder.id` (`CLAUDE.md` contract item 5). Moving to v1 changes the cosign type
+(`slsaprovenance1`) and the builder-id path in `scripts/ci/sign_image.sh` and in both appliances'
+`verify_image_signature.sh`, so it lands as one change set in all three repositories. Also add a test
+that runs `sign_image.sh` against stub `cosign`/`docker` binaries and a v0.2 and a v1 predicate
+(needs `jq`): the v1 guard in the script is currently unexercised.
+
+### T-721 — Constrain the Docker Hub OIDC connection; watch the first main-branch publish
+A feature-branch run authenticated to Docker Hub and pushed (by digest, plus cosign signatures), so
+the connection's ruleset does not restrict the token to `refs/heads/main`. The `github.ref ==
+'refs/heads/main'` guard on `tag-images` is a workflow control, not a registry one: a branch that
+edits the workflow can bypass it. Constrain the connection (ref or a protected environment) once
+branch iteration is done. Also: `tag-images` (unscoped login, `imagetools create`),
+`publish-build-manifest` and `notify-appliances` have not executed since the OIDC change, and only
+1 of 54 runs of `200` since 2026-09-18 has ever succeeded (the 2026-10-26 branch run), so no
+appliance has verified a signature from this repository's `main` identity. Watch the first push to
+main end to end, then confirm an appliance's `210`/`220` verifies a real signature.

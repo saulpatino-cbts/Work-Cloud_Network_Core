@@ -128,18 +128,6 @@ jobs:
             exit 1
           fi
 
-      # TEMPORARY diagnostic (remove after the OIDC ruleset is confirmed): print
-      # the exact `sub` claim GitHub issues for this run, so the Docker Hub
-      # connection ruleset can be set to match it verbatim. The `sub` is an
-      # identifier, not a secret; the token itself is never printed.
-      - name: "TEMP print OIDC subject claim"
-        run: |
-          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://hub.docker.com" | jq -r '.value')
-          SUB=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | { cat; echo; } | base64 -d 2>/dev/null | jq -r '.sub')
-          echo "OIDC sub claim = ${SUB}"
-          echo "::notice::OIDC sub claim = ${SUB}"
-
       # Keyless OIDC login: GitHub mints a short-lived OIDC token for this run
       # (needs `id-token: write`), Docker Hub validates it against the connection
       # whose ruleset trusts this repo, and issues a scoped, short-lived token.
@@ -199,14 +187,23 @@ jobs:
       # and buildx --push never loads the image into the runner's local Docker
       # daemon, so docker/scout-action could otherwise silently fall back to a
       # stale locally-cached image and scan the wrong content entirely.
-      - name: Docker Scout — fail on fixable critical/high CVEs
+      #
+      # This is a REGRESSION gate, not an absolute gate: `compare ... to-latest`
+      # with `exit-on: vulnerability` fails only when this build INTRODUCES new
+      # fixable critical/high CVEs versus the currently-published `latest`. It no
+      # longer blocks on CVEs the published images already carry (those are tracked
+      # and remediated by the separate 390-scout-scan workflow), so a release is
+      # never blocked by inherited base-image CVEs, but can never regress either.
+      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs
         uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
-          command: cves
+          command: compare
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build.outputs.digest }}
+          to-latest: true
+          organization: ${{ env.DOCKERHUB_NAMESPACE }}
           only-severities: critical,high
           only-fixed: true
-          exit-code: true
+          exit-on: vulnerability
 
       # Sign only what Scout accepted, and only by digest: the signature is what
       # the appliances verify before a deploy (scripts/ci/sign_image.sh).
@@ -337,14 +334,18 @@ jobs:
       # Scout by digest — see the comment on the CLI/API/Worker Scout step
       # above: no tag exists yet, and a floating-tag reference could resolve
       # against a stale locally-cached image instead of the one just pushed.
-      - name: Docker Scout — fail on fixable critical/high CVEs (Web)
+      # Regression gate (see the CLI/API/Worker Scout step above): fail only on
+      # newly introduced fixable critical/high CVEs vs. the published `latest`.
+      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs (Web)
         uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
-          command: cves
+          command: compare
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_web.outputs.digest }}
+          to-latest: true
+          organization: ${{ env.DOCKERHUB_NAMESPACE }}
           only-severities: critical,high
           only-fixed: true
-          exit-code: true
+          exit-on: vulnerability
 
       - name: Build and push Migrator image by digest
         id: build_migrator
@@ -361,14 +362,18 @@ jobs:
           sbom: true
           cache-from: type=gha
 
-      - name: Docker Scout — fail on fixable critical/high CVEs (Migrator)
+      # Regression gate (see the CLI/API/Worker Scout step above): fail only on
+      # newly introduced fixable critical/high CVEs vs. the published `latest`.
+      - name: Docker Scout — fail on newly introduced fixable critical/high CVEs (Migrator)
         uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
         with:
-          command: cves
+          command: compare
           image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_migrator.outputs.digest }}
+          to-latest: true
+          organization: ${{ env.DOCKERHUB_NAMESPACE }}
           only-severities: critical,high
           only-fixed: true
-          exit-code: true
+          exit-on: vulnerability
 
       - name: Smoke test — /api/health returns 200
         env:

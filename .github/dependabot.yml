@@ -6,7 +6,7 @@
 # updates are grouped per ecosystem.
 #
 # PR strategy:
-#   - Python: weekly, grouped by ecosystem, auto-assign to saulpatinojr
+#   - Python: weekly, grouped by ecosystem, auto-assign to saulpatino-cbts
 #   - Actions: weekly, grouped — keeps CI action SHAs current
 #   - Docker: weekly — keeps base image digests current in /, apps/cna-api,
 #     apps/cna-worker, apps/cna-web
@@ -26,9 +26,9 @@ updates:
       time: "06:00"
       timezone: America/Chicago
     assignees:
-      - saulpatinojr
+      - saulpatino-cbts
     reviewers:
-      - saulpatinojr
+      - saulpatino-cbts
     labels:
       - dependencies
       - python
@@ -59,7 +59,7 @@ updates:
       time: "06:00"
       timezone: America/Chicago
     assignees:
-      - saulpatinojr
+      - saulpatino-cbts
     labels:
       - dependencies
       - github-actions
@@ -83,7 +83,7 @@ updates:
       time: "06:00"
       timezone: America/Chicago
     assignees:
-      - saulpatinojr
+      - saulpatino-cbts
     labels:
       - dependencies
       - docker
@@ -104,9 +104,9 @@ updates:
       time: "06:00"
       timezone: America/Chicago
     assignees:
-      - saulpatinojr
+      - saulpatino-cbts
     reviewers:
-      - saulpatinojr
+      - saulpatino-cbts
     labels:
       - dependencies
       - npm

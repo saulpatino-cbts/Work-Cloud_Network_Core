@@ -454,7 +454,7 @@ sweep policy.
 1. Establish whether a sweep policy exists for this subscription, what it targets, and on what
    schedule.
 2. If the environment should persist: apply a `CanNotDelete` resource lock to
-   `rg-cna-dev-scus` and `rg-cna-dev-scus-tfstate` at minimum — the state RG especially, since
+   `rg-cna-<env>-<region_short>` and `rg-cna-<env>-<region_short>-tfstate` at minimum — the state RG especially, since
    losing it is what turned a redeploy into a rebuild — or request an exclusion from the sweep.
 3. If the environment is legitimately ephemeral: record that in the demo/engagement runbook so a
    rebuild is planned rather than discovered, and consider whether the tfstate backend should live
@@ -631,7 +631,7 @@ the two appliances first.
   triggers `310-release-version`, which would rebuild and republish an old commit.
 - *Container images.* The appliances pull `docker.io/<namespace>/cna:*-sha-*`; the Azure appliance's
   live catalog entry is on Docker Hub. The GHCR packages those two releases named
-  (`ghcr.io/saulpatinojr/Work-Cloud_Network_Assessment`, `ghcr.io/saulpatinojr/MVP-Cloud_Network_Assessment`)
+  (`ghcr.io/saulpatino-cbts/Work-Cloud_Network_Assessment`, `ghcr.io/saulpatino-cbts/MVP-Cloud_Network_Assessment`)
   are used by nothing current; the Azure catalog archives from run `24168247436` to `24585307176`
   name them and become non-restorable, which is accepted.
 - *Actions secrets and variables.* The set the original's workflows consumed (`DOCKERHUB_NAMESPACE`,
@@ -648,8 +648,8 @@ by an admin, and deleting a repository is owner-only and final after GitHub's 90
 Repository owner.
 
 **Required action** — in this order; the deletion is last
-1. Move the Wiki: `git clone https://github.com/saulpatinojr/Work-Cloud_Network_Assessment.wiki.git`, add
-   `https://github.com/saulpatinojr/Work-Cloud_Network_Core.wiki.git` as a remote and push `master`
+1. Move the Wiki: `git clone https://github.com/saulpatino-cbts/Work-Cloud_Network_Assessment.wiki.git`, add
+   `https://github.com/saulpatino-cbts/Work-Cloud_Network_Core.wiki.git` as a remote and push `master`
    (create one page in the new Wiki first so the Wiki repository exists). Confirm the page count
    matches. This also closes the destination half of R-009.
 2. Set `CORE_REPO` to `Work-Cloud_Network_Core` in **both** appliances (Azure R-005, AWS R-009) and
@@ -657,11 +657,11 @@ Repository owner.
 3. Make `DOCKERHUB_NAMESPACE` visible to this repository's Actions and run `200 · Build Container
    Images` once (R-013 step 4). Every run so far has failed on that variable, so no manifest has been
    published from here yet.
-4. Open <https://github.com/saulpatinojr?tab=packages>. If either legacy GHCR package must survive,
+4. Open <https://github.com/saulpatino-cbts?tab=packages>. If either legacy GHCR package must survive,
    retag it to Docker Hub before the deletion; otherwise let it go with the repository.
 5. Remove the original repository's Actions secrets, variables, environments and any runner
    registration. In Azure and AWS, delete the federated identity credentials / OIDC role trust
-   entries whose subject names `repo:saulpatinojr/Work-Cloud_Network_Assessment:*` — they are orphaned.
+   entries whose subject names `repo:saulpatino-cbts/Work-Cloud_Network_Assessment:*` — they are orphaned.
 6. Confirm nothing you still need is owned by that repository: a repository-level project board,
    a GitHub App installation scoped to it, or Dependabot alerts (T-204 now re-triages on this
    repository's Security tab).

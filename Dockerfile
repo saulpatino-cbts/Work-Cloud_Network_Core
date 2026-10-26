@@ -65,7 +65,7 @@ ARG CNA_VERSION=dev
 LABEL org.opencontainers.image.title="CNA Platform" \
       org.opencontainers.image.description="Cloud Network Assessment CLI" \
       org.opencontainers.image.version="${CNA_VERSION}" \
-      org.opencontainers.image.source="https://github.com/saulpatinojr/Work-Cloud_Network_Core" \
+      org.opencontainers.image.source="https://github.com/saulpatino-cbts/Work-Cloud_Network_Core" \
       org.opencontainers.image.licenses="Proprietary"
 
 # System deps for diagram generation (runtime only). No `apt-get upgrade`:

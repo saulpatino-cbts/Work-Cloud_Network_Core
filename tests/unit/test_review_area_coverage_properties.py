@@ -56,7 +56,7 @@ _EXPECTED_AREAS = frozenset(AREAS)
 # The two Terraform areas are represented by their relocation records: the
 # Terraform itself lives in the appliance repositories (TODO.md T-504).
 _EXPECTED_AWS_SUBJECTS = frozenset(
-    {"saulpatinojr/Work-Cloud_Network_AWS_Appliance:infra/terraform"}
+    {"saulpatino-cbts/Work-Cloud_Network_AWS_Appliance:infra/terraform"}
 )
 
 # The core's numbered CI workflows, recorded as repo-relative workflow subjects.

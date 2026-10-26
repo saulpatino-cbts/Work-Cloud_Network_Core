@@ -191,7 +191,7 @@ all require the live environment.**
    merged, `200` published `sha-11eaa7e`, and `211` deployed it to a rebuilt dev.
 3. Hit the dev Front Door URL and `/api/health`; sign in via Entra **and** verify
    `/local-admin` accepts the break-glass password.
-   **URL:** `https://cna-dev-scus-afd-ep-dqh0gxcffjcthpbj.a01.azurefd.net`.
+   **URL:** `https://<your-frontdoor-endpoint>.azurefd.net`.
    The break-glass check matters more than usual now: the environment is new, so
    confirm `LOCAL_ADMIN_PASSWORD` actually seeded into the rebuilt Key Vault.
 4. Pre-run a full Azure discovery on the demo engagement; confirm findings and
@@ -225,9 +225,9 @@ This section is the record of what happened and what is standing now.
 ### 5.1 What was wrong
 
 `350-drift-dev` had been failing every day since **2026-07-21** with
-`ResourceGroupNotFound: rg-cna-dev-scus-tfstate` — the *Terraform state* resource group.
+`ResourceGroupNotFound: rg-cna-<env>-<region_short>-tfstate` — the *Terraform state* resource group.
 The workload side was gone too (`220-fast-redeploy` failed with "The containerapp
-'cna-dev-scus-ca-api' does not exist"). No teardown workflow ran in that window, so the
+'<your-api-containerapp>' does not exist"). No teardown workflow ran in that window, so the
 resource groups were deleted directly in the subscription, out of band — consistent with
 a sandbox cost sweep. The last successful deploy was 2026-07-02.
 
@@ -267,7 +267,7 @@ which is deleted — core `REVIEW.md` → R-014.)
 `211 · Deploy Azure Platform (Split)` run **33169632082**, all jobs green, evidence in
 `.deployment-catalog/dev/33169632082.json`:
 
-- **URL:** `https://cna-dev-scus-afd-ep-dqh0gxcffjcthpbj.a01.azurefd.net`
+- **URL:** `https://<your-frontdoor-endpoint>.azurefd.net`
 - **Images:** `api-`/`web-`/`worker-`/`migrator-sha-11eaa7e` — the build carrying every
   §3 item (CLI readers, draw.io rendering, AWS end-to-end, portal publishing)
 - **Health:** `healthy`, origin health 100%, private-endpoint approval passed, canary and

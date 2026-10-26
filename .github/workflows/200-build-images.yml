@@ -128,12 +128,17 @@ jobs:
             exit 1
           fi
 
+      # Keyless OIDC login: GitHub mints a short-lived OIDC token for this run
+      # (needs `id-token: write`), Docker Hub validates it against the connection
+      # whose ruleset trusts this repo, and issues a scoped, short-lived token.
+      # No password/PAT/OAT is stored. `username` is the Docker Hub org name.
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
@@ -231,12 +236,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
+      # Keyless OIDC login (see build-images for the full explanation).
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Validate Docker Hub namespace
         run: |
@@ -418,6 +425,7 @@ jobs:
     needs: [build-images, build-web]
     permissions:
       contents: read
+      id-token: write  # keyless Docker Hub OIDC login (re-tag pushes to the registry)
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
@@ -431,12 +439,14 @@ jobs:
             exit 1
           fi
 
+      # Keyless OIDC login (see build-images for the full explanation).
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Tag every scanned digest
         env:

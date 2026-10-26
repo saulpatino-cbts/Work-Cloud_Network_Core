@@ -3,15 +3,15 @@
 # Builds the Docker image, pushes to Docker Hub, creates a GitHub Release
 # with auto-generated changelog from PRs merged since last tag.
 #
-# Required repository secrets:
-#   DOCKERHUB_NAMESPACE / DOCKERHUB_TOKEN — Docker Hub image push
+# Required repository variables (no stored credential; the Docker Hub login is keyless OIDC):
+#   DOCKERHUB_NAMESPACE / DOCKERHUB_OIDC_CONNECTIONID — Docker Hub image push
 #
 # Required repository settings:
 #   Actions > General > Workflow permissions: Read and write
 name: "310 · Release CLI Tool"
 
 # Runs on GitHub-hosted runners (ubuntu-latest): the release builds and pushes
-# with the repository secrets and creates the GitHub Release with GITHUB_TOKEN;
+# through a keyless Docker Hub OIDC login and creates the GitHub Release with GITHUB_TOKEN;
 # no private network or cloud credentials are involved. The self-hosted runner
 # the original repository used is retired.
 
@@ -22,7 +22,7 @@ on:
 
 permissions:
   contents: write    # create GitHub Release
-  id-token: write    # OIDC (future Cosign signing)
+  id-token: write    # keyless Docker Hub OIDC login (and future Cosign signing)
 
 # One release run per tag — don't let a re-pushed tag race a still-running
 # release; serialize rather than cancel so a partial GitHub Release isn't left.
@@ -49,7 +49,7 @@ jobs:
       # Extract version from tag
       - name: Extract version
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Validate Docker Hub namespace
         run: |
@@ -61,10 +61,18 @@ jobs:
       # Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than a multi-platform build: the push at the end
+          # would fail with "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Buildx-only credential: the only registry write is the Buildx push below and
+          # no later step needs Docker CLI credentials. It keeps the OIDC token off the
+          # public base/helper-image pulls (same reason as 200-build-images).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}@push
 
       # Docker Buildx for multi-platform + cache
       - name: Set up Docker Buildx

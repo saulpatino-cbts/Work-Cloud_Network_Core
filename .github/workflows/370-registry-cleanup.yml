@@ -64,7 +64,7 @@ jobs:
 
       - name: Prune stale SHA-tagged images
         env:
-          # Personal-account PAT, NOT the org access token in DOCKERHUB_TOKEN
+          # Personal-account PAT, NOT an org-scoped credential such as the keyless OIDC token
           # (see comment below — org tokens can't manage tags via the Hub API
           # at all, confirmed against the live API, not just an auth quirk).
           DOCKERHUB_PERSONAL_USERNAME: ${{ vars.DOCKERHUB_PERSONAL_USERNAME }}
@@ -95,7 +95,7 @@ jobs:
           fi
 
           # Docker Hub API auth — DOCKERHUB_NAMESPACE ("hybridcloudworks") is
-          # an Organization account, and org access tokens (DOCKERHUB_TOKEN,
+          # an Organization account, and org-scoped tokens (the keyless OIDC token
           # used elsewhere for docker login/push) cannot manage tags via the
           # Hub REST API at all — confirmed against the live API through
           # three failure modes, not just an auth quirk:

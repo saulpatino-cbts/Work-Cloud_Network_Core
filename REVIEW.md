@@ -575,9 +575,10 @@ repository owner can write; none of them can be committed.
 Repository owner.
 
 **Required action** — in this order, so the appliances never lose their image source:
-1. On `Work-Cloud_Network_Core` → *Settings*: create the secrets `DOCKERHUB_TOKEN`, `DOCKERHUB_PERSONAL_TOKEN`,
+1. On `Work-Cloud_Network_Core` → *Settings*: create the secrets `DOCKERHUB_PERSONAL_TOKEN`,
    `GH_APP_ID`, `GH_APP_PRIVATE_KEY` and the variables `DOCKERHUB_NAMESPACE`,
-   `DOCKERHUB_PERSONAL_USERNAME`, `APPLIANCE_REPOS`
+   `DOCKERHUB_OIDC_CONNECTIONID` (the Docker Hub OIDC connection id; there is no `DOCKERHUB_TOKEN`
+   any more), `DOCKERHUB_PERSONAL_USERNAME`, `APPLIANCE_REPOS`
    (`Work-Cloud_Network_Azure_Appliance,Work-Cloud_Network_AWS_Appliance`) with the values the
    original repository uses. Set *Actions → General → Workflow permissions* to *Read and write*
    (`310` and the manifest commit in `200` need it).
@@ -636,7 +637,8 @@ the two appliances first.
   name them and become non-restorable, which is accepted.
 - *Actions secrets and variables.* The set the original's workflows consumed (`DOCKERHUB_NAMESPACE`,
   `DOCKERHUB_TOKEN`, `DOCKERHUB_PERSONAL_USERNAME`, `DOCKERHUB_PERSONAL_TOKEN`, `APPLIANCE_REPOS`,
-  `GH_APP_ID`, `GH_APP_PRIVATE_KEY`) is exactly the set this repository's workflows consume — R-013.
+  `GH_APP_ID`, `GH_APP_PRIVATE_KEY`) was the set the original's workflows consumed. Here `DOCKERHUB_TOKEN`
+  is replaced by the keyless OIDC variable `DOCKERHUB_OIDC_CONNECTIONID`; the rest are unchanged — R-013.
 - *Wiki.* Not verifiable from the engineering side (a Wiki is a separate git repository that needs
   write access, R-009); step 1 below.
 

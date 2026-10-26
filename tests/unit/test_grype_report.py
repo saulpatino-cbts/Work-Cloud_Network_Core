@@ -6,6 +6,7 @@ empty or malformed is an error rather than a clean image. Each case runs the rea
 entry point as a subprocess on a Grype-shaped JSON report built here.
 """
 
+import itertools
 import json
 import os
 import subprocess
@@ -52,7 +53,13 @@ def match(
 def report(*matches: dict, **extra: object) -> dict:
     return {
         "matches": list(matches),
-        "source": {"type": "image"},
+        "source": {
+            "type": "image",
+            "target": {
+                # stereoscope spells Docker Hub index.docker.io in the recorded repo digest.
+                "repoDigests": ["index.docker.io/" + IMAGE.split("/", 1)[1]],
+            },
+        },
         "descriptor": {"name": "grype", "version": "0.118.0"},
         **extra,
     }
@@ -184,7 +191,206 @@ class TestUnusableReportIsNeverAPass:
 
         assert result.returncode == 0
         assert "::warning::" in result.stdout and "zero findings" in result.stdout
-        assert "No findings." in summary
+        assert "0 matches: confirm the vulnerability database was current" in summary
+
+
+def each_order(tmp_path: Path, records: list[dict]):
+    """Run the script once per ordering of `records`, each with its own summary file."""
+    for index, ordering in enumerate(itertools.permutations(records)):
+        run_dir = tmp_path / f"order-{index}"
+        run_dir.mkdir()
+        result, summary = run_report(run_dir, report(*ordering))
+        yield ordering, result, summary
+
+
+class TestDuplicateMatchesNeverHideAViolation:
+    """Grype can list one vulnerability on one package more than once, with different
+    severity or fix data (one record per data source). The verdict must not depend
+    on which record comes first."""
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            [match(severity="High", state="not-fixed", fix_versions=[]), match(severity="High")],
+            [match(severity="Low"), match(severity="Critical")],
+            [match(severity="Medium"), match(severity="High")],
+            [
+                match(severity="Critical", state="not-fixed", fix_versions=[]),
+                match(severity="Low"),
+                match(severity="High"),
+            ],
+        ],
+        ids=["unfixable-then-fixable", "low-then-critical", "medium-then-high", "three-records"],
+    )
+    def test_a_fixable_high_or_critical_record_fails_in_any_order(
+        self, tmp_path: Path, records: list[dict]
+    ) -> None:
+        for ordering, result, summary in each_order(tmp_path, records):
+            assert result.returncode == 1, (result.stdout, [m["vulnerability"] for m in ordering])
+            assert "**FAIL**" in summary
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            [match(severity="Critical", state="not-fixed", fix_versions=[]), match(severity="Low")],
+            [match(severity="High", state="wont-fix", fix_versions=[]), match(severity="Medium")],
+        ],
+        ids=["unfixable-critical-and-fixable-low", "unfixable-high-and-fixable-medium"],
+    )
+    def test_duplicates_without_a_fixable_high_still_pass_in_any_order(
+        self, tmp_path: Path, records: list[dict]
+    ) -> None:
+        for ordering, result, summary in each_order(tmp_path, records):
+            assert result.returncode == 0, (result.stdout, [m["vulnerability"] for m in ordering])
+            assert "**PASS**" in summary
+
+    def test_records_that_differ_are_both_reported(self, tmp_path: Path) -> None:
+        _, summary = run_report(tmp_path, report(match(severity="Low"), match(severity="Critical")))
+
+        assert "| Critical | 1 | 1 | 0 |" in summary
+        assert "| Low | 1 | 1 | 0 |" in summary
+        assert "| **All** | 2 | 2 | 0 |" in summary
+
+    def test_identical_duplicates_are_one_finding_and_one_violation(self, tmp_path: Path) -> None:
+        result, summary = run_report(tmp_path, report(match(), match(), match()))
+
+        assert result.returncode == 1
+        assert "| **All** | 1 | 1 | 0 |" in summary
+        assert "1 fixable HIGH or above finding(s)" in summary
+        assert result.stdout.count("  violation:") == 1
+
+    def test_output_does_not_depend_on_the_order_of_matches(self, tmp_path: Path) -> None:
+        records = [
+            match("CVE-2026-0001", "High", package="a"),
+            match("CVE-2026-0001", "Low", package="a"),
+            match("CVE-2026-0002", "Low", package="b"),
+            match("CVE-2026-0003", "Low", "not-fixed", [], package="c"),
+        ]
+        outcomes = {
+            (result.returncode, result.stdout, summary)
+            for _, result, summary in each_order(tmp_path, records)
+        }
+
+        assert len(outcomes) == 1, "exit code, log and summary are identical for every order"
+
+
+def source_for(*repo_digests: str, kind: str = "image") -> dict:
+    return {"type": kind, "target": {"userInput": "x", "repoDigests": list(repo_digests)}}
+
+
+class TestTheReportMustBeForTheImageThatWasToBeScanned:
+    def test_a_different_digest_is_an_error_not_a_pass(self, tmp_path: Path) -> None:
+        other = "index.docker.io/acme-org/cna@sha256:" + "cd" * 32
+
+        result, _ = run_report(tmp_path, report(source=source_for(other)))
+
+        assert result.returncode == 2
+        assert "::error title=Grype report unusable::" in result.stdout
+        assert "was to be scanned" in result.stdout
+
+    def test_the_same_digest_in_another_repository_is_an_error(self, tmp_path: Path) -> None:
+        other = "index.docker.io/acme-org/other@sha256:" + "ab" * 32
+
+        result, _ = run_report(tmp_path, report(source=source_for(other)))
+
+        assert result.returncode == 2
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            None,
+            {},
+            {"type": "directory", "target": "/work"},
+            {"type": "image"},
+            {"type": "image", "target": "docker.io/acme-org/cna"},
+            {"type": "image", "target": {}},
+            {"type": "image", "target": {"repoDigests": []}},
+            {"type": "image", "target": {"repoDigests": None}},
+            {"type": "image", "target": {"repoDigests": [7, None]}},
+        ],
+        ids=[
+            "absent",
+            "empty",
+            "not-an-image",
+            "no-target",
+            "target-is-a-string",
+            "no-repo-digests",
+            "empty-repo-digests",
+            "null-repo-digests",
+            "non-string-repo-digests",
+        ],
+    )
+    def test_a_report_that_cannot_confirm_its_image_is_an_error(
+        self, tmp_path: Path, source: object
+    ) -> None:
+        document = report(match(severity="Low"))
+        if source is None:
+            del document["source"]
+        else:
+            document["source"] = source
+
+        result, _ = run_report(tmp_path, document)
+
+        assert result.returncode == 2, result.stdout
+        assert "::error title=Grype report unusable::" in result.stdout
+
+    @pytest.mark.parametrize("host", ["index.docker.io", "docker.io", "registry-1.docker.io:443"])
+    def test_any_registry_spelling_of_the_same_repository_and_digest_matches(
+        self, tmp_path: Path, host: str
+    ) -> None:
+        recorded = f"{host}/acme-org/cna@sha256:" + "ab" * 32
+
+        result, summary = run_report(
+            tmp_path, report(match(severity="Low"), source=source_for(recorded))
+        )
+
+        assert result.returncode == 0, result.stdout
+        assert "report confirms digest `sha256:" + "ab" * 32 + "`" in summary
+
+    def test_one_matching_entry_among_several_is_enough(self, tmp_path: Path) -> None:
+        recorded = [
+            "index.docker.io/acme-org/cna@sha256:" + "cd" * 32,
+            "index.docker.io/acme-org/cna@sha256:" + "ab" * 32,
+        ]
+
+        result, _ = run_report(tmp_path, report(source=source_for(*recorded)))
+
+        assert result.returncode == 0, result.stdout
+
+    @pytest.mark.parametrize(
+        "image",
+        [
+            "docker.io/acme-org/cna:latest",
+            "docker.io/acme-org/cna",
+            "docker.io/acme-org/cna@sha256:" + "ab" * 31,
+            "docker.io/acme-org/cna@sha256:" + "AB" * 32,
+        ],
+    )
+    def test_the_image_to_expect_must_be_a_digest_reference(
+        self, tmp_path: Path, image: str
+    ) -> None:
+        path = tmp_path / "grype.json"
+        path.write_text(json.dumps(report()), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--report", str(path), "--name", "cli", "--image", image],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT.parent,
+            env=base_env(),
+        )
+
+        assert result.returncode == 2
+        assert "--image must be a digest reference" in result.stdout
+
+    def test_a_stale_report_for_another_image_cannot_be_reused(self, tmp_path: Path) -> None:
+        # The report is clean, but for a different digest: the policy must not pass on it.
+        clean_other = report(source=source_for("index.docker.io/acme-org/cna@sha256:" + "ef" * 32))
+
+        result, summary = run_report(tmp_path, clean_other)
+
+        assert result.returncode == 2
+        assert summary == ""
 
 
 class TestSummary:

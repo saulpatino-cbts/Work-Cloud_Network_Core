@@ -142,8 +142,9 @@ or record a `TODO.md` item naming them — never leave one side implied.
   dependency, extra or dependency group in `pyproject.toml`, run `uv lock` and
   commit both files — `300-test-codebase` fails on drift. Never edit `uv.lock`
   by hand, never add a package to a Dockerfile with a bare `pip install`, and
-  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a Docker Scout
-  finding on a base-image package is fixed by Dependabot's digest bump. The uv
+  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a
+  `390-scan-images` (Grype) finding on a base-image package is fixed by
+  Dependabot's digest bump. The uv
   version is pinned in the `FROM ghcr.io/astral-sh/uv:… AS uv` stage of each
   Python Dockerfile and the `uv==` steps of `300-test-codebase.yml`; when
   Dependabot bumps the stage, move the workflow pins with it.

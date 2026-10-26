@@ -70,7 +70,7 @@ LABEL org.opencontainers.image.title="CNA Platform" \
 
 # System deps for diagram generation (runtime only). No `apt-get upgrade`:
 # the image must be the pinned base digest plus these packages, nothing that
-# depends on the day it was built. When Docker Scout fails on a base-image
+# depends on the day it was built. When the 390 Grype scan flags a base-image
 # deb, the fix is the Dependabot digest bump, not a rebuild (TODO.md T-702).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz libcairo2 libpango-1.0-0 \

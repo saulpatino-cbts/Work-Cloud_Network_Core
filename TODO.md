@@ -2139,22 +2139,33 @@ no published image was CVE-checked anywhere.
   credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
   `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
   dispatch. A fixable HIGH or CRITICAL finding fails the check; there is no `continue-on-error`; each
-  image gets a job-summary table and a code-scanning category; each digest's signature and provenance
-  are re-verified with cosign against the identity the appliances trust. Tests:
+  image gets a job-summary table and a code-scanning category; each digest's cosign signature and
+  SLSA provenance are checked against the identity the appliances trust (this does not run the
+  appliances' own verify scripts). Tests:
   `tests/unit/test_resolve_scan_targets.py`, `test_grype_report.py`, `test_verify_published_image.py`
   and `test_scan_workflow.py`.
 - **OPEN — verify on the first main run.** `390` cannot run before it is on the default branch, so
-  none of this has been executed by GitHub. After merge, make a main publish of `200` (or dispatch it
-  from main), then dispatch `390` from main once, and check: (1) Docker Hub accepts the OIDC login for
+  none of this has been executed by GitHub. `main` already carries published digests (the manifest's
+  `sha_tag` changes with every publish), so after merge dispatch `390` from main once; the next main
+  publish of `200` should then start a scan by itself. Check: (1) Docker Hub accepts the OIDC login for
   `390`'s workflow identity (a `workflow_run` or `schedule` token has never been exchanged); (2) Grype
   pulls the private digests with `registry:` and the unscoped login, and its database downloads;
   (3) the policy step reads the JSON report and the job summary renders; (4) the SARIF uploads and
   appears as one category per image (`grype-<key>`) in code scanning, within its size limits; (5)
-  `cosign verify` and `verify-attestation` pass for all five digests, which is the evidence that the
-  appliances' `210`/`220` verification will pass; (6) the `workflow_run` wiring: a successful main run
-  of `200` starts exactly one scan, and a branch dispatch of `200` starts none. Until the first main
-  publish lands, `390` skips on the schedule and fails on `workflow_run` or dispatch with "Nothing to
-  scan".
+  `cosign verify` and `verify-attestation` pass for all five digests under cosign v3.1.3. That shows
+  each digest is signed by the expected identity with the expected provenance; it is **not** evidence
+  that the appliances' own scripts accept the digests, because `390` does not run them. Read the
+  `attestation shape:` log line of each digest (DSSE envelope or bare in-toto statement) and compare it
+  with what the appliances' `scripts/ci/verify_image_signature.sh` parses; only a real `210`/`220` run,
+  or that script run against the same digest, proves the appliances' side; (6) the `workflow_run`
+  wiring: a successful main run of `200` starts exactly one scan, and a branch dispatch of `200` starts
+  none. If a run ever finds the placeholder manifest, or one without `digests{}`, it skips on the
+  schedule and fails on `workflow_run` or dispatch with "Nothing to scan".
+- **Maintenance:** `GRYPE_VERSION` in `390-scan-images.yml` (v0.118.0, the default of the pinned
+  `anchore/scan-action` v7.4.2) is pinned because the action fetches Grype's installer by release tag
+  inside a job that holds an OIDC token and a Docker Hub credential. Dependabot cannot see it: bump it
+  deliberately, with the action and from Grype's release notes (v0.121.0 was the latest release on
+  2026-10-26).
 - Still a design decision (unchanged): `390` runs after `200` has published and tagged, so it detects
   and cannot stop a deploy. Gating needs a scan of the digest between build and tag in `200`, or a
   check in the appliances' `210`/`220`. Both appliances' docs must say a deployed digest is signed and

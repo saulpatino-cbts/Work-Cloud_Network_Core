@@ -208,6 +208,16 @@ class TestScanner:
         assert steps["grype_sarif"]["env"]["GRYPE_DB_AUTO_UPDATE"] == "false"
         assert "cache-db" not in steps["grype_sarif"]["with"]
 
+    def test_grype_is_pinned_to_one_release_in_both_passes(self, scan: dict) -> None:
+        # The action fetches Grype's installer by release tag inside a job that holds
+        # an OIDC token and a Docker Hub credential, so the release is a deliberate pin.
+        assert re.fullmatch(r"v\d+\.\d+\.\d+", scan["env"]["GRYPE_VERSION"])
+        passes = [s for s in all_steps(scan) if s.get("uses", "").startswith("anchore/")]
+
+        assert len(passes) == 2
+        for step in passes:
+            assert step["with"]["grype-version"] == "${{ env.GRYPE_VERSION }}"
+
     def test_the_policy_step_reads_the_full_report_with_the_workflow_threshold(
         self, scan: dict
     ) -> None:
@@ -216,6 +226,15 @@ class TestScanner:
         assert "scripts/ci/grype_report.py" in policy["run"]
         assert '--fail-on "$SCAN_FAIL_ON"' in policy["run"]
         assert scan["env"]["SCAN_FAIL_ON"] == "high"
+
+
+class TestHeaderDoesNotOverclaim:
+    def test_the_signature_check_is_not_presented_as_proof_for_the_appliances(self) -> None:
+        text = " ".join(SCAN_FILE.read_text(encoding="utf-8").replace("#", " ").split())
+
+        assert "does NOT run the appliances' own verify scripts" in text
+        assert "will pass" not in text
+        assert "before an appliance refuses a deploy" not in text
 
 
 class TestNothingCanMakeThePolicySilentlyGreen:

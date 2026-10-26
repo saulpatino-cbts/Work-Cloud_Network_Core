@@ -35,10 +35,13 @@ name: "390 · Scan Published Images"
 # So this workflow checks out `main` only and never PR or fork code, and passes
 # every `github.event.*` value to scripts through `env:`, never into a shell line.
 #
-# Independent signature check: each scanned digest is also verified with cosign
-# against the identity the appliances trust (scripts/ci/verify_published_image.py).
-# A pass is evidence that the appliances' own verification in 210/220 will pass; a
-# failure is red here, in the core, before an appliance refuses a deploy.
+# Signature check: each scanned digest is also verified with cosign (the release
+# pinned below) against the identity the appliances trust, and its SLSA provenance
+# must name a run of this repository (scripts/ci/verify_published_image.py). A pass
+# proves exactly that, with that cosign release. It does NOT run the appliances' own
+# verify scripts (210/220), which parse cosign's output themselves, so it is not
+# proof that they will accept the digest; the log records which attestation shape
+# (DSSE envelope or bare statement) cosign printed, as evidence for that comparison.
 #
 # UNVERIFIED until the first run on main (a workflow_run, schedule or
 # workflow_dispatch workflow must exist on the default branch first): the Docker Hub
@@ -70,6 +73,13 @@ env:
   # together with the others named in CLAUDE.md (contract item 5): 200-build-images
   # (signs) and both appliances' 210/220 (verify) carry the same release.
   COSIGN_VERSION: v3.1.3
+  # Grype release the scan runs. It is pinned here, and not left to the action's
+  # default, because the action fetches Grype's installer by this release tag and runs
+  # it in a job that holds an OIDC token and a Docker Hub credential. v0.118.0 is the
+  # default of the pinned anchore/scan-action v7.4.2 (GrypeVersion.js and its bundled
+  # dist/index.js at that commit). Dependabot cannot see it: bump it deliberately,
+  # together with the action, from the Grype release notes (TODO.md T-719).
+  GRYPE_VERSION: v0.118.0
   # Lowest severity that fails the job when the finding is fixable.
   SCAN_FAIL_ON: high
   # The identity 200-build-images signs under and the builder id its provenance
@@ -203,8 +213,8 @@ jobs:
       # than GHSA ids. `fail-build: false` with `severity-cutoff: critical`: the
       # action's own gate is not the policy (it cannot see fixability once the
       # report is unfiltered); with the gate off the action only adds a warning when
-      # a CRITICAL exists, which is informational. The Grype version is the one the
-      # pinned action ships, so a Dependabot bump of the action moves it.
+      # a CRITICAL exists, which is informational. `grype-version` is the pin in
+      # `env:` above.
       - name: Scan with Grype (full JSON report)
         id: grype_json
         if: ${{ !cancelled() && steps.login.outcome == 'success' }}
@@ -213,6 +223,7 @@ jobs:
           image: registry:${{ matrix.ref }}
           output-format: json
           output-file: ${{ runner.temp }}/grype-${{ matrix.key }}.json
+          grype-version: ${{ env.GRYPE_VERSION }}
           fail-build: "false"
           severity-cutoff: critical
           only-fixed: "false"
@@ -229,6 +240,7 @@ jobs:
           image: registry:${{ matrix.ref }}
           output-format: sarif
           output-file: ${{ runner.temp }}/grype-${{ matrix.key }}.sarif
+          grype-version: ${{ env.GRYPE_VERSION }}
           fail-build: "false"
           severity-cutoff: critical
           only-fixed: "false"

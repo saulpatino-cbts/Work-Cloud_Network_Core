@@ -1,11 +1,12 @@
 """Tests for scripts/ci/verify_published_image.py (TODO.md T-719).
 
-390 uses this script to prove, for every digest it scans, that the appliances'
-signature and provenance checks will pass. cosign itself is not available here, so
-the verification logic is exercised against a fake runner that returns the output
-shapes cosign prints; that proves the decisions (which digests, identities and
-builders are accepted), not cosign's own behaviour. The first real run of 390 is
-what proves the two together.
+390 uses this script to check, for every digest it scans, that cosign finds it signed
+by the expected identity with provenance from a run of this repository. cosign itself
+is not available here, so the verification logic is exercised against a fake runner
+that returns the output shapes cosign may print; that proves the decisions (which
+digests, identities and builders are accepted), not cosign's own behaviour. The first
+real run of 390 is what proves the two together. Neither proves that the appliances'
+own verify scripts accept the digests: this script does not run them.
 """
 
 import base64
@@ -194,6 +195,41 @@ class TestVerify:
 
     def test_accepts_a_dsse_envelope_as_well_as_a_bare_statement(self) -> None:
         assert verify(FakeCosign(attest_out=lines(envelope(statement())))) == BUILDER
+
+    def test_logs_which_shape_cosign_printed_so_the_first_run_is_evidence(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        verify(FakeCosign(attest_out=lines(envelope(statement()))))
+        assert "attestation shape: dsse-envelope" in capsys.readouterr().out
+
+        verify(FakeCosign(attest_out=lines(statement())))
+        assert "attestation shape: in-toto statement" in capsys.readouterr().out
+
+    def test_the_logged_shape_is_that_of_the_statement_that_passed(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        wrong_builder = statement(builder="https://github.com/acme/other/actions/runs/1")
+
+        verify(FakeCosign(attest_out=lines(wrong_builder, envelope(statement()))))
+
+        assert "attestation shape: dsse-envelope" in capsys.readouterr().out
+
+    def test_a_rejection_names_the_shape_of_every_statement_seen(self) -> None:
+        wrong_builder = statement(builder="https://github.com/acme/other/actions/runs/1")
+
+        with pytest.raises(verify_published_image.VerifyError) as error:
+            verify(FakeCosign(attest_out=lines(wrong_builder, envelope(wrong_builder))))
+
+        assert "shape=in-toto statement" in str(error.value)
+        assert "shape=dsse-envelope" in str(error.value)
+
+    def test_the_docstring_does_not_claim_the_appliances_checks_will_pass(self) -> None:
+        doc = verify_published_image.__doc__ or ""
+
+        assert "does NOT prove that the appliances' own check will pass" in doc
+        assert "will pass" not in doc.replace(
+            "does NOT prove that the appliances' own check will pass", ""
+        )
 
     def test_rejects_an_envelope_with_an_undecodable_payload(self) -> None:
         broken = {"payloadType": "application/vnd.in-toto+json", "payload": "!!!", "signatures": []}

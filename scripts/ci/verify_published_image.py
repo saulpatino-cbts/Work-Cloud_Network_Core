@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Verify that a published image digest is signed and attested the way the appliances require.
+"""Verify that a published image digest is signed and attested by the expected identity.
 
-390 runs this against every digest it scans. It is an independent re-statement of
-the checks the appliances run before every deploy (their
-scripts/ci/verify_image_signature.sh, called by 210 and 220), so a drift in how
-200-build-images signs is caught here, in the core, before an appliance refuses a
-deploy:
+390 runs this against every digest it scans, with the cosign release pinned in the
+workflow (COSIGN_VERSION). A pass proves exactly this, using that cosign release:
 
     1. `cosign verify` finds a keyless signature on the digest whose certificate
        carries exactly IMAGE_SIGNING_IDENTITY and SIGSTORE_OIDC_ISSUER, and the
@@ -16,10 +13,19 @@ deploy:
        `predicate.builder.id` that starts with EXPECTED_BUILDER_PREFIX (a workflow
        run of this repository).
 
+A pass does NOT prove that the appliances' own check will pass. This script does not
+run their scripts/ci/verify_image_signature.sh (called by 210 and 220), which parses
+cosign's output with its own filters. In particular `cosign verify-attestation` may
+print a DSSE envelope (a base64 `payload` field) instead of a bare in-toto statement;
+this script decodes either, but a script that reads a top-level `.predicateType` would
+not accept an envelope. So the shape cosign printed is recorded for each digest
+("attestation shape: dsse-envelope" or "attestation shape: in-toto statement"), which
+makes the first real run's log the evidence for any such mismatch.
+
 cosign 3 accepts exactly one proof of signing time per verification: an RFC 3161
 signed timestamp (`--use-signed-timestamps`) or Rekor's integrated timestamp (the
 default). The appliances accept either, so this script tries the timestamp form
-first and falls back to the default, exactly as they do.
+first and falls back to the default, in the same order as they do.
 
 Environment (all required; the workflow derives them from `github.*`, never from
 the image or the manifest):
@@ -33,7 +39,7 @@ Usage:
 cosign needs Docker CLI registry credentials (a global `docker login`) to read the
 signature and attestation from the private repository.
 
-Exit 0: signature, attestation, subject and builder all verified.
+Exit 0: signature, attestation, subject and builder all verified by cosign.
 Exit 1: any check failed.
 Exit 2: the script was invoked with missing or malformed input.
 """
@@ -63,6 +69,9 @@ PROVENANCE_PREDICATE = "https://slsa.dev/provenance/v0.2"
 TIMESTAMP_FLAG = "--use-signed-timestamps"
 COSIGN_TIMEOUT_SECONDS = 300
 STDERR_LIMIT = 2000
+# How cosign printed one verify-attestation result (see statement_of).
+SHAPE_ENVELOPE = "dsse-envelope"
+SHAPE_STATEMENT = "in-toto statement"
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -125,11 +134,11 @@ def check_signatures(stdout: str, digest: str) -> None:
             raise VerifyError(f"the verified signature is on {signed}, not sha256:{digest}")
 
 
-def statement_of(entry: object) -> Mapping | None:
-    """The in-toto statement of one verify-attestation output line.
+def statement_of(entry: object) -> tuple[Mapping, str] | None:
+    """The in-toto statement of one verify-attestation output line, and its shape.
 
     cosign prints either the statement itself or a DSSE envelope whose base64
-    `payload` holds it; both are accepted.
+    `payload` holds it; both are accepted, and the shape says which one it was.
     """
     if not isinstance(entry, dict):
         return None
@@ -138,22 +147,23 @@ def statement_of(entry: object) -> Mapping | None:
             decoded = json.loads(base64.b64decode(entry["payload"], validate=True))
         except (ValueError, TypeError, binascii.Error):
             return None
-        return decoded if isinstance(decoded, dict) else None
-    return entry
+        return (decoded, SHAPE_ENVELOPE) if isinstance(decoded, dict) else None
+    return entry, SHAPE_STATEMENT
 
 
-def check_attestations(stdout: str, digest: str, builder_prefix: str) -> str:
-    """Return the builder id of the first statement that satisfies every check."""
+def check_attestations(stdout: str, digest: str, builder_prefix: str) -> tuple[str, str]:
+    """Return the builder id and output shape of the first statement that passes every check."""
     seen: list[str] = []
     for line in stdout.splitlines():
         if not line.strip():
             continue
         try:
-            statement = statement_of(json.loads(line))
+            parsed = statement_of(json.loads(line))
         except ValueError:
             continue
-        if statement is None:
+        if parsed is None:
             continue
+        statement, shape = parsed
         subjects = [
             s.get("digest", {}).get("sha256")
             for s in statement.get("subject") or []
@@ -168,10 +178,10 @@ def check_attestations(stdout: str, digest: str, builder_prefix: str) -> str:
             and digest in subjects
             and builder_id.startswith(builder_prefix)
         ):
-            return builder_id
+            return builder_id, shape
         seen.append(
-            f"predicateType={statement.get('predicateType')!r} subjects={subjects!r} "
-            f"builder={builder_id!r}"
+            f"shape={shape} predicateType={statement.get('predicateType')!r} "
+            f"subjects={subjects!r} builder={builder_id!r}"
         )
     raise VerifyError(
         f"no SLSA v0.2 provenance statement has subject sha256:{digest} and a builder id "
@@ -203,7 +213,9 @@ def verify(
     stdout = cosign_with_either_timestamp(
         runner, ["verify-attestation", "--type", PROVENANCE_TYPE, *identity_args, ref]
     )
-    return check_attestations(stdout, digest, builder_prefix)
+    builder_id, shape = check_attestations(stdout, digest, builder_prefix)
+    print(f"attestation shape: {shape}")
+    return builder_id
 
 
 def read_settings(env: Mapping[str, str]) -> tuple[str, str, str]:

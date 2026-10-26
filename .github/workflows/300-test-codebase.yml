@@ -1,7 +1,7 @@
 # CI pipeline — hardened
 # Changes from original:
 #   - All actions pinned to SHA digest (supply chain security)
-#   - Python matrix: 3.13 + 3.14 (current stable lines)
+#   - Python 3.14 only: every image ships python:3.14-slim, so no other interpreter is deployed
 #   - pip cache via actions/cache (60-80% faster installs)
 #   - Coverage XML generated in the Python 3.14 job
 #   - Secret scanning runs gitleaks directly to avoid Node.js action runtime warnings
@@ -163,27 +163,23 @@ jobs:
         run: npm test
 
   # ------------------------------------------------------------------
-  # 3. Unit tests — Python matrix 3.13 + 3.14
+  # 3. Unit tests — Python 3.14 (the interpreter every image ships)
   # ------------------------------------------------------------------
   test:
-    name: Unit Tests (Python ${{ matrix.python-version }})
+    name: Unit Tests (Python 3.14)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [lint]  # secret-scan is non-blocking (continue-on-error)
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: test-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          key: test-3.14-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         # enrichment is required since tests/unit/test_azure_discovery.py exercises
         # the Log Analytics paths by importing azure.monitor.query directly (T-408).
@@ -201,7 +197,6 @@ jobs:
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80
       - name: Upload coverage report
-        if: matrix.python-version == '3.14'
         run: |
           echo "## Coverage report" >> "$GITHUB_STEP_SUMMARY"
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"

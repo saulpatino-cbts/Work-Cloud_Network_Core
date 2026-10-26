@@ -43,10 +43,12 @@ name: "390 · Scan Published Images"
 # proof that they will accept the digest; the log records which attestation shape
 # (DSSE envelope or bare statement) cosign printed, as evidence for that comparison.
 #
-# UNVERIFIED until the first run on main (a workflow_run, schedule or
-# workflow_dispatch workflow must exist on the default branch first): the Docker Hub
-# login for this workflow identity, the Grype step, the SARIF upload and the cosign
-# verification. See TODO.md T-719.
+# VERIFIED on 2026-10-26 by a throwaway, push-triggered copy of this workflow on a
+# branch (run 40327208460): target resolution, the Docker Hub OIDC login, cosign
+# verification of all five digests, both Grype passes, SARIF generation and the policy
+# verdict. NOT yet exercised: the workflow_run and schedule triggers (a workflow must
+# exist on the default branch first), Docker Hub's OIDC rule for their token claims,
+# and the SARIF upload. See TODO.md T-719.
 
 on:
   workflow_run:

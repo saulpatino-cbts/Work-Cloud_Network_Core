@@ -2144,23 +2144,28 @@ no published image was CVE-checked anywhere.
   appliances' own verify scripts). Tests:
   `tests/unit/test_resolve_scan_targets.py`, `test_grype_report.py`, `test_verify_published_image.py`
   and `test_scan_workflow.py`.
-- **OPEN — verify on the first main run.** `390` cannot run before it is on the default branch, so
-  none of this has been executed by GitHub. `main` already carries published digests (the manifest's
-  `sha_tag` changes with every publish), so after merge dispatch `390` from main once; the next main
-  publish of `200` should then start a scan by itself. Check: (1) Docker Hub accepts the OIDC login for
-  `390`'s workflow identity (a `workflow_run` or `schedule` token has never been exchanged); (2) Grype
-  pulls the private digests with `registry:` and the unscoped login, and its database downloads;
-  (3) the policy step reads the JSON report and the job summary renders; (4) the SARIF uploads and
-  appears as one category per image (`grype-<key>`) in code scanning, within its size limits; (5)
-  `cosign verify` and `verify-attestation` pass for all five digests under cosign v3.1.3. That shows
-  each digest is signed by the expected identity with the expected provenance; it is **not** evidence
-  that the appliances' own scripts accept the digests, because `390` does not run them. Read the
-  `attestation shape:` log line of each digest (DSSE envelope or bare in-toto statement) and compare it
-  with what the appliances' `scripts/ci/verify_image_signature.sh` parses; only a real `210`/`220` run,
-  or that script run against the same digest, proves the appliances' side; (6) the `workflow_run`
-  wiring: a successful main run of `200` starts exactly one scan, and a branch dispatch of `200` starts
-  none. If a run ever finds the placeholder manifest, or one without `digests{}`, it skips on the
-  schedule and fails on `workflow_run` or dispatch with "Nothing to scan".
+- **Verified on 2026-10-26 by a branch-only copy of this workflow** (run 40327208460 on a throwaway
+  `push`-triggered branch, since deleted), against the digests then in the manifest: target
+  resolution; the Docker Hub OIDC login (it also works from a non-default branch's `push` run); Grype
+  pulling the private digests with `registry:` and the unscoped login, and its database download;
+  both Grype passes, with the SARIF generated (about 2 MB for the api image); the policy step reading
+  the JSON report and checking `source.target.repoDigests` (it is
+  `index.docker.io/<ns>/cna@sha256:<digest>` for a by-digest reference); `cosign verify` and
+  `verify-attestation` passing for all five digests under cosign v3.1.3. It also found 15 fixable
+  HIGH/CRITICAL findings in the published `cli`, `api` and `worker` images (web and migrator were
+  clean): Python 3.14.7 and OpenSSL 3.5.7-1~deb13u2 in the pinned `python:3.14-slim` base, cleared
+  by bumping that digest.
+- **OPEN — still unverified until the first run on main**, because a `workflow_run`, `schedule` or
+  `workflow_dispatch` workflow must exist on the default branch first: (1) Docker Hub accepting the
+  OIDC login for a `workflow_run` or `schedule` token (only a `push` token has been exchanged);
+  (2) the SARIF upload: that code scanning accepts it and shows one category per image
+  (`grype-<key>`); (3) the `workflow_run` wiring: a successful main run of `200` starts exactly one
+  scan, and a branch dispatch of `200` starts none. After merge, dispatch `390` from main once; the
+  next main publish of `200` should then start a scan by itself. If a run ever finds the placeholder
+  manifest, or one without `digests{}`, it skips on the schedule and fails on `workflow_run` or
+  dispatch with "Nothing to scan".
+- The cosign output shape those runs printed is `attestation shape: dsse-envelope`, which matters for
+  the appliances: see T-723.
 - **Maintenance:** `GRYPE_VERSION` in `390-scan-images.yml` (v0.118.0, the default of the pinned
   `anchore/scan-action` v7.4.2) is pinned because the action fetches Grype's installer by release tag
   inside a job that holds an OIDC token and a Docker Hub credential. Dependabot cannot see it: bump it
@@ -2203,3 +2208,14 @@ set (re-running the failed jobs completes it). Tag every `*-sha-<7>` first and t
 last, retry transient errors, then compare each tag's resolved digest with the recorded one. Also: a
 re-run of an old failed `main` run rebuilds that old commit and would move `*-latest` and the manifest
 backwards; skip publication when `github.sha` is no longer the tip of `main`.
+
+### T-723 — The AWS appliance's `verify_image_signature.sh` cannot parse cosign's attestation output
+Observed on 2026-10-26 (the `390` branch probe, run 40327208460, cosign v3.1.3):
+`cosign verify-attestation` prints one **DSSE envelope** per line (`payload` is the base64 in-toto
+statement), not bare statements. `Work-Cloud_Network_Azure_Appliance/scripts/ci/verify_image_signature.sh`
+decodes `.payload`; `Work-Cloud_Network_AWS_Appliance/scripts/ci/verify_image_signature.sh` assumes bare
+statements and filters on a top-level `.predicateType`, so against a real attestation it finds none
+and would refuse every deploy (`210`/`220`). The two copies `CLAUDE.md` calls byte-identical have also
+diverged on digest handling (AWS requires `@sha256`, Azure only warns). In the AWS appliance: decode
+the envelope as Azure does, decide the digest policy once, restore byte-identity, and prove it by
+running the script against a real digest published from this repository.

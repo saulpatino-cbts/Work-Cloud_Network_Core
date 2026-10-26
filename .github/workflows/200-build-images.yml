@@ -11,14 +11,20 @@ name: "200 · Build Container Images"
 # not make this one dispatchable. The commit that adds this paragraph is that
 # push; its own run is the first build from this repository.
 #
-# Publish order (scan before tag). Every image is pushed to Docker Hub **by
-# digest only** (no tag), scanned by Docker Scout at that digest, and only when
-# all five images have passed does the `tag-images` job attach the immutable
-# `*-sha-<7>` and floating `*-latest` tags. A failed scan therefore never moves
-# a tag; the untagged digest it leaves behind is inert (nothing resolves to it)
-# and Docker Hub garbage-collects it. The tag names, the `latest-build.json`
-# fields and the `cna-image-published` payload are unchanged; the manifest
-# additionally records `digests{}` so the appliances can pin by digest.
+# Publish order (build + sign, then tag). Every image is pushed to Docker Hub
+# **by digest only** (no tag), signed, and only when all five images are built
+# does the `tag-images` job attach the immutable `*-sha-<7>` and floating
+# `*-latest` tags. An untagged digest left behind by a failed run is inert
+# (nothing resolves to it) and Docker Hub garbage-collects it. The tag names, the
+# `latest-build.json` fields and the `cna-image-published` payload are unchanged;
+# the manifest additionally records `digests{}` so the appliances can pin by
+# digest.
+#
+# Vulnerability scanning is intentionally NOT in this workflow. Docker Scout's
+# backend features require a Scout-entitled Docker identity, which the keyless
+# OIDC identity this workflow authenticates as does not have. The separate
+# `390-scout-scan` workflow owns CVE reporting over the published images. Keeping
+# Scout out of here lets the whole build/push/tag path stay keyless.
 #
 # Signing (TODO.md T-703). Once an image has passed its gates, the build job
 # signs the digest with cosign — keyless, under this workflow's OIDC identity
@@ -128,12 +134,28 @@ jobs:
             exit 1
           fi
 
+      # Keyless OIDC login: GitHub mints a short-lived OIDC token for this run
+      # (needs `id-token: write`), Docker Hub validates it against the connection
+      # whose ruleset trusts this repo, and issues a scoped, short-lived token.
+      # No password/PAT/OAT is stored. `username` is the Docker Hub org name.
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than these jobs: a push after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Scope the OIDC credential to pushes of our own repo only. The token
+          # the ruleset issues is scoped to hybridcloudworks/cna, so using it for
+          # ALL registry traffic breaks buildx's pull of public helper images
+          # (e.g. docker/buildkit-syft-scanner for the SBOM) with
+          # "401 ... insufficient scopes". `scope` writes the creds to the buildx
+          # config for pushes only; base/helper pulls use the default anonymous
+          # credentials. Requires Buildx >= 0.31.0 (setup-buildx v4.4.1 is newer).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@push
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
@@ -142,7 +164,7 @@ jobs:
 
       # The tag list computed here is NOT applied by the build step below; it is
       # handed to `tag-images`, which applies it only after every image has
-      # passed its scan. The labels are baked into the image now.
+      # been built and signed. The labels are baked into the image now.
       - name: Extract metadata for ${{ matrix.name }}
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
@@ -165,26 +187,43 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: true
+          # Pin SLSA v0.2: BuildKit >= 0.28 defaults to v1 (`runDetails.builder.id`),
+          # but the appliances verify `slsaprovenance02` and `predicate.builder.id`
+          # (CLAUDE.md contract item 5), and sign_image.sh attests that type. The
+          # action still appends `builder-id=<run URL>`. Moving to v1 is a
+          # core + both appliances change, not a workflow tweak.
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scout by digest, not by a mutable tag: no tag exists yet for this build,
-      # and buildx --push never loads the image into the runner's local Docker
-      # daemon, so docker/scout-action could otherwise silently fall back to a
-      # stale locally-cached image and scan the wrong content entirely.
-      - name: Docker Scout — fail on fixable critical/high CVEs
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
-        with:
-          command: cves
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build.outputs.digest }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-code: true
+      # Vulnerability scanning is handled out-of-band by the 390-scout-scan
+      # workflow, not here: Docker Scout's backend features require a
+      # Scout-entitled Docker identity, which the keyless OIDC identity this
+      # workflow logs in as does not have ("user githubactions not entitled to
+      # use Docker Scout"). Keeping Scout out of the build/push path lets 200
+      # stay fully keyless; 390 owns CVE reporting over the published images.
 
-      # Sign only what Scout accepted, and only by digest: the signature is what
-      # the appliances verify before a deploy (scripts/ci/sign_image.sh).
+      # Second login, after the last Buildx step of this job and WITHOUT `scope`.
+      # The scoped credential above is written to the Buildx config and is
+      # invisible to everything that is not Buildx: cosign and `docker run` read
+      # the global Docker config, so without this they fail with "UNAUTHORIZED:
+      # authentication required" on the private repository. Widening is safe
+      # here because no Buildx build follows, so the public helper-image pull
+      # that motivated `scope` (401 "insufficient scopes") cannot recur.
+      - name: Log in to Docker Hub (Docker CLI and cosign)
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than these jobs: a push after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
+
+      # Sign by digest: the signature is what the appliances verify before a
+      # deploy (scripts/ci/sign_image.sh).
       - name: Sign and attest ${{ matrix.name }} image
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -231,12 +270,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
+      # Keyless OIDC login (see build-images for the full explanation).
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than these jobs: a push after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Scope the OIDC credential to pushes of our own repo only. The token
+          # the ruleset issues is scoped to hybridcloudworks/cna, so using it for
+          # ALL registry traffic breaks buildx's pull of public helper images
+          # (e.g. docker/buildkit-syft-scanner for the SBOM) with
+          # "401 ... insufficient scopes". `scope` writes the creds to the buildx
+          # config for pushes only; base/helper pulls use the default anonymous
+          # credentials. Requires Buildx >= 0.31.0 (setup-buildx v4.4.1 is newer).
+          scope: ${{ vars.DOCKERHUB_NAMESPACE }}/cna@push
 
       - name: Validate Docker Hub namespace
         run: |
@@ -251,7 +303,7 @@ jobs:
           cosign-release: ${{ env.COSIGN_VERSION }}
 
       # Tag lists here are handed to `tag-images` and applied only after every
-      # image has passed its scan (see the CLI/API/Worker job above).
+      # image has been built and signed (see the CLI/API/Worker job above).
       - name: Extract metadata for Web
         id: meta_web
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
@@ -294,22 +346,14 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_web.outputs.labels }}
-          provenance: true
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scout by digest — see the comment on the CLI/API/Worker Scout step
-      # above: no tag exists yet, and a floating-tag reference could resolve
-      # against a stale locally-cached image instead of the one just pushed.
-      - name: Docker Scout — fail on fixable critical/high CVEs (Web)
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
-        with:
-          command: cves
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_web.outputs.digest }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-code: true
+      # Vulnerability scanning for the web image is handled by 390-scout-scan
+      # (see the CLI/API/Worker note above): Scout's backend needs a
+      # Scout-entitled identity that keyless OIDC does not have.
 
       - name: Build and push Migrator image by digest
         id: build_migrator
@@ -322,18 +366,30 @@ jobs:
             CNA_BUILD_SHA=${{ github.sha }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_migrator.outputs.labels }}
-          provenance: true
+          provenance: version=v0.2
           sbom: true
           cache-from: type=gha
 
-      - name: Docker Scout — fail on fixable critical/high CVEs (Migrator)
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
+      # Migrator image CVE scanning is handled by 390-scout-scan (see above).
+
+      # Second login, after the last Buildx step of this job and WITHOUT `scope`.
+      # The scoped credential above is written to the Buildx config and is
+      # invisible to everything that is not Buildx: the smoke test's `docker run`
+      # and cosign read the global Docker config, so without this they fail
+      # with "UNAUTHORIZED:
+      # authentication required" on the private repository. Widening is safe
+      # here because no Buildx build follows, so the public helper-image pull
+      # that motivated `scope` (401 "insufficient scopes") cannot recur.
+      - name: Log in to Docker Hub (Docker CLI and cosign)
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than these jobs: a push after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
-          command: cves
-          image: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna@${{ steps.build_migrator.outputs.digest }}
-          only-severities: critical,high
-          only-fixed: true
-          exit-code: true
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
 
       - name: Smoke test — /api/health returns 200
         env:
@@ -341,8 +397,8 @@ jobs:
         run: |
           # Run by digest: it is the only reference that exists for this build
           # yet, and `docker run` would otherwise prefer a stale locally-cached
-          # image over pulling the one just pushed (same issue as the Docker
-          # Scout steps above), which would smoke-test the wrong image entirely.
+          # image over pulling the one just pushed, which would smoke-test the
+          # wrong image entirely.
           docker run -d --name cna-web-smoke \
             -e DATABASE_URL="postgresql://test:test@localhost:5432/test?sslmode=disable" \
             -e NEXTAUTH_URL="http://localhost:3000" \
@@ -369,8 +425,8 @@ jobs:
           fi
           echo "Smoke test passed (status=$STATUS)"
 
-      # Both digests have now passed Scout and web its smoke test; sign them by
-      # digest (scripts/ci/sign_image.sh) — same gate as the CLI/API/Worker job.
+      # Web has passed its smoke test; sign both digests by digest
+      # (scripts/ci/sign_image.sh) — same step as the CLI/API/Worker job.
       - name: Sign and attest Web and Migrator images
         env:
           DIGEST_WEB: ${{ steps.build_web.outputs.digest }}
@@ -408,16 +464,25 @@ jobs:
           record migrator "$DIGEST_MIGRATOR" "$META_MIGRATOR_JSON"
 
   # The only place a tag is created. Runs only when every image has been built,
-  # scanned and (web) smoke-tested, then attaches each image's `*-sha-<7>` and
-  # `*-latest` tags to the digest that was scanned — the tag can never point at
-  # content Scout did not see. `imagetools create` re-tags the pushed index
-  # (with its attestations) without rebuilding or re-pushing layers.
+  # signed and (web) smoke-tested, then attaches each image's `*-sha-<7>` and
+  # `*-latest` tags to the digest that was signed — the tag can never point at
+  # content that failed to build or sign. `imagetools create` re-tags the
+  # pushed index (with its attestations) without rebuilding or re-pushing
+  # layers.
   tag-images:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build-images, build-web]
+    # Publishing is main-only. A workflow_dispatch from a feature branch still
+    # builds, pushes by digest and signs, so a pipeline change can be proven end
+    # to end, but it must not move `*-latest`, rewrite the manifest or notify the
+    # appliances (which also verify against the `@refs/heads/main` identity that a
+    # branch run cannot satisfy). publish-build-manifest and notify-appliances
+    # depend on this job, so they are skipped with it.
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
+      id-token: write  # keyless Docker Hub OIDC login (re-tag pushes to the registry)
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
@@ -431,14 +496,22 @@ jobs:
             exit 1
           fi
 
+      # Keyless OIDC login (see build-images for the full explanation).
       - name: Log in to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than these jobs: a push after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_NAMESPACE }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          # No `scope` here: `imagetools create` first reads the source manifest
+          # (pull) and then writes the tags (push), and this job runs no Buildx
+          # build, so there is no public helper-image pull to protect.
 
-      - name: Tag every scanned digest
+      - name: Tag every signed digest
         env:
           DIGEST_CLI: ${{ needs.build-images.outputs.digest_cli }}
           DIGEST_API: ${{ needs.build-images.outputs.digest_api }}
@@ -585,8 +658,26 @@ jobs:
     # private key and the dispatch calls use that token.
     permissions: {}
     steps:
+      # The dispatch is a fast path only (the appliances also poll the committed
+      # manifest), so missing App credentials must be a visible warning, not a red
+      # run after the images were already tagged and the manifest committed. Only
+      # the presence of each secret is exposed to this step, never its value.
+      - name: Check GitHub App credentials
+        id: creds
+        env:
+          HAS_APP_ID: ${{ secrets.GH_APP_ID != '' }}
+          HAS_APP_KEY: ${{ secrets.GH_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_APP_ID" = "true" ] && [ "$HAS_APP_KEY" = "true" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GH_APP_ID / GH_APP_PRIVATE_KEY are not configured, so the push-based cna-image-published dispatch is skipped; the appliances pick the images up from the committed manifest on their next poll."
+          fi
+
       - name: Generate GitHub App token (appliance repositories only)
         id: app-token
+        if: steps.creds.outputs.present == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
         with:
           client-id: ${{ secrets.GH_APP_ID }}
@@ -595,6 +686,7 @@ jobs:
           repositories: ${{ vars.APPLIANCE_REPOS }}
 
       - name: Send cna-image-published to each appliance
+        if: steps.creds.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           OWNER: ${{ github.repository_owner }}

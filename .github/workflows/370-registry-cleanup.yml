@@ -35,6 +35,13 @@ env:
 
 jobs:
   cleanup:
+    # Deleting tags needs a personal-account PAT: org access tokens, and the
+    # org-scoped token the keyless OIDC login issues, cannot manage tags through
+    # the Hub API. Until DOCKERHUB_PERSONAL_USERNAME (variable) and
+    # DOCKERHUB_PERSONAL_TOKEN (secret) exist, the weekly schedule is skipped
+    # rather than failing every Monday; a manual dispatch still runs and fails
+    # loudly with the missing-credential error below.
+    if: github.event_name == 'workflow_dispatch' || vars.DOCKERHUB_PERSONAL_USERNAME != ''
     # GitHub-hosted, not self-hosted: hub.docker.com (the web/API domain used
     # here for tag listing + deletion) sits behind bot/WAF protection that
     # 403s requests from the VPS's IP before auth even runs — confirmed via

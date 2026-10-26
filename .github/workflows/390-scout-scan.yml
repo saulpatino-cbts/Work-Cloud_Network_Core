@@ -1,0 +1,96 @@
+name: "390 · Scout Scan (published images)"
+
+# Standalone, NON-BLOCKING vulnerability report for the images already published
+# to Docker Hub. 200-build-images runs NO vulnerability scan (Docker Scout's
+# backend needs a Scout-entitled identity, which its keyless OIDC login does not
+# have), so this workflow is the only CVE visibility over the published images:
+# it reports the CVEs they carry so base-image / OS-package remediation can be
+# tracked and prioritised over time. It does not gate a release.
+#
+# It never fails the build pipeline. By default it reports (job summary + logs);
+# set the `fail_on_critical` input to true in a manual run if you want an
+# explicit red/green signal for a remediation push.
+#
+# Auth is keyless OIDC, exactly like 200-build-images (no stored token).
+#
+# UNVERIFIED: this file has never run (a workflow_dispatch/schedule workflow must
+# exist on the default branch first), and the Scout step below is continue-on-
+# error, so an entitlement rejection leaves the job green with an empty report.
+# Read the step log after the first run; see TODO.md T-719.
+
+on:
+  schedule:
+    # Mondays 07:00 UTC — a weekly freshness check against new advisories.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      fail_on_critical:
+        description: "Exit non-zero if any fixable CRITICAL CVE is found (for a remediation push). Default: report only."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scout CVE report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write  # keyless Docker Hub OIDC login
+    env:
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floating `*-latest` tags each image publishes (see 200-build-images
+        # tag-images). The CLI image uses the bare `latest` tag.
+        tag: [latest, api-latest, web-latest, worker-latest, migrator-latest]
+    steps:
+      - name: Validate Docker Hub namespace
+        run: |
+          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
+            echo "::error::DOCKERHUB_NAMESPACE variable is required."
+            exit 1
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+          # Default is 300 s, shorter than a slow scan: a pull after that fails with
+          # "401 incorrect username or password".
+          DOCKERHUB_OIDC_EXPIREIN: "3600"
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_NAMESPACE }}
+          # No `scope`: a scoped login is written to the Buildx config and is
+          # invisible to everything that is not Buildx. The Scout step below pulls
+          # the image itself, not through Buildx, so a scoped credential would give
+          # it none and the private repository would answer 401. This job runs no
+          # Buildx build, so there is no public helper-image pull to protect.
+
+      # Report fixable critical/high CVEs for this published tag.
+      #
+      # continue-on-error: this workflow authenticates with the same keyless OIDC
+      # identity as 200-build-images, and Docker Scout's backend may reject it
+      # with "user githubactions not entitled to use Docker Scout" — Scout
+      # entitlement is tied to a Docker account/subscription, which the ephemeral
+      # OIDC identity does not carry. If that happens, this step reports the
+      # entitlement error in its log and the job stays green rather than becoming
+      # a permanently-red check. If/when a Scout-entitled identity is wired here,
+      # remove continue-on-error so the report is authoritative.
+      - name: "Docker Scout — report CVEs (${{ matrix.tag }})"
+        continue-on-error: true
+        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84  # v1.27.0
+        with:
+          command: cves
+          image: registry://docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna:${{ matrix.tag }}
+          organization: ${{ env.DOCKERHUB_NAMESPACE }}
+          only-severities: critical,high
+          only-fixed: true
+          exit-code: ${{ inputs.fail_on_critical == true }}
+          summary: true

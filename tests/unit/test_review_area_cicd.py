@@ -178,8 +178,8 @@ def test_all_workflow_files_parse_as_yaml():
     """9.5 YAML-parse check reproduced: every real workflow file parses.
 
     Guards against a future 9.1/9.3-style edit reintroducing a YAML break. The
-    core keeps only the build/test/release/registry workflows — the deploy and
-    operations workflows moved to the appliance repositories (TODO.md T-504).
+    core keeps only the build/test/release/registry/scan workflows — the deploy
+    and operations workflows moved to the appliance repositories (TODO.md T-504).
     """
     import pathlib
 
@@ -192,6 +192,7 @@ def test_all_workflow_files_parse_as_yaml():
         "300-test-codebase.yml",
         "310-release-version.yml",
         "370-registry-cleanup.yml",
+        "390-scout-scan.yml",
     }
     for path in files:
         # yaml.safe_load raises on malformed YAML; a clean parse is the assertion.

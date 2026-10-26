@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Sign one published image digest and attach its SLSA provenance as a cosign
 # attestation (TODO.md T-703). Called by 200-build-images.yml once the image has
-# passed Docker Scout (and, for web, the smoke test) — always by digest, never
-# by tag:
+# been built and pushed (and, for web, smoke-tested) — always by digest, never
+# by tag. cosign and `docker buildx imagetools` need Docker CLI registry
+# credentials (a global `docker login`), not just the Buildx-scoped login:
 #
 #   scripts/ci/sign_image.sh docker.io/<namespace>/cna@sha256:<64>
 #
@@ -54,6 +55,14 @@ if ! jq -e '
       else empty end
     ' "$WORK/provenance.json" > "$WORK/predicate.json"; then
   echo "::error::No BuildKit provenance found on ${REF} (is provenance: true set on its build step?)." >&2
+  exit 1
+fi
+# The appliances verify `slsaprovenance02` and read predicate.builder.id. BuildKit
+# >= 0.28 defaults to SLSA v1 (predicate.runDetails.builder.id), so 200 pins
+# `provenance: version=v0.2` on every build step. If that pin is ever lost, stop
+# here with the real cause rather than attest a v1 predicate under the v0.2 type.
+if jq -e 'has("runDetails")' "$WORK/predicate.json" > /dev/null; then
+  echo "::error::${REF} carries a SLSA v1 provenance predicate (runDetails.builder.id) but the appliances verify slsaprovenance02; set 'provenance: version=v0.2' on its build step." >&2
   exit 1
 fi
 BUILDER_ID="$(jq -r '.builder.id // empty' "$WORK/predicate.json")"

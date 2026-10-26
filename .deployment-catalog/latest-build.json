@@ -1,20 +1,20 @@
 {
-  "sha_tag": "sha-9ba9708",
-  "commit": "9ba970836077d4ab2ea63d24d08646da2cbd351d",
-  "built_at": "2026-10-26T12:44:15Z",
-  "run_id": "40323754545",
+  "sha_tag": "sha-ffed595",
+  "commit": "ffed59545926c41c87c0e34c2b7f39e0fae3be04",
+  "built_at": "2026-10-26T13:16:41Z",
+  "run_id": "40328443275",
   "images": {
-    "cli":      "docker.io/hybridcloudworks/cna:sha-9ba9708",
-    "api":      "docker.io/hybridcloudworks/cna:api-sha-9ba9708",
-    "worker":   "docker.io/hybridcloudworks/cna:worker-sha-9ba9708",
-    "web":      "docker.io/hybridcloudworks/cna:web-sha-9ba9708",
-    "migrator": "docker.io/hybridcloudworks/cna:migrator-sha-9ba9708"
+    "cli":      "docker.io/hybridcloudworks/cna:sha-ffed595",
+    "api":      "docker.io/hybridcloudworks/cna:api-sha-ffed595",
+    "worker":   "docker.io/hybridcloudworks/cna:worker-sha-ffed595",
+    "web":      "docker.io/hybridcloudworks/cna:web-sha-ffed595",
+    "migrator": "docker.io/hybridcloudworks/cna:migrator-sha-ffed595"
   },
   "digests": {
-    "cli":      "docker.io/hybridcloudworks/cna@sha256:c3db2a958297a55607754edbe238e1c55e5f15b9aa4d4d4d4252fb286b2a16a4",
-    "api":      "docker.io/hybridcloudworks/cna@sha256:2a2282885b5dd63911b0926f45c5459066df46f36aa7a1375e33d8c04f1bebf4",
-    "worker":   "docker.io/hybridcloudworks/cna@sha256:75d8d8faa7bcd89aa9f763779dcc16ec7d31334bbae889f14202321f37f377fc",
-    "web":      "docker.io/hybridcloudworks/cna@sha256:a5e80e513bd26c2f38ade493161ebeb9e38b54ac1e975317f9de98b840a3c560",
-    "migrator": "docker.io/hybridcloudworks/cna@sha256:5005483495f4cf6ad1459243a076dfe3d18cfbb5b0f41b535b917b2b4580f4cc"
+    "cli":      "docker.io/hybridcloudworks/cna@sha256:09b889814786cf06db06205fffff330fde910559a88804c9f0a220c2d46b7024",
+    "api":      "docker.io/hybridcloudworks/cna@sha256:ff29b5c8c5fa96233e70a4c68445ab00f61d116debaa926ea3f0eb81c4ec8bc1",
+    "worker":   "docker.io/hybridcloudworks/cna@sha256:1958976bc96b5b7a166ef5de5e6d441c2788c119c1e88c823e7afecf1b093b78",
+    "web":      "docker.io/hybridcloudworks/cna@sha256:d272199713e226856461892968f70229dce004a07f3e47cacc4fc841b9b578dd",
+    "migrator": "docker.io/hybridcloudworks/cna@sha256:408ce5378515f32c8f4e30f3f1158dac1999e58db801d832f37975c782d9646e"
   }
 }

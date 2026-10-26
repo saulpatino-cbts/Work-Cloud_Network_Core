@@ -2,8 +2,8 @@ name: "200 · Build Container Images"
 
 # Runs on GitHub-hosted runners (ubuntu-latest). Nothing here needs a private
 # network or cloud credentials: images build with buildx (GitHub Actions cache),
-# push to Docker Hub with the repository secret, and the manifest commit and
-# appliance dispatch use GitHub tokens. The self-hosted runner the original
+# push to Docker Hub with a keyless OIDC login (nothing stored), and the manifest
+# commit and appliance dispatch use GitHub tokens. The self-hosted runner the original
 # repository used is retired; a fresh clone of this repository needs no runner.
 #
 # First build in a new repository (REVIEW.md R-013 step 4): GitHub registers a
@@ -52,10 +52,11 @@ on:
       - .github/workflows/200-build-images.yml
   workflow_dispatch:
 
-# Never cancel an in-flight build. Tags are created all-or-nothing in the final
-# `tag-images` job, but a cancellation while that job is mid-loop would still
-# leave a partial tagged set on Docker Hub (e.g. `api-latest` moved,
-# `web-latest` not) that the appliances' `*-latest` fallbacks would deploy.
+# Never cancel an in-flight build. The final `tag-images` job tags one component
+# at a time (it is not atomic), so a cancellation while it is mid-loop would leave
+# a partial tagged set on Docker Hub (e.g. `api-latest` moved, `web-latest` not)
+# that the appliances' `*-latest` fallbacks would deploy; re-running the failed
+# jobs completes the set (TODO.md T-722).
 # Queued runs for the same ref still collapse to the newest one, so a burst of
 # Dependabot merges costs at most one superseded full build, and runs finish in
 # push order (the queued run starts only after the in-flight one completes), so
@@ -109,7 +110,7 @@ jobs:
             key: cli
             file: Dockerfile
             raw_tag: latest
-            sha_prefix: ""
+            sha_prefix: sha-
           - name: API
             key: api
             file: apps/cna-api/Dockerfile
@@ -638,8 +639,19 @@ jobs:
           git commit -m "chore(build): update latest-build manifest to sha-$(echo '${{ github.sha }}' | cut -c1-7) [skip ci]"
           # Pull rebase in case main moved while builds were running (common in parallel jobs).
           # -X theirs: during conflicts, prefer our new manifest over whatever is on remote.
-          git pull --rebase --autostash -X theirs origin main
-          git push
+          # Dependabot merges arrive in bursts, so a push can lose the race between the
+          # pull and the push: retry a bounded number of times instead of failing a run
+          # whose images are already tagged.
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash -X theirs origin main
+            if git push; then
+              exit 0
+            fi
+            echo "::warning::Pushing the manifest was rejected (attempt ${attempt}/3); main moved, retrying."
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the manifest commit after 3 attempts."
+          exit 1
 
   # Tell each appliance repository that a new image set exists so it can
   # auto-update dev and open the prod update request (its 230-image-update
@@ -678,6 +690,10 @@ jobs:
       - name: Generate GitHub App token (appliance repositories only)
         id: app-token
         if: steps.creds.outputs.present == 'true'
+        # Present but wrong credentials (a revoked key, a numeric App ID where
+        # `client-id` is expected) must not turn the run red either: the dispatch
+        # is a fast path and the next step reports the skip.
+        continue-on-error: true
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
         with:
           client-id: ${{ secrets.GH_APP_ID }}
@@ -685,8 +701,12 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ vars.APPLIANCE_REPOS }}
 
+      - name: Report a skipped dispatch
+        if: steps.creds.outputs.present == 'true' && steps.app-token.outcome != 'success'
+        run: echo "::warning::Could not mint the GitHub App token (check GH_APP_ID, which must be the App's client ID, and GH_APP_PRIVATE_KEY); the dispatch is skipped and the appliances pick the images up from the committed manifest on their next poll."
+
       - name: Send cna-image-published to each appliance
-        if: steps.creds.outputs.present == 'true'
+        if: steps.app-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           OWNER: ${{ github.repository_owner }}

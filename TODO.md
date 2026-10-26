@@ -2158,4 +2158,14 @@ branch iteration is done. Also: `tag-images` (unscoped login, `imagetools create
 `publish-build-manifest` and `notify-appliances` have not executed since the OIDC change, and only
 1 of 54 runs of `200` since 2026-09-18 has ever succeeded (the 2026-10-26 branch run), so no
 appliance has verified a signature from this repository's `main` identity. Watch the first push to
-main end to end, then confirm an appliance's `210`/`220` verifies a real signature.
+main end to end, then confirm an appliance's `210`/`220` verifies a real signature. Before the first
+main publish, confirm in Docker Hub (the OIDC connection's rules and its Failures table) that the rule
+accepts `repo:saulpatino-cbts/Work-Cloud_Network_Core:ref:refs/heads/main`: only a branch has ever
+authenticated. If it does not, every main login answers 401 and the run fails safe (nothing tagged).
+
+### T-722 — Make `tag-images` safer (found by the independent review of PR #90)
+`tag-images` tags one component at a time with no retry, so a Hub 5xx/429 mid-loop leaves a partial
+set (re-running the failed jobs completes it). Tag every `*-sha-<7>` first and the floating `*-latest`
+last, retry transient errors, then compare each tag's resolved digest with the recorded one. Also: a
+re-run of an old failed `main` run rebuilds that old commit and would move `*-latest` and the manifest
+backwards; skip publication when `github.sha` is no longer the tip of `main`.

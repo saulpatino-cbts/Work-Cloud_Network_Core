@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Sign one published image digest and attach its SLSA provenance as a cosign
 # attestation (TODO.md T-703). Called by 200-build-images.yml once the image has
-# passed Docker Scout (and, for web, the smoke test) — always by digest, never
-# by tag:
+# been built and pushed (and, for web, smoke-tested) — always by digest, never
+# by tag. cosign and `docker buildx imagetools` need Docker CLI registry
+# credentials (a global `docker login`), not just the Buildx-scoped login:
 #
 #   scripts/ci/sign_image.sh docker.io/<namespace>/cna@sha256:<64>
 #

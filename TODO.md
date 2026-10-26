@@ -2134,7 +2134,7 @@ uses), behind the same `dry_run` input.
 not entitled to use Docker Scout"). The stand-in `390-scout-scan` had never run and its one step was
 `continue-on-error`, so an entitlement rejection would have left the job green with an empty report:
 no published image was CVE-checked anywhere.
-- **Status:** the visibility gap is closed in code, **not yet in practice** — see the OPEN item below.
+- **Status:** done 2026-10-26, with one item still open (the weekly `schedule` trigger, below).
   `390-scan-images` (Anchore Grype through `anchore/scan-action`; no Docker entitlement, no stored
   credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
   `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
@@ -2155,15 +2155,19 @@ no published image was CVE-checked anywhere.
   HIGH/CRITICAL findings in the published `cli`, `api` and `worker` images (web and migrator were
   clean): Python 3.14.7 and OpenSSL 3.5.7-1~deb13u2 in the pinned `python:3.14-slim` base, cleared
   by bumping that digest.
-- **OPEN — still unverified until the first run on main**, because a `workflow_run`, `schedule` or
-  `workflow_dispatch` workflow must exist on the default branch first: (1) Docker Hub accepting the
-  OIDC login for a `workflow_run` or `schedule` token (only a `push` token has been exchanged);
-  (2) the SARIF upload: that code scanning accepts it and shows one category per image
-  (`grype-<key>`); (3) the `workflow_run` wiring: a successful main run of `200` starts exactly one
-  scan, and a branch dispatch of `200` starts none. After merge, dispatch `390` from main once; the
-  next main publish of `200` should then start a scan by itself. If a run ever finds the placeholder
-  manifest, or one without `digests{}`, it skips on the schedule and fails on `workflow_run` or
-  dispatch with "Nothing to scan".
+- **Verified on main, 2026-10-26** by a dispatch (run 40329327255) and by the run the
+  `workflow_run` trigger started itself after a `200` publish (run 40330428668): the trigger wiring (a
+  successful main run of `200` starts one scan), Docker Hub's OIDC rule accepting the `workflow_run`
+  token, the SARIF upload (one `grype-<key>` category per image in code scanning) and the verdicts.
+  First scan of the rebuilt images: `cli`, `api` and `worker` have 0 fixable findings at HIGH or
+  above (2 fixable below HIGH; `api` 428 findings, down from 474), `web` and `migrator` 0 fixable.
+- **OPEN:** the weekly `schedule` trigger has not fired yet (first due Monday 2026-11-02 07:00 UTC);
+  check that its token is accepted by Docker Hub like the other two. If a run ever finds the
+  placeholder manifest, or one without `digests{}`, it skips on the schedule and fails on
+  `workflow_run` or dispatch with "Nothing to scan".
+- Owner to weigh: code scanning now lists about 430 open alerts (11 critical, 130 high), all findings
+  with no fix available, which the policy deliberately ignores. Uploading only fixable findings (set
+  `only-fixed` on the SARIF pass) would leave the alert list short and actionable.
 - The cosign output shape those runs printed is `attestation shape: dsse-envelope`, which matters for
   the appliances: see T-723.
 - **Maintenance:** `GRYPE_VERSION` in `390-scan-images.yml` (v0.118.0, the default of the pinned
@@ -2193,21 +2197,21 @@ A feature-branch run authenticated to Docker Hub and pushed (by digest, plus cos
 the connection's ruleset does not restrict the token to `refs/heads/main`. The `github.ref ==
 'refs/heads/main'` guard on `tag-images` is a workflow control, not a registry one: a branch that
 edits the workflow can bypass it. Constrain the connection (ref or a protected environment) once
-branch iteration is done. Also: `tag-images` (unscoped login, `imagetools create`),
-`publish-build-manifest` and `notify-appliances` have not executed since the OIDC change, and only
-1 of 54 runs of `200` since 2026-09-18 has ever succeeded (the 2026-10-26 branch run), so no
-appliance has verified a signature from this repository's `main` identity. Watch the first push to
-main end to end, then confirm an appliance's `210`/`220` verifies a real signature. Before the first
-main publish, confirm in Docker Hub (the OIDC connection's rules and its Failures table) that the rule
-accepts `repo:saulpatino-cbts/Work-Cloud_Network_Core:ref:refs/heads/main`: only a branch has ever
-authenticated. If it does not, every main login answers 401 and the run fails safe (nothing tagged).
+branch iteration is done. Done 2026-10-26: the first six `main` runs of `200` all succeeded end to
+end (`tag-images`, `publish-build-manifest`; `notify-appliances` warns about the missing App
+secrets), so the connection's rule accepts `refs/heads/main` as well as branches. Still open: (1)
+constrain the connection to `main` in the Docker Hub console; (2) have an appliance's `210`/`220`
+verify a real signature from this repository (`390` verifies all five digests with cosign v3.1.3;
+see T-723 for why the AWS script cannot).
 
 ### T-722 — Make `tag-images` safer (found by the independent review of PR #90)
 `tag-images` tags one component at a time with no retry, so a Hub 5xx/429 mid-loop leaves a partial
 set (re-running the failed jobs completes it). Tag every `*-sha-<7>` first and the floating `*-latest`
 last, retry transient errors, then compare each tag's resolved digest with the recorded one. Also: a
 re-run of an old failed `main` run rebuilds that old commit and would move `*-latest` and the manifest
-backwards; skip publication when `github.sha` is no longer the tip of `main`.
+backwards; skip publication when `github.sha` is no longer the tip of `main`. Two CLI tags from the
+runs before the `sha-` prefix fix remain in the registry (`cna:3cb68dc`, `cna:18b8752`); `370` cannot
+prune them until it has a personal PAT (REVIEW.md R-013), so delete them by hand or let `370` do it then.
 
 ### T-723 — The AWS appliance's `verify_image_signature.sh` cannot parse cosign's attestation output
 Observed on 2026-10-26 (the `390` branch probe, run 40327208460, cosign v3.1.3):

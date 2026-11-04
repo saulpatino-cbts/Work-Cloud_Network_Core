@@ -120,5 +120,6 @@ def test_invalid_provider_config_fails_before_decrypt(monkeypatch, config):
         pytest.fail("invalid provider config must fail before decrypt")
 
     monkeypatch.setattr(chat_router, "decrypt", fail_if_called)
+    ciphertext = "stored-ciphertext"
     with pytest.raises(chat_router.ChatConfigError, match="CNA_BYO_AI_PROVIDERS"):
-        chat_router._load_byo_credentials({"ai.byo.anthropic.apiKey": "stored-ciphertext"}, ())
+        chat_router._load_byo_credentials({"ai.byo.anthropic.apiKey": ciphertext}, ())

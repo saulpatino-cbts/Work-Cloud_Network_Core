@@ -60,6 +60,28 @@ export function DeliverableProgress({ deliverableId }: { deliverableId: string }
     );
   }
 
+  if (status === "COMPLETED") {
+    return (
+      <span className="rounded border border-teal-800/40 bg-teal-50 dark:bg-teal-900/20 px-2 py-1 text-xs font-medium text-teal-700 dark:text-teal-300">
+        Generation complete
+      </span>
+    );
+  }
+
+  if (steps.length === 0) {
+    return (
+      <div className="flex items-center gap-2" aria-live="polite">
+        <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-teal-700 dark:text-teal-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
+          Generating assessment…
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2" aria-live="polite">
       <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-teal-700 dark:text-teal-400" fill="none" viewBox="0 0 24 24">

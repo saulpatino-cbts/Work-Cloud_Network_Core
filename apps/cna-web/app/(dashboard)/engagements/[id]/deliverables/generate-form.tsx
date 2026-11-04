@@ -3,6 +3,7 @@
 import { useActionState, useRef } from "react";
 import { generateDeliverable, generateAllAssessments } from "./actions";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { DeliverableProgress } from "./deliverable-progress";
 
 const ASSESSMENT_TYPES = [
   {
@@ -165,16 +166,20 @@ export function GenerateDeliverableForm({ engagementId }: { engagementId: string
           )}
           {allState?.success && (
             <p className="mb-3 rounded-xl border border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-4 py-3 text-sm text-teal-700 dark:text-teal-300">
-              All assessments generated —{" "}
-              <strong className="text-teal-800 dark:text-teal-200">{allState.count}</strong> of 5 created successfully.
+              All {allState.count} assessments were queued for background generation.
             </p>
           )}
+          {allState?.deliverableIds?.map((id) => (
+            <div key={id} className="mb-2">
+              <DeliverableProgress deliverableId={id} />
+            </div>
+          ))}
 
           <div className="flex items-center justify-between gap-4 rounded-xl border border-navy-700/40 bg-navy-50 dark:bg-navy-800/20 px-4 py-3">
             <div>
               <p className="text-xs font-semibold text-navy-500 dark:text-navy-200">Generate All Assessments</p>
               <p className="mt-0.5 text-xs text-navy-500">
-                Runs all 5 types in parallel. Each is auto-named and saved. May take several minutes.
+                Queues all 5 types in parallel. Each is auto-named and saved as it completes.
               </p>
             </div>
             <SubmitButton

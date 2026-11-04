@@ -79,8 +79,7 @@ export default async function AssessmentsPage({ params }: PageProps) {
 
   const { deliverables, findings } = engagement;
 
-  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage
-  // (Azure-only today), so disable generation and downloads on an AWS appliance.
+  // Generated assessment blobs use the configured Azure or S3 backend.
   const storageAvailable = isBlobStorageAvailable();
 
   let needsResync = false;

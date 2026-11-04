@@ -60,8 +60,7 @@ export default async function DocumentsPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  // CR-CORE-01 / AWS-F-04: document upload needs blob storage (Azure-only
-  // today), so hide the upload form on an AWS appliance.
+  // Hide upload controls when the selected Azure or S3 backend is unconfigured.
   const storageAvailable = isBlobStorageAvailable();
 
   // hasTopology is needed to show the "Generate from live data" button on templates

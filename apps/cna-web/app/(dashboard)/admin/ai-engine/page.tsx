@@ -72,7 +72,7 @@ const MODE_COPY = {
   "byo-api": {
     title: "Bring-your-own API",
     blurb:
-      "This appliance was deployed with ai_mode = byo-api: no cloud AI service is provisioned. Paste an Anthropic and/or OpenAI API key below — these are the only secrets entered in the app, stored encrypted in the database. With one key that provider is used automatically; with both, the toggle chooses.",
+      "This appliance was deployed with ai_mode = byo-api: no cloud AI service is provisioned. Only providers enabled by the appliance configuration are shown. Their API keys are the only provider secrets entered in the app and are stored encrypted in the database.",
   },
 } as const;
 
@@ -120,9 +120,11 @@ export default async function AiEnginePage() {
               <div>
                 <h2 className="text-xl font-bold text-navy-900 dark:text-white">Active provider</h2>
                 <p className="text-sm text-navy-500 dark:text-navy-300">
-                  {state.byoToggleEnabled
-                    ? "Both keys are present — choose which provider answers."
-                    : "Enabled once both an Anthropic and an OpenAI key are saved. With a single key, that provider is used automatically."}
+                  {state.engines.length === 1
+                    ? "The appliance configuration enables one provider. Its key is used automatically when saved."
+                    : state.byoToggleEnabled
+                      ? "Both enabled provider keys are present — choose which provider answers."
+                      : "The provider switch is enabled once a key is saved for each enabled provider. A single configured key is used automatically."}
                 </p>
               </div>
               {!isAdmin && (

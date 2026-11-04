@@ -7,8 +7,8 @@
  * family is allowed:
  *   saas     — the cloud-native engine for this appliance's cloud:
  *              azure-openai on Azure, bedrock on AWS.
- *   byo-api  — bring-your-own: anthropic and/or openai, keyed by an API key
- *              the admin entered on the AI Engine page.
+ *   byo-api  — only Anthropic/OpenAI IDs explicitly allowed by
+ *              CNA_BYO_AI_PROVIDERS, keyed by an admin-entered API key.
  */
 
 export type AiEngineId = "azure-openai" | "bedrock" | "anthropic" | "openai";
@@ -28,9 +28,13 @@ export const SAAS_ENGINE_BY_CLOUD: Readonly<Record<ApplianceCloud, AiEngineId>> 
   aws: "bedrock",
 };
 
-// Ordered: the first entry is the deterministic tie-break when both BYO keys
-// are configured and neither the stored setting nor the env default applies.
+// Complete provider ID set. The configured JSON array order supplies the
+// deterministic tie-break when multiple enabled keys are configured.
 export const BYO_ENGINES: readonly ByoProvider[] = ["anthropic", "openai"];
+export const BYO_AI_PROVIDERS_ENV = "CNA_BYO_AI_PROVIDERS";
+
+const BYO_AI_PROVIDERS_ERROR =
+  `${BYO_AI_PROVIDERS_ENV} must be a non-empty JSON array of unique provider IDs: anthropic, openai.`;
 
 export function clean(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? "";
@@ -54,8 +58,61 @@ export function isByoProvider(value: string): value is ByoProvider {
   return (BYO_ENGINES as readonly string[]).includes(value);
 }
 
-export function allowedEngines(mode: AiMode, cloud: ApplianceCloud): readonly AiEngineId[] {
-  return mode === "byo-api" ? BYO_ENGINES : [SAAS_ENGINE_BY_CLOUD[cloud]];
+export class AiEngineConfigurationError extends Error {}
+
+/** Parse the strict deploy-time BYO provider allowlist without echoing its value. */
+export function parseByoAiProviders(value: string | null | undefined): ByoProvider[] {
+  if (!value?.trim()) throw new AiEngineConfigurationError(BYO_AI_PROVIDERS_ERROR);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new AiEngineConfigurationError(BYO_AI_PROVIDERS_ERROR);
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new AiEngineConfigurationError(BYO_AI_PROVIDERS_ERROR);
+  }
+
+  const providers: ByoProvider[] = [];
+  for (const item of parsed) {
+    if (typeof item !== "string" || !isByoProvider(item) || providers.includes(item)) {
+      throw new AiEngineConfigurationError(BYO_AI_PROVIDERS_ERROR);
+    }
+    providers.push(item);
+  }
+  return providers;
+}
+
+export function validateByoAiProviders(providers: readonly string[]): ByoProvider[] {
+  if (providers.length === 0 || providers.some((provider) => !isByoProvider(provider)) ||
+      new Set(providers).size !== providers.length) {
+    throw new AiEngineConfigurationError(BYO_AI_PROVIDERS_ERROR);
+  }
+  return [...providers] as ByoProvider[];
+}
+
+export function assertByoProviderAllowed(
+  provider: ByoProvider,
+  providers: readonly ByoProvider[],
+): void {
+  if (!providers.includes(provider)) {
+    throw new AiEngineConfigurationError(
+      `${provider} is not enabled by ${BYO_AI_PROVIDERS_ENV}.`,
+    );
+  }
+}
+
+export function configuredByoAiProviders(): ByoProvider[] {
+  return parseByoAiProviders(process.env[BYO_AI_PROVIDERS_ENV]);
+}
+
+export function allowedEngines(
+  mode: AiMode,
+  cloud: ApplianceCloud,
+  byoProviders: readonly ByoProvider[] = [],
+): readonly AiEngineId[] {
+  return mode === "byo-api" ? byoProviders : [SAAS_ENGINE_BY_CLOUD[cloud]];
 }
 
 export class AiEngineUnavailableError extends Error {}
@@ -63,6 +120,7 @@ export class AiEngineUnavailableError extends Error {}
 export type ResolveEngineInput = {
   mode: AiMode;
   cloud: ApplianceCloud;
+  byoProviders: readonly ByoProvider[];
   stored: string | null | undefined;
   envDefault: string | null | undefined;
   configured: ReadonlySet<AiEngineId>;
@@ -73,19 +131,30 @@ export type ResolveEngineInput = {
  *
  * saas:    the single engine allowed for this cloud; stored/env preferences
  *          are irrelevant. Configuration is the caller's check.
- * byo-api: among configured BYO engines — one ⇒ it wins outright (stored
- *          setting ignored); two ⇒ stored, then env default, then anthropic;
+ * byo-api: among explicitly allowed and configured BYO engines — one ⇒ it wins
+ *          outright (stored setting ignored); many ⇒ stored, then env default,
+ *          then the first allowlisted provider;
  *          none ⇒ AiEngineUnavailableError.
  * A stored value from another mode is skipped, never fatal.
  */
 export function resolveEngine(input: ResolveEngineInput): AiEngineId {
-  const allowed = allowedEngines(input.mode, input.cloud);
+  const allowed =
+    input.mode === "byo-api"
+      ? allowedEngines(input.mode, input.cloud, validateByoAiProviders(input.byoProviders))
+      : allowedEngines(input.mode, input.cloud);
   if (input.mode === "saas") return allowed[0];
+
+  const configuredDefault = clean(input.envDefault);
+  if (configuredDefault && !allowed.includes(configuredDefault as AiEngineId)) {
+    throw new AiEngineConfigurationError(
+      `CNA_AI_ENGINE_DEFAULT must name a provider enabled by ${BYO_AI_PROVIDERS_ENV}.`,
+    );
+  }
 
   const candidates = allowed.filter((engine) => input.configured.has(engine));
   if (candidates.length === 0) {
     throw new AiEngineUnavailableError(
-      "No bring-your-own AI API key is configured. Add an Anthropic or OpenAI key on the admin AI Engine page.",
+      "No enabled bring-your-own AI API key is configured. Add a key for a provider enabled by CNA_BYO_AI_PROVIDERS on the admin AI Engine page.",
     );
   }
   if (candidates.length === 1) return candidates[0];

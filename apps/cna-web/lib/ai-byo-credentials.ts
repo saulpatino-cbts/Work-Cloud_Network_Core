@@ -1,10 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
-import { decrypt, encrypt } from "@/lib/crypto";
-import { prisma } from "@/lib/prisma";
+import { decrypt, encrypt } from "./crypto";
+import { prisma } from "./prisma";
 
-import { BYO_ENGINES, clean, type ByoProvider } from "./ai-engine-rules";
+import {
+  AiEngineConfigurationError,
+  assertByoProviderAllowed,
+  clean,
+  configuredByoAiProviders,
+  normalizeAiMode,
+  type ByoProvider,
+} from "./ai-engine-rules";
 
 /**
  * Bring-your-own AI provider keys — the only secrets an admin enters in the
@@ -40,9 +47,16 @@ export const PROVIDER_LABELS: Readonly<Record<ByoProvider, string>> = {
   openai: "OpenAI",
 };
 
-const ALL_BYO_KEYS = BYO_ENGINES.flatMap((provider) =>
-  (["apiKey", "keyHint", "model"] as const).map((field) => byoSettingKey(provider, field)),
-);
+function allowedProviders(): ByoProvider[] {
+  if (normalizeAiMode(process.env.CNA_AI_MODE) !== "byo-api") {
+    throw new AiEngineConfigurationError("BYO API keys are unavailable in saas mode.");
+  }
+  return configuredByoAiProviders();
+}
+
+function assertProviderAllowed(provider: ByoProvider): void {
+  assertByoProviderAllowed(provider, allowedProviders());
+}
 
 export function emptyByoPresence(): ByoCredentialPresence {
   return {
@@ -53,14 +67,18 @@ export function emptyByoPresence(): ByoCredentialPresence {
 
 /** Presence + hint only — never decrypts. Safe to feed to the admin page. */
 export async function getByoCredentialPresence(): Promise<ByoCredentialPresence> {
+  const providers = allowedProviders();
+  const keys = providers.flatMap((provider) =>
+    (["apiKey", "keyHint", "model"] as const).map((field) => byoSettingKey(provider, field)),
+  );
   const rows = await prisma.appSetting.findMany({
-    where: { key: { in: ALL_BYO_KEYS } },
+    where: { key: { in: keys } },
     select: { key: true, value: true },
   });
   const byKey = new Map(rows.map((row) => [row.key, row.value]));
 
   const presence = emptyByoPresence();
-  for (const provider of BYO_ENGINES) {
+  for (const provider of providers) {
     presence[provider] = {
       configured: Boolean(clean(byKey.get(byoSettingKey(provider, "apiKey")))),
       hint: clean(byKey.get(byoSettingKey(provider, "keyHint"))) || null,
@@ -72,6 +90,7 @@ export async function getByoCredentialPresence(): Promise<ByoCredentialPresence>
 
 /** Server-only: the plaintext key for a transport call. */
 export async function getDecryptedByoApiKey(provider: ByoProvider): Promise<string | null> {
+  assertProviderAllowed(provider);
   const row = await prisma.appSetting.findUnique({
     where: { key: byoSettingKey(provider, "apiKey") },
     select: { value: true },
@@ -88,6 +107,7 @@ export class ByoKeyRejectedError extends Error {}
  * Only the HTTP status is reported back — never the key.
  */
 export async function probeByoApiKey(provider: ByoProvider, apiKey: string): Promise<void> {
+  assertProviderAllowed(provider);
   try {
     if (provider === "anthropic") {
       await new Anthropic({ apiKey, maxRetries: 0 }).models.list({ limit: 1 });
@@ -111,6 +131,7 @@ export async function setByoApiKey(
   updatedBy?: string,
   options: { probe?: boolean } = {},
 ): Promise<void> {
+  assertProviderAllowed(provider);
   const key = apiKey.trim();
   if (!key) throw new Error("API key must not be empty.");
   if (options.probe ?? true) await probeByoApiKey(provider, key);
@@ -149,6 +170,7 @@ export async function setByoModel(
     await prisma.appSetting.deleteMany({ where: { key } });
     return;
   }
+  assertProviderAllowed(provider);
   await prisma.appSetting.upsert({
     where: { key },
     create: { key, value, updatedBy },

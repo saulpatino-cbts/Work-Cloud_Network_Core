@@ -15,17 +15,19 @@ ids, same env vars, same resolution rules. The appliance's deploy-time AI mode
               OpenAI via managed identity — DefaultAzureCredential bearer
               token, same scope as lib/ai-engine.ts getAzureClient()), or
               ``bedrock`` on AWS (Bedrock Converse via the task role).
-  byo-api   — bring-your-own provider: ``anthropic`` and/or ``openai``,
+  byo-api   — bring-your-own providers selected by the explicit
+              ``CNA_BYO_AI_PROVIDERS`` JSON allowlist (Anthropic/OpenAI),
               authenticated with an API key the admin entered on the AI Engine
               page. Keys live AES-256-GCM encrypted in the AppSetting table
               (see cna.core.credential_crypto) and are passed in already
               decrypted by the caller (apps/cna-api/routers/chat.py).
 
-Resolution (byo-api): exactly one key configured → that provider is active
+Resolution (byo-api): only allowlisted keys can be considered. Exactly one
+key configured → that provider is active
 regardless of the stored setting; both configured → the stored
-``ai.activeEngine`` wins, then ``CNA_AI_ENGINE_DEFAULT``, then ``anthropic``;
-none → ChatConfigError (503). A stored value from another mode is skipped,
-never fatal.
+``ai.activeEngine`` wins, then an allowlisted ``CNA_AI_ENGINE_DEFAULT``, then
+the first allowlisted provider; none → ChatConfigError (503). An incompatible
+default is a configuration error. A stored value from another mode is skipped.
 
 Transports use the official SDKs (``anthropic``, ``openai``, ``boto3``) with
 their own retries disabled so tenacity — already a platform dependency,
@@ -35,6 +37,7 @@ on httpx to keep its wire format byte-identical to the web tier.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -67,9 +70,14 @@ MODE_BYO_API = "byo-api"
 CLOUD_AZURE = "azure"
 CLOUD_AWS = "aws"
 SAAS_ENGINE_BY_CLOUD = {CLOUD_AZURE: ENGINE_AZURE_OPENAI, CLOUD_AWS: ENGINE_BEDROCK}
-# Ordered: the first entry is the deterministic tie-break when both are
-# configured and neither the stored setting nor the env default applies.
+# Complete provider ID set. Configured JSON array order supplies the
+# deterministic tie-break when multiple enabled keys are configured.
 BYO_ENGINES = (ENGINE_ANTHROPIC, ENGINE_OPENAI)
+BYO_AI_PROVIDERS_ENV = "CNA_BYO_AI_PROVIDERS"
+_BYO_AI_PROVIDERS_ERROR = (
+    f"{BYO_AI_PROVIDERS_ENV} must be a non-empty JSON array of unique provider IDs: "
+    "anthropic, openai."
+)
 
 DEFAULT_AZURE_DEPLOYMENT = "gpt-chat-latest"
 DEFAULT_AZURE_API_VERSION = "2024-12-01-preview"
@@ -105,7 +113,42 @@ _BOTO_TRANSIENT_CODES = {
 
 
 class ChatConfigError(Exception):
-    """Raised when no AI engine is configured. Routers map this to 503."""
+    """Raised when AI runtime configuration is invalid or no engine is configured."""
+
+
+def parse_byo_ai_providers(value: str | None) -> tuple[str, ...]:
+    """Parse the explicit, exact-ID BYO provider allowlist; never infer a default."""
+    if not value or not value.strip():
+        raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR) from None
+    if not isinstance(parsed, list) or not parsed:
+        raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
+    providers: list[str] = []
+    for provider in parsed:
+        if not isinstance(provider, str) or provider not in BYO_ENGINES or provider in providers:
+            raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
+        providers.append(provider)
+    return tuple(providers)
+
+
+def validate_byo_ai_providers(providers: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Validate an already-parsed provider set passed across an internal boundary."""
+    if (
+        not providers
+        or any(
+            not isinstance(provider, str) or provider not in BYO_ENGINES for provider in providers
+        )
+        or len(set(providers)) != len(providers)
+    ):
+        raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
+    return tuple(providers)
+
+
+def configured_byo_ai_providers() -> tuple[str, ...]:
+    return parse_byo_ai_providers(os.environ.get(BYO_AI_PROVIDERS_ENV))
 
 
 def _clean(value: str | None) -> str:
@@ -126,14 +169,25 @@ def resolve_appliance_cloud(value: str | None = None) -> str:
     return CLOUD_AWS if cloud == CLOUD_AWS else CLOUD_AZURE
 
 
-def allowed_engines(mode: str, cloud: str) -> tuple[str, ...]:
+def allowed_engines(
+    mode: str, cloud: str, byo_providers: tuple[str, ...] | None = None
+) -> tuple[str, ...]:
     """Engines the current mode permits — mirrors allowedEngines() in ai-engine.ts."""
     if mode == MODE_BYO_API:
-        return BYO_ENGINES
+        providers = (
+            configured_byo_ai_providers()
+            if byo_providers is None
+            else validate_byo_ai_providers(byo_providers)
+        )
+        return providers
     return (SAAS_ENGINE_BY_CLOUD[resolve_appliance_cloud(cloud)],)
 
 
-def engine_configured(engine: str, byo_keys: Mapping[str, str | None] | None = None) -> bool:
+def engine_configured(
+    engine: str,
+    byo_keys: Mapping[str, str | None] | None = None,
+    byo_providers: tuple[str, ...] | None = None,
+) -> bool:
     """Whether the engine can be used right now (parity with getAiEngineStatuses()
     configured flags). SaaS engines read env; BYO engines need a decrypted key."""
     if engine == ENGINE_AZURE_OPENAI:
@@ -143,7 +197,12 @@ def engine_configured(engine: str, byo_keys: Mapping[str, str | None] | None = N
             _clean(os.environ.get(BEDROCK_PROFILE_ENV)) or _clean(os.environ.get(BEDROCK_MODEL_ENV))
         )
     if engine in BYO_ENGINES:
-        return bool(_clean((byo_keys or {}).get(engine)))
+        providers = (
+            configured_byo_ai_providers()
+            if byo_providers is None
+            else validate_byo_ai_providers(byo_providers)
+        )
+        return engine in providers and bool(_clean((byo_keys or {}).get(engine)))
     return False
 
 
@@ -153,6 +212,7 @@ def resolve_engine(
     mode: str | None = None,
     cloud: str | None = None,
     configured: set[str] | frozenset[str] | None = None,
+    byo_providers: tuple[str, ...] | None = None,
 ) -> str:
     """Resolve the active engine id.
 
@@ -161,25 +221,34 @@ def resolve_engine(
     * saas — the single engine allowed for this cloud. Stored/env preferences
       are irrelevant (one engine per appliance); configuration is checked by
       the caller, which raises ChatConfigError when it is missing.
-    * byo-api — among the configured BYO engines: one ⇒ it wins outright;
-      two ⇒ stored AppSetting, then CNA_AI_ENGINE_DEFAULT, then the first of
-      BYO_ENGINES; none ⇒ ChatConfigError.
+    * byo-api — only explicitly allowlisted BYO engines are considered: one
+      configured ⇒ it wins outright; many ⇒ stored AppSetting, then an
+      allowlisted CNA_AI_ENGINE_DEFAULT, then the first allowlisted provider;
+      none ⇒ ChatConfigError.
 
     A stored value that is not allowed in the current mode is ignored.
     """
     resolved_mode = resolve_ai_mode(mode)
-    allowed = allowed_engines(resolved_mode, resolve_appliance_cloud(cloud))
+    allowed = allowed_engines(
+        resolved_mode, resolve_appliance_cloud(cloud), byo_providers=byo_providers
+    )
 
     if resolved_mode == MODE_SAAS:
         return allowed[0]
 
+    env_default = _clean(os.environ.get("CNA_AI_ENGINE_DEFAULT"))
+    if env_default and env_default not in allowed:
+        raise ChatConfigError(
+            f"CNA_AI_ENGINE_DEFAULT must name a provider enabled by {BYO_AI_PROVIDERS_ENV}."
+        )
+
     if configured is None:
-        configured = {e for e in VALID_ENGINES if engine_configured(e)}
+        configured = {e for e in VALID_ENGINES if engine_configured(e, byo_providers=allowed)}
     candidates = [e for e in allowed if e in configured]
     if not candidates:
         raise ChatConfigError(
-            "No bring-your-own AI API key is configured. Add an Anthropic or OpenAI "
-            "key on the admin AI Engine page."
+            "No enabled bring-your-own AI API key is configured. Add a key for a "
+            "provider enabled by CNA_BYO_AI_PROVIDERS on the admin AI Engine page."
         )
     if len(candidates) == 1:
         return candidates[0]
@@ -187,7 +256,6 @@ def resolve_engine(
     stored = _clean(stored_engine)
     if stored in candidates:
         return stored
-    env_default = _clean(os.environ.get("CNA_AI_ENGINE_DEFAULT"))
     if env_default in candidates:
         return env_default
     return candidates[0]
@@ -451,17 +519,40 @@ class GroundedChatAgent:
         *,
         byo_keys: Mapping[str, str | None] | None = None,
         byo_models: Mapping[str, str | None] | None = None,
+        byo_providers: tuple[str, ...] | None = None,
         mode: str | None = None,
         cloud: str | None = None,
     ):
         self.mode = resolve_ai_mode(mode)
         self.cloud = resolve_appliance_cloud(cloud)
+        if self.mode == MODE_BYO_API:
+            configured_providers = configured_byo_ai_providers()
+            if byo_providers is not None:
+                supplied_providers = validate_byo_ai_providers(byo_providers)
+                if supplied_providers != configured_providers:
+                    raise ChatConfigError(
+                        f"BYO provider configuration must match {BYO_AI_PROVIDERS_ENV}."
+                    )
+            self.byo_providers = configured_providers
+        else:
+            self.byo_providers = ()
         self._byo_keys = {k: _clean(v) for k, v in (byo_keys or {}).items()}
         self._byo_models = {k: _clean(v) for k, v in (byo_models or {}).items()}
 
-        configured = {e for e in VALID_ENGINES if engine_configured(e, self._byo_keys)}
+        allowed = allowed_engines(
+            self.mode,
+            self.cloud,
+            byo_providers=self.byo_providers if self.mode == MODE_BYO_API else None,
+        )
+        configured = {
+            e for e in allowed if engine_configured(e, self._byo_keys, self.byo_providers)
+        }
         self.engine = resolve_engine(
-            engine, mode=self.mode, cloud=self.cloud, configured=configured
+            engine,
+            mode=self.mode,
+            cloud=self.cloud,
+            configured=configured,
+            byo_providers=self.byo_providers if self.mode == MODE_BYO_API else None,
         )
         if self.engine not in configured:
             raise ChatConfigError(self._unconfigured_message(self.engine))
@@ -586,6 +677,8 @@ class GroundedChatAgent:
         """Anthropic Messages API with the admin-entered key. Thinking is left at
         the model's adaptive default; a safety refusal is surfaced as text rather
         than treated as a transport failure."""
+        if ENGINE_ANTHROPIC not in self.byo_providers:
+            raise ChatConfigError(f"Anthropic is not enabled by {BYO_AI_PROVIDERS_ENV}.")
         api_key = self._byo_keys.get(ENGINE_ANTHROPIC)
         if not api_key:
             raise ChatConfigError(self._unconfigured_message(ENGINE_ANTHROPIC))
@@ -612,6 +705,8 @@ class GroundedChatAgent:
     def _complete_openai(self, system_prompt: str, turns: list[dict]) -> str:
         """OpenAI chat completions (api.openai.com) with the admin-entered key —
         same request shape as the Azure path, minus the deployment routing."""
+        if ENGINE_OPENAI not in self.byo_providers:
+            raise ChatConfigError(f"OpenAI is not enabled by {BYO_AI_PROVIDERS_ENV}.")
         api_key = self._byo_keys.get(ENGINE_OPENAI)
         if not api_key:
             raise ChatConfigError(self._unconfigured_message(ENGINE_OPENAI))
@@ -649,6 +744,8 @@ __all__ = [
     "build_system_prompt",
     "engine_configured",
     "extract_citations",
+    "configured_byo_ai_providers",
+    "parse_byo_ai_providers",
     "resolve_ai_mode",
     "resolve_appliance_cloud",
     "resolve_engine",

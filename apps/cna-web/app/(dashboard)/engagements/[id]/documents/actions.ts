@@ -204,7 +204,7 @@ export async function uploadDocument(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: document upload needs blob storage, Azure-only today.
+  // Guard configuration before uploading to the selected storage backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;

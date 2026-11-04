@@ -420,6 +420,33 @@ def test_labels_use_escaped_line_breaks():
     minidom.parseString(xml)  # must stay well-formed
 
 
+def test_hostile_resource_name_stays_text_after_xml_and_html_parsing():
+    import xml.etree.ElementTree as ET
+    from html.parser import HTMLParser
+
+    class TagCollector(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.tags = []
+
+        def handle_starttag(self, tag, _attrs):
+            self.tags.append(tag)
+
+    sub = _sub_with_services()
+    sub.vnets[0].name = '<img src=x onerror="alert(1)"> & prod'
+
+    root = ET.fromstring(generate_vnet_topology(sub))
+    labels = [cell.get("value", "") for cell in root.iter("mxCell")]
+    hostile_label = next(value for value in labels if "&lt;img" in value)
+    parsed_html = TagCollector()
+    parsed_html.feed(hostile_label)
+
+    assert "&amp; prod" in hostile_label
+    assert "img" not in parsed_html.tags
+    assert all(tag == "br" for tag in parsed_html.tags)
+    assert all("<img" not in value for value in labels)
+
+
 def test_service_band_summarises_overflow_instead_of_drawing_every_icon():
     from cna.core.topology_schema import AzurePrivateEndpoint
     from cna.diagram_engine.drawio_generator import MAX_ICONS_PER_TYPE

@@ -30,6 +30,11 @@ from pydantic import BaseModel
 
 # Ensure the repo root is on the path so `cna` package is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# The API directory is also importable so its standalone middleware module
+# resolves both in the container entrypoint and in local TestClient runs.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from request_body_limit import RequestBodyLimitMiddleware
 
 from cna.api_errors import sanitize_downstream_error
 from cna.api_status import Outcome, status_for
@@ -73,6 +78,7 @@ _MIN_ZONE_REDUNDANCY = 2
 _MIN_NIC_COUNT = 2
 _LOG_RETENTION_MIN_DAYS = 90
 _GW_HIGH_UTILIZATION_PCT = 80
+MAX_REQUEST_BODY_BYTES = 1_048_576
 
 # The container starts uvicorn with module path "apps.cna-api.main" from /app,
 # so only /app is on sys.path — make the API directory importable so the
@@ -201,6 +207,10 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="CNA API", version=_api_version(), lifespan=_lifespan)
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_body_size=MAX_REQUEST_BODY_BYTES,
+)
 app.include_router(metrics_router)
 app.include_router(chat_router)
 app.include_router(reports_router)

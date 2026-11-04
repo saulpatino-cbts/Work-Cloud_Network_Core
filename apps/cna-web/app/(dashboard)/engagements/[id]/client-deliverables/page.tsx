@@ -5,7 +5,7 @@ import Link from "next/link";
 import { deleteDeliverableFromPortal, deleteDocument } from "./actions";
 import { ConfirmSubmitButton } from "@/components/ui/confirm-submit-button";
 import { PortalPublishPanel } from "./portal-publish-panel";
-import { isBlobStorageAvailable } from "@/lib/storage";
+import { isBlobStorageAvailable, isPortalPublishingAvailable } from "@/lib/storage";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -71,9 +71,8 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
   const isMember = engagement.members.some((m) => m.userId === session?.user?.id);
   if (!isMember) notFound();
 
-  // CR-CORE-01 / AWS-F-04: the client portal publish and the interactive
-  // assessment both need blob storage (Azure-only today). Disable those
-  // controls on an AWS appliance; the rest of the page stays functional.
+  // Interactive assessments use either storage backend; external publishing
+  // remains separately gated until the Python API supports S3.
   const storageAvailable = isBlobStorageAvailable();
 
   const interactiveAssessment = engagement.deliverables.find((d) => d.type === "INTERACTIVE_ASSESSMENT");
@@ -113,7 +112,7 @@ export default async function ClientDeliverablesPage({ params }: PageProps) {
       {/* ── Client portal (external, time-limited share) ── */}
       <PortalPublishPanel
         engagementId={id}
-        storageAvailable={storageAvailable}
+        storageAvailable={isPortalPublishingAvailable()}
         hasPublishedDeliverables={hasPublishedDeliverables}
         latestPublication={
           latestPublication

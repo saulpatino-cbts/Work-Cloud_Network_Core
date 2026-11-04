@@ -17,7 +17,9 @@ from cna.ai_engine.chat_agent import (
     build_system_prompt,
     engine_configured,
     extract_citations,
+    parse_byo_ai_providers,
     resolve_engine,
+    validate_byo_ai_providers,
 )
 
 ENG = "eng-123"
@@ -133,6 +135,7 @@ def clean_ai_env(monkeypatch):
         "CNA_AI_MODE",
         "CNA_APPLIANCE_CLOUD",
         "CNA_AI_ENGINE_DEFAULT",
+        "CNA_BYO_AI_PROVIDERS",
         "AZURE_OPENAI_ENDPOINT",
         "CNA_BEDROCK_MODEL_ID",
         "CNA_BEDROCK_INFERENCE_PROFILE_ARN",
@@ -141,44 +144,103 @@ def clean_ai_env(monkeypatch):
 
 
 # Shared resolver vector table — mirrored by apps/cna-web/lib/ai-engine.test.ts.
-# (mode, cloud, stored, env_default, configured) -> expected engine (or None = ChatConfigError)
+# (mode, cloud, allowlist or None for SaaS, stored, env_default, configured)
+# -> expected engine (or None = ChatConfigError)
 RESOLVER_VECTORS = [
     # saas: one engine per cloud; stored/env preferences are irrelevant
-    ("saas", "azure", None, None, {"azure-openai"}, "azure-openai"),
-    ("saas", "azure", "openai", "openai", {"azure-openai"}, "azure-openai"),
-    ("saas", "azure", "foundry-claude", None, {"azure-openai"}, "azure-openai"),
-    ("saas", "azure", "bogus", None, set(), "azure-openai"),  # unconfigured: agent raises
-    ("saas", "aws", None, None, {"bedrock"}, "bedrock"),
-    ("saas", "aws", "azure-openai", None, {"bedrock"}, "bedrock"),
+    ("saas", "azure", None, None, None, {"azure-openai"}, "azure-openai"),
+    ("saas", "azure", None, "openai", "openai", {"azure-openai"}, "azure-openai"),
+    ("saas", "azure", None, "foundry-claude", None, {"azure-openai"}, "azure-openai"),
+    ("saas", "azure", None, "bogus", None, set(), "azure-openai"),
+    ("saas", "aws", None, None, None, {"bedrock"}, "bedrock"),
+    ("saas", "aws", None, "azure-openai", None, {"bedrock"}, "bedrock"),
     # byo-api: no key -> error
-    ("byo-api", "azure", None, None, set(), None),
-    ("byo-api", "azure", "anthropic", None, set(), None),
-    ("byo-api", "azure", None, None, {"azure-openai"}, None),  # saas engine never counts
+    ("byo-api", "azure", ("anthropic", "openai"), None, None, set(), None),
+    ("byo-api", "azure", ("anthropic", "openai"), "anthropic", None, set(), None),
+    ("byo-api", "azure", ("anthropic", "openai"), None, None, {"azure-openai"}, None),
+    ("byo-api", "azure", ("anthropic",), None, None, {"openai"}, None),
     # byo-api: exactly one key -> it wins, stored setting ignored
-    ("byo-api", "azure", None, None, {"anthropic"}, "anthropic"),
-    ("byo-api", "azure", "openai", None, {"anthropic"}, "anthropic"),
-    ("byo-api", "aws", "azure-openai", "openai", {"openai"}, "openai"),
+    ("byo-api", "azure", ("anthropic", "openai"), None, None, {"anthropic"}, "anthropic"),
+    ("byo-api", "azure", ("anthropic", "openai"), "openai", None, {"anthropic"}, "anthropic"),
+    ("byo-api", "aws", ("openai",), "azure-openai", "openai", {"openai"}, "openai"),
     # byo-api: both keys -> stored, then env default, then anthropic
-    ("byo-api", "azure", "openai", None, {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", "anthropic", "openai", {"anthropic", "openai"}, "anthropic"),
-    ("byo-api", "azure", None, "openai", {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", "azure-openai", "openai", {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", "bogus", "bogus", {"anthropic", "openai"}, "anthropic"),
-    ("byo-api", "azure", None, None, {"anthropic", "openai"}, "anthropic"),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "openai",
+        None,
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "anthropic",
+        "openai",
+        {"anthropic", "openai"},
+        "anthropic",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        None,
+        "openai",
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "azure-openai",
+        "openai",
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "bogus",
+        None,
+        {"anthropic", "openai"},
+        "anthropic",
+    ),
+    ("byo-api", "azure", ("anthropic", "openai"), None, None, {"anthropic", "openai"}, "anthropic"),
 ]
 
 
-@pytest.mark.parametrize("mode,cloud,stored,env_default,configured,expected", RESOLVER_VECTORS)
+@pytest.mark.parametrize(
+    "mode,cloud,byo_providers,stored,env_default,configured,expected", RESOLVER_VECTORS
+)
 def test_resolve_engine_vectors(
-    clean_ai_env, monkeypatch, mode, cloud, stored, env_default, configured, expected
+    clean_ai_env, monkeypatch, mode, cloud, byo_providers, stored, env_default, configured, expected
 ):
     if env_default is not None:
         monkeypatch.setenv("CNA_AI_ENGINE_DEFAULT", env_default)
     if expected is None:
         with pytest.raises(ChatConfigError):
-            resolve_engine(stored, mode=mode, cloud=cloud, configured=configured)
+            resolve_engine(
+                stored,
+                mode=mode,
+                cloud=cloud,
+                configured=configured,
+                byo_providers=byo_providers,
+            )
     else:
-        assert resolve_engine(stored, mode=mode, cloud=cloud, configured=configured) == expected
+        assert (
+            resolve_engine(
+                stored,
+                mode=mode,
+                cloud=cloud,
+                configured=configured,
+                byo_providers=byo_providers,
+            )
+            == expected
+        )
 
 
 def test_resolve_engine_defaults_from_env(clean_ai_env, monkeypatch):
@@ -187,6 +249,7 @@ def test_resolve_engine_defaults_from_env(clean_ai_env, monkeypatch):
     monkeypatch.setenv("CNA_APPLIANCE_CLOUD", "aws")
     assert resolve_engine(None) == "bedrock"
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     with pytest.raises(ChatConfigError):
         resolve_engine(None)  # env-only configured set has no BYO keys
 
@@ -194,8 +257,11 @@ def test_resolve_engine_defaults_from_env(clean_ai_env, monkeypatch):
 def test_allowed_engines(clean_ai_env):
     assert allowed_engines("saas", "azure") == ("azure-openai",)
     assert allowed_engines("saas", "aws") == ("bedrock",)
-    assert allowed_engines("byo-api", "azure") == ("anthropic", "openai")
-    assert allowed_engines("byo-api", "aws") == ("anthropic", "openai")
+    assert allowed_engines("byo-api", "azure", ("openai",)) == ("openai",)
+    assert allowed_engines("byo-api", "aws", ("anthropic", "openai")) == (
+        "anthropic",
+        "openai",
+    )
 
 
 def test_engine_configured(clean_ai_env, monkeypatch):
@@ -205,6 +271,7 @@ def test_engine_configured(clean_ai_env, monkeypatch):
     assert not engine_configured("bedrock")
     monkeypatch.setenv("CNA_BEDROCK_MODEL_ID", "anthropic.claude-example")
     assert engine_configured("bedrock")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     assert not engine_configured("anthropic")
     assert not engine_configured("anthropic", {"anthropic": ""})
     assert not engine_configured("anthropic", {"anthropic": "none"})
@@ -213,22 +280,94 @@ def test_engine_configured(clean_ai_env, monkeypatch):
     assert not engine_configured("unknown", {"unknown": "x"})
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        " ",
+        "anthropic,openai",
+        "{}",
+        "[]",
+        '["azure-openai"]',
+        '["anthropic","anthropic"]',
+        '["openai","<OPENAI_API_KEY>"]',
+        '[" openai"]',
+    ],
+)
+def test_provider_config_fails_closed(clean_ai_env, value):
+    with pytest.raises(ChatConfigError, match="CNA_BYO_AI_PROVIDERS"):
+        parse_byo_ai_providers(value)
+
+
+def test_provider_config_parses_exact_ids(clean_ai_env):
+    assert parse_byo_ai_providers('["openai","anthropic"]') == ("openai", "anthropic")
+    with pytest.raises(ChatConfigError, match="CNA_BYO_AI_PROVIDERS"):
+        validate_byo_ai_providers(())
+
+
+def test_incompatible_default_fails_closed(clean_ai_env, monkeypatch):
+    monkeypatch.setenv("CNA_AI_ENGINE_DEFAULT", "openai")
+    with pytest.raises(ChatConfigError, match="CNA_AI_ENGINE_DEFAULT"):
+        resolve_engine(
+            mode="byo-api",
+            byo_providers=("anthropic",),
+            configured={"anthropic", "openai"},
+        )
+
+
 def test_agent_raises_config_error_when_nothing_configured(clean_ai_env):
     with pytest.raises(ChatConfigError, match="AZURE_OPENAI_ENDPOINT"):
         GroundedChatAgent()
 
 
+def test_saas_ignores_invalid_byo_provider_config(clean_ai_env, monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://aif.example")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", "not-json")
+
+    assert GroundedChatAgent().engine == "azure-openai"
+
+
 def test_agent_byo_without_keys_raises(clean_ai_env, monkeypatch):
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://aif.example")  # must not rescue byo mode
     with pytest.raises(ChatConfigError, match="AI Engine page"):
         GroundedChatAgent()
 
 
+@pytest.mark.parametrize("config", [None, "", "not-json", "{}", "[]"])
+def test_invalid_byo_provider_config_blocks_agent_before_inference(
+    clean_ai_env, monkeypatch, config
+):
+    monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    if config is None:
+        monkeypatch.delenv("CNA_BYO_AI_PROVIDERS", raising=False)
+    else:
+        monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", config)
+
+    with pytest.raises(ChatConfigError, match="CNA_BYO_AI_PROVIDERS"):
+        GroundedChatAgent(byo_keys={"anthropic": "sk-test"})
+
+
 def test_agent_byo_single_key_overrides_stored(clean_ai_env, monkeypatch):
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     agent = GroundedChatAgent(engine="openai", byo_keys={"anthropic": "sk-a"})
     assert agent.engine == "anthropic"
+
+
+def test_agent_ignores_stored_disallowed_key_and_blocks_its_transport(clean_ai_env, monkeypatch):
+    monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic"]')
+    agent = GroundedChatAgent(
+        engine="openai",
+        byo_keys={"anthropic": "sk-anthropic", "openai": "sk-openai"},
+    )
+
+    assert agent.engine == "anthropic"
+    with pytest.raises(ChatConfigError, match="not enabled by CNA_BYO_AI_PROVIDERS"):
+        agent._complete_openai("prompt", [{"role": "user", "content": "question"}])
 
 
 # ── answer() with mocked Azure OpenAI transport ──────────────────────────────
@@ -306,6 +445,7 @@ def test_answer_via_mocked_anthropic(monkeypatch):
     import anthropic
 
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     monkeypatch.delenv("CNA_ANTHROPIC_MODEL", raising=False)
     captured: dict = {}
 
@@ -349,6 +489,7 @@ def test_anthropic_refusal_surfaces_as_text(monkeypatch):
     import anthropic
 
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
 
     class FakeAnthropic:
         def __init__(self, **kwargs):
@@ -368,6 +509,7 @@ def test_answer_via_mocked_openai(monkeypatch):
     import openai
 
     monkeypatch.setenv("CNA_AI_MODE", "byo-api")
+    monkeypatch.setenv("CNA_BYO_AI_PROVIDERS", '["anthropic","openai"]')
     monkeypatch.setenv("CNA_OPENAI_MODEL", "gpt-test")
     captured: dict = {}
 

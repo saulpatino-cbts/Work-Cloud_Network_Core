@@ -89,7 +89,9 @@ or record a `TODO.md` item naming them — never leave one side implied.
    is a warning, never a failed build.
 4. **Runtime environment contract** the images read, injected by the appliances'
    Terraform: `CNA_AI_MODE` (`saas` | `byo-api`), `CNA_APPLIANCE_CLOUD`
-   (`azure` | `aws`), `CNA_AI_ENGINE_DEFAULT`, the SaaS engine variables
+   (`azure` | `aws`), `CNA_AI_ENGINE_DEFAULT`, `CNA_BYO_AI_PROVIDERS` (required
+   in `byo-api`: a nonempty JSON array of unique `anthropic` / `openai` ids,
+   with a compatible default; ignored in `saas`), the SaaS engine variables
    (`AZURE_OPENAI_*` on Azure, `CNA_BEDROCK_*` on AWS), and
    `CREDENTIAL_ENCRYPTION_KEY` (web always; api in `byo-api`), and the image-update
    check inputs the web tier reads (`CNA_WEB_IMAGE`, `CNA_IMAGE_REGISTRY_USERNAME`,

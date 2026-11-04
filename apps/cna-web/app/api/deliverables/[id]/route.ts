@@ -222,14 +222,15 @@ export async function GET(
         status: 404,
       });
     }
-    // CR-CORE-01 / AWS-F-04: serving blob-backed content needs a SAS URL, which
-    // only the Azure path implements. On AWS, return a clean 501 instead of
-    // letting the Azure SDK throw "AZURE_STORAGE_ACCOUNT_NAME is not set".
+    // Both backends issue short-lived read-only URLs after membership checks.
     if (!isBlobStorageAvailable()) {
       return NextResponse.json({ error: STORAGE_UNAVAILABLE_MESSAGE }, { status: 501 });
     }
-    const sasUrl = await generateSasUrl(deliverable.blobPath, 1);
-    return NextResponse.redirect(sasUrl, { status: 302 });
+    const sasUrl = await generateSasUrl(deliverable.blobPath, deliverable.engagementId);
+    return NextResponse.redirect(sasUrl, {
+      status: 302,
+      headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+    });
   }
 
   const content = deliverable.content;

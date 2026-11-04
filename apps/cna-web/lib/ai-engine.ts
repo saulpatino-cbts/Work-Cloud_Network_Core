@@ -19,12 +19,14 @@ import {
 import {
   type AiEngineId,
   type AiMode,
+  AiEngineConfigurationError,
   AiEngineUnavailableError,
   type ApplianceCloud,
   allowedEngines,
   BYO_ENGINES,
   byoToggleEnabled,
   clean,
+  configuredByoAiProviders,
   normalizeAiEngine,
   normalizeAiMode,
   normalizeApplianceCloud,
@@ -33,7 +35,12 @@ import {
   VALID_ENGINES,
 } from "./ai-engine-rules";
 
-export { AiEngineUnavailableError, normalizeAiEngine, VALID_ENGINES };
+export {
+  AiEngineConfigurationError,
+  AiEngineUnavailableError,
+  normalizeAiEngine,
+  VALID_ENGINES,
+};
 export type { AiEngineId, AiMode, ApplianceCloud, ByoCredentialPresence };
 
 export const AI_ENGINE_SETTING_KEY = "ai.activeEngine";
@@ -98,8 +105,16 @@ export function getApplianceCloud(): ApplianceCloud {
 }
 
 export function getConfiguredDefaultAiEngine(): AiEngineId {
-  const allowed = allowedEngines(getAiMode(), getApplianceCloud());
-  const fromEnv = normalizeAiEngine(process.env.CNA_AI_ENGINE_DEFAULT);
+  const mode = getAiMode();
+  const byoProviders = mode === "byo-api" ? configuredByoAiProviders() : [];
+  const allowed = allowedEngines(mode, getApplianceCloud(), byoProviders);
+  const rawDefault = clean(process.env.CNA_AI_ENGINE_DEFAULT);
+  const fromEnv = normalizeAiEngine(rawDefault);
+  if (mode === "byo-api" && rawDefault && (!fromEnv || !allowed.includes(fromEnv))) {
+    throw new AiEngineConfigurationError(
+      "CNA_AI_ENGINE_DEFAULT must name a provider enabled by CNA_BYO_AI_PROVIDERS.",
+    );
+  }
   return fromEnv && allowed.includes(fromEnv) ? fromEnv : allowed[0];
 }
 
@@ -234,7 +249,9 @@ export function getAiEngineStatuses(
     }),
   };
 
-  return allowedEngines(getAiMode(), getApplianceCloud()).map((id) => statuses[id]());
+  const mode = getAiMode();
+  const byoProviders = mode === "byo-api" ? configuredByoAiProviders() : [];
+  return allowedEngines(mode, getApplianceCloud(), byoProviders).map((id) => statuses[id]());
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +277,7 @@ export async function resolveActiveAiEngine(): Promise<AiEngineId | null> {
     return resolveEngine({
       mode: getAiMode(),
       cloud: getApplianceCloud(),
+      byoProviders: getAiMode() === "byo-api" ? configuredByoAiProviders() : [],
       stored,
       envDefault: process.env.CNA_AI_ENGINE_DEFAULT,
       configured: getConfiguredEngines(byo),
@@ -274,7 +292,7 @@ export async function getActiveAiEngine(): Promise<AiEngineId> {
   const engine = await resolveActiveAiEngine();
   if (!engine) {
     throw new AiEngineUnavailableError(
-      "No bring-your-own AI API key is configured. Add an Anthropic or OpenAI key on the admin AI Engine page.",
+      "No enabled bring-your-own AI API key is configured. Add a key for a provider enabled by CNA_BYO_AI_PROVIDERS on the admin AI Engine page.",
     );
   }
   return engine;
@@ -284,7 +302,10 @@ export async function setActiveAiEngine(engine: AiEngineId, updatedBy?: string):
   if (!VALID_ENGINES.has(engine)) {
     throw new Error(`Unsupported AI engine: ${engine}`);
   }
-  const allowed = allowedEngines(getAiMode(), getApplianceCloud());
+  getConfiguredDefaultAiEngine();
+  const mode = getAiMode();
+  const byoProviders = mode === "byo-api" ? configuredByoAiProviders() : [];
+  const allowed = allowedEngines(mode, getApplianceCloud(), byoProviders);
   if (!allowed.includes(engine)) {
     throw new Error(`${engine} is not available in ${getAiMode()} mode on this appliance.`);
   }

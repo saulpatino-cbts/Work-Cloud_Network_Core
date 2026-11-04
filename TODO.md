@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-09-23
+**Last reviewed:** 2026-11-04
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-717 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-723 |
 
 ---
 
@@ -1382,6 +1382,10 @@ order; do not reorder it.
 - **Notes for future engineers:** The rate limiter is 5 requests / 60s on `generateDeliverable`.
   A user who re-clicks after the false failure starts a second comprehensive run plus four more
   single-shots — so the visible symptom of this bug also makes the underlying load worse.
+- **Status:** Done 2026-11-03 — all five deliverable rows are created atomically as `RUNNING`;
+  the action dispatches all five via `after()` and returns their ids without waiting for generation.
+  The page polls every row, and each single-shot background task marks its row `COMPLETED` or
+  `FAILED`. Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-418 — Diagram generation covers Azure only, and two C4 layers are the same diagram
 
@@ -2043,6 +2047,9 @@ transitions) and make the multi-step persistence in `_run_*_discovery` transacti
 `lib/crypto.ts` / `cna/core/credential_crypto.py` use one static `CREDENTIAL_ENCRYPTION_KEY` and
 the ciphertext carries no key id, so rotation makes every stored cloud credential and BYO AI key
 undecryptable at once. Prefix ciphertext with a key id, accept a keyring, add a re-encrypt job.
+- **Related local preparation, 2026-11-04:** strict web Base64/IV/tag validation now matches the
+  existing Python encoding contract and shares the Node-generated test vector. This is parsing
+  hardening, not keyring support or a completed rotation migration; T-707 remains open.
 
 ### T-708 — Audit trail and token-at-rest hygiene (DATA-009)
 No table records who deleted an engagement, changed a credential or saved an AI key; NextAuth
@@ -2055,23 +2062,31 @@ and `summarize-error.ts` are Azure-shaped; `POST /publish` hard-codes `AzureBlob
 on `CNA_APPLIANCE_CLOUD` / the credential platform and add the S3 path (the CLI's `s3_deployer.py`
 exists) so the AWS appliance can upload documents and publish portals.
 
-- **Web-tier storage — findings-only degradation shipped (CR-CORE-01 / AWS-F-04).** The web tier
-  (`apps/cna-web/lib/blob.ts`) implements the five blob functions (`uploadEngagementFile`,
-  `uploadDeliverable`, `deleteBlob`, `deleteContainer`, `generateSasUrl`) for Azure Blob Storage
-  only, so on an AWS appliance document upload, deliverable/diagram blobs and the client portal
-  used to throw raw Azure errors (`AZURE_STORAGE_ACCOUNT_NAME is not set`). Those three features
-  now degrade gracefully on AWS instead of crashing: a single `isBlobStorageAvailable()` helper
-  (`apps/cna-web/lib/storage.ts`, keyed off `CNA_APPLIANCE_CLOUD` via the existing
-  `normalizeApplianceCloud` helper) gates every call site — the API route returns HTTP 501 with a
-  clean JSON body, the server actions return a clean error, and the upload/download/publish UI
-  controls are hidden with a short "Not available on this appliance" note. Azure behaviour is
-  unchanged. The assessment and findings UI stay fully functional on AWS.
-- **Remaining "full parity" work (this item):** add an S3 storage abstraction selected by
-  `CNA_APPLIANCE_CLOUD` — add the `@aws-sdk/client-s3` dependency and an S3 implementation of the
-  same five blob functions, using presigned URLs as the SAS-URL equivalent for `generateSasUrl` —
-  and switch the API's `POST /publish` off the hard-coded `AzureBlobDeployer` onto the same
-  cloud-selected path, so the AWS appliance can actually upload documents and publish portals
-  rather than only disabling those features.
+- **Web-tier storage implemented locally 2026-11-04 (Core #70 / CR-CORE-01 / AWS-F-04);
+  independent bounded review completed with no actionable findings.** `apps/cna-web/lib/blob.ts` supports all five operations on S3
+  using `CNA_APPLIANCE_CLOUD`, the existing `CNA_STORAGE_BUCKET`, AWS SDK v3 workload credentials,
+  relative engagement-scoped keys and read-only presigned downloads capped at one hour.
+  Azure retains its configured containers, upload metadata and user-delegation signing.
+  Read/delete callers now pass the authorized engagement ID; unsafe paths, external URLs and
+  cross-engagement scope are refused. S3 portal cleanup paginates/batches only the exact
+  `portal-<engagementId>/` prefix, detects partial errors, and never deletes a bucket.
+  Configuration-aware guards enable document/diagram/assessment controls on either cloud.
+  Offline regressions cover storage, config and authorized callers; no cloud calls were made.
+  Final web checks passed: lint, typecheck and 291 tests across 11 files; the independent
+  reviewer reran 187 focused storage/caller tests. Live IAM/KMS and both-cloud smoke
+  verification remain outstanding. This completes issue #70's five web storage operations
+  locally, not the broader T-709 external publishing scope or deployed acceptance.
+- **Still outstanding — Python external portal publishing:** `apps/cna-api/main.py` →
+  `POST /publish` still requires Azure account configuration and constructs `AzureBlobDeployer`.
+  The AWS publish action/UI remain separately disabled (`isPortalPublishingAvailable`) until
+  that API path is cloud-selected and tested. This broader T-709 item is NOT complete.
+- **Cross-repository follow-up (parent coordinates):** notify BOTH
+  `Work-Cloud_Network_AWS_Appliance` and `Work-Cloud_Network_Azure_Appliance` and record the
+  shared-board/register item before release. AWS must verify injected bucket/region and the
+  web runtime role's scoped PutObject/GetObject/DeleteObject/ListBucket permissions (plus KMS
+  access if applicable); Azure must verify its existing storage account/container configuration,
+  Blob data access and delegation signing. Confirm version-retention/lifecycle expectations in
+  both appliances. No appliance, board, IAM or deployment changes were made locally.
 
 ### T-710 — Align the storage-account variable name (ARCH-003)
 The API reads `AZURE_STORAGE_ACCOUNT_NAME` (`apps/cna-api/main.py`); the Azure appliance injects
@@ -2083,6 +2098,19 @@ The API reads `AZURE_STORAGE_ACCOUNT_NAME` (`apps/cna-api/main.py`); the Azure a
 contract variable `CREDENTIAL_ENCRYPTION_KEY`); `apps/cna-web/.env.example` covers 8 of the 34
 names the web tier reads. Generate both from a grep of `os.environ` / `process.env` and add a
 guard test that fails on drift.
+- **Coordinated runtime follow-up, 2026-11-04:** the prepared Core BYO provider restriction
+  requires `CNA_BYO_AI_PROVIDERS` as a nonempty JSON array of unique exact `anthropic` / `openai`
+  identifiers. Both `saulpatino-cbts/Work-Cloud_Network_Azure_Appliance` and
+  `saulpatino-cbts/Work-Cloud_Network_AWS_Appliance` must inject the same client-approved JSON
+  into web and API, validate a matching `CNA_AI_ENGINE_DEFAULT`, and deploy the compatible Core
+  release together. Missing or invalid BYO configuration must fail closed; SaaS remains native.
+  Selection is not network egress enforcement. Before release:
+  1. Complete both appliance input validation/runtime wiring and negative tests.
+  2. Verify Core selection, key probe/decrypt, and inference reject forbidden providers.
+  3. Record handovers in both appliances' change reports and the cross-repo findings register,
+     link the synchronized changes, and surface them on CNA Total Workboard with owner authority.
+  These cross-repo notifications/board writes are not performed by this local Core-only pass;
+  they require the coordinator and authorized external-write step. R-011/R-021 remain open.
 
 ### T-712 — Local-admin limiter and break-glass parity (SEC-004, ARCH-010)
 `app/api/local-admin/route.ts` keys its limiter on `x-azure-clientip`, which is absent on AWS and
@@ -2094,6 +2122,10 @@ draw.io `html=1` labels are single-escaped and the encyclopedia embeds the expor
 `| safe`; customer strings (resource names, tags, NSG descriptions) can carry markup into the PDF
 and the Electron renderer. Escape label text for HTML and XML both, and add a test with a hostile
 resource name.
+- **Status:** Done 2026-11-03 — draw.io cell and edge labels are escaped for inner HTML and the
+  outer XML attribute separately; only intentional line breaks remain markup. A hostile resource
+  name regression test parses both representations and confirms it does not become an HTML element.
+  Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-714 — Prune dead modules (PY-014)
 26 `cna.*` modules are imported by nothing (`modules.{container,dns,hybrid,iam,landingzone,
@@ -2110,6 +2142,21 @@ removed. Fix each at its call site and add the `/tmp` cleanup to the discovery f
 No CI runs `prisma migrate deploy` (empty DB and v0.8 snapshot), starts the API or migrator images,
 or exercises `210`'s rollback mode. Add a Postgres service job for the migrations, start the
 api/migrator images in `200`'s smoke test, and run `TestRealDrawioExport` inside the API image.
+- **Migrator dependency isolation follow-up, assessed 2026-11-04:** published scan
+  `41787325861` reports fixable MEDIUM `CVE-2026-118764` in minimatch 10.2.6 and 3.1.5.
+  The migrator copies the builder's full `node_modules`, including ESLint's dev-only tree;
+  Prisma 6.19.3 itself requires `@prisma/config` and `@prisma/engines`, so copying only the
+  top-level Prisma directories is not safe. Implement a lockfile-backed production dependency
+  stage: promote the existing Prisma CLI version to production dependencies, regenerate the
+  npm lock, run `npm ci --omit=dev --legacy-peer-deps` in that stage, generate the client
+  against its schema, and copy that complete production tree into the migrator only.
+  Keep the web builder's dev dependencies and existing runner tracing unchanged. Verify the
+  resulting tree excludes both minimatch instances and ESLint, then run `prisma migrate deploy`
+  on an isolated empty Postgres DB and a v0.8 snapshot, rerun for idempotence, exercise seed
+  unset/set hash paths with synthetic credentials, and rescan the rebuilt digest. Do not
+  force minimatch 11 into consumers requiring 3 or 10. **Not implemented or claimed fixed:**
+  no reachable Docker engine or local Postgres tooling is available for the required image
+  and migration smoke tests; approval to install tooling or use a shared database is absent.
 
 ### T-717 — Bound request bodies in cna-api
 The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JSON body to
@@ -2117,6 +2164,9 @@ The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JS
 `MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
 balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
 declared constant, e.g. 1 MiB, with 413) and a test.
+- **Status:** Done 2026-11-03 — the API enforces a 1 MiB maximum before route parsing, rejecting
+  oversized declared and chunked request bodies with 413. TestClient regressions cover both paths.
+  Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-718 — Prune orphaned signatures and attestations in `370-registry-cleanup`
 T-703 stores each image's cosign signature and provenance attestation as OCI referrers of the
@@ -2130,11 +2180,26 @@ uses), behind the same `dry_run` input.
 
 
 ### T-719 — CVE visibility after Docker Scout left `200`
+- **Current image evidence, 2026-11-04:** fresh run `41841234214` used Grype
+  0.118.0, DB v6.1.10 built `2026-11-04T06:20:59Z`, against the unchanged catalog
+  digests. CLI/API/worker still fail on fixable CRITICAL `CVE-2026-115557` in Python
+  3.14.9; web/migrator pass fixable HIGH+ policy, not a zero-finding verdict.
+  All five signature/provenance checks and SARIF uploads passed. The prepared
+  Python 3.14.10 pins remain source-only: image rebuild/rescan and platform smoke
+  proof require separate owner authorization. Scout access/run remains a distinct phase.
+- **Optional Scout draft, 2026-11-04:** separate main-only manual
+  `390-scout-review.yml` reads the existing validated digest matrix and invokes
+  pinned Docker Scout `cves` for linux/amd64 with read-only GitHub permissions.
+  `SCOUT_DOCKERHUB_USER` / `SCOUT_DOCKERHUB_PAT` must be installed by an authorized
+  owner with Scout entitlement and image-pull access; no credentials were set,
+  no auth probe or dispatch was attempted, and Grype remains unchanged.
+  Review output is informational, not a clean-image or pre-deployment gate.
 `200` no longer scans: Docker Scout's backend rejects the keyless OIDC identity ("user githubactions
 not entitled to use Docker Scout"). The stand-in `390-scout-scan` had never run and its one step was
 `continue-on-error`, so an entitlement rejection would have left the job green with an empty report:
 no published image was CVE-checked anywhere.
-- **Status:** done 2026-10-26, with one item still open (the weekly `schedule` trigger, below).
+- **Status:** implemented 2026-10-26; weekly trigger verified 2026-11-04. The fresh scan fails
+  the intended vulnerability policy; source remediation is prepared but not rebuilt/rescanned.
   `390-scan-images` (Anchore Grype through `anchore/scan-action`; no Docker entitlement, no stored
   credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
   `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
@@ -2161,11 +2226,24 @@ no published image was CVE-checked anywhere.
   token, the SARIF upload (one `grype-<key>` category per image in code scanning) and the verdicts.
   First scan of the rebuilt images: `cli`, `api` and `worker` have 0 fixable findings at HIGH or
   above (2 fixable below HIGH; `api` 428 findings, down from 474), `web` and `migrator` 0 fixable.
-- **OPEN:** the weekly `schedule` trigger has not fired yet (first due Monday 2026-11-02 07:00 UTC);
-  check that its token is accepted by Docker Hub like the other two. If a run ever finds the
+- **Verified 2026-11-04:** the November 2 scheduled run `41485284536` authenticated and scanned
+  all images, but failed policy on a fixable CRITICAL Python finding (see fresh scan below).
+  If a run ever finds the
   placeholder manifest, or one without `digests{}`, it skips on the schedule and fails on
   `workflow_run` or dispatch with "Nothing to scan".
-- Owner to weigh: code scanning now lists about 430 open alerts (11 critical, 130 high), all findings
+- **Fresh remote scan, 2026-11-04:** coordinator-dispatched run `41787325861` scanned the five
+  catalog digests of build `32c4489` using Grype 0.118.0 and DB v6.1.10 built
+  `2026-11-03T06:20:47Z`. CLI/API each had 462 distinct findings (4 fixable); worker had 184
+  (4 fixable); web had 3 (0 fixable); migrator had 5 (2 fixable). CLI/API/worker each failed
+  on one fixable CRITICAL `CVE-2026-115557`, Python 3.14.9, fixed in 3.14.10; web/migrator had
+  no fixable HIGH+. All signatures/provenance checks and SARIF uploads passed. The Python base
+  update to `3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966`
+  is prepared in all eight CLI/API/worker stages, with static consistency tests.
+  **No rebuilt-image after-scan exists:** local scanners are absent and Docker is unreachable.
+  Published digests are unchanged and remain vulnerable. Build provenance records linux/amd64;
+  scan logs do not retain the selected child platform, so no additional architecture coverage
+  is claimed. Rebuild, smoke-test, and scan each supported runtime platform before release.
+- Owner to weigh: on 2026-10-26, code scanning listed about 430 open alerts (11 critical, 130 high), all findings
   with no fix available, which the policy deliberately ignores. Uploading only fixable findings (set
   `only-fixed` on the SARIF pass) would leave the alert list short and actionable.
 - The cosign output shape those runs printed is `attestation shape: dsse-envelope`, which matters for
@@ -2212,6 +2290,12 @@ re-run of an old failed `main` run rebuilds that old commit and would move `*-la
 backwards; skip publication when `github.sha` is no longer the tip of `main`. Two CLI tags from the
 runs before the `sha-` prefix fix remain in the registry (`cna:3cb68dc`, `cna:18b8752`); `370` cannot
 prune them until it has a personal PAT (REVIEW.md R-013), so delete them by hand or let `370` do it then.
+- **Local change prepared, 2026-11-04:** `200-build-images.yml` now checks that the run SHA is still
+  `main` before tagging and again before writing the manifest; if a manifest push must rebase, it
+  aborts rather than committing a stale build on a newer `main`. It applies immutable tags before
+  floating tags and retries each tag operation up to three times. Static regression assertions were
+  added to `tests/unit/test_scan_workflow.py`. This does not compare the registry-resolved digest
+  after each tag, and no live registry behavior was exercised; retain that verification as open work.
 
 ### T-723 — The AWS appliance's `verify_image_signature.sh` cannot parse cosign's attestation output
 Observed on 2026-10-26 (the `390` branch probe, run 40327208460, cosign v3.1.3):

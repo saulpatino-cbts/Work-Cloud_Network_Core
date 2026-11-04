@@ -29,7 +29,7 @@ export async function saveDiagramSource(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: diagram files are uploaded to blob storage, Azure-only today.
+  // Diagram files use the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;
@@ -96,7 +96,7 @@ export async function saveDiagramXml(
   if (!session?.user?.id) return { error: "Not authenticated." };
   if (!engagementId) return { error: "Engagement is required." };
 
-  // CR-CORE-01 / AWS-F-04: saved diagram XML is written to blob storage, Azure-only today.
+  // Saved diagram XML uses the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const isMember = await ensureMembership(engagementId, session.user.id);
@@ -168,7 +168,7 @@ export async function uploadDiagramExport(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: diagram exports are uploaded to blob storage, Azure-only today.
+  // Diagram exports use the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const engagementId = formData.get("engagementId") as string | null;
@@ -245,8 +245,7 @@ export async function generateDiagramFromDiscovery(
   if (!session?.user?.id) return { error: "Not authenticated." };
   if (!engagementId) return { error: "Engagement is required." };
 
-  // CR-CORE-01 / AWS-F-04: the generated diagram is persisted via saveDiagramXml
-  // (blob storage, Azure-only today) — bail out before the API call on AWS.
+  // Validate storage before the API call; saveDiagramXml persists the result.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const isMember = await ensureMembership(engagementId, session.user.id);

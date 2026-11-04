@@ -487,6 +487,27 @@ jobs:
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
     steps:
+      # A re-run of an old successful main run can still be dispatched after
+      # main has advanced. Refuse before obtaining a registry token or moving
+      # any tags; the build digest is useful only for the source currently on
+      # main.
+      - name: Checkout current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Refuse to publish a stale main build
+        env:
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN=$(git rev-parse HEAD)
+          if [ "$RUN_SHA" != "$CURRENT_MAIN" ]; then
+            echo "::error::This build is for ${RUN_SHA}, but main is now ${CURRENT_MAIN}; refusing to move image tags."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
@@ -512,7 +533,7 @@ jobs:
           # (pull) and then writes the tags (push), and this job runs no Buildx
           # build, so there is no public helper-image pull to protect.
 
-      - name: Tag every signed digest
+      - name: Tag immutable digests first and floating tags last
         env:
           DIGEST_CLI: ${{ needs.build-images.outputs.digest_cli }}
           DIGEST_API: ${{ needs.build-images.outputs.digest_api }}
@@ -550,12 +571,48 @@ jobs:
           done
 
           for c in $COMPONENTS; do
-            ARGS=()
-            while IFS= read -r t; do
-              [ -n "$t" ] && ARGS+=(-t "$t")
-            done < <(jq -r '.[]' <<< "${TAGS[$c]}")
-            echo "Tagging ${c}: ${IMAGE}@${DIGESTS[$c]} ->" "${ARGS[@]}"
-            docker buildx imagetools create "${ARGS[@]}" "${IMAGE}@${DIGESTS[$c]}"
+            if ! jq -e 'type == "array" and length == 2 and all(.[]; type == "string")' \
+              <<< "${TAGS[$c]}" >/dev/null; then
+              echo "::error::Expected exactly two generated tags for '${c}'; refusing to tag anything."
+              exit 1
+            fi
+          done
+
+          # Move immutable references first. Floating `*-latest` references are
+          # conveniences only and must be the final operations. Retry transient
+          # registry errors a bounded number of times; a failed run can safely
+          # be re-run without rolling back tags to an older source commit.
+          for tag_class in immutable floating; do
+            for c in $COMPONENTS; do
+              mapfile -t CLASS_TAGS < <(
+                jq -r --arg class "$tag_class" '
+                  .[] | select(
+                    if $class == "immutable"
+                    then test(":(api-|worker-|web-|migrator-)?sha-[0-9a-f]{7}$")
+                    else test(":(api-|worker-|web-|migrator-)?latest$")
+                    end
+                  )
+                ' <<< "${TAGS[$c]}"
+              )
+              if [ "${#CLASS_TAGS[@]}" -ne 1 ]; then
+                echo "::error::Expected one ${tag_class} tag for '${c}', found ${#CLASS_TAGS[@]}; refusing to continue."
+                exit 1
+              fi
+              for t in "${CLASS_TAGS[@]}"; do
+                echo "Tagging ${tag_class} ${c}: ${IMAGE}@${DIGESTS[$c]} -> ${t}"
+                for attempt in 1 2 3; do
+                  if docker buildx imagetools create -t "$t" "${IMAGE}@${DIGESTS[$c]}"; then
+                    break
+                  fi
+                  if [ "$attempt" -eq 3 ]; then
+                    echo "::error::Could not apply ${tag_class} tag '${t}' after 3 attempts."
+                    exit 1
+                  fi
+                  echo "::warning::Could not apply '${t}' (attempt ${attempt}/3); retrying."
+                  sleep $((attempt * 2))
+                done
+              done
+            done
           done
 
   publish-build-manifest:
@@ -568,6 +625,7 @@ jobs:
       contents: write
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+      RUN_SHA: ${{ github.sha }}
       DIGEST_CLI: ${{ needs.build-images.outputs.digest_cli }}
       DIGEST_API: ${{ needs.build-images.outputs.digest_api }}
       DIGEST_WORKER: ${{ needs.build-images.outputs.digest_worker }}
@@ -583,6 +641,16 @@ jobs:
         with:
           # Need write access to push the manifest commit back to main
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require this build to still be the main tip
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          CURRENT_MAIN=$(git rev-parse FETCH_HEAD)
+          if [ "$RUN_SHA" != "$CURRENT_MAIN" ]; then
+            echo "::error::This build is for ${RUN_SHA}, but main is now ${CURRENT_MAIN}; refusing to publish a stale manifest."
+            exit 1
+          fi
 
       # `images{}` keeps the tag form the appliances already read. `digests{}`
       # is additive (same keys, `name@sha256:…` form) so an appliance can pin
@@ -601,13 +669,13 @@ jobs:
               exit 1
             fi
           done
-          SHA_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+          SHA_TAG="sha-${RUN_SHA:0:7}"
           IMAGE="docker.io/${DOCKERHUB_NAMESPACE}/cna"
           mkdir -p .deployment-catalog
           cat > .deployment-catalog/latest-build.json <<EOF
           {
             "sha_tag": "${SHA_TAG}",
-            "commit": "${{ github.sha }}",
+            "commit": "${RUN_SHA}",
             "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "run_id": "${{ github.run_id }}",
             "images": {
@@ -637,13 +705,18 @@ jobs:
           git add .deployment-catalog/latest-build.json
           git diff --cached --quiet && echo "No changes to commit" && exit 0
           git commit -m "chore(build): update latest-build manifest to sha-$(echo '${{ github.sha }}' | cut -c1-7) [skip ci]"
-          # Pull rebase in case main moved while builds were running (common in parallel jobs).
-          # -X theirs: during conflicts, prefer our new manifest over whatever is on remote.
-          # Dependabot merges arrive in bursts, so a push can lose the race between the
-          # pull and the push: retry a bounded number of times instead of failing a run
-          # whose images are already tagged.
+          # Rebase to detect a push race, then require our source SHA to remain
+          # the parent of the manifest commit. If main advanced, abort rather
+          # than retrying a stale build on top of a newer source revision.
+          # Transient push failures still get a bounded retry while that
+          # source-SHA guard remains true.
           for attempt in 1 2 3; do
             git pull --rebase --autostash -X theirs origin main
+            REBASED_ON=$(git rev-parse HEAD^)
+            if [ "$REBASED_ON" != "$RUN_SHA" ]; then
+              echo "::error::main advanced from ${RUN_SHA} while publishing (now based on ${REBASED_ON}); refusing to publish a stale manifest."
+              exit 1
+            fi
             if git push; then
               exit 0
             fi

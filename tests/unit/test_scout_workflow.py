@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FILE = ROOT / ".github" / "workflows" / "390-scout-review.yml"
-SCOUT_SHA = "e7e2a72bf1485d10a58f30696b6c513b261ce4fa"  # pragma: allowlist secret
+SCOUT_ACTION = "docker/scout-action@e7e2a72bf1485d10a58f30696b6c513b261ce4fa"
 
 
 @pytest.fixture(scope="module")
@@ -64,7 +64,7 @@ def test_targets_are_resolved_without_inputs_or_credential_fallback(workflow: di
 
 def test_official_scout_scans_exact_digest_without_writes(workflow: dict) -> None:
     scout = steps(workflow, "scout")[0]
-    assert scout["uses"] == f"docker/scout-action@{SCOUT_SHA}"
+    assert scout["uses"] == SCOUT_ACTION
     assert scout["with"] == {
         "command": "cves",
         "image": "registry://${{ matrix.ref }}",

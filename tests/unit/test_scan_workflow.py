@@ -220,9 +220,7 @@ class TestBuildPublisherSafety:
         assert "for attempt in 1 2 3" in script
         assert "docker buildx imagetools create -t" in script
 
-    def test_manifest_refuses_stale_build_before_commit_and_after_rebase(
-        self, build: dict
-    ) -> None:
+    def test_manifest_refuses_stale_build_before_commit_and_after_rebase(self, build: dict) -> None:
         steps = build["jobs"]["publish-build-manifest"]["steps"]
         guard = next(
             step

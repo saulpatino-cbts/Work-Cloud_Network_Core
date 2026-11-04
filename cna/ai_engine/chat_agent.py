@@ -128,11 +128,7 @@ def parse_byo_ai_providers(value: str | None) -> tuple[str, ...]:
         raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
     providers: list[str] = []
     for provider in parsed:
-        if (
-            not isinstance(provider, str)
-            or provider not in BYO_ENGINES
-            or provider in providers
-        ):
+        if not isinstance(provider, str) or provider not in BYO_ENGINES or provider in providers:
             raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
         providers.append(provider)
     return tuple(providers)
@@ -142,7 +138,9 @@ def validate_byo_ai_providers(providers: tuple[str, ...] | list[str]) -> tuple[s
     """Validate an already-parsed provider set passed across an internal boundary."""
     if (
         not providers
-        or any(not isinstance(provider, str) or provider not in BYO_ENGINES for provider in providers)
+        or any(
+            not isinstance(provider, str) or provider not in BYO_ENGINES for provider in providers
+        )
         or len(set(providers)) != len(providers)
     ):
         raise ChatConfigError(_BYO_AI_PROVIDERS_ERROR)
@@ -245,9 +243,7 @@ def resolve_engine(
         )
 
     if configured is None:
-        configured = {
-            e for e in VALID_ENGINES if engine_configured(e, byo_providers=allowed)
-        }
+        configured = {e for e in VALID_ENGINES if engine_configured(e, byo_providers=allowed)}
     candidates = [e for e in allowed if e in configured]
     if not candidates:
         raise ChatConfigError(

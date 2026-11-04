@@ -159,9 +159,7 @@ def _load_ai_settings(byo_providers: tuple[str, ...] = ()) -> dict[str, str]:
         allowed_providers = configured_byo_ai_providers()
         requested_providers = validate_byo_ai_providers(byo_providers)
         if requested_providers != allowed_providers:
-            raise ChatConfigError(
-                "BYO provider configuration must match CNA_BYO_AI_PROVIDERS."
-            )
+            raise ChatConfigError("BYO provider configuration must match CNA_BYO_AI_PROVIDERS.")
     setting_keys = [AI_ENGINE_SETTING_KEY]
     for provider in allowed_providers:
         setting_keys.extend(
@@ -192,9 +190,7 @@ def _load_byo_credentials(
     configured_providers = configured_byo_ai_providers()
     requested_providers = validate_byo_ai_providers(byo_providers)
     if requested_providers != configured_providers:
-        raise ChatConfigError(
-            "BYO provider configuration must match CNA_BYO_AI_PROVIDERS."
-        )
+        raise ChatConfigError("BYO provider configuration must match CNA_BYO_AI_PROVIDERS.")
     keys = {
         provider: (
             decrypt(blob) if (blob := settings.get(_byo_setting_key(provider, "apiKey"))) else None
@@ -228,11 +224,7 @@ def chat(engagement_id: str, request: ChatRequest) -> dict:
     ]
 
     try:
-        byo_providers = (
-            configured_byo_ai_providers()
-            if resolve_ai_mode() == MODE_BYO_API
-            else ()
-        )
+        byo_providers = configured_byo_ai_providers() if resolve_ai_mode() == MODE_BYO_API else ()
     except ChatConfigError as exc:
         raise HTTPException(
             status_code=status_for(Outcome.NOT_CONFIGURED), detail=str(exc)

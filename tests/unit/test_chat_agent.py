@@ -164,13 +164,54 @@ RESOLVER_VECTORS = [
     ("byo-api", "azure", ("anthropic", "openai"), "openai", None, {"anthropic"}, "anthropic"),
     ("byo-api", "aws", ("openai",), "azure-openai", "openai", {"openai"}, "openai"),
     # byo-api: both keys -> stored, then env default, then anthropic
-    ("byo-api", "azure", ("anthropic", "openai"), "openai", None, {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", ("anthropic", "openai"), "anthropic", "openai", {"anthropic", "openai"}, "anthropic"),
-    ("byo-api", "azure", ("anthropic", "openai"), None, "openai", {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", ("anthropic", "openai"), "azure-openai", "openai", {"anthropic", "openai"}, "openai"),
-    ("byo-api", "azure", ("anthropic", "openai"), "bogus", None, {"anthropic", "openai"}, "anthropic"),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "openai",
+        None,
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "anthropic",
+        "openai",
+        {"anthropic", "openai"},
+        "anthropic",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        None,
+        "openai",
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "azure-openai",
+        "openai",
+        {"anthropic", "openai"},
+        "openai",
+    ),
+    (
+        "byo-api",
+        "azure",
+        ("anthropic", "openai"),
+        "bogus",
+        None,
+        {"anthropic", "openai"},
+        "anthropic",
+    ),
     ("byo-api", "azure", ("anthropic", "openai"), None, None, {"anthropic", "openai"}, "anthropic"),
 ]
+
 
 @pytest.mark.parametrize(
     "mode,cloud,byo_providers,stored,env_default,configured,expected", RESOLVER_VECTORS

@@ -64,9 +64,9 @@ def test_chat_decrypts_only_allowlisted_provider_keys(monkeypatch):
     monkeypatch.setattr(chat_router, "decrypt", fake_decrypt)
     keys, models = chat_router._load_byo_credentials(
         {
-            "ai.byo.anthropic.apiKey": "anthropic-ciphertext",
+            "ai.byo.anthropic.apiKey": "anthropic-ciphertext",  # pragma: allowlist secret
             "ai.byo.anthropic.model": "claude-test",
-            "ai.byo.openai.apiKey": "openai-ciphertext",
+            "ai.byo.openai.apiKey": "openai-ciphertext",  # pragma: allowlist secret
             "ai.byo.openai.model": "gpt-test",
         },
         ("anthropic",),
@@ -86,7 +86,7 @@ def test_saas_does_not_decrypt_or_require_byo_provider_config(monkeypatch):
 
     monkeypatch.setattr(chat_router, "decrypt", fail_if_called)
     assert chat_router._load_byo_credentials(
-        {"ai.byo.anthropic.apiKey": "stored-ciphertext"}, ()
+        {"ai.byo.anthropic.apiKey": "stored-ciphertext"}, ()  # pragma: allowlist secret
     ) == ({}, {})
 
 
@@ -117,6 +117,4 @@ def test_invalid_provider_config_fails_before_decrypt(monkeypatch, config):
 
     monkeypatch.setattr(chat_router, "decrypt", fail_if_called)
     with pytest.raises(chat_router.ChatConfigError, match="CNA_BYO_AI_PROVIDERS"):
-        chat_router._load_byo_credentials(
-            {"ai.byo.anthropic.apiKey": "stored-ciphertext"}, ()
-        )
+        chat_router._load_byo_credentials({"ai.byo.anthropic.apiKey": "stored-ciphertext"}, ())

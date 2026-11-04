@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FILE = ROOT / ".github" / "workflows" / "390-scout-review.yml"
-SCOUT_SHA = "e7e2a72bf1485d10a58f30696b6c513b261ce4fa"
+SCOUT_SHA = "e7e2a72bf1485d10a58f30696b6c513b261ce4fa"  # pragma: allowlist secret
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +90,13 @@ def test_official_scout_scans_exact_digest_without_writes(workflow: dict) -> Non
                 for forbidden in ("docker push", "docker build", "docker login", "gh ", "curl "):
                     assert forbidden not in step["run"]
     text = FILE.read_text(encoding="utf-8")
-    for forbidden in ("id-token:", "security-events:", "registry-write-", "only-fixed:", "sarif-file:"):
+    for forbidden in (
+        "id-token:",
+        "security-events:",
+        "registry-write-",
+        "only-fixed:",
+        "sarif-file:",
+    ):
         assert forbidden not in text
     assert "zero-vulnerability verdict" in text
 
@@ -130,9 +136,7 @@ def test_main_guard_executes_offline(workflow: dict, ref: str) -> None:
 
 @pytest.mark.parametrize("user,pat", [("", ""), ("fixture-user", ""), ("", "fixture-not-a-token")])
 def test_missing_secret_fails_explicitly_offline(workflow: dict, user: str, pat: str) -> None:
-    result = run_guard(
-        steps(workflow, "targets")[1]["run"], {"SCOUT_USER": user, "SCOUT_PAT": pat}
-    )
+    result = run_guard(steps(workflow, "targets")[1]["run"], {"SCOUT_USER": user, "SCOUT_PAT": pat})
     assert result.returncode == 1
     assert "::error::Configure approved" in result.stdout
     assert "fixture-" not in result.stdout

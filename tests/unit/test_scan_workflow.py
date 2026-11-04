@@ -186,6 +186,60 @@ class TestDockerHubLogin:
         assert "password" not in login["with"]
 
 
+class TestBuildPublisherSafety:
+    def test_tag_job_refuses_stale_main_before_registry_login(self, build: dict) -> None:
+        job = build["jobs"]["tag-images"]
+        steps = job["steps"]
+        checkout = next(step for step in steps if step.get("name") == "Checkout current main")
+        guard = next(
+            step for step in steps if step.get("name") == "Refuse to publish a stale main build"
+        )
+        login = next(step for step in steps if step.get("name") == "Log in to Docker Hub")
+
+        assert checkout["with"]["ref"] == "main"
+        assert checkout["with"]["persist-credentials"] is False
+        assert guard["env"] == {"RUN_SHA": "${{ github.sha }}"}
+        assert "git rev-parse HEAD" in guard["run"]
+        assert "CURRENT_MAIN" in guard["run"]
+        assert steps.index(checkout) < steps.index(guard) < steps.index(login)
+
+    def test_tags_are_split_into_immutable_then_floating_with_bounded_retries(
+        self, build: dict
+    ) -> None:
+        steps = build["jobs"]["tag-images"]["steps"]
+        tag_step = next(
+            step
+            for step in steps
+            if step.get("name") == "Tag immutable digests first and floating tags last"
+        )
+        script = tag_step["run"]
+
+        assert "for tag_class in immutable floating" in script
+        assert "sha-[0-9a-f]{7}" in script
+        assert "migrator-)?latest" in script
+        assert "for attempt in 1 2 3" in script
+        assert "docker buildx imagetools create -t" in script
+
+    def test_manifest_refuses_stale_build_before_commit_and_after_rebase(
+        self, build: dict
+    ) -> None:
+        steps = build["jobs"]["publish-build-manifest"]["steps"]
+        guard = next(
+            step
+            for step in steps
+            if step.get("name") == "Require this build to still be the main tip"
+        )
+        push = next(step for step in steps if step.get("name") == "Commit and push manifest")
+        push_script = push["run"]
+
+        assert "git fetch origin main" in guard["run"]
+        assert '"$RUN_SHA" != "$CURRENT_MAIN"' in guard["run"]
+        assert "git pull --rebase --autostash -X theirs origin main" in push_script
+        assert "REBASED_ON=$(git rev-parse HEAD^)" in push_script
+        assert '"$REBASED_ON" != "$RUN_SHA"' in push_script
+        assert steps.index(guard) < steps.index(push)
+
+
 class TestScanner:
     def test_uses_grype_through_the_pinned_action_and_no_other_scanner(self, scan: dict) -> None:
         used = [s["uses"] for s in all_steps(scan) if "uses" in s]

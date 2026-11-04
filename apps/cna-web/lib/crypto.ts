@@ -1,11 +1,20 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGO = "aes-256-gcm" as const;
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+function decodeBase64(value: string, errorMessage: string): Buffer {
+  if (!BASE64_PATTERN.test(value)) throw new Error(errorMessage);
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.toString("base64") !== value) throw new Error(errorMessage);
+  return decoded;
+}
 
 function getKey(): Buffer {
-  const b64 = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const b64 = process.env.CREDENTIAL_ENCRYPTION_KEY?.trim();
   if (!b64) throw new Error("CREDENTIAL_ENCRYPTION_KEY is not set");
-  const key = Buffer.from(b64, "base64");
+  const key = decodeBase64(b64, "CREDENTIAL_ENCRYPTION_KEY must be valid base64");
   if (key.length !== 32)
     throw new Error("CREDENTIAL_ENCRYPTION_KEY must decode to exactly 32 bytes");
   return key;
@@ -36,9 +45,11 @@ export function decrypt(ciphertext: string): string {
   const parts = ciphertext.split(":");
   if (parts.length !== 3) throw new Error("Invalid ciphertext format");
   const [ivB64, tagB64, dataB64] = parts;
-  const iv = Buffer.from(ivB64, "base64");
-  const tag = Buffer.from(tagB64, "base64");
-  const data = Buffer.from(dataB64, "base64");
+  const iv = decodeBase64(ivB64, "Invalid ciphertext encoding");
+  const tag = decodeBase64(tagB64, "Invalid ciphertext encoding");
+  const data = decodeBase64(dataB64, "Invalid ciphertext encoding");
+  if (iv.length !== 12 || tag.length !== 16)
+    throw new Error("Invalid ciphertext format");
   const decipher = createDecipheriv(ALGO, key, iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");

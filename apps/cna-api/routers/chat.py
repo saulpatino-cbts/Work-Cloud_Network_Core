@@ -28,12 +28,13 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from cna.ai_engine.chat_agent import (
-    BYO_ENGINES,
     MODE_BYO_API,
     ChatConfigError,
     GroundedChatAgent,
     build_grounding_context,
+    configured_byo_ai_providers,
     resolve_ai_mode,
+    validate_byo_ai_providers,
 )
 from cna.api_errors import sanitize_downstream_error
 from cna.api_status import Outcome, status_for
@@ -53,12 +54,6 @@ AI_ENGINE_SETTING_KEY = "ai.activeEngine"
 def _byo_setting_key(provider: str, field: str) -> str:
     return f"ai.byo.{provider}.{field}"
 
-
-AI_SETTING_KEYS = (
-    AI_ENGINE_SETTING_KEY,
-    *(_byo_setting_key(p, "apiKey") for p in BYO_ENGINES),
-    *(_byo_setting_key(p, "model") for p in BYO_ENGINES),
-)
 
 MAX_MESSAGES = 30
 MAX_MESSAGE_CHARS = 4000
@@ -153,18 +148,31 @@ def _load_topology_classification(engagement_id: str) -> tuple[str | None, str |
         return None, None
 
 
-def _load_ai_settings() -> dict[str, str]:
+def _load_ai_settings(byo_providers: tuple[str, ...] = ()) -> dict[str, str]:
     """Read the engine switch and BYO provider settings in one round trip.
 
-    Empty on any failure — a settings read must never block chat; the agent
-    then resolves from env alone (saas) or reports the missing key (byo-api).
+    Only allowlisted BYO rows are retrieved. Empty on DB failure — the agent
+    then reports missing configuration; invalid provider env is checked first.
     """
+    allowed_providers: tuple[str, ...] = ()
+    if resolve_ai_mode() == MODE_BYO_API:
+        allowed_providers = configured_byo_ai_providers()
+        requested_providers = validate_byo_ai_providers(byo_providers)
+        if requested_providers != allowed_providers:
+            raise ChatConfigError(
+                "BYO provider configuration must match CNA_BYO_AI_PROVIDERS."
+            )
+    setting_keys = [AI_ENGINE_SETTING_KEY]
+    for provider in allowed_providers:
+        setting_keys.extend(
+            (_byo_setting_key(provider, "apiKey"), _byo_setting_key(provider, "model"))
+        )
     try:
         with _get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     'SELECT key, value FROM "AppSetting" WHERE key = ANY(%s)',
-                    (list(AI_SETTING_KEYS),),
+                    (setting_keys,),
                 )
                 rows = cur.fetchall()
         return {row["key"]: row["value"] for row in rows if row.get("value")}
@@ -175,19 +183,27 @@ def _load_ai_settings() -> dict[str, str]:
 
 def _load_byo_credentials(
     settings: dict[str, str],
+    byo_providers: tuple[str, ...],
 ) -> tuple[dict[str, str | None], dict[str, str | None]]:
     """Decrypt the admin-entered BYO keys — only in byo-api mode, so a saas
     appliance never needs CREDENTIAL_ENCRYPTION_KEY in the API container."""
     if resolve_ai_mode() != MODE_BYO_API:
         return {}, {}
+    configured_providers = configured_byo_ai_providers()
+    requested_providers = validate_byo_ai_providers(byo_providers)
+    if requested_providers != configured_providers:
+        raise ChatConfigError(
+            "BYO provider configuration must match CNA_BYO_AI_PROVIDERS."
+        )
     keys = {
         provider: (
             decrypt(blob) if (blob := settings.get(_byo_setting_key(provider, "apiKey"))) else None
         )
-        for provider in BYO_ENGINES
+        for provider in configured_providers
     }
     models = {
-        provider: settings.get(_byo_setting_key(provider, "model")) for provider in BYO_ENGINES
+        provider: settings.get(_byo_setting_key(provider, "model"))
+        for provider in configured_providers
     }
     return keys, models
 
@@ -211,6 +227,17 @@ def chat(engagement_id: str, request: ChatRequest) -> dict:
         for m in request.messages[-MAX_MESSAGES:]
     ]
 
+    try:
+        byo_providers = (
+            configured_byo_ai_providers()
+            if resolve_ai_mode() == MODE_BYO_API
+            else ()
+        )
+    except ChatConfigError as exc:
+        raise HTTPException(
+            status_code=status_for(Outcome.NOT_CONFIGURED), detail=str(exc)
+        ) from exc
+
     findings = _load_findings(engagement_id)
     stat_summary = _load_stat_summary(engagement_id)
     pattern, rationale = _load_topology_classification(engagement_id)
@@ -224,12 +251,13 @@ def chat(engagement_id: str, request: ChatRequest) -> dict:
     )
 
     try:
-        settings = _load_ai_settings()
-        byo_keys, byo_models = _load_byo_credentials(settings)
+        settings = _load_ai_settings(byo_providers)
+        byo_keys, byo_models = _load_byo_credentials(settings, byo_providers)
         agent = GroundedChatAgent(
             engine=settings.get(AI_ENGINE_SETTING_KEY),
             byo_keys=byo_keys,
             byo_models=byo_models,
+            byo_providers=byo_providers if resolve_ai_mode() == MODE_BYO_API else None,
         )
         result = agent.answer(messages, context)
     except (ChatConfigError, CredentialCryptoError) as exc:

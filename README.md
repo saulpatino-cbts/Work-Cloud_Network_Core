@@ -128,7 +128,107 @@ The container images do not resolve dependencies at build time: they install the
 committed in `uv.lock` with hash checking. After changing a dependency in `pyproject.toml`, run
 `uv lock` (uv ≥ 0.12.21) and commit the updated lock alongside it — CI fails when the two disagree.
 
-### Deploying an environment
+### Client installation and deployment
+
+This repository is the internal image source, **not** the customer installer. Do not deploy the
+core repository or run Terraform from it. Install from exactly one customer-facing appliance:
+choose Azure or AWS, then follow that appliance repository's **README → Operating the appliance**
+and its `REVIEW.md` / `TODO.md` prerequisites:
+[Azure appliance](https://github.com/saulpatino-cbts/Work-Cloud_Network_Azure_Appliance) ·
+[AWS appliance](https://github.com/saulpatino-cbts/Work-Cloud_Network_AWS_Appliance).
+
+Use this sequence before a client deployment:
+
+1. Select the client's cloud and GitHub organization, and review the chosen appliance's supported
+   regions, prerequisites, required roles, state-backend setup, workflow inputs, and approval
+   gates. Resolve its open review blockers with the client account owners; do not copy deployment
+   steps from this core repository.
+2. Fill in the appliance's documented non-secret placeholders for the client-owned repository,
+   cloud account or subscription, region, state backend, domain, and image-pull identity. Treat
+   ``<client-owner>``, ``<client-repository>``, and
+   ``<cloud-account-or-subscription>`` as prompts to replace in the appliance's own settings.
+   Do the same for ``<region>`` and ``<state-backend>``; these are not literal values or values to
+   add to this core repository.
+3. Configure the appliance repository's GitHub variables, OIDC trust, and cloud secret manager
+   exactly as its setup guide specifies. Keep credentials and key material in the approved secret
+   store; never put them in a workflow input, command line, committed file, or unapproved `.env`
+   file or artifact. Terraform state and saved plans can contain secret values even when inputs
+   are marked sensitive; keep them in the client's access-controlled backend and never publish
+   them as installation evidence. The core's `.env.example` is a runtime inventory and
+   local-development template, not a production deployment file.
+4. Choose `saas` or `byo-api` only after reviewing the appliance and security decisions. `saas`
+   uses the appliance cloud's managed identity. BYO-AI keys are entered only in the application's
+   authorized AI Engine administration UI; do not inject provider keys through environment
+   variables, Terraform, or workflow inputs. **BYO-AI remains subject to the open security and
+   product-owner decisions in `REVIEW.md` R-011 and R-021.** The current single-key encryption
+   configuration cannot be rotated without coordinated keyring/re-encryption work (`TODO.md`
+   T-707); preserve the configured key and an approved recovery procedure.
+5. Run the appliance's documented bootstrap and deployment workflow for its non-production
+   environment first. Review its health checks and deployment evidence, then use its production
+   approval gate and change/rollback procedure. The appliance is the authority for exact commands,
+   inputs, resource names, cloud roles, and recovery steps.
+6. Confirm the deployed image tag and digest and review current signature/provenance and scan
+   evidence before promoting according to the client's release policy. Core workflow
+   `390-scan-images` scans after publication; it is **detection, not a pre-deployment gate**.
+   A signature or catalog entry alone does not mean an image is vulnerability-free. If fresh scan
+   evidence is unavailable, treat scan status as unknown and resolve that through the client's
+   release owner before production use.
+
+#### Client identities, provider selection, and credential lifecycle
+
+Each appliance is a **single-client security boundary**. Give each client its own database,
+storage, secret manager, encryption key, authentication registration, and runtime identities.
+BYO provider settings are appliance-wide `AppSetting` rows, not per-engagement keys. Engagement
+membership does not make a shared appliance safe for unrelated customers.
+
+Keep the identities separate:
+
+| Identity or setting | Ownership and use |
+|---|---|
+| Client bootstrap identity | Creates the client's backend and initial trust; not the app runtime identity. |
+| Client deploy OIDC identity | Limited to the client's repository, approved environment, and deployment resources; never copy another client's trust subjects. |
+| App runtime identity | Only the secret, storage, database, and cloud-AI access the running services need; not deployment or secret-administration access. |
+| Upstream publisher | The chosen image producer. Its repository, workflow OIDC signing identity, issuer, and provenance builder must match the verified catalog. A client fork does not make the deploy owner the upstream signer. |
+| `CORE_OWNER` / `CORE_REPO` | Appliance-side upstream source settings, not tenant/account IDs or credentials. Follow each appliance's current input names and explicitly select the real publisher. |
+| `LOCAL_ADMIN_PASSWORD` | Optional break-glass **PBKDF2 hash**, never a plaintext password. Leave it unset to disable that path; provide it only through the appliance's protected secret procedure. |
+
+**Prepared contract, not yet deployed:** the matching Core release for `byo-api` requires
+`CNA_BYO_AI_PROVIDERS`: an explicit nonempty JSON
+array containing only the client-approved `anthropic` and/or `openai` identifiers, with no
+duplicates. Both the web and API service must receive the same list. Missing, malformed,
+placeholder, or incompatible provider/default settings fail closed rather than authorizing all
+providers. Set `CNA_AI_ENGINE_DEFAULT` to one of the selected providers. These are non-secret
+configuration values; provider API keys remain UI-only. Both appliances must adopt this contract
+with the matching Core release before enabling BYO-AI.
+
+Provider selection is **not a network egress firewall**. Saving a key probes the selected
+provider's models endpoint; analysis/chat can send findings, topology, documents, and prompts to
+that provider. Obtain the client's data-processing, retention, residency, and outbound-network
+approval first (R-011/R-021). Configure and verify the appliance's network policy separately;
+do not infer blocked internet access from an app allowlist or private inbound connectivity.
+
+Only an authenticated platform ADMIN may save or remove BYO keys. Keys are encrypted with
+AES-256-GCM in the client's database and decrypted server-side for provider requests; the UI
+shows only a hint. Do not copy keys or raw SDK/HTTP errors into screenshots, logs, support
+bundles, workflow outputs, or plan artifacts. Review any exported evidence for secrets first.
+Removing a key deletes its stored key and hint, but keeps its model override and does not revoke
+the provider credential, cancel in-flight calls, or erase database backups. Provider revocation
+and backup retention remain client-owned operations.
+
+Replacing a provider API key and rotating `CREDENTIAL_ENCRYPTION_KEY` are different operations.
+For a provider-key replacement, use the authorized admin UI and the client's approved provider
+revocation procedure; never paste credentials into deployment inputs. **Do not replace the
+encryption key in place:** existing ciphertext has no key ID and will become unreadable.
+T-707's coordinated keyring/re-encryption migration is still outstanding. Preserve the existing
+key in the client's recovery vault and restore a matching database/key pair when recovering.
+Verify recovery in an isolated client-owned non-production environment without exposing secrets.
+
+For installation verification, confirm health/readiness, authentication and authorization,
+the running immutable image digests, signer/provenance checks, scan date/policy, and an approved
+non-production workflow. For rollback, use the appliance's reviewed release catalog and migration
+compatibility procedure; do not blindly roll database state or encryption keys backward. Cleanup
+must follow the client's retention and revocation policy for provider credentials, runtime
+secrets, backups, storage, state, and artifacts. No cleanup or rotation is automatic here.
 
 Deployment does not happen from this repository. Each appliance repository owns its cloud's
 Terraform, bootstrap, deploy, drift and teardown workflows and documents the procedure in its
@@ -152,11 +252,38 @@ Configuration comes from three places, in this order of authority:
    pull them into a short-lived `.env` artifact.
 3. **`.env` / `.env.local`** — local development only, never committed.
 
-`.env.example` at the repository root is the complete inventory of the runtime environment
-contract — every variable the images read, each with a one-line description and which side
-(appliance Terraform or local `.env`) supplies it.
-`apps/cna-web/.env.example` covers the web application specifically. The Wiki's **Secrets
+`.env.example` at the repository root documents the runtime environment contract and which
+side (appliance Terraform or local `.env`) supplies each listed value. Inventory drift remains
+tracked by `TODO.md` T-711; do not assume these templates enumerate every runtime variable.
+`apps/cna-web/.env.example` documents web-specific values. The Wiki's **Secrets
 Reference** explains each value in full.
+
+### Web file storage (Core #70 / CR-CORE-01)
+
+The web tier selects its backend using `CNA_APPLIANCE_CLOUD`. On AWS it uses the
+appliance-injected `CNA_STORAGE_BUCKET` (a bucket name, not a URL) and AWS SDK v3's
+default workload credential and region chains. It does not need Azure storage
+configuration, static keys, or a custom endpoint. On Azure it retains
+`AZURE_STORAGE_ACCOUNT_NAME` and optional `AZURE_STORAGE_CONTAINER_ENGAGEMENTS`
+(default `raw-artifacts`).
+
+Documents and diagrams use `raw-artifacts/<engagementId>/<file>` on S3;
+deliverables use `deliverables/<engagementId>/<file>`. Azure retains its configured
+engagement container and the `deliverables` container. Stored paths are relative
+keys, never external URLs. Download/delete operations require the authorized
+engagement ID; read-only download links expire within one hour and their redirects
+are not cached. Portal cleanup targets only `portal-<engagementId>/` on S3 (never
+the bucket), or that engagement's Azure container. Cleanup removes current objects;
+version retention, soft deletion and lifecycle remain appliance policy.
+
+Upload, diagram and assessment controls become available when the selected storage
+configuration is valid. **External client portal publishing remains Azure-only**:
+the Python API's `POST /publish` still uses `AzureBlobDeployer`; its AWS conversion
+is a separate T-709 follow-up. Both appliances must verify their runtime identities
+and configuration before adopting the image: AWS needs bucket-scoped
+`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` and prefix-scoped `s3:ListBucket`;
+Azure retains Blob data access and user-delegation signing permissions. No IAM,
+storage policy, deployment, or live-cloud verification is performed by this local change.
 
 ---
 

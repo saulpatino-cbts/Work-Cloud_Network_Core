@@ -11,7 +11,7 @@ dependencies = [
     "click>=8.4.2",
     "rich>=15.0.0",
     "boto3>=1.43.118",
-    "azure-identity>=1.26.0",
+    "azure-identity>=1.27.0",
     # Pinned to 1.x deliberately (TODO.md T-413). FoundryAgentClient drives
     # agents.threads / .messages / .runs, which is the 1.x surface; 2.x replaced
     # it entirely and every one of those calls raises AttributeError against it.
@@ -23,9 +23,9 @@ dependencies = [
     "azure-mgmt-network>=33.1.0",
     "azure-mgmt-resource>=26.0.0",
     "azure-mgmt-subscription>=3.1.1",
-    "azure-storage-blob>=12.31.0",       # Phase F: Azure Blob Storage deployer
-    "openai>=3.37.0",
-    "anthropic>=2.1.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
+    "azure-storage-blob>=12.31.1",       # Phase F: Azure Blob Storage deployer
+    "openai>=3.41.0",
+    "anthropic>=2.3.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
     # Reads the AES-256-GCM credential blobs the web tier writes (BYO AI keys).
     # Was only ever a transitive dependency of azure-identity; declared so a
     # future azure-identity bump cannot silently drop it.
@@ -42,7 +42,7 @@ dependencies = [
     # via the API; defusedxml is the hardened stdlib drop-in for that.
     "defusedxml>=0.7.1",
     "pandas>=3.1.0",
-    "pydantic>=2.14.1",
+    "pydantic>=2.14.2",
     "python-dotenv>=1.2.4",
     "pyyaml>=6.0.3",
     "tenacity>=9.2.1",
@@ -92,7 +92,7 @@ enrichment = [
 # exercises at discovery time and must be present in the image; the rest of the
 # enrichment extra remains optional.
 api = [
-    "fastapi>=0.161.1",
+    "fastapi>=0.162.0",
     "uvicorn[standard]>=0.54.0",
     "psycopg2-binary>=2.9",
     "azure-mgmt-monitor>=7.0.0,<8",
@@ -101,11 +101,11 @@ api = [
 ]
 
 dev = [
-    "pytest>=9.1.1",
+    "pytest>=9.2.0",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
-    "hypothesis>=6.170.8",             # property-based tests (production-readiness review invariants)
+    "hypothesis>=6.170.14",             # property-based tests (production-readiness review invariants)
     "ruff>=0.17.2",
-    "ty>=0.0.91",                       # type checker (TODO.md T-402)
+    "ty>=0.0.95",                       # type checker (TODO.md T-402)
     "pre-commit>=4.7.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]
@@ -128,8 +128,8 @@ build = [
 # the cna package, so its image resolves them from the same lock as the CLI and
 # API images (same versions everywhere) instead of an unpinned `pip install`.
 worker = [
-    "azure-identity>=1.26.0",
-    "azure-storage-blob>=12.31.0",
+    "azure-identity>=1.27.0",
+    "azure-storage-blob>=12.31.1",
 ]
 
 # uv.lock is the single resolution every Python image installs from

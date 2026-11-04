@@ -1,0 +1,96 @@
+name: "390 · Docker Scout Review"
+
+# Optional authenticated Scout review; the independent Grype workflow is unchanged.
+# cves queries Docker's service and pulls published images, but does not publish
+# images, attestations or environments. Owner-approved Scout entitlement is required.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  targets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      has_targets: ${{ steps.resolve.outputs.has_targets }}
+    steps:
+      - name: Require main
+        env:
+          RUN_REF: ${{ github.ref }}
+        run: |
+          if [ "$RUN_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch Docker Scout Review from main only."
+            exit 1
+          fi
+
+      - name: Require approved Scout credentials
+        env:
+          SCOUT_USER: ${{ secrets.SCOUT_DOCKERHUB_USER }}
+          SCOUT_PAT: ${{ secrets.SCOUT_DOCKERHUB_PAT }}
+        run: |
+          if [ -z "$SCOUT_USER" ] || [ -z "$SCOUT_PAT" ]; then
+            echo "::error::Configure approved SCOUT_DOCKERHUB_USER and SCOUT_DOCKERHUB_PAT secrets with Scout entitlement and image pull access before dispatch. No OIDC fallback is attempted."
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci
+            .deployment-catalog
+
+      - name: Resolve published digests
+        id: resolve
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          EVENT_NAME: workflow_dispatch
+        run: python3 scripts/ci/resolve_scan_targets.py
+
+  scout:
+    name: Scout ${{ matrix.key }} (linux/amd64)
+    needs: targets
+    if: github.ref == 'refs/heads/main' && needs.targets.outputs.has_targets == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    steps:
+      - name: Review published image with Docker Scout
+        uses: docker/scout-action@e7e2a72bf1485d10a58f30696b6c513b261ce4fa # v1.29.0
+        with:
+          command: cves
+          image: registry://${{ matrix.ref }}
+          platform: linux/amd64
+          dockerhub-user: ${{ secrets.SCOUT_DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.SCOUT_DOCKERHUB_PAT }}
+          github-token: ${{ github.token }}
+          write-comment: false
+          summary: true
+          exit-code: false
+
+      - name: State review limits
+        if: ${{ !cancelled() }}
+        env:
+          IMAGE_REF: ${{ matrix.ref }}
+          IMAGE_KEY: ${{ matrix.key }}
+        run: |
+          {
+            echo "### Docker Scout review scope"
+            printf 'Image: `%s` (`%s`), platform: `linux/amd64`.\n\n' "$IMAGE_REF" "$IMAGE_KEY"
+            echo "Informational CVE review: success is not a zero-vulnerability verdict or a deployment gate."
+            echo "Authentication, entitlement or scan errors remain failures. No Grype fallback is attempted."
+            echo "No image build/push, registry mutation, PR comment, SARIF upload or deployment is performed."
+            echo "Other platforms are not covered. Scout results are separate from signature/provenance checks in 390-scan-images."
+          } >> "$GITHUB_STEP_SUMMARY"

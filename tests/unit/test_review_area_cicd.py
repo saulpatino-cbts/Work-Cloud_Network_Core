@@ -193,6 +193,7 @@ def test_all_workflow_files_parse_as_yaml():
         "310-release-version.yml",
         "370-registry-cleanup.yml",
         "390-scan-images.yml",
+        "390-scout-review.yml",
     }
     for path in files:
         # yaml.safe_load raises on malformed YAML; a clean parse is the assertion.

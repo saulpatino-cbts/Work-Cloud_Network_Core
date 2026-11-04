@@ -144,6 +144,32 @@ async function runComprehensiveInBackground(
   }
 }
 
+async function runSingleShotInBackground(
+  deliverableId: string,
+  engagementId: string,
+  ctx: DeliverableContext,
+): Promise<void> {
+  try {
+    const content = await generateDeliverableContent(ctx);
+    const fileName = `${ctx.type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.md`;
+    const blobPath = await uploadDeliverable(engagementId, fileName, content);
+    await prisma.deliverable.update({
+      where: { id: deliverableId },
+      data: { content, blobPath, status: "COMPLETED" },
+    });
+  } catch (err) {
+    console.error("[runSingleShotInBackground][error]", err);
+    await prisma.deliverable
+      .update({
+        where: { id: deliverableId },
+        data: { status: "FAILED" },
+      })
+      .catch((statusError) => {
+        console.error("[runSingleShotInBackground][status-update-error]", statusError);
+      });
+  }
+}
+
 /** Poll target for the deliverables page while a report is QUEUED/RUNNING. */
 export async function getDeliverableProgress(
   deliverableId: string,
@@ -366,7 +392,7 @@ export async function generateDeliverable(
 export async function generateAllAssessments(
   _prev: { error?: string; success?: boolean; count?: number } | null,
   formData: FormData,
-): Promise<{ error?: string; success?: boolean; count?: number }> {
+): Promise<{ error?: string; success?: boolean; count?: number; deliverableIds?: string[] }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
@@ -428,41 +454,41 @@ export async function generateAllAssessments(
   }));
   const previousAssessments = existingDeliverables.map((d) => ({ type: d.type, title: d.title }));
 
-  // Dispatch the sectioned Comprehensive Assessment to the background first.
+  // Create all rows before dispatch so the page can poll every background job.
   const comprehensiveTitle = buildTitle(
     "COMPREHENSIVE_ASSESSMENT",
     engagement.clientOrg,
     existingDeliverables.length + 1,
   );
-  const comprehensiveRow = await prisma.deliverable.create({
-    data: {
-      engagementId,
-      title: comprehensiveTitle,
-      type: "COMPREHENSIVE_ASSESSMENT",
-      status: "RUNNING",
-      progressLog: "[]",
-    },
-  });
-  after(() =>
-    runComprehensiveInBackground(comprehensiveRow.id, engagementId, {
-      type: "COMPREHENSIVE_ASSESSMENT",
-      title: comprehensiveTitle,
-      clientOrg: engagement.clientOrg,
-      engagementName: engagement.name,
-      findings,
-      topologyJson: mergedTopologyJson,
-      documents: docInput,
-      customerLogoUrl,
-      credentialsInfo,
-      previousAssessments,
+  const rows = await prisma.$transaction([
+    prisma.deliverable.create({
+      data: {
+        engagementId,
+        title: comprehensiveTitle,
+        type: "COMPREHENSIVE_ASSESSMENT",
+        status: "RUNNING",
+        progressLog: "[]",
+      },
     }),
-  );
+    ...SINGLE_SHOT_TYPES.map((type, i) =>
+      prisma.deliverable.create({
+        data: {
+          engagementId,
+          title: buildTitle(type, engagement.clientOrg, existingDeliverables.length + i + 2),
+          type: type as DeliverableType,
+          status: "RUNNING",
+          progressLog: "[]",
+        },
+      }),
+    ),
+  ]);
+  const [comprehensiveRow, ...singleShotRows] = rows;
 
-  const settled = await Promise.allSettled(
-    SINGLE_SHOT_TYPES.map((type, i) =>
-      generateDeliverableContent({
-        type,
-        title: buildTitle(type, engagement.clientOrg, existingDeliverables.length + i + 2),
+  after(async () => {
+    await Promise.all([
+      runComprehensiveInBackground(comprehensiveRow.id, engagementId, {
+        type: "COMPREHENSIVE_ASSESSMENT",
+        title: comprehensiveTitle,
         clientOrg: engagement.clientOrg,
         engagementName: engagement.name,
         findings,
@@ -471,29 +497,27 @@ export async function generateAllAssessments(
         customerLogoUrl,
         credentialsInfo,
         previousAssessments,
-      }).then((content) => ({ type, content })),
-    ),
-  );
-
-  let saved = 1; // the background comprehensive row counts as dispatched
-  for (const result of settled) {
-    if (result.status !== "fulfilled") continue;
-    const { type, content } = result.value;
-    const fileName = `${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.md`;
-    try {
-      const blobPath = await uploadDeliverable(engagementId, fileName, content);
-      const title = buildTitle(type, engagement.clientOrg, existingDeliverables.length + saved + 1);
-      await prisma.deliverable.create({
-        data: { engagementId, title, type, blobPath, content },
-      });
-      saved++;
-    } catch { /* skip failed saves */ }
-  }
-
-  const failed = settled.filter((r) => r.status === "rejected").length;
-  if (failed > 0 && saved <= 1) {
-    return { error: `All ${failed} synchronous assessment generations failed. Check active AI engine connectivity. (The Comprehensive Assessment was dispatched in the background — check its status on the deliverables list.)` };
-  }
+      }),
+      ...singleShotRows.map((row, i) =>
+        runSingleShotInBackground(row.id, engagementId, {
+          type: SINGLE_SHOT_TYPES[i],
+          title: buildTitle(
+            SINGLE_SHOT_TYPES[i],
+            engagement.clientOrg,
+            existingDeliverables.length + i + 2,
+          ),
+          clientOrg: engagement.clientOrg,
+          engagementName: engagement.name,
+          findings,
+          topologyJson: mergedTopologyJson,
+          documents: docInput,
+          customerLogoUrl,
+          credentialsInfo,
+          previousAssessments,
+        }),
+      ),
+    ]);
+  });
 
   await prisma.engagement.update({
     where: { id: engagementId },
@@ -501,7 +525,11 @@ export async function generateAllAssessments(
   });
 
   revalidatePath(`/engagements/${engagementId}`);
-  return { success: true, count: saved };
+  return {
+    success: true,
+    count: rows.length,
+    deliverableIds: rows.map((row) => row.id),
+  };
 }
 
 // ─── Delete assessment ─────────────────────────────────────────────────────────

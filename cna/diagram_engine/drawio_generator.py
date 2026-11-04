@@ -207,20 +207,20 @@ def _safe(text: str | None) -> str:
 
 
 def _label(text: str | None) -> str:
-    """Escape a cell label and turn newlines into real line breaks.
+    """Escape a cell label for HTML embedded in an XML attribute.
 
     Every style in this module sets html=1, under which a raw newline collapses
     to a single space — so the multi-line labels this generator has always
     written (name / CIDR / location) rendered as one run-on line.
 
-    The break has to be written as an entity, not as a literal tag: `value` is
-    an XML attribute, where a raw "<" is malformed and makes draw.io drop the
-    cell (and, in practice, its siblings). Writing "&lt;br&gt;" here means the
-    parsed attribute holds "<br>", which html=1 then renders as a line break.
-    Escaping before substituting also keeps the substitution the only markup
-    that can reach the label.
+    There are two parsers: the outer XML parser and draw.io's HTML renderer.
+    Escape text for HTML first, introduce only the intentional line-break
+    element, then escape the whole value for its XML attribute.
     """
-    return _safe(text).replace("\n", "&lt;br&gt;")
+    if not text:
+        return ""
+    html_label = html.escape(str(text), quote=True).replace("\n", "<br>")
+    return html.escape(html_label, quote=True)
 
 
 def _truncate(text: str, limit: int = 24) -> str:
@@ -274,7 +274,7 @@ def _child_cell(  # noqa: PLR0913
 def _edge_cell(src: str, tgt: str, label: str = "") -> str:
     eid = _cell_id()
     return (
-        f'<mxCell id="{eid}" value="{_safe(label)}" style="{STYLE_EDGE}" '
+        f'<mxCell id="{eid}" value="{_label(label)}" style="{STYLE_EDGE}" '
         f'edge="1" source="{src}" target="{tgt}" parent="1">'
         f'<mxGeometry relative="1" as="geometry"/>'
         f"</mxCell>\n"

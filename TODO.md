@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-09-23
+**Last reviewed:** 2026-11-04
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-717 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-723 |
 
 ---
 
@@ -1382,6 +1382,10 @@ order; do not reorder it.
 - **Notes for future engineers:** The rate limiter is 5 requests / 60s on `generateDeliverable`.
   A user who re-clicks after the false failure starts a second comprehensive run plus four more
   single-shots — so the visible symptom of this bug also makes the underlying load worse.
+- **Status:** Done 2026-11-03 — all five deliverable rows are created atomically as `RUNNING`;
+  the action dispatches all five via `after()` and returns their ids without waiting for generation.
+  The page polls every row, and each single-shot background task marks its row `COMPLETED` or
+  `FAILED`. Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-418 — Diagram generation covers Azure only, and two C4 layers are the same diagram
 
@@ -2094,6 +2098,10 @@ draw.io `html=1` labels are single-escaped and the encyclopedia embeds the expor
 `| safe`; customer strings (resource names, tags, NSG descriptions) can carry markup into the PDF
 and the Electron renderer. Escape label text for HTML and XML both, and add a test with a hostile
 resource name.
+- **Status:** Done 2026-11-03 — draw.io cell and edge labels are escaped for inner HTML and the
+  outer XML attribute separately; only intentional line breaks remain markup. A hostile resource
+  name regression test parses both representations and confirms it does not become an HTML element.
+  Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-714 — Prune dead modules (PY-014)
 26 `cna.*` modules are imported by nothing (`modules.{container,dns,hybrid,iam,landingzone,
@@ -2117,6 +2125,9 @@ The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JS
 `MAX_MESSAGE_CHARS`. Nothing in the application bounds a request body — only the edge or load
 balancer does. Add a body-size limit (an ASGI middleware rejecting `Content-Length` above a
 declared constant, e.g. 1 MiB, with 413) and a test.
+- **Status:** Done 2026-11-03 — the API enforces a 1 MiB maximum before route parsing, rejecting
+  oversized declared and chunked request bodies with 413. TestClient regressions cover both paths.
+  Recorded in [`CHANGELOG.md`](CHANGELOG.md) → Unreleased.
 
 ### T-718 — Prune orphaned signatures and attestations in `370-registry-cleanup`
 T-703 stores each image's cosign signature and provenance attestation as OCI referrers of the

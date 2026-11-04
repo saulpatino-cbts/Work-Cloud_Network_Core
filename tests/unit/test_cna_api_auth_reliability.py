@@ -160,6 +160,25 @@ def test_unauthenticated_allowed_when_token_and_cloud_unset(plain_client, api_ma
     assert resp.status_code == 501
 
 
+# ── T-717 — request body size limit ──────────────────────────────────────────
+
+
+def test_oversized_request_body_is_rejected_before_route(plain_client, api_main):
+    payload = b"x" * (api_main.MAX_REQUEST_BODY_BYTES + 1)
+    resp = plain_client.post("/intake", content=payload)
+
+    assert resp.status_code == 413
+    assert resp.json() == {"detail": "request body too large"}
+
+
+def test_chunked_oversized_request_body_is_rejected(plain_client, api_main):
+    chunk_size = api_main.MAX_REQUEST_BODY_BYTES // 2 + 1
+    chunks = (b"x" * chunk_size for _ in range(2))
+    resp = plain_client.post("/intake", content=chunks)
+
+    assert resp.status_code == 413
+
+
 # ── PY-001 — fail-fast startup validation ─────────────────────────────────────
 
 

@@ -34,7 +34,7 @@ export default async function DiagramPage({ params }: PageProps) {
   if (!isMember) notFound();
 
   // CR-CORE-01 / AWS-F-04: generating, saving and uploading diagrams all write
-  // to blob storage (Azure-only today), so disable those controls on AWS.
+  // to the configured Azure or S3 backend.
   const storageAvailable = isBlobStorageAvailable();
 
   // Latest saved diagram source (editor saves and .drawio uploads both store

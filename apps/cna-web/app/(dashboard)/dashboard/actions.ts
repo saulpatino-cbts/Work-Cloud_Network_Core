@@ -81,13 +81,12 @@ export async function deleteEngagement(formData: FormData) {
     ...deliverables.map((d) => d.blobPath),
   ].filter((p): p is string => Boolean(p));
 
-  // CR-CORE-01 / AWS-F-04: only Azure writes blobs/containers, so there is
-  // nothing to clean up on AWS — skip the storage calls so the engagement still
-  // deletes instead of logging raw Azure-storage errors for every artifact.
+  // Both backends enforce the authorized engagement on every object/prefix.
+  // Preserve best-effort DB teardown if storage configuration is unavailable.
   if (isBlobStorageAvailable()) {
     for (const blobPath of blobPaths) {
       try {
-        await deleteBlob(blobPath);
+        await deleteBlob(blobPath, engagementId);
       } catch (err) {
         console.error(`[deleteEngagement] blob delete failed for ${blobPath} (orphaned):`, err);
       }
@@ -95,7 +94,7 @@ export async function deleteEngagement(formData: FormData) {
 
     // The per-engagement client-portal container (see cna-api /publish).
     try {
-      await deleteContainer(`portal-${engagementId}`);
+      await deleteContainer(`portal-${engagementId}`, engagementId);
     } catch (err) {
       console.error(`[deleteEngagement] portal container delete failed for portal-${engagementId} (orphaned):`, err);
     }

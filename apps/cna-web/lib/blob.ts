@@ -4,135 +4,216 @@ import {
   generateBlobSASQueryParameters,
 } from "@azure/storage-blob";
 import { DefaultAzureCredential } from "@azure/identity";
+import {
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getStorageConfig } from "./storage";
 
-function getBlobServiceClient(): BlobServiceClient {
-  const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-  if (!accountName) {
-    throw new Error("AZURE_STORAGE_ACCOUNT_NAME is not set");
-  }
-  const credential = new DefaultAzureCredential();
+const DEFAULT_DOWNLOAD_TTL_HOURS = 1;
+const MAX_DOWNLOAD_TTL_SECONDS = 3600;
+const S3_DELETE_BATCH_SIZE = 1000;
+const MARKDOWN_CONTENT_TYPE = "text/markdown; charset=utf-8";
+type StorageConfig = ReturnType<typeof getStorageConfig>;
+
+function azureClient(config: StorageConfig): BlobServiceClient {
+  if (config.cloud !== "azure") throw new Error("Expected Azure storage configuration");
   return new BlobServiceClient(
-    `https://${accountName}.blob.core.windows.net`,
-    credential,
+    `https://${config.account}.blob.core.windows.net`,
+    new DefaultAzureCredential(),
   );
 }
 
-/**
- * Upload a document file to the raw-artifacts container.
- * Returns the blob path: raw-artifacts/{engagementId}/{fileName}
- */
+function validateEngagement(engagementId: string): void {
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(engagementId)) {
+    throw new Error("Invalid storage engagement ID");
+  }
+}
+
+function validatePath(path: string): void {
+  // Accept canonical relative keys only. Never normalize a URL, percent escape,
+  // backslash or dot segment into an apparently authorized engagement prefix.
+  if (
+    !path || /[\\%?#:\u0000-\u001f\u007f]/.test(path) ||
+    path.split("/").some((part) => !part || part === "." || part === "..")
+  ) {
+    throw new Error("Invalid storage path");
+  }
+}
+
+function scopedPath(blobPath: string, engagementId: string, config: StorageConfig) {
+  validateEngagement(engagementId);
+  validatePath(blobPath);
+  const [container, owner, ...file] = blobPath.split("/");
+  if (
+    (container !== config.engagements && container !== "deliverables") ||
+    owner !== engagementId || file.length === 0
+  ) {
+    throw new Error("Storage path does not belong to the expected engagement");
+  }
+  return { container, blobName: [owner, ...file].join("/") };
+}
+
+async function upload(
+  config: StorageConfig,
+  container: string,
+  engagementId: string,
+  fileName: string,
+  buffer: Buffer,
+  contentType: string,
+): Promise<string> {
+  validateEngagement(engagementId);
+  validatePath(fileName);
+  const blobName = `${engagementId}/${fileName}`;
+  const key = `${container}/${blobName}`;
+  if (Buffer.byteLength(key, "utf8") > 1024) throw new Error("Storage path is too long");
+  if (config.cloud === "aws") {
+    // No static credentials or custom endpoint: use the SDK workload chain.
+    const client = new S3Client({});
+    try {
+      await client.send(new PutObjectCommand({
+        Bucket: config.bucket, Key: key, Body: buffer, ContentType: contentType,
+      }));
+    } finally {
+      client.destroy();
+    }
+  } else {
+    await azureClient(config).getContainerClient(container).getBlockBlobClient(blobName)
+      .upload(buffer, buffer.length, { blobHTTPHeaders: { blobContentType: contentType } });
+  }
+  return key;
+}
+
+/** Persist the same relative container/engagement/file path on either cloud. */
 export async function uploadEngagementFile(
   engagementId: string,
   fileName: string,
   buffer: Buffer,
   contentType: string,
 ): Promise<string> {
-  const container =
-    process.env.AZURE_STORAGE_CONTAINER_ENGAGEMENTS ?? "raw-artifacts";
-  const client = getBlobServiceClient();
-  const containerClient = client.getContainerClient(container);
-  const blobName = `${engagementId}/${fileName}`;
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  await blockBlobClient.upload(buffer, buffer.length, {
-    blobHTTPHeaders: { blobContentType: contentType },
-  });
-  return `${container}/${blobName}`;
+  const config = getStorageConfig();
+  return upload(config, config.engagements, engagementId, fileName, buffer, contentType);
 }
 
-/**
- * Upload a generated deliverable to the deliverables container.
- * Returns the blob path: deliverables/{engagementId}/{fileName}
- */
 export async function uploadDeliverable(
   engagementId: string,
   fileName: string,
   content: string,
 ): Promise<string> {
-  const client = getBlobServiceClient();
-  const containerClient = client.getContainerClient("deliverables");
-  const blobName = `${engagementId}/${fileName}`;
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  const buffer = Buffer.from(content, "utf-8");
-  await blockBlobClient.upload(buffer, buffer.length, {
-    blobHTTPHeaders: { blobContentType: "text/markdown; charset=utf-8" },
-  });
-  return `deliverables/${blobName}`;
+  return upload(getStorageConfig(), "deliverables", engagementId, fileName,
+    Buffer.from(content, "utf-8"), MARKDOWN_CONTENT_TYPE);
 }
 
-/**
- * Delete a blob by its full path (container/blobName).
- * 404 is treated as success — blob is already gone.
- */
-export async function deleteBlob(blobPath: string): Promise<void> {
-  const client = getBlobServiceClient();
-  const slashIndex = blobPath.indexOf("/");
-  if (slashIndex === -1) return;
-  const containerName = blobPath.slice(0, slashIndex);
-  const blobName = blobPath.slice(slashIndex + 1);
-  const containerClient = client.getContainerClient(containerName);
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+function isAzureNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null &&
+    "statusCode" in error && error.statusCode === 404;
+}
+
+/** Caller must authorize engagementId first. Missing objects are success. */
+export async function deleteBlob(blobPath: string, engagementId: string): Promise<void> {
+  const config = getStorageConfig();
+  const { container, blobName } = scopedPath(blobPath, engagementId, config);
+  if (config.cloud === "aws") {
+    const client = new S3Client({});
+    try {
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: blobPath }));
+    } finally {
+      client.destroy();
+    }
+    return;
+  }
   try {
-    await blockBlobClient.delete();
-  } catch (err: unknown) {
-    const code = (err as { statusCode?: number })?.statusCode;
-    if (code === 404) return;
-    throw err;
+    await azureClient(config).getContainerClient(container).getBlockBlobClient(blobName).delete();
+  } catch (error: unknown) {
+    if (!isAzureNotFound(error)) throw error;
   }
 }
 
 /**
- * Delete an entire container by name (e.g. the per-engagement client portal
- * container `portal-<engagementId>`). Best-effort: a missing container (404) is
- * treated as success so callers can invoke this during engagement teardown
- * without knowing whether a portal was ever published (DATA-001 / C6).
+ * Delete only the authorized engagement's portal: an Azure container, or a
+ * slash-delimited S3 prefix inside the configured bucket. Never delete a bucket.
+ * Unversioned/current objects only; version retention is an appliance policy.
  */
-export async function deleteContainer(containerName: string): Promise<void> {
-  if (!containerName) return;
-  const client = getBlobServiceClient();
-  const containerClient = client.getContainerClient(containerName);
+export async function deleteContainer(containerName: string, engagementId: string): Promise<void> {
+  validateEngagement(engagementId);
+  if (containerName !== `portal-${engagementId}`) throw new Error("Invalid portal container scope");
+  const config = getStorageConfig();
+  if (config.cloud === "azure") {
+    try {
+      await azureClient(config).getContainerClient(containerName).delete();
+    } catch (error: unknown) {
+      if (!isAzureNotFound(error)) throw error;
+    }
+    return;
+  }
+  const client = new S3Client({});
+  const prefix = `${containerName}/`;
+  let token: string | undefined;
+  const seenTokens = new Set<string>();
   try {
-    await containerClient.delete();
-  } catch (err: unknown) {
-    const code = (err as { statusCode?: number })?.statusCode;
-    if (code === 404) return;
-    throw err;
+    do {
+      const page = await client.send(new ListObjectsV2Command({
+        Bucket: config.bucket, Prefix: prefix, ContinuationToken: token,
+      }));
+      const objects = (page.Contents ?? []).map(({ Key }) => {
+        if (!Key?.startsWith(prefix)) throw new Error("S3 returned an object outside the portal scope");
+        return { Key };
+      });
+      for (let offset = 0; offset < objects.length; offset += S3_DELETE_BATCH_SIZE) {
+        const result = await client.send(new DeleteObjectsCommand({
+          Bucket: config.bucket,
+          Delete: { Objects: objects.slice(offset, offset + S3_DELETE_BATCH_SIZE), Quiet: true },
+        }));
+        if (result.Errors?.length) throw new Error("S3 portal cleanup failed for one or more objects");
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+      if (page.IsTruncated && (!token || seenTokens.has(token))) {
+        throw new Error("S3 returned invalid portal pagination");
+      }
+      if (token) seenTokens.add(token);
+    } while (token);
+  } finally {
+    client.destroy();
   }
 }
 
-/**
- * Generate a user-delegation SAS URL for a blob.
- * Returns a time-limited read-only URL valid for ttlHours (default 1 hour).
- */
+/** Read-only URL, 1 second–1 hour. Caller must authorize engagementId first. */
 export async function generateSasUrl(
   blobPath: string,
-  ttlHours: number = 1,
+  engagementId: string,
+  ttlHours: number = DEFAULT_DOWNLOAD_TTL_HOURS,
 ): Promise<string> {
-  const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-  if (!accountName) {
-    throw new Error("AZURE_STORAGE_ACCOUNT_NAME is not set");
+  const expiresIn = Math.floor(ttlHours * 3600);
+  if (!Number.isFinite(ttlHours) || ttlHours > DEFAULT_DOWNLOAD_TTL_HOURS ||
+    expiresIn < 1 || expiresIn > MAX_DOWNLOAD_TTL_SECONDS) {
+    throw new Error("Download URL lifetime must be between 1 second and 1 hour");
   }
-  const client = getBlobServiceClient();
-  const slashIndex = blobPath.indexOf("/");
-  if (slashIndex === -1) throw new Error(`Invalid blobPath: ${blobPath}`);
-  const containerName = blobPath.slice(0, slashIndex);
-  const blobName = blobPath.slice(slashIndex + 1);
-
+  const config = getStorageConfig();
+  const { container, blobName } = scopedPath(blobPath, engagementId, config);
+  if (config.cloud === "aws") {
+    const client = new S3Client({});
+    try {
+      return await getSignedUrl(client, new GetObjectCommand({
+        Bucket: config.bucket, Key: blobPath,
+      }), { expiresIn });
+    } finally {
+      client.destroy();
+    }
+  }
+  const client = azureClient(config);
   const startsOn = new Date();
-  const expiresOn = new Date(Date.now() + ttlHours * 3600 * 1000);
-
+  const expiresOn = new Date(startsOn.getTime() + expiresIn * 1000);
   const userDelegationKey = await client.getUserDelegationKey(startsOn, expiresOn);
-
   const sasParams = generateBlobSASQueryParameters(
-    {
-      containerName,
-      blobName,
-      permissions: BlobSASPermissions.parse("r"),
-      startsOn,
-      expiresOn,
-    },
+    { containerName: container, blobName, permissions: BlobSASPermissions.parse("r"), startsOn, expiresOn },
     userDelegationKey,
-    accountName,
+    config.account,
   );
-
-  return `https://${accountName}.blob.core.windows.net/${containerName}/${blobName}?${sasParams.toString()}`;
+  const encodedPath = blobPath.split("/").map(encodeURIComponent).join("/");
+  return `https://${config.account}.blob.core.windows.net/${encodedPath}?${sasParams.toString()}`;
 }

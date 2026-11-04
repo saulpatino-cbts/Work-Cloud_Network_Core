@@ -224,8 +224,7 @@ export async function generateDeliverable(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage,
-  // Azure-only today — disable generation cleanly on AWS.
+  // Generated assessment blobs use the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   // OWA-02: Rate limit deliverable generation (5 requests per 60s)
@@ -396,8 +395,7 @@ export async function generateAllAssessments(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: generated assessments are persisted to blob storage,
-  // Azure-only today — disable generation cleanly on AWS.
+  // Generated assessment blobs use the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   // OWA-02: Rate limit generating all assessments (5 requests per 60s)
@@ -555,11 +553,9 @@ export async function deleteDeliverable(formData: FormData) {
     select: { blobPath: true },
   });
   if (!record) return;
-  // CR-CORE-01 / AWS-F-04: only Azure writes blobs, so only Azure can delete
-  // them. On AWS there is no blob to remove — skip the call so the row still
-  // deletes instead of hitting a raw Azure-storage error.
+  // Storage independently validates the row's path against the authorized engagement.
   if (record.blobPath && isBlobStorageAvailable()) {
-    await deleteBlob(record.blobPath);
+    await deleteBlob(record.blobPath, engagementId);
   }
 
   await prisma.deliverable.deleteMany({ where: { id: deliverableId, engagementId } });

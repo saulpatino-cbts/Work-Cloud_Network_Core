@@ -7,7 +7,10 @@ import { after } from "next/server";
 import type { DeliverableContext } from "@/lib/openai";
 import { generateComprehensiveReport, type ProgressUpdate } from "@/lib/report-orchestrator";
 import { deleteBlob, uploadDeliverable } from "@/lib/blob";
-import { isBlobStorageAvailable, STORAGE_UNAVAILABLE_MESSAGE } from "@/lib/storage";
+import {
+  isBlobStorageAvailable, isPortalPublishingAvailable,
+  PORTAL_UNAVAILABLE_MESSAGE, STORAGE_UNAVAILABLE_MESSAGE,
+} from "@/lib/storage";
 import { sanitizeBackendDetail } from "@/lib/summarize-error";
 import { apiHeaders } from "@/lib/api-client";
 
@@ -114,8 +117,7 @@ export async function createInteractiveAssessment(
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated." };
 
-  // CR-CORE-01 / AWS-F-04: the interactive assessment is persisted to blob
-  // storage, Azure-only today — disable generation cleanly on AWS.
+  // Interactive assessment blobs use the configured Azure or S3 backend.
   if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
 
   const member = await prisma.engagementMember.findUnique({
@@ -220,11 +222,10 @@ export async function deleteDeliverableFromPortal(formData: FormData) {
     select: { blobPath: true },
   });
   if (!record) return;
-  // CR-CORE-01 / AWS-F-04: only Azure writes blobs, so there is nothing to
-  // delete on AWS — skip the call rather than hit a raw Azure-storage error.
+  // Scope storage cleanup to this authorized engagement on either cloud.
   if (record.blobPath && isBlobStorageAvailable()) {
     try {
-      await deleteBlob(record.blobPath);
+      await deleteBlob(record.blobPath, engagementId);
     } catch (err) {
       console.error(`[deleteDeliverableFromPortal] blob delete failed for ${record.blobPath}; deleting row anyway (orphaned blob):`, err);
     }
@@ -255,11 +256,10 @@ export async function deleteDocument(formData: FormData) {
     select: { blobPath: true },
   });
   if (!record) return;
-  // CR-CORE-01 / AWS-F-04: only Azure writes blobs, so there is nothing to
-  // delete on AWS — skip the call rather than hit a raw Azure-storage error.
+  // Scope storage cleanup to this authorized engagement on either cloud.
   if (record.blobPath && isBlobStorageAvailable()) {
     try {
-      await deleteBlob(record.blobPath);
+      await deleteBlob(record.blobPath, engagementId);
     } catch (err) {
       console.error(`[deleteDocument] blob delete failed for ${record.blobPath}; deleting row anyway (orphaned blob):`, err);
     }
@@ -289,7 +289,7 @@ export async function publishClientPortal(
   // CR-CORE-01 / AWS-F-04: publishing the client portal uploads deliverables to
   // a blob container (the API's AzureBlobDeployer) — Azure-only today. Disable
   // it cleanly on AWS instead of returning a backend storage failure.
-  if (!isBlobStorageAvailable()) return { error: STORAGE_UNAVAILABLE_MESSAGE };
+  if (!isPortalPublishingAvailable()) return { error: PORTAL_UNAVAILABLE_MESSAGE };
 
   const member = await prisma.engagementMember.findUnique({
     where: { engagementId_userId: { engagementId, userId: session.user.id } },

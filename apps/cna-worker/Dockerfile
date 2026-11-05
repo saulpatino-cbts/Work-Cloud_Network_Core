@@ -4,7 +4,7 @@
 # Keep the version in step with the `uv==` pins in 300-test-codebase.yml.
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
-FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS builder
+FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966 AS builder
 
 WORKDIR /build
 
@@ -20,7 +20,7 @@ RUN uv export --locked --only-group worker --no-emit-project -o /tmp/requirement
  && rm -f /tmp/requirements.txt
 
 # ---- final stage ----
-FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58
+FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966
 
 # Non-root user — uid/gid 1001 (matches root Dockerfile's cna user).
 RUN groupadd --gid 1001 cna \

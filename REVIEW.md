@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-09-23
+**Last reviewed:** 2026-11-05
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -32,6 +32,7 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-020](#r-020--aeonik-font-licence-and-oci-licence-label) | Aeonik typeface licence coverage; OCI label `Proprietary` vs Apache-2.0 `LICENSE` | Legal / brand | Open — [VERIFY] |
 | [R-021](#r-021--byo-api-mode-scope-for-10) | Ship 1.0 `saas`-only or complete R-011 first | Product owner / Security | Open |
 | [R-022](#r-022--version-100-release-identity) | Version 1.0.0 identity: withdrawn `[1.0.0]` heading, version strings, first tag | Repository owner | Open — before the first `v*` tag |
+| [R-023](#r-023--make-the-image-build-checks-required-on-main) | Make the image-build checks required status checks on `main` | Repository admin | Open — [VERIFY] |
 
 ---
 
@@ -868,3 +869,25 @@ A customer cannot tell what "1.0" they run; a new `[1.0.0]` heading would collid
 **References**
 - v1.0 review findings RELEASE-004, DOC-001, DOC-022
 
+## R-023 — Make the image-build checks required on `main`
+
+**Problem**
+Dependabot PR #104 merged on 2026-11-05 and broke `200 · Build Container Images` on main (run #63).
+`300 · Test Codebase` → "Docker Build Smoke Test" builds the CLI image from the same Python base and
+should have failed on that PR, so the check was probably not required for merge. [VERIFY] The PR's
+check results were not inspected (GitHub API unavailable at the time of the fix); confirm on PR #104's
+Checks tab before acting.
+
+**Required owner**
+Repository admin (branch protection / rulesets).
+
+**Required action**
+Add "Docker Build Smoke Test" and "Python Lockfile Consistency" as required status checks on `main`,
+and add the T-724 image matrix when it lands. Confirm Dependabot PRs cannot bypass the rule.
+
+**Impact if unresolved**
+A red base-image or dependency PR can still be merged, and the first signal is a failed publish on
+main, after which the appliances' `230` poll has nothing new to pick up.
+
+**References**
+- `TODO.md` → T-724; `CHANGELOG.md` → Unreleased, Fixed (`200` run #63)

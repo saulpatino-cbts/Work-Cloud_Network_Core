@@ -268,30 +268,62 @@ jobs:
   # Every Python image installs from uv.lock, so a pyproject.toml edit that is
   # not followed by `uv lock` would fail the image builds on main. Catch it
   # here, on the PR, and prove the install sets the Dockerfiles export still
-  # install as hash-checked wheels for the image interpreter (cp314 linux) — the
-  # same `uv export` / `uv pip install --require-hashes` commands the
-  # Dockerfiles run, into a throwaway prefix. A real install, not `--dry-run`:
-  # dry-run only proves a hash is *present*; the hash is verified, and a
-  # missing cp314 wheel is noticed, only when the file is fetched. uv is
-  # version-pinned to the release the Dockerfiles' `uv` stage copies in
-  # (`ghcr.io/astral-sh/uv:0.12.21`), so the check and the build read the lock
-  # identically.
+  # install as hash-checked wheels for the image interpreter — the same
+  # `uv export` / `uv pip install --require-hashes` commands the Dockerfiles
+  # run, into a throwaway prefix. A real install, not `--dry-run`: dry-run only
+  # proves a hash is *present*; the hash is verified, and a missing wheel is
+  # noticed, only when the file is fetched.
+  #
+  # The interpreter and uv versions are READ FROM THE DOCKERFILES, not restated
+  # here, and the install is `--only-binary :all:`: the slim images have no
+  # compiler, so a sdist fallback that this runner (which has gcc) would
+  # quietly build must fail here as it fails in 200. Without both, Dependabot's
+  # python 3.14 -> 3.15 base bump (PR #104) passed this job while uv.lock had
+  # no cp315 wheels for markupsafe/httptools/numpy, and 200 broke on main.
   lockfile:
     name: Python Lockfile Consistency
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Read the image interpreter and uv versions from the Dockerfiles
+        id: image
+        run: |
+          set -euo pipefail
+          FILES=(Dockerfile apps/cna-api/Dockerfile apps/cna-worker/Dockerfile)
+          PY=$(grep -hoE '^FROM python:[0-9]+\.[0-9]+' "${FILES[@]}" | sed 's/^FROM python://' | sort -u)
+          UV=$(grep -hoE '^FROM ghcr\.io/astral-sh/uv:[0-9.]+' "${FILES[@]}" | sed 's/.*uv://' | sort -u)
+          if [ "$(wc -l <<<"$PY")" -ne 1 ] || [ -z "$PY" ]; then
+            echo "::error::The Python Dockerfiles must share one python:<major.minor> base; found: $(tr '\n' ' ' <<<"$PY")"
+            exit 1
+          fi
+          if [ "$(wc -l <<<"$UV")" -ne 1 ] || [ -z "$UV" ]; then
+            echo "::error::The Python Dockerfiles must share one astral-sh/uv release; found: $(tr '\n' ' ' <<<"$UV")"
+            exit 1
+          fi
+          # Every other job in this workflow tests on a hard-coded interpreter;
+          # it must be the one the images ship, or the tests prove nothing about them.
+          BAD=$(grep -nE '^ +python-version: "[0-9.]+"' .github/workflows/300-test-codebase.yml | grep -vF "\"${PY}\"" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Images ship Python ${PY} but 300-test-codebase tests another interpreter; bump python-version with the base image:"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "python=${PY}" >> "$GITHUB_OUTPUT"
+          echo "uv=${UV}" >> "$GITHUB_OUTPUT"
+          echo "Images ship Python ${PY} and uv ${UV}"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: ${{ steps.image.outputs.python }}
       - name: Cache uv wheels
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/uv
-          key: lockfile-uv-${{ hashFiles('uv.lock') }}
+          key: lockfile-uv-${{ steps.image.outputs.python }}-${{ hashFiles('uv.lock') }}
       - name: Install uv
-        run: pip install "uv==0.12.21"
+        env:
+          UV_VERSION: ${{ steps.image.outputs.uv }}
+        run: pip install "uv==${UV_VERSION}"
       - name: uv.lock matches pyproject.toml
         run: uv lock --check
       - name: Every image install set installs from the lock with verified hashes
@@ -302,7 +334,7 @@ jobs:
             echo "::group::${label}"
             # shellcheck disable=SC2086  # flags are a deliberate word list
             uv export --locked --no-emit-project ${flags} -o "${RUNNER_TEMP}/${label}.txt"
-            uv pip install --system --require-hashes --no-deps \
+            uv pip install --system --require-hashes --no-deps --only-binary :all: \
               --prefix "${RUNNER_TEMP}/prefix-${label}" -r "${RUNNER_TEMP}/${label}.txt"
             echo "::endgroup::"
           done <<'SETS'

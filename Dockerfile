@@ -16,7 +16,7 @@
 # Keep the version in step with the `uv==` pins in 300-test-codebase.yml.
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
-FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966 AS builder
+FROM python:3.14.10-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS builder
 
 ARG CNA_VERSION=dev
 WORKDIR /build
@@ -48,7 +48,7 @@ RUN uv pip install --system --no-cache --no-deps --no-build-isolation --prefix=/
 # the final image. The export pipeline (cna/diagram_engine/export_pipeline.py)
 # degrades to XML-only output without it — its own warning promises the CLI
 # is available "inside the Docker container", which is made true here.
-FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966 AS drawio-fetch
+FROM python:3.14.10-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS drawio-fetch
 
 ARG DRAWIO_VERSION=31.3.2
 ARG DRAWIO_SHA256=725453f32ef7f2f63f8b50b374857a5c312e2aaabcf221cb0600332741ae1094
@@ -60,7 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
   && echo "${DRAWIO_SHA256}  /tmp/drawio.deb" | sha256sum -c -
 
 # ---- final stage ----
-FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966
+FROM python:3.14.10-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d
 
 ARG CNA_VERSION=dev
 LABEL org.opencontainers.image.title="CNA Platform" \

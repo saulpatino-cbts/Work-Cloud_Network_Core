@@ -18,13 +18,13 @@ dependencies = [
     # In 1.x, AIProjectClient.agents returns an AgentsClient from the separate
     # azure-ai-agents package, so that must be declared too — it is what actually
     # provides the operations.
-    "azure-ai-projects>=2.9.0,<3",       # Foundry Agent Service: recommendation enrichment
+    "azure-ai-projects>=2.10.0,<3",       # Foundry Agent Service: recommendation enrichment
     "azure-ai-agents>=1.1.0,<2",         # provides AIProjectClient.agents in 1.x
     "azure-mgmt-network>=33.1.0",
     "azure-mgmt-resource>=26.0.0",
     "azure-mgmt-subscription>=3.1.1",
     "azure-storage-blob>=12.31.1",       # Phase F: Azure Blob Storage deployer
-    "openai>=3.41.0",
+    "openai>=3.42.1",
     "anthropic>=2.3.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
     # Reads the AES-256-GCM credential blobs the web tier writes (BYO AI keys).
     # Was only ever a transitive dependency of azure-identity; declared so a

@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-11-04
+**Last reviewed:** 2026-11-05
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-723 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-724 |
 
 ---
 
@@ -2307,3 +2307,18 @@ and would refuse every deploy (`210`/`220`). The two copies `CLAUDE.md` calls by
 diverged on digest handling (AWS requires `@sha256`, Azure only warns). In the AWS appliance: decode
 the envelope as Azure does, decide the digest policy once, restore byte-identity, and prove it by
 running the script against a real digest published from this repository.
+
+### T-724 — Build every image on pull requests, not only the CLI
+- **Priority:** Medium
+- **Description:** `300 · Test Codebase` → "Docker Build Smoke Test" builds only the root
+  `Dockerfile` (the CLI image). `apps/cna-api`, `apps/cna-worker` and `apps/cna-web` are first
+  built by `200` after merge, so a base-image or dependency change that breaks only one of them
+  reaches main before anything fails. Found while fixing `200` run #63 (Dependabot PR #104,
+  Python 3.15 base): the lockfile job now catches the Python install sets of `api`/`worker`
+  (`CHANGELOG.md` → Unreleased, Changed), but nothing builds the `web` image on a PR.
+- **Dependencies:** None. Making the checks *required* is `REVIEW.md` → R-023.
+- **Recommended action:** Add a matrix build (`docker build`, no push, no login) of the four
+  Dockerfiles, run on PRs that touch a Dockerfile, `uv.lock`, `pyproject.toml` or
+  `apps/cna-web/package*.json`, with the existing non-root check per image. Keep it out of `200`
+  so it holds no OIDC token.
+- **Status:** Open.

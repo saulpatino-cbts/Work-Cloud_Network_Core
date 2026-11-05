@@ -68,6 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The migrator image no longer runs as root** (IMG-002). It executed `prisma migrate deploy` as uid 0 with the database-owner connection string; it now runs as uid 1001 through `prisma/migrate.sh`. The web runner's `HEALTHCHECK` probes `/api/health` instead of rendering `/` (IMG-009), and `apps/cna-web/.dockerignore` fences the build context.
 
 ### Fixed
+- **`200 · Build Container Images` failed on main after Dependabot PR #104** (run #63,
+  2026-11-05). The `docker-minor-patch` group moved all eight Python stages (root, `cna-api`,
+  `cna-worker`) from `python:3.14.10-slim` to `python:3.15.0-slim`. `uv.lock` has no cp315 wheels
+  for markupsafe, httptools, numpy, contourpy, uvloop or pyyaml, so the hash-pinned install fell
+  back to sdists in the compiler-less slim builder. Reverted to `3.14.10-slim@sha256:930e1abb…`,
+  which keeps the CVE-2026-115557 fix (T-719); uv stays at 0.13.7. Dependabot now ignores
+  semver-minor/major updates of the `python` image, so an interpreter upgrade is made by hand with
+  the CI `python-version` and a lock that carries wheels for it; patch updates still arrive.
 - **“Generate All Assessments” now runs asynchronously** (`TODO.md` → T-417). All five report
   rows are created atomically as `RUNNING`, dispatched via `after()`, and polled individually;
   each background job marks its row completed or failed.
@@ -81,6 +89,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Accessibility** (UI-001 / UI-003 / UI-004 / UI-005). Section labels move to tokens that pass WCAG AA in both themes; credential-form, local-admin and chat inputs get programmatic labels; a branded `not-found` page replaces the default 404; the service-principal help modal gains dark-mode variants.
 
 ### Changed
+- **`300 · Test Codebase` lockfile job checks the interpreter the images ship.** It read
+  neither the Dockerfiles' Python nor their uv release (it hard-coded 3.14 and uv 0.12.21 against
+  the images' 0.13.7) and ran on a runner with a C compiler, so PR #104 could not fail it. It now
+  reads `python:<major.minor>` and the `astral-sh/uv` release from the three Python Dockerfiles,
+  fails when they disagree with each other or with any hard-coded `python-version` in the
+  workflow, and installs every set with `--only-binary :all:` so a missing wheel fails on the PR
+  as it does in the image. Verified locally: on 3.15 the `cli` and `api` sets fail (no
+  markupsafe/httptools wheels); on 3.14 all four sets install; unit suite 1,421 passed.
 - **Prepared publisher race/retry controls and client installation guidance** (`TODO.md` →
   T-722). `200-build-images` checks the current source SHA before tags and manifest publication,
   applies immutable tags before floating tags, and bounds tag retries. Registry behavior remains

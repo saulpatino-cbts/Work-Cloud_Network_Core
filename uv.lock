@@ -91,7 +91,7 @@ wheels = [
 
 [[package]]
 name = "azure-ai-projects"
-version = "2.9.0"
+version = "2.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-core" },
@@ -101,9 +101,9 @@ dependencies = [
     { name = "openai" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/c4/2d12f3ba1bc1cc3f844e9d34e602f825dea8d5cae069a203f80591e63091/azure_ai_projects-2.9.0.tar.gz", hash = "sha256:f85902b1c220f5ef999f7892d5fa8b6f1efecf867c73b107df7de614f5821fd3", size = 40061819, upload-time = "2026-10-17T03:57:23.38Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/d7/974be6e67c0245f20718f00e4814a76ea0c30d41975d309728780d7219eb/azure_ai_projects-2.10.0.tar.gz", hash = "sha256:c1edbb1241c973538a85de45a467edf9d6c244916c01cf68751eedbe65e7f37f", size = 40071589, upload-time = "2026-10-30T21:51:18.18Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/25/cda9f33df69ba45378b7dcbb591b15ca0df0ddf633cbf2359d2f8030f06b/azure_ai_projects-2.9.0-py3-none-any.whl", hash = "sha256:e0e0ea059dee51ea92b65f1e40fa6b50f62636485f8228325f1918f9fb5d7d92", size = 552868, upload-time = "2026-10-17T03:57:26.606Z" },
+    { url = "https://files.pythonhosted.org/packages/be/65/8f5b76467bb778206ef2aa71a7e4d5b44bde0526dcf076fe6349b2f2f9f1/azure_ai_projects-2.10.0-py3-none-any.whl", hash = "sha256:bc549ec352740af8e313bc215b2e8e37d5df59d5f6b3c6a74ee8517104baa952", size = 557162, upload-time = "2026-10-30T21:51:22.549Z" },
 ]
 
 [[package]]
@@ -846,7 +846,7 @@ worker = [
 requires-dist = [
     { name = "anthropic", specifier = ">=2.3.0" },
     { name = "azure-ai-agents", specifier = ">=1.1.0,<2" },
-    { name = "azure-ai-projects", specifier = ">=2.9.0,<3" },
+    { name = "azure-ai-projects", specifier = ">=2.10.0,<3" },
     { name = "azure-identity", specifier = ">=1.27.0" },
     { name = "azure-mgmt-compute", marker = "extra == 'api'", specifier = ">=39.0.0,<40" },
     { name = "azure-mgmt-compute", marker = "extra == 'enrichment'", specifier = ">=39.0.0,<40" },
@@ -878,7 +878,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.9" },
     { name = "mcp", marker = "extra == 'enrichment'", specifier = ">=2.3.0,<3" },
     { name = "n2g", specifier = ">=0.3.3" },
-    { name = "openai", specifier = ">=3.41.0" },
+    { name = "openai", specifier = ">=3.42.1" },
     { name = "pandas", specifier = ">=3.1.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.7.0" },
     { name = "psycopg2-binary", marker = "extra == 'api'", specifier = ">=2.9" },
@@ -2591,7 +2591,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "3.41.0"
+version = "3.42.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2601,9 +2601,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8f/f1/3aaadae62d59a9b464f9d2e1deab74f9eb697244beb7dc37fff64df9c92c/openai-3.41.0.tar.gz", hash = "sha256:d065fc59d3d7d8537a77b3ceb527732952c6ff610158e8a2a95b246be637e86f", size = 2313147, upload-time = "2026-10-28T22:27:52.317Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/7b/e01d5288d13e3bae3714ed39df402f99f88f422dcd978c5ce94848037200/openai-3.42.1.tar.gz", hash = "sha256:4222d919374648ff572753626e942f26eb1ece8a5e0e9a2708c9be4d560f070f", size = 2356422, upload-time = "2026-11-01T20:57:02.607Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/23/089333ff950ee07c30762160f4eff5ac5d376934c2d6797abf6da9cd06a5/openai-3.41.0-py3-none-any.whl", hash = "sha256:7060a74b239609b21f2919eb98807a8aad463b4f510b8b3b388b15559360b0a8", size = 2380171, upload-time = "2026-10-28T22:27:50.372Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/11/37b847d8a057000193974eeea1bcc681355ae50d35865f2eb2b323de6153/openai-3.42.1-py3-none-any.whl", hash = "sha256:c1959518a8e26f81a3564357082cb684540be639a21fece35ac5619415a3eadc", size = 2397433, upload-time = "2026-11-01T20:57:00.622Z" },
 ]
 
 [[package]]

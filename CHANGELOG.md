@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The migrator image no longer runs as root** (IMG-002). It executed `prisma migrate deploy` as uid 0 with the database-owner connection string; it now runs as uid 1001 through `prisma/migrate.sh`. The web runner's `HEALTHCHECK` probes `/api/health` instead of rendering `/` (IMG-009), and `apps/cna-web/.dockerignore` fences the build context.
 
 ### Fixed
+- **Python images move to the `python:3.14.10-slim` digest that carries `apt` 3.0.4**
+  (`390` run #16, 2026-11-05). `390 · Scan Published Images` failed the `cli`, `api` and `worker`
+  images on HIGH `CVE-2026-109518` in `apt` and `libapt-pkg7.0` 3.0.3 (fixed in 3.0.4, DSA-6607-1).
+  The digest moves from `sha256:930e1abb…` to `sha256:af8a5aa1…` in all eight Python `FROM` lines,
+  the same change Dependabot's digest bump makes. The tag stays 3.14.10. The package versions were
+  checked in the image's amd64 layer; `390` after the rebuild is the confirmation.
 - **`200 · Build Container Images` failed on main after Dependabot PR #104** (run #63,
   2026-11-05). The `docker-minor-patch` group moved all eight Python stages (root, `cna-api`,
   `cna-worker`) from `python:3.14.10-slim` to `python:3.15.0-slim`. `uv.lock` has no cp315 wheels

@@ -309,6 +309,14 @@ jobs:
             echo "$BAD"
             exit 1
           fi
+          # Same for every `uv==` pin in this workflow (CLAUDE.md: the pins move
+          # with the Dockerfiles' `uv` stage).
+          BADUV=$(grep -nE 'uv==[0-9.]+' .github/workflows/300-test-codebase.yml | grep -v 'uv==\${UV_VERSION}' | grep -vF "uv==${UV}" || true)
+          if [ -n "$BADUV" ]; then
+            echo "::error::Images ship uv ${UV} but this workflow pins another release; move the pins with the Dockerfiles' uv stage:"
+            echo "$BADUV"
+            exit 1
+          fi
           echo "python=${PY}" >> "$GITHUB_OUTPUT"
           echo "uv=${UV}" >> "$GITHUB_OUTPUT"
           echo "Images ship Python ${PY} and uv ${UV}"
@@ -363,7 +371,7 @@ jobs:
           path: ~/.cache/pip
           key: pip-audit-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - name: Install pip-audit and uv
-        run: pip install pip-audit "uv==0.12.21"
+        run: pip install pip-audit "uv==0.13.7"
       - name: Audit the locked resolution
         # Audits exactly what the images ship (TODO.md T-702): the lock exported
         # with every extra, so the api/enrichment/dev sets are covered in one

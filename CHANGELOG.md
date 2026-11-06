@@ -99,6 +99,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Accessibility** (UI-001 / UI-003 / UI-004 / UI-005). Section labels move to tokens that pass WCAG AA in both themes; credential-form, local-admin and chat inputs get programmatic labels; a branded `not-found` page replaces the default 404; the service-principal help modal gains dark-mode variants.
 
 ### Changed
+- **`300 · Test Codebase` builds all four non-CLI images on pull requests** (`TODO.md` → T-724). New
+  job `docker-build-images` ("Docker Build Image (api|worker|web|migrator)") builds api, worker, web and
+  migrator from the same contexts, files and targets as `200`, with no registry login, no push and no
+  signing, and fails if an image runs as root. Until now only the CLI image was built before merge, so a
+  base-image or dependency change that broke one of the others reached `main` first. It runs on pull
+  requests and manual dispatch; a push to `main` is built by `200`.
 - **`300 · Test Codebase` lockfile job checks the interpreter the images ship.** It read
   neither the Dockerfiles' Python nor their uv release (it hard-coded 3.14 and uv 0.12.21 against
   the images' 0.13.7) and ran on a runner with a C compiler, so PR #104 could not fail it. It now

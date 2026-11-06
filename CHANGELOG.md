@@ -68,6 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The migrator image no longer runs as root** (IMG-002). It executed `prisma migrate deploy` as uid 0 with the database-owner connection string; it now runs as uid 1001 through `prisma/migrate.sh`. The web runner's `HEALTHCHECK` probes `/api/health` instead of rendering `/` (IMG-009), and `apps/cna-web/.dockerignore` fences the build context.
 
 ### Fixed
+- **`oauthlib` 4.0.0 to 4.0.1 in `uv.lock`** (`300` pip-audit, 2026-11-05). `pip-audit` began failing on
+  CVE-2026-49272 in `oauthlib` 4.0.0, fixed in 4.0.1; `main` passed the same check hours earlier, so the
+  advisory is new. Bumped with `uv lock --upgrade-package oauthlib` (uv 0.13.7, three lines, lock
+  `revision` unchanged).
 - **Python images move to the `python:3.14.10-slim` digest that carries `apt` 3.0.4**
   (`390` run #16, 2026-11-05). `390 · Scan Published Images` failed the `cli`, `api` and `worker`
   images on HIGH `CVE-2026-109518` in `apt` and `libapt-pkg7.0` 3.0.3 (fixed in 3.0.4, DSA-6607-1).

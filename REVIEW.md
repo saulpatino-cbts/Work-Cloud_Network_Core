@@ -885,6 +885,15 @@ Repository admin (branch protection / rulesets).
 Add "Docker Build Smoke Test" and "Python Lockfile Consistency" as required status checks on `main`,
 and add the T-724 image matrix when it lands. Confirm Dependabot PRs cannot bypass the rule.
 
+**Do not break the publish step.** `200-build-images` (`publish-build-manifest`) commits
+`.deployment-catalog/latest-build.json` and runs a plain `git push` to `main` as `github-actions[bot]`
+(see the "update latest-build manifest" commits on `main`). A branch-protection rule or ruleset that
+requires status checks or pull requests for every push would reject that push and stop every publish and
+`cna-image-published` notice. Use a ruleset that requires the checks on pull requests and lists
+`github-actions[bot]` (or the `200` identity) in its bypass list, or change `200` to open a pull request
+for the manifest first. Verify by watching the next `200` run after the rule is enabled. [VERIFY] The
+bypass behaviour of the repository's current rules was not inspected (settings API not readable here).
+
 **Impact if unresolved**
 A red base-image or dependency PR can still be merged, and the first signal is a failed publish on
 main, after which the appliances' `230` poll has nothing new to pick up.

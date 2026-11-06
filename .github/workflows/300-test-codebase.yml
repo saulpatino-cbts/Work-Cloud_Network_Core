@@ -263,6 +263,68 @@ jobs:
           echo "OK: running as $USER"
 
   # ------------------------------------------------------------------
+  # 5b. Build the other four images on pull requests (TODO.md T-724)
+  # ------------------------------------------------------------------
+  # `docker-build` above builds only the CLI image. api, worker, web and
+  # migrator were first built by 200 after merge, so a base-image or dependency
+  # change that broke only one of them reached main before anything failed
+  # (Dependabot's python 3.15 base, PR #104). Same contexts, files and targets
+  # as 200-build-images.yml, but no registry login, no push and no cosign: this
+  # job holds no OIDC token. Runs on pull requests and manual dispatch only;
+  # a push to main is built by 200 itself.
+  docker-build-images:
+    name: Docker Build Image (${{ matrix.key }})
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: api
+            context: .
+            file: apps/cna-api/Dockerfile
+            target: ""
+          - key: worker
+            context: .
+            file: apps/cna-worker/Dockerfile
+            target: ""
+          - key: web
+            context: apps/cna-web
+            file: apps/cna-web/Dockerfile
+            target: runner
+          - key: migrator
+            context: apps/cna-web
+            file: apps/cna-web/Dockerfile
+            target: migrator
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - name: Build image (no push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          push: false
+          load: true
+          tags: cna-ci:${{ matrix.key }}
+          build-args: |
+            CNA_BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=pr-${{ matrix.key }}
+          cache-to: type=gha,scope=pr-${{ matrix.key }},mode=max
+      - name: Verify non-root user
+        run: |
+          USER=$(docker run --rm --entrypoint whoami cna-ci:${{ matrix.key }})
+          if [ "$USER" = "root" ]; then
+            echo "FAIL: ${{ matrix.key }} container is running as root"
+            exit 1
+          fi
+          echo "OK: ${{ matrix.key }} runs as $USER"
+
+  # ------------------------------------------------------------------
   # 6. Python lockfile consistency (TODO.md T-702)
   # ------------------------------------------------------------------
   # Every Python image installs from uv.lock, so a pyproject.toml edit that is

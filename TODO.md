@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-11-05
+**Last reviewed:** 2026-11-06
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -2321,4 +2321,7 @@ running the script against a real digest published from this repository.
   Dockerfiles, run on PRs that touch a Dockerfile, `uv.lock`, `pyproject.toml` or
   `apps/cna-web/package*.json`, with the existing non-root check per image. Keep it out of `200`
   so it holds no OIDC token.
-- **Status:** Open.
+- **Status:** Done 2026-11-06: `300-test-codebase.yml` → `docker-build-images` builds api, worker, web
+  and migrator with the same contexts, files and targets as `200`, no push and no login, and checks
+  each runs non-root, on pull requests and manual dispatch. The CLI image stays in "Docker Build Smoke
+  Test". Making the checks required remains `REVIEW.md` → R-023. First proven on its own pull request.

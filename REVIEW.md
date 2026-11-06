@@ -882,8 +882,8 @@ Checks tab before acting.
 Repository admin (branch protection / rulesets).
 
 **Required action**
-Add "Docker Build Smoke Test" and "Python Lockfile Consistency" as required status checks on `main`,
-and add the T-724 image matrix when it lands. Confirm Dependabot PRs cannot bypass the rule.
+Add "Docker Build Smoke Test", "Python Lockfile Consistency" and the four "Docker Build Image (api|worker|web|migrator)"
+checks (T-724, landed 2026-11-06) as required status checks on `main`. Confirm Dependabot PRs cannot bypass the rule.
 
 **Do not break the publish step.** `200-build-images` (`publish-build-manifest`) commits
 `.deployment-catalog/latest-build.json` and runs a plain `git push` to `main` as `github-actions[bot]`

@@ -7,9 +7,9 @@ NETWORK_DIAGRAM document and loads into the embedded editor.
 
 This is the seam that was missing. cna.ai_engine.diagram_authoring
 (`author_engagement_bundle`) and the generators under cna.diagram_engine have
-existed since Phase B, but nothing called them: the docstring says "the worker
-hooks it after analysis", and the worker is a placeholder. As a result the
-Diagram page only ever offered a blank canvas.
+existed since Phase B, but nothing called them: their docstring said "the worker
+hooks it after analysis", and the worker was only a placeholder (since retired,
+REVIEW.md R-016). As a result the Diagram page only ever offered a blank canvas.
 """
 
 from __future__ import annotations

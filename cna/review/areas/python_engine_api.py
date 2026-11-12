@@ -1,7 +1,8 @@
 """Findings for the ``python-engine-api`` area (Requirement 2 correctness).
 
 This is a *verify-then-close-gaps* record for the ``cna/`` core, the
-``apps/cna-api`` FastAPI service, and the ``apps/cna-worker`` decision. The
+``apps/cna-api`` FastAPI service, and the (now retired) ``apps/cna-worker``
+decision. The
 audit against Requirement 2 confirmed:
 
   * **2.1 — `/intake` honesty (verified compliant).** ``apps/cna-api/main.py``
@@ -17,17 +18,19 @@ audit against Requirement 2 confirmed:
     ``200`` on an error path. Recorded as a ``LOW`` residual gap that this task
     remediates.
 
-  * **2.5 — worker retirement decision (retire).** The ``apps/cna-worker``
+  * **2.5 — worker retirement decision (retired).** The ``apps/cna-worker``
     placeholder was a run-once script that stubbed the publish job against a
     hardcoded ``sample-engagement``. The ``apps/cna-api`` ``POST /publish``
     endpoint now does that job for real (real deliverables -> private
     per-engagement blob container -> portal generation -> TTL-capped SAS URL)
-    and its docstring states it supersedes the placeholder. The decision is
-    therefore **retire** (not retained with a responsibility). The worker is
-    still wired into the Azure and AWS Terraform ``compute`` modules, the
-    ``apps/cna-worker/Dockerfile`` container audit, and the README, so the
-    removal is a coordinated change carried as the plan action rather than
-    performed here. Recorded as a ``LOW`` finding.
+    and its docstring states it supersedes the placeholder. The decision was
+    **retire** (not retained with a responsibility), approved by the owner as
+    REVIEW.md R-016. This repository's half removes the worker's code,
+    Dockerfile, image build, manifest keys, dependency group and container
+    audit. Both appliance repositories drop the worker
+    service from their Terraform ``compute`` modules and deploy workflows in
+    the same coordinated change set (TODO.md T-725; REVIEW.md R-016). Recorded as an
+    ``INFORMATIONAL`` finding.
 
 These records are consumed by the consolidation step (spec task 14.1).
 """
@@ -68,15 +71,15 @@ def python_engine_api_findings() -> list[Finding]:
         ),
         Finding(
             area=_AREA,
-            severity=Severity.LOW,
+            severity=Severity.INFORMATIONAL,
             proposed_action=(
-                "Retire apps/cna-worker: the run-once placeholder (hardcoded "
-                "sample-engagement) is superseded by the apps/cna-api POST "
-                "/publish endpoint, which performs the real publish job. Remove "
-                "the worker service and its Dockerfile, and drop the worker "
-                "container from the Azure and AWS Terraform compute modules "
-                "(and the README service list) as a coordinated change; the "
-                "worker is not retained with any responsibility."
+                "apps/cna-worker retired: the run-once placeholder "
+                "(hardcoded sample-engagement) was superseded by the "
+                "apps/cna-api POST /publish endpoint. The worker code, its "
+                "Dockerfile, image build and manifest keys are removed from the "
+                "core; both appliances drop the worker service from their "
+                "Terraform compute modules and deploy workflows in the same "
+                "coordinated change set (TODO.md T-725; REVIEW.md R-016)."
             ),
             dedup_key="python-engine-api:worker-retirement",
             subject="apps/cna-worker",

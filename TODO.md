@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-11-06
+**Last reviewed:** 2026-11-11
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-724 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-725 |
 
 ---
 
@@ -2201,7 +2201,7 @@ no published image was CVE-checked anywhere.
 - **Status:** implemented 2026-10-26; weekly trigger verified 2026-11-04. The fresh scan fails
   the intended vulnerability policy; source remediation is prepared but not rebuilt/rescanned.
   `390-scan-images` (Anchore Grype through `anchore/scan-action`; no Docker entitlement, no stored
-  credential, the same unscoped keyless OIDC login as `200`) scans the five `digests{}` of
+  credential, the same unscoped keyless OIDC login as `200`) scans every `digests{}` entry of
   `.deployment-catalog/latest-build.json` after every successful main run of `200`, weekly, and on
   dispatch. A fixable HIGH or CRITICAL finding fails the check; there is no `continue-on-error`; each
   image gets a job-summary table and a code-scanning category; each digest's cosign signature and
@@ -2279,7 +2279,7 @@ branch iteration is done. Done 2026-10-26: the first six `main` runs of `200` al
 end (`tag-images`, `publish-build-manifest`; `notify-appliances` warns about the missing App
 secrets), so the connection's rule accepts `refs/heads/main` as well as branches. Still open: (1)
 constrain the connection to `main` in the Docker Hub console; (2) have an appliance's `210`/`220`
-verify a real signature from this repository (`390` verifies all five digests with cosign v3.1.3;
+verify a real signature from this repository (`390` verifies all five digests (four after R-016) with cosign v3.1.3;
 see T-723 for why the AWS script cannot).
 
 ### T-722 — Make `tag-images` safer (found by the independent review of PR #90)
@@ -2325,3 +2325,60 @@ running the script against a real digest published from this repository.
   and migrator with the same contexts, files and targets as `200`, no push and no login, and checks
   each runs non-root, on pull requests and manual dispatch. The CLI image stays in "Docker Build Smoke
   Test". Making the checks required remains `REVIEW.md` → R-023. First proven on its own pull request.
+  Worker leg removed with R-016 (T-725).
+
+### T-725 — Retire the worker in both appliances, then apply, then delete its tags (`REVIEW.md` → R-016)
+- **Priority:** Medium
+- **Description:** The owner approved R-016 on 2026-11-11. The core change removes the worker image,
+  the `images.worker` / `digests.worker` keys of `latest-build.json` and the worker leg of `300`.
+  Both appliances deploy `apps/cna-worker` as an always-on service and carry a `worker` slot in their
+  deploy workflows. Per the `CLAUDE.md` contract (items 1 and 2) the mirror lands in **both**
+  `Work-Cloud_Network_AWS_Appliance` and `Work-Cloud_Network_Azure_Appliance` in the same change set.
+  Provenance: the paths and line numbers below come from a read-only `git grep` of local appliance
+  `main` checkouts at AWS `abbaf35` and Azure `66b9111` (both committed 2026-11-05, not fetched);
+  re-run the grep on a fresh branch. Appliance `TODO.md` lines that mention the worker container:
+  AWS `TODO.md:353` and `:362` (the done MCP-variable parity item), Azure `TODO.md:297` (the BYO
+  provider rollout gate); update their wording in the same change.
+- **Dependencies:** None to start. The core change merges only after both appliance changes merge.
+- **Recommended action:**
+  1. In each appliance, remove the worker service and its inputs from
+     `infra/terraform/modules/compute/` (`main.tf`, `variables.tf`, `locals.tf`, `outputs.tf`), the
+     AWS `modules/observability/` worker entries, the Azure `modules/security/variables.tf` worker
+     variable, and the worker image variables and wiring in
+     `infra/terraform/environments/{dev,prod}/workload/` (`variables.tf`, `main.tf`; Azure also
+     `locals.tf`, `outputs.tf`).
+  2. Remove the worker slot from `210-deploy`, `220-fast-redeploy`, `230-image-update`,
+     `330-teardown` (AWS), `350-drift-dev` and `360-drift-prod`, from
+     `scripts/ci/resolve_rollback_target.py` (`EFFECTIVE_WORKER_IMAGE`; keep reading rollback records
+     written before the change, which still carry `worker_image`) and, in AWS,
+     `scripts/ci/ecs_update_image.sh`'s container list. `230`, `210` and `220` must accept a
+     manifest **with or without** `worker`: the core keeps publishing `images.worker` /
+     `digests.worker` until the core change merges, after the appliances.
+  3. Remove the worker from `.github/ISSUE_TEMPLATE/update-available.md` and from each appliance's
+     `README.md` and `CLAUDE.md` contract text (tag scheme and `images{}` / `digests{}` keys:
+     `cli`, `api`, `web`, `migrator`). Keep the shared files byte-identical between the appliances.
+  4. Run `terraform plan` for each environment and confirm the only destroys are the worker service
+     and its directly owned resources.
+  5. **Dev is applied automatically after an appliance merge.** Each appliance's `230-image-update`
+     (cron `17 */6 * * *` and the `cna-image-published` dispatch; gate `vars.AUTO_UPDATE_DEV !=
+     'false'`, line 217) calls `210-deploy` for `dev` (lines 226–229), which runs `terraform apply
+     -auto-approve` (AWS `210-deploy.yml:1044` and `:1151`, Azure `:1239` and `:1332`). The first new
+     core image set after an appliance merge would therefore destroy that appliance's dev worker with
+     no human step: the `dev` environment has no required reviewer in either appliance (observed
+     2026-11-11). Today `AUTO_UPDATE_DEV` is `False` in both appliances (observed 2026-11-11; the
+     Actions comparison is case-insensitive), so dev is not auto-updated. Re-check it before each
+     appliance merge: if the gate is open, the owner decides whether to set `AUTO_UPDATE_DEV=false`
+     first; with the gate closed, after the merge the owner reviews the dev plan, runs `210-deploy`
+     for `dev` by hand, then sets the variable back to its previous value.
+  6. Merge order: both appliances first, then the core change.
+  7. **Human prerequisite for prod:** the owner creates a `hub` environment with required reviewers
+     in both appliances before any prod apply. `210-deploy` targets `hub` for prod, but neither
+     appliance has one (observed 2026-11-11: AWS has `copilot` and `dev`, Azure has `dev`, none
+     protected), and GitHub creates an unprotected `hub` on first use. This belongs to each
+     appliance; track it there rather than duplicating it here.
+  8. **Prod** is destroyed only when a human dispatches `210-deploy` for `prod`, after reviewing its
+     plan; until step 7 is done there is no second-person approval. Agents never apply.
+  9. A human deletes the `worker-sha-*` and `worker-latest` tags on Docker Hub (a registry write),
+     then remove the `worker` pattern and `worker-latest` protection from `370-registry-cleanup.yml`.
+- **Status:** Open. Core change prepared 2026-11-11 on `work/retire-cna-worker`, not merged; appliance
+  changes not started. Refresh this line before each merge.

@@ -263,10 +263,10 @@ jobs:
           echo "OK: running as $USER"
 
   # ------------------------------------------------------------------
-  # 5b. Build the other four images on pull requests (TODO.md T-724)
+  # 5b. Build the other three images on pull requests (TODO.md T-724)
   # ------------------------------------------------------------------
-  # `docker-build` above builds only the CLI image. api, worker, web and
-  # migrator were first built by 200 after merge, so a base-image or dependency
+  # `docker-build` above builds only the CLI image. api, web and migrator
+  # were first built by 200 after merge, so a base-image or dependency
   # change that broke only one of them reached main before anything failed
   # (Dependabot's python 3.15 base, PR #104). Same contexts, files and targets
   # as 200-build-images.yml, but no registry login, no push and no cosign: this
@@ -285,10 +285,6 @@ jobs:
           - key: api
             context: .
             file: apps/cna-api/Dockerfile
-            target: ""
-          - key: worker
-            context: .
-            file: apps/cna-worker/Dockerfile
             target: ""
           - key: web
             context: apps/cna-web
@@ -352,7 +348,7 @@ jobs:
         id: image
         run: |
           set -euo pipefail
-          FILES=(Dockerfile apps/cna-api/Dockerfile apps/cna-worker/Dockerfile)
+          FILES=(Dockerfile apps/cna-api/Dockerfile)
           PY=$(grep -hoE '^FROM python:[0-9]+\.[0-9]+' "${FILES[@]}" | sed 's/^FROM python://' | sort -u)
           UV=$(grep -hoE '^FROM ghcr\.io/astral-sh/uv:[0-9.]+' "${FILES[@]}" | sed 's/.*uv://' | sort -u)
           if [ "$(wc -l <<<"$PY")" -ne 1 ] || [ -z "$PY" ]; then
@@ -410,7 +406,6 @@ jobs:
           done <<'SETS'
           cli|--no-default-groups
           api|--no-default-groups --extra api
-          worker|--only-group worker
           build|--only-group build
           SETS
 

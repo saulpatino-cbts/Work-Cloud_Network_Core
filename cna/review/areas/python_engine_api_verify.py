@@ -3,7 +3,8 @@
 Where :mod:`cna.review.areas.python_engine_api` records the audit's
 verify-then-close-gaps findings (the ``/intake`` honest-501 (2.1), the single
 outcome->status mapping (2.2/2.4), and the worker retirement decision (2.5)),
-this module records the *verification suite* result for the area — the design's
+this module records the *verification suite* result for the area as it was
+measured at audit time (spec task 4.7) — the design's
 "Verification" line for section 2: ``ruff check cna apps``, ``ty check cna``,
 and ``pytest`` under the 80% coverage gate. Failures are recorded as
 ``Finding`` records rather than swallowed (design "Error Handling": a failing
@@ -41,8 +42,13 @@ tools reported, and what this module records:
   * **pytest (verified compliant + one cross-area failure).** ``pytest
     tests/unit/`` under ``--cov=cna --cov-fail-under=80`` **passed the coverage
     gate at 88.08%** (well above ``fail_under = 80``); every ``python-engine-api``
-    test passed, including the FastAPI ``TestClient`` error-path/sanitization and
-    worker-decision tests (4.6). Three collected tests skip for environment
+    test passed, including the FastAPI ``TestClient`` error-path/sanitization
+    tests (4.6). That run also passed the worker-decision tests of task 4.6;
+    their module (``tests/unit/test_cna_api_worker_decision.py``) was deleted
+    with ``apps/cna-worker`` when the worker was retired (REVIEW.md R-016), so
+    they are no longer part of the suite. The numbers in this record (coverage,
+    skips, failures) are that audit-time run's, not a live measurement. Three
+    collected tests skip for environment
     reasons unrelated to this area (``weasyprint`` native lib, the draw.io CLI).
     Two tests failed — both in ``tests/unit/test_logging_config_properties.py``
     (observability area, Property 16 / task 12.2), not in this area: Hypothesis
@@ -126,9 +132,11 @@ def python_engine_api_verify_findings() -> list[Finding]:
                 "Verified compliant (pytest coverage gate): 'pytest tests/unit/ "
                 f"--cov=cna --cov-fail-under={COVERAGE_GATE}' passed the gate at "
                 f"{COVERAGE_PERCENT:.2f}% total coverage (pyproject fail_under = "
-                f"{COVERAGE_GATE}). Every python-engine-api test passed, including "
-                "the FastAPI TestClient error-path/sanitization and worker-decision "
-                "tests (task 4.6). Three tests skip for environment reasons "
+                f"{COVERAGE_GATE}) in the audit-time run. Every python-engine-api "
+                "test passed, including the FastAPI TestClient "
+                "error-path/sanitization tests (task 4.6; the worker-decision tests "
+                "left the suite with apps/cna-worker, REVIEW.md R-016). Three "
+                "tests skip for environment reasons "
                 "unrelated to this area (weasyprint native lib and the draw.io CLI, "
                 "both present inside the container images). Keep the gate at 80 and "
                 "do not weaken it to absorb future gaps."

@@ -40,21 +40,28 @@ def test_records_single_status_mapping_gap():
 
 
 def test_records_worker_retirement_decision():
-    """2.5: the worker-retirement decision is recorded with a retire action.
+    """2.5: the worker-retirement decision is recorded as INFORMATIONAL (core half).
 
-    The decision must state the worker is retired (superseded by /publish),
-    not retained with a responsibility, and carry the removal action.
+    The worker was retired (REVIEW.md R-016). The finding documents the
+    completed decision rather than a pending one: retired, superseded by the
+    /publish endpoint, not retained with a responsibility.
     """
     findings = python_engine_api_findings()
     worker = next(f for f in findings if f.dedup_key == "python-engine-api:worker-retirement")
     assert worker.subject == "apps/cna-worker"
     action = worker.proposed_action.lower()
-    assert "retire" in action
-    # The action must carry the removal/retention decision (retire => remove).
-    assert "remove" in action
+    # Finding documents completion — severity is INFORMATIONAL.
+    assert worker.severity is Severity.INFORMATIONAL
+    assert worker.blocker_id is None
+    assert "retired" in action
     # Superseded by the publish endpoint, not retained with a responsibility.
-    assert "/publish" in worker.proposed_action
-    assert "retained" not in action or "not retained" in action
+    assert "post /publish" in action
+    assert "superseded" in action
+    assert "retained" not in action
+    # Cites the owning review decision, and no release that does not exist.
+    assert "REVIEW.md R-016" in worker.proposed_action
+    assert "v1.0.0" not in worker.proposed_action
+    assert "T-002" not in worker.proposed_action
 
 
 def test_findings_are_fixable_not_escalations():

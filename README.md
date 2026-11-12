@@ -42,8 +42,7 @@ someone, check `REVIEW.md`.
 ```
 apps/
 ├── cna-web/          Next.js web platform (8-step journey, encyclopedia, copilot)
-├── cna-api/          FastAPI — metrics, chat, reports, discovery routers
-└── cna-worker/       Python background worker — discovery + report generation
+└── cna-api/          FastAPI — metrics, chat, reports, discovery routers
 cna/                  Python package, installed as the `cna` CLI
 ├── core/             topology_schema · findings_schema · stat_masters · engagement
 ├── modules/          AWS + Azure discovery, FinOps signals, BC/DR signals, topology classifier

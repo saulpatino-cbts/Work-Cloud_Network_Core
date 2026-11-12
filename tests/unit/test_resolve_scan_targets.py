@@ -22,7 +22,7 @@ SCRIPT = REPO_ROOT / "scripts" / "ci" / "resolve_scan_targets.py"
 REAL_MANIFEST = REPO_ROOT / ".deployment-catalog" / "latest-build.json"
 
 NAMESPACE = "acme-org"
-IMAGE_KEYS = ("cli", "api", "worker", "web", "migrator")
+IMAGE_KEYS = ("cli", "api", "web", "migrator")
 COMMIT = "1234567" + "a" * 33
 OTHER_COMMIT = "7654321" + "b" * 33
 PLACEHOLDER_COMMIT = "0" * 40

@@ -44,7 +44,7 @@ class Severity(IntEnum):
 AREAS: frozenset[str] = frozenset(
     {
         "app-typescript",  # apps/cna-web (Next.js, incl. AWS-shaped UI views)
-        "python-engine-api",  # cna/ core + apps/cna-api + apps/cna-worker decision
+        "python-engine-api",  # cna/ core + apps/cna-api (+ retired cna-worker, R-016)
         "terraform-azure",  # the Azure appliance's Terraform (reviewed there; T-504)
         "terraform-aws",  # the AWS appliance's Terraform (reviewed there; T-504)
         "cicd",  # .github/workflows (200, 300, 310, 370)

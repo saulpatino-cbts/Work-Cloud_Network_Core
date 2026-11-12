@@ -4,6 +4,11 @@ name: "370 · Docker Hub Registry Cleanup"
 # SHA tags (sha-*, api-sha-*, worker-sha-*, web-sha-*, migrator-sha-*)
 # accumulate unbounded with nothing ever deleting them.
 #
+# The worker image is retired (REVIEW.md R-016): 200 no longer builds it, but its
+# tags remain on Docker Hub. The worker entries below are kept on purpose, so
+# `worker-sha-*` tags beyond KEEP_COUNT still age out; the newest KEEP_COUNT and
+# `worker-latest` stay until a human deletes them (TODO.md T-725).
+#
 # Retention: for each component, keep the newest KEEP_COUNT SHA tags, plus
 # the *-latest tag (never touched) and whatever SHA is currently recorded in
 # .deployment-catalog/latest-build.json (rollback safety net). Everything

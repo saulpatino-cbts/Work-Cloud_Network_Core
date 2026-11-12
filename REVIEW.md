@@ -6,7 +6,7 @@ that belongs to a named owner outside the engineering task itself.
 
 Anything an engineer can solve without external input belongs in [`TODO.md`](TODO.md), not here.
 
-**Last reviewed:** 2026-11-05
+**Last reviewed:** 2026-11-11
 
 | ID | Blocker | Owner | Status |
 |---|---|---|---|
@@ -25,7 +25,7 @@ Anything an engineer can solve without external input belongs in [`TODO.md`](TOD
 | [R-013](#r-013--bring-the-core-repository-live-and-cut-the-appliances-over-to-it) | Bring `Work-Cloud_Network_Core` live: secrets, variables, GitHub App, `CORE_REPO` flip | Repository owner | Open — blocks the first image build from this repository |
 | [R-014](#r-014--move-the-wiki-and-delete-the-original-repository) | Move the Wiki, then delete `Work-Cloud_Network_Assessment` | Repository owner | Open — pre-deletion checklist; engineering checks done 2026-09-24 |
 | [R-015](#r-015--decide-the-customer-facing-appliance-repository-names) | Decide the customer-facing appliance repository names (`*_Appliance` vs `*_Assessment`) | Repository owner | Open — not blocking |
-| [R-016](#r-016--retire-appscna-worker-and-its-image-service-and-catalog-slot) | Retire `apps/cna-worker` — placeholder deployed as an always-on service in both appliances | Repository owner | Open — v1.0 review finding IMG-003 / ARCH-101 |
+| [R-016](#r-016--retire-appscna-worker-and-its-image-service-and-catalog-slot) | Retire `apps/cna-worker` — placeholder deployed as an always-on service in both appliances | Repository owner | Open — approved 2026-11-11; core and appliance changes, merge order and progress in `TODO.md` → T-725 |
 | [R-017](#r-017--stop-publishing-the-cli-image-on-every-push) | Stop building/publishing the CLI image `cna:sha-<7>` (no appliance consumes it) | Repository owner | Open — not blocking |
 | [R-018](#r-018--remove-cnareview-from-the-shipped-package) | Move `cna/review/**` out of the shipped package and API image | Repository owner | Open — not blocking |
 | [R-019](#r-019--diagram-editor-sends-customer-topology-to-embeddiagramsnet) | Diagram editor posts customer topology XML to public `embed.diagrams.net`; no offline path | Product owner / Security | Open — data-governance decision |
@@ -742,8 +742,43 @@ appliances.
 Wasted compute, a permanently restarting container in every environment, and documentation that
 describes a component that does nothing.
 
+**Decision**
+- **Approved by the repository owner on 2026-11-11.** Progress is tracked in `TODO.md` → T-725.
+- **The core change removes** `apps/cna-worker/` (`main.py`, `Dockerfile`) and its decision test; the
+  worker build, signing and tagging in `200-build-images` and the `images.worker` / `digests.worker`
+  keys it writes; both keys from `.deployment-catalog/latest-build.json`; the worker leg of
+  `300-test-codebase`'s `docker-build-images` and the `worker` install set of its lockfile job; the
+  `worker` dependency group from `pyproject.toml` and `uv.lock`; `worker` from
+  `scripts/ci/resolve_scan_targets.py` (so `390` scans `cli`, `api`, `web` and `migrator`); and
+  Dependabot's `/apps/cna-worker` directory. `370-registry-cleanup` keeps its worker pattern and
+  `worker-latest` protection on purpose until the old tags are deleted.
+- **Each appliance change removes** the worker service and its inputs, the worker slot in its
+  workflows, and the worker from its contract text, in both `Work-Cloud_Network_AWS_Appliance` and
+  `Work-Cloud_Network_Azure_Appliance`.
+- **Merge order: both appliances first, then the core.** The appliances' `230` reads this repository's
+  `latest-build.json`; a core merge first would publish a manifest without `images.worker` to
+  appliances that still expect it. Until the core merges, the appliances must accept a manifest with
+  or without `worker`.
+- **How the live worker service is destroyed.** In **dev** it can be automatic: each appliance's
+  `230-image-update` (cron and the `cna-image-published` dispatch, gated on
+  `vars.AUTO_UPDATE_DEV != 'false'`) calls `210-deploy` for `dev`, which runs
+  `terraform apply -auto-approve`. With the gate open, the first new core image set after an
+  appliance change merges destroys that appliance's dev worker with no human step: the `dev`
+  environment has no required reviewer in either appliance (observed 2026-11-11). Today
+  `AUTO_UPDATE_DEV` is `False` in both appliances (observed 2026-11-11; the comparison is
+  case-insensitive), so dev is not auto-updated and the dev deploy is a human `210-deploy` run.
+  Re-check the variable before each appliance merge (`TODO.md` → T-725).
+  In **prod** it is destroyed only when a human dispatches `210-deploy` for prod. The `hub`
+  environment that job targets does not exist in either appliance (observed 2026-11-11), so there is
+  no second-person approval today: GitHub creates an unprotected `hub` on first use. Creating `hub`
+  with required reviewers before any prod apply is a prerequisite owned by each appliance
+  (`TODO.md` → T-725). No agent applies.
+- After that, a human deletes the `worker-*` tags on Docker Hub (a registry write) and the worker
+  entry leaves `370`.
+
 **References**
 - v1.0 review findings IMG-003, ARCH-004, ARCH-101, PY-016
+- `TODO.md` → T-725 (appliance mirror, apply, tag deletion)
 
 ## R-017 — Stop publishing the CLI image on every push
 
@@ -882,8 +917,8 @@ Checks tab before acting.
 Repository admin (branch protection / rulesets).
 
 **Required action**
-Add "Docker Build Smoke Test", "Python Lockfile Consistency" and the four "Docker Build Image (api|worker|web|migrator)"
-checks (T-724, landed 2026-11-06) as required status checks on `main`. Confirm Dependabot PRs cannot bypass the rule.
+Add "Docker Build Smoke Test", "Python Lockfile Consistency" and the three "Docker Build Image (api|web|migrator)"
+checks (T-724, landed 2026-11-06; the worker leg left with R-016) as required status checks on `main`, and remove "Docker Build Image (worker)" if it was already added as a required check. Confirm Dependabot PRs cannot bypass the rule.
 
 **Do not break the publish step.** `200-build-images` (`publish-build-manifest`) commits
 `.deployment-catalog/latest-build.json` and runs a plain `git push` to `main` as `github-actions[bot]`

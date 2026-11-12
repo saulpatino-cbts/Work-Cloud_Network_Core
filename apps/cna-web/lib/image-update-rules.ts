@@ -1,7 +1,7 @@
 /**
  * Image-update rules — pure functions, no I/O.
  *
- * A deployed appliance runs immutable images (`cna:{web,api,worker}-sha-<7>`)
+ * A deployed appliance runs immutable images (`cna:{web,api,migrator}-sha-<7>`)
  * and only changes them through its own workflows: `230-image-update` picks
  * up every new image set the core publishes, redeploys `dev` automatically
  * and opens an `update-available` issue for `prod`, which a human applies via

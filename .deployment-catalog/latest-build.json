@@ -6,14 +6,12 @@
   "images": {
     "cli":      "docker.io/hybridcloudworks/cna:sha-821e1b4",
     "api":      "docker.io/hybridcloudworks/cna:api-sha-821e1b4",
-    "worker":   "docker.io/hybridcloudworks/cna:worker-sha-821e1b4",
     "web":      "docker.io/hybridcloudworks/cna:web-sha-821e1b4",
     "migrator": "docker.io/hybridcloudworks/cna:migrator-sha-821e1b4"
   },
   "digests": {
     "cli":      "docker.io/hybridcloudworks/cna@sha256:2030bca303bc8a694057affed74dab1e444605df7d13fadbafeaa67102695adb",
     "api":      "docker.io/hybridcloudworks/cna@sha256:46e46578cac801a68fd82cf9b46edebfd1bec5a65920c2bd5b50bdb0897b9d14",
-    "worker":   "docker.io/hybridcloudworks/cna@sha256:aea4f94da4a25acac5f277a73376e3ce7ca4686cdecdb704485c17c257d9bc5c",
     "web":      "docker.io/hybridcloudworks/cna@sha256:9877de981ed0a32ecbae754f119860657c0e4d11eabcd8b6ca96d734b94bcc99",
     "migrator": "docker.io/hybridcloudworks/cna@sha256:e22946615697b74b9a2cf53327bc56ee251fc48db404b1b458f5040c6c93c82f"
   }

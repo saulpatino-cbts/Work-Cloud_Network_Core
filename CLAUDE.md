@@ -6,9 +6,9 @@ human intro page; this file states the rules an agent must not infer wrongly.
 ## What this repository is
 
 This is the **core** of the Cloud Network Assessment (CNA) platform: the single
-source of application code — `apps/cna-web`, `apps/cna-api`, `apps/cna-worker`,
-and the `cna` Python package — and the pipeline that builds and publishes their
-container images (`200-build-images.yml` → Docker Hub `<namespace>/cna`).
+source of application code — `apps/cna-web`, `apps/cna-api` and the `cna` Python
+package — and the pipeline that builds and publishes their container images
+(`200-build-images.yml` → Docker Hub `<namespace>/cna`).
 
 It is **internal, never customer-facing**: customers consume an appliance, not this
 repository. The project's original repository, `Work-Cloud_Network_Assessment`, held this
@@ -63,12 +63,12 @@ Changing any of the following changes both appliances. Mirror the change into
 **both** appliance repositories in the same change set (link the sibling PRs),
 or record a `TODO.md` item naming them — never leave one side implied.
 
-1. **Image tag scheme** on Docker Hub: `cna:{api,worker,web,migrator}-sha-<7>`
+1. **Image tag scheme** on Docker Hub: `cna:{api,web,migrator}-sha-<7>`
    immutable tags plus floating `*-latest`; the CLI image is `cna:sha-<7>` /
    `cna:latest`.
 2. **`.deployment-catalog/latest-build.json`** — fields `sha_tag`, `commit`,
-   `built_at`, `run_id`, `images{cli,api,worker,web,migrator}` (immutable tags)
-   and `digests{cli,api,worker,web,migrator}` (`docker.io/<ns>/cna@sha256:<64>`).
+   `built_at`, `run_id`, `images{cli,api,web,migrator}` (immutable tags)
+   and `digests{cli,api,web,migrator}` (`docker.io/<ns>/cna@sha256:<64>`).
    Written and committed by `200-build-images.yml` (main only) after every image was
    built, pushed by digest, signed and attested. `200` runs **no vulnerability
    scan** — Docker Scout's backend needs an entitlement its keyless OIDC login lacks.

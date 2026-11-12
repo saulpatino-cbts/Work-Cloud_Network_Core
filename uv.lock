@@ -837,10 +837,6 @@ build = [
     { name = "setuptools" },
     { name = "wheel" },
 ]
-worker = [
-    { name = "azure-identity" },
-    { name = "azure-storage-blob" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -902,10 +898,6 @@ provides-extras = ["enrichment", "api", "dev"]
 build = [
     { name = "setuptools", specifier = ">=84.2.1" },
     { name = "wheel" },
-]
-worker = [
-    { name = "azure-identity", specifier = ">=1.27.0" },
-    { name = "azure-storage-blob", specifier = ">=12.31.1" },
 ]
 
 [[package]]

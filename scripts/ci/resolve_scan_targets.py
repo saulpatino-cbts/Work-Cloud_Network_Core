@@ -40,10 +40,11 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-# The contract with the appliances (CLAUDE.md, contract item 2): these five keys,
+# The contract with the appliances (CLAUDE.md, contract item 2): these four keys,
 # in this order. A key added to or removed from the manifest must be a deliberate
 # change here, so a new image can never be deployed without being scanned.
-IMAGE_KEYS = ("cli", "api", "worker", "web", "migrator")
+# Note: the cna-worker image was retired (REVIEW.md R-016).
+IMAGE_KEYS = ("cli", "api", "web", "migrator")
 DEFAULT_MANIFEST = ".deployment-catalog/latest-build.json"
 EVENTS = ("workflow_run", "schedule", "workflow_dispatch")
 

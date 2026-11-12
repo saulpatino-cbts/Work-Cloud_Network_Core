@@ -6,13 +6,15 @@ diagram per discovered scope.
 
 This module is the seam between discovery+analysis (already on-disk) and the
 draw.io render pipeline. It is intentionally synchronous and side-effect free
-— the worker hooks it after analysis and forwards the result to the export
-pipeline + manifest. Failures degrade gracefully: a missing or partial
-topology yields fewer diagrams, not an exception.
+— its caller (cna-api's ``routers/diagrams.py``) loads the persisted
+topologies, calls it, and returns the result as one .drawio document.
+Failures degrade gracefully: a missing or partial topology yields fewer
+diagrams, not an exception.
 
 Optional integration with the in-app draw.io MCP surface is via
-`DrawioMCPClient.health()` — we log when it is reachable so operators can
-verify the studio is functional from the worker. The actual icon styles come
+`DrawioMCPClient.health()`, when a caller passes a client (the diagrams router
+currently does not) — we log when it is reachable so operators can verify the
+studio is functional from the calling service. The actual icon styles come
 from the local shape catalog (offline-deterministic).
 """
 

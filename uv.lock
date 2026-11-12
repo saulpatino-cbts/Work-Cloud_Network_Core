@@ -768,7 +768,7 @@ wheels = [
 
 [[package]]
 name = "cna"
-version = "0.8.0b0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

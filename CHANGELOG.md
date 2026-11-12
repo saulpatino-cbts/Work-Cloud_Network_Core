@@ -248,6 +248,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+<!-- [1.0.0-rc1 — withdrawn]: An earlier [1.0.0] heading was removed before release. The 1.0.0 entry will be added here when the release is tagged. -->
+
+---
+
 ## [0.8.0-beta] - 2026-06-16
 
 ### Added

@@ -84,7 +84,7 @@ describe("tag scheme", () => {
   const VECTORS: Array<[string, string, string, string]> = [
     ["web-sha-abc1234", "web", "web-latest", "abc1234"],
     ["api-sha-0123abc", "api", "api-latest", "0123abc"],
-    ["worker-latest", "worker", "worker-latest", ""],
+    ["migrator-latest", "migrator", "migrator-latest", ""],
     ["migrator-sha-deadbee", "migrator", "migrator-latest", "deadbee"],
     ["sha-abc1234", "", "latest", "abc1234"],
     ["latest", "", "latest", ""],

@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "click>=8.4.2",
     "rich>=15.0.0",
-    "boto3>=1.43.123",
+    "boto3>=1.43.125",
     "azure-identity>=1.27.0",
     # Pinned to 1.x deliberately (TODO.md T-413). FoundryAgentClient drives
     # agents.threads / .messages / .runs, which is the 1.x surface; 2.x replaced
@@ -104,8 +104,8 @@ dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
     "hypothesis>=6.170.15",             # property-based tests (production-readiness review invariants)
-    "ruff>=0.17.3",
-    "ty>=0.0.99",                       # type checker (TODO.md T-402)
+    "ruff>=0.17.4",
+    "ty>=0.0.95",                       # type checker (TODO.md T-402)
     "pre-commit>=4.7.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]
@@ -114,7 +114,7 @@ dev = [
 # dependencies and extras (TODO.md T-702). Groups are never installed by
 # `pip install .`; the Dockerfiles export them from the lock explicitly.
 [dependency-groups]
-# The build backend the three Python Dockerfiles install into the *builder*
+# The build backend the two Python Dockerfiles install into the *builder*
 # stage before building the `cna` wheel with `--no-build-isolation`, so the
 # backend itself is pinned and hash-checked instead of fetched unpinned by pip's
 # isolated build environment. Mirrors [build-system].requires — keep both in
@@ -124,14 +124,6 @@ build = [
     "setuptools>=84.2.1",
     "wheel",
 ]
-# apps/cna-worker/main.py imports exactly these two SDKs and does not install
-# the cna package, so its image resolves them from the same lock as the CLI and
-# API images (same versions everywhere) instead of an unpinned `pip install`.
-worker = [
-    "azure-identity>=1.27.0",
-    "azure-storage-blob>=12.31.1",
-]
-
 # uv.lock is the single resolution every Python image installs from
 # (`uv export --locked` → `uv pip install --require-hashes`); 300-test-codebase
 # fails when it drifts from this file (`uv lock --check`). Regenerate with
@@ -186,7 +178,7 @@ ignore = [
     "S603",   # subprocess call (needed for diagram export)
     "S607",   # partial executable path (needed for diagram export)
     "N818",   # exception name without Error suffix — intentional (CNAPartialResult, ObservedStateViolation, etc.)
-    "S108",   # /tmp usage — acceptable in containerised CLI/worker images
+    "S108",   # /tmp usage — acceptable in containerised CLI/API images
     "S311",   # pseudo-random — used for jitter/throttle, not cryptography
 ]
 

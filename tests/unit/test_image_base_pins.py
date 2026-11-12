@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 PYTHON_DOCKERFILES = (
     ROOT / "Dockerfile",
     ROOT / "apps" / "cna-api" / "Dockerfile",
-    ROOT / "apps" / "cna-worker" / "Dockerfile",
 )
 PYTHON_BASE = re.compile(
     r"^FROM (python:(\d+)\.(\d+)\.(\d+)-slim@sha256:[0-9a-f]{64})(?: AS \S+)?$"

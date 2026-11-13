@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Obsidian knowledge vault as a deliverable format** (`BUILD-02` phase 1; spec at `.kiro/specs/obsidian-second-brain/`). A new `ObsidianVaultRenderer` (`cna/report_engine/obsidian_vault.py`) turns a reviewed `FindingsReport` into an Obsidian vault — a folder of linked Markdown notes (one per finding, affected resource, recommendation and framework, plus a README entry note) that opens as a navigable knowledge graph and also reads as plain Markdown in any editor. Finding notes carry YAML front-matter (severity, cloud, domain, framework) and keep observed facts separate from recommendations (DD-002); cost figures keep their `[VERIFY]` marker; no secret is ever written. It is a new renderer in the existing pipeline — opt-in via `RenderOptions.render_obsidian` (default off), gated by the same `DD-009` review gate as every other format, recorded in the `DeliverableManifest` as `format="obsidian"`, and shipped as a `<engagement_id>_vault_<ts>.zip` the delivery portal uploads (`.zip` added to the portal's content-type map). The vault absorbs the former Phase E knowledge-transfer package: its README is the how-to-read guide and its `Frameworks/` notes are the framework links per finding (the `knowledge_transfer.py` stub now points at the renderer). 14 unit tests cover structure, front-matter, the observed/recommended split, the cost marker, a wiki-link audit, the zip, the pipeline manifest record, the review-gate block and write-isolation. The AI second-brain half of `BUILD-02` (retrieval from a per-customer vault) is designed but gated on a privacy review and not built. Core-only; no appliance change.
 
 ### Security
+- **Prepared: base-image CVEs from the 2026-11-12 `390` scan addressed at build time** (`TODO.md` → T-727).
+  `cli` and `api`: CVE-2026-119170 in Python 3.14.10 (fixed in 3.14.11, which has no image) by the move to Python
+  3.15.2 [VERIFY: no `390` run has scanned a 3.15.2 image yet, so that 3.15.2 is not affected is unconfirmed];
+  CVE-2026-76844 and CVE-2026-85091 in `zlib1g` 1:1.3.dfsg+really1.3.1-1+b1 by the `apt-get upgrade` to
+  1:1.3.dfsg+really1.3.1-1+deb13u1 from trixie-security. `web` and `migrator`: CRITICAL CVE-2026-4738 in `zlib`
+  1.3.2-r1 by the `apk upgrade` to 1.4-r0 from Alpine v3.24/main. The package versions were seen in local builds
+  only; the next `200` publish and the `390` scan after it are the proof for the published images.
+- **`minimatch` 10.2.6 → 11.0.8 in the web tier's dev tree and the published `migrator` image** (Dependabot
+  alert #74, GHSA-g3hv-75wg-m249 / CVE-2026-118764, MEDIUM; vulnerable `>=7.0.0 <11.0.1`). It is a dev dependency,
+  but the `migrator` stage copies the builder's whole `node_modules`, so it shipped in that image too (`TODO.md`
+  → T-716). `apps/cna-web/package.json` overrides `minimatch@^10` to `11.0.8`, in the style of the existing
+  `brace-expansion` overrides; the lockfile adds its new dependency `@isaacs/nonrecursive-glob-match` 1.1.0 (dev).
+  It reached the tree through `eslint` 10.14.0, `@eslint/config-array` and
+  `@typescript-eslint/typescript-estree`. The `minimatch` 3.1.5 copy under the eslint plugins is outside this
+  advisory's range and stays [VERIFY: the 2026-11-04 `390` scan also reported CVE-2026-118764 against 3.1.5;
+  whether Grype keeps reporting it is unconfirmed until the next scan].
 - **Prepared fail-closed BYO provider authorization.** Web and Python runtime paths
   require `CNA_BYO_AI_PROVIDERS` as a nonempty JSON array of unique `anthropic` /
   `openai` ids in `byo-api`, with a compatible default. Invalid configuration or
@@ -63,11 +79,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Markdown deliverables served as HTML carry a Content-Security-Policy and safe links** (SEC-005). `default-src 'none'` with a per-response script nonce (the print button's inline handler became a nonce'd listener), an href allow-list (`http`, `https`, `mailto`, `tel`, relative, anchor — obfuscated `java\tscript:` included), `rel="noopener noreferrer"`, and full attribute escaping (`"`/`'` as well as `&<>`).
 - **Images are built and signed before any tag moves** (IMG-001 / RELEASE-002). `200-build-images` pushed `*-sha-<7>` and `*-latest` before anything had checked the image, so a bad image was already what `210`, `220`, `350` and `360` fall back to. Every image is now pushed by digest only and tagged in a `tag-images` job (main only) only after all five were built and signed; the inline Docker Scout gate this entry first introduced was removed again (see Changed, `TODO.md` → T-719); `latest-build.json` gains an additive `digests{}` (`docker.io/<ns>/cna@sha256:…`) next to `images{}` so the appliances can move to deploy-by-digest (`TODO.md` → T-701). Jobs carry minimal `permissions:`; `cancel-in-progress` is off so a cancelled run cannot leave a half-tagged set. Dependabot's docker ecosystem covers all four Dockerfiles.
 - **Every published image is signed and carries verifiable provenance** (`TODO.md` → T-703, findings RELEASE-003 / IMG-012). `200-build-images` emitted BuildKit SBOM/provenance attestations that nothing signed or verified, so a tag re-pointed on Docker Hub or an image pushed with the registry credential from anywhere else would have deployed. Each digest that is built (and, for web, passes the smoke test) is now signed with cosign — keyless, under the workflow's own OIDC identity, recorded in the Sigstore transparency log, no key material anywhere — and BuildKit's SLSA v0.2 provenance is re-attached as a cosign attestation whose `builder.id` is asserted to be this run (`scripts/ci/sign_image.sh`). The build jobs gain `id-token: write` and nothing else. Both appliances verify signature, attestation subject and builder against their `IMAGE_SIGNING_IDENTITY` variable before every `210` plan and `220` redeploy; `CLAUDE.md` records the contract (item 5). Keyless signing publishes the repository and workflow name to the public transparency log; nothing else leaves the run. cosign stores the signature and attestation as OCI referrers of the digest (a `sha256-<digest>` index tag where the registry lacks the Referrers API), which `370-registry-cleanup`'s component patterns never match; pruning the ones orphaned by `370` is `TODO.md` → T-718.
-- **Python images install a hash-checked lockfile and no longer self-upgrade at build time** (`TODO.md` → T-702, findings PY-020 / IMG-004). `uv.lock` pins the whole resolution (145 packages, universal markers, sha256 per wheel); the CLI, API and worker Dockerfiles export their set from it with `uv export --locked` — which fails the build the moment `pyproject.toml` and the lock disagree — and install with `uv pip install --require-hashes --no-deps`, so an immutable `sha-<7>` image is now reproducible from its commit instead of being whatever PyPI resolved that day (the `openai>=2.45` floor resolved to a different 3.x on different days; it is now one reviewed version until the lock is regenerated). The `cna` wheel is built with `--no-build-isolation` against a hash-checked `build` dependency group (setuptools/wheel), and the worker's two Azure SDKs come from a `worker` group in the same lock instead of an unpinned `pip install`. uv comes from a digest-pinned `FROM ghcr.io/astral-sh/uv:0.12.21 AS uv` stage (a `FROM` line so Dependabot bumps it) and is copied into the builder stage only; the API image no longer needs `gcc`/`libpq-dev` because every wheel is prebuilt for cp314. `apt-get -y upgrade` and `apk upgrade` are removed from every final stage and the `python:3.14-slim` / `node:24-alpine` digests are refreshed — Dependabot's docker ecosystem keeps them current, so a Docker Scout finding on a base-image package is fixed by the digest bump, never by a rebuild that changes the image. `300 · Test Codebase` gains a **Python Lockfile Consistency** job (`uv lock --check` plus a real, hash-verified install of the cli / api / worker / build sets into a throwaway prefix on Python 3.14), `pip-audit` audits the locked export (every extra, `--strict`, zero advisories today), Dependabot's Python ecosystem becomes `uv` so its PRs move `pyproject.toml` and `uv.lock` together, and `detect-secrets` / `check-added-large-files` exclude the lock. Local `pip install -e .[dev]` is unchanged; run `uv lock` after editing a dependency.
+- **Python images install a hash-checked lockfile and no longer self-upgrade at build time** (`TODO.md` → T-702, findings PY-020 / IMG-004). `uv.lock` pins the whole resolution (145 packages, universal markers, sha256 per wheel); the CLI, API and worker Dockerfiles export their set from it with `uv export --locked` — which fails the build the moment `pyproject.toml` and the lock disagree — and install with `uv pip install --require-hashes --no-deps`, so an immutable `sha-<7>` image is now reproducible from its commit instead of being whatever PyPI resolved that day (the `openai>=2.45` floor resolved to a different 3.x on different days; it is now one reviewed version until the lock is regenerated). The `cna` wheel is built with `--no-build-isolation` against a hash-checked `build` dependency group (setuptools/wheel), and the worker's two Azure SDKs come from a `worker` group in the same lock instead of an unpinned `pip install`. uv comes from a digest-pinned `FROM ghcr.io/astral-sh/uv:0.12.21 AS uv` stage (a `FROM` line so Dependabot bumps it) and is copied into the builder stage only; the API image no longer needs `gcc`/`libpq-dev` because every wheel is prebuilt for cp314. `apt-get -y upgrade` and `apk upgrade` are removed from every final stage and the `python:3.14-slim` / `node:24-alpine` digests are refreshed — Dependabot's docker ecosystem keeps them current, so a Docker Scout finding on a base-image package is fixed by the digest bump, never by a rebuild that changes the image. `300 · Test Codebase` gains a **Python Lockfile Consistency** job (`uv lock --check` plus a real, hash-verified install of the cli / api / worker / build sets into a throwaway prefix on Python 3.14), `pip-audit` audits the locked export (every extra, `--strict`, zero advisories today), Dependabot's Python ecosystem becomes `uv` so its PRs move `pyproject.toml` and `uv.lock` together, and `detect-secrets` / `check-added-large-files` exclude the lock. Local `pip install -e .[dev]` is unchanged; run `uv lock` after editing a dependency. (Reversed for shipped final stages by T-727; see Changed.)
 - **Web dependency advisories closed.** Next.js 16.3.1 → 16.3.6 (GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4 — unauthenticated RCE paths), `sharp` ≥ 0.35.4 (GHSA-rgj7-g3m4-5g8c), `browserslist` ≥ 4.29 and `baseline-browser-mapping` ≥ 2.11 overrides; `npm audit` reports zero advisories. `vite` is declared as a devDependency because vitest 5 lists it only as a peer and `npm install --legacy-peer-deps` (the web Dockerfile's mode) dropped it.
 - **The migrator image no longer runs as root** (IMG-002). It executed `prisma migrate deploy` as uid 0 with the database-owner connection string; it now runs as uid 1001 through `prisma/migrate.sh`. The web runner's `HEALTHCHECK` probes `/api/health` instead of rendering `/` (IMG-009), and `apps/cna-web/.dockerignore` fences the build context.
 
 ### Fixed
+- **Dependabot is configured to move the python base in one pull request across both Python Dockerfiles**
+  (2026-11-12; unverified until its next docker run). PRs #122 and #123 bumped the python digest one directory
+  at a time, and each failed `tests/unit/test_image_base_pins.py`, which requires one shared digest.
+  `.github/dependabot.yml` gains a `python-base` group (`group-by: dependency-name`) ahead of
+  `docker-minor-patch`; the rule that keeps Python minors manual stays, and its comment now says how to move to
+  3.16.
+- **`uv.lock` moves `httptools` 0.8.0 → 0.9.0, `markupsafe` 3.0.3 → 3.0.4 and `uvloop` 0.22.1 → 0.23.0**, their
+  first releases with cp315 wheels (`uv lock --upgrade-package`, uv 0.13.7; no other package moved).
 - **`oauthlib` 4.0.0 to 4.0.1 in `uv.lock`** (`300` pip-audit, 2026-11-05). `pip-audit` began failing on
   CVE-2026-49272 in `oauthlib` 4.0.0, fixed in 4.0.1; `main` passed the same check hours earlier, so the
   advisory is new. Bumped with `uv lock --upgrade-package oauthlib` (uv 0.13.7, three lines, lock
@@ -99,6 +123,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Accessibility** (UI-001 / UI-003 / UI-004 / UI-005). Section labels move to tokens that pass WCAG AA in both themes; credential-form, local-admin and chat inputs get programmatic labels; a branded `not-found` page replaces the default 404; the service-principal help modal gains dark-mode variants.
 
 ### Changed
+- **The CLI and API images move to Python 3.15, and every shipped image applies its distro security updates again**
+  (`TODO.md` → T-726, T-727, 2026-11-12). **Python:** all six Python `FROM` lines (builder, drawio-fetch and final in
+  `Dockerfile` and `apps/cna-api/Dockerfile`) move from `python:3.14.10-slim@sha256:af8a5aa1…` to
+  `python:3.15.2-slim-trixie@sha256:65a65fc7…` (Python 3.15.2, Debian 13.7); the tag now names the Debian release, and
+  `tests/unit/test_image_base_pins.py` requires that and a floor of 3.15.2. PyYAML 6.0.3 has no cp315 wheel
+  ([yaml/pyyaml#951](https://github.com/yaml/pyyaml/issues/951)), so both builders install the hash-checked `build`
+  group first and build PyYAML from its hash-checked source archive as plain Python
+  (`PYYAML_FORCE_LIBYAML=0 … --no-build-isolation-package pyyaml`; nothing here imports `yaml.CLoader`). Every
+  `python-version` in `300-test-codebase.yml` moves to 3.15, and its unit-test job is renamed
+  `Unit Tests (Python 3.15)`: `main` has no ruleset and no classic protection (`protected: false`, read 2026-11-12),
+  so the rename breaks no required check. The `Python Lockfile Consistency` job installs the build group first and
+  keeps `--only-binary :all:` for every package except PyYAML (`--no-binary pyyaml`). **Distro upgrades (policy
+  change, reverses T-702's rule):** the shipped final stages run `apt-get upgrade` (Python images, with retries off
+  and `--error-on=any`) or `apk upgrade --no-cache` (web `migrator` and `runner`) in a `RUN` that names the new
+  `PUBLISH_CACHE_BUST` build argument, which every image build in `200-build-images.yml` (all three `build-args`
+  blocks) and in `300` (the CLI smoke build and the pull-request image builds) sets per run
+  (`${{ github.run_id }}-${{ github.run_attempt }}`), so the Actions cache never replays an older upgrade result; that
+  also rebuilds every later layer of those stages on each run (longer builds, more cache churn). The root image's
+  draw.io install is folded into the same `RUN`, so every apt-get in a shipped stage runs with retries off. Two builds
+  of one commit can now differ in their distro packages; the controls are `390-scan-images` and the new
+  `tests/unit/test_image_security_upgrade.py`, which also fails if a stage is appended after `final` or a workflow
+  builds a stage it does not check. The root and API final stages are now named `final` (still the last stage; no
+  build target changes). Image names, tags, the catalog, signing, users, ports and settings are unchanged (contract
+  items 1–5 untouched).
 - **`300 · Test Codebase` builds all four non-CLI images on pull requests** (`TODO.md` → T-724). New
   job `docker-build-images` ("Docker Build Image (api|worker|web|migrator)") builds api, worker, web and
   migrator from the same contexts, files and targets as `200`, with no registry login, no push and no
@@ -112,7 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads `python:<major.minor>` and the `astral-sh/uv` release from the three Python Dockerfiles,
   fails when they disagree with each other or with any hard-coded `python-version` in the
   workflow, and installs every set with `--only-binary :all:` so a missing wheel fails on the PR
-  as it does in the image. Verified locally: on 3.15 the `cli` and `api` sets fail (no
+  as it does in the image (PyYAML excepted since T-726). Verified locally: on 3.15 the `cli` and `api` sets fail (no
   markupsafe/httptools wheels); on 3.14 all four sets install; unit suite 1,421 passed.
 - **Prepared publisher race/retry controls and client installation guidance** (`TODO.md` →
   T-722). `200-build-images` checks the current source SHA before tags and manifest publication,

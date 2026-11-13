@@ -178,6 +178,7 @@ jobs:
           file: ${{ matrix.file }}
           build-args: |
             CNA_BUILD_SHA=${{ github.sha }}
+            PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
           # Pin SLSA v0.2: BuildKit >= 0.28 defaults to v1 (`runDetails.builder.id`),
@@ -337,6 +338,7 @@ jobs:
           target: runner
           build-args: |
             CNA_BUILD_SHA=${{ github.sha }}
+            PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_web.outputs.labels }}
           provenance: version=v0.2
@@ -357,6 +359,7 @@ jobs:
           target: migrator
           build-args: |
             CNA_BUILD_SHA=${{ github.sha }}
+            PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
           outputs: type=image,name=docker.io/${{ env.DOCKERHUB_NAMESPACE }}/cna,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta_migrator.outputs.labels }}
           provenance: version=v0.2

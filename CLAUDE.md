@@ -143,10 +143,18 @@ or record a `TODO.md` item naming them — never leave one side implied.
   image installs (`uv export --locked` + `--require-hashes`); after editing a
   dependency, extra or dependency group in `pyproject.toml`, run `uv lock` and
   commit both files — `300-test-codebase` fails on drift. Never edit `uv.lock`
-  by hand, never add a package to a Dockerfile with a bare `pip install`, and
-  never re-add `apt-get upgrade` / `apk upgrade` to a final stage: a
-  `390-scan-images` (Grype) finding on a base-image package is fixed by
-  Dependabot's digest bump. The uv
+  by hand, and never add a package to a Dockerfile with a bare `pip install`.
+  Every shipped final stage runs the distro security upgrade (`apt-get upgrade`
+  in the Python images, `apk upgrade` in the web and migrator images) on top of
+  the digest-pinned base, behind the per-run `PUBLISH_CACHE_BUST` build argument
+  every image build in `200-build-images` and `300-test-codebase` passes, and
+  keeps it: a security fix reaches the Debian and
+  Alpine mirrors before the official image is rebuilt with it, and a digest bump
+  clears a `390-scan-images` (Grype) finding on a base package only after that
+  rebuild, which can lag days or weeks (`TODO.md` T-727, reversing T-702's rule;
+  the same policy as `saulpatinojr/HCW-NetworkEyes_App` T-741). Dependabot's
+  digest bump still moves the base; `tests/unit/test_image_security_upgrade.py`
+  fails if a shipped stage drops the upgrade. The uv
   version is pinned in the `FROM ghcr.io/astral-sh/uv:… AS uv` stage of each
   Python Dockerfile and the `uv==` steps of `300-test-codebase.yml`; when
   Dependabot bumps the stage, move the workflow pins with it.

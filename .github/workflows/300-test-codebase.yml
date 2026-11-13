@@ -1,9 +1,9 @@
 # CI pipeline — hardened
 # Changes from original:
 #   - All actions pinned to SHA digest (supply chain security)
-#   - Python 3.14 only: every image ships python:3.14-slim, so no other interpreter is deployed
+#   - Python 3.15 only: every Python image ships python:3.15.2-slim-trixie, so no other interpreter is deployed
 #   - pip cache via actions/cache (60-80% faster installs)
-#   - Coverage XML generated in the Python 3.14 job
+#   - Coverage XML generated in the Python 3.15 job
 #   - Secret scanning runs gitleaks directly to avoid Node.js action runtime warnings
 #   - ruff jobs split: check + format are separate steps with annotations
 #   - module-dependency-check now also runs on PRs (was push-only)
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -163,10 +163,10 @@ jobs:
         run: npm test
 
   # ------------------------------------------------------------------
-  # 3. Unit tests — Python 3.14 (the interpreter every image ships)
+  # 3. Unit tests — Python 3.15 (the interpreter every image ships)
   # ------------------------------------------------------------------
   test:
-    name: Unit Tests (Python 3.14)
+    name: Unit Tests (Python 3.15)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [lint]  # secret-scan is non-blocking (continue-on-error)
@@ -174,12 +174,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: test-3.14-${{ hashFiles('pyproject.toml') }}
+          key: test-3.15-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         # enrichment is required since tests/unit/test_azure_discovery.py exercises
         # the Log Analytics paths by importing azure.monitor.query directly (T-408).
@@ -225,7 +225,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -249,8 +249,10 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      # PUBLISH_CACHE_BUST as in 200 (TODO.md T-727), so every image build in this workflow passes it; this one
+      # has no Actions cache, so it changes nothing today, but tests/unit/test_image_security_upgrade.py requires it.
       - name: Build image
-        run: docker build -t cna:ci-test .
+        run: docker build --build-arg "PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}" -t cna:ci-test .
       - name: Smoke test — cna --help
         run: docker run --rm cna:ci-test --help
       - name: Verify non-root user
@@ -307,8 +309,11 @@ jobs:
           push: false
           load: true
           tags: cna-ci:${{ matrix.key }}
+          # PUBLISH_CACHE_BUST as in 200 (TODO.md T-727): the per-run value keeps the gha cache from replaying an
+          # older distro-upgrade layer, so the PR build proves the upgrade against today's mirrors.
           build-args: |
             CNA_BUILD_SHA=${{ github.sha }}
+            PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=pr-${{ matrix.key }}
           cache-to: type=gha,scope=pr-${{ matrix.key }},mode=max
       - name: Verify non-root user
@@ -338,6 +343,15 @@ jobs:
   # quietly build must fail here as it fails in 200. Without both, Dependabot's
   # python 3.14 -> 3.15 base bump (PR #104) passed this job while uv.lock had
   # no cp315 wheels for markupsafe/httptools/numpy, and 200 broke on main.
+  #
+  # The one exception is PyYAML 6.0.3, which has no cp315 wheel yet
+  # (yaml/pyyaml#951; TODO.md T-726). As in the Dockerfiles, the build group is
+  # installed first and PyYAML is built from its hash-checked source archive
+  # with it (`--no-build-isolation-package pyyaml`), as plain Python
+  # (PYYAML_FORCE_LIBYAML=0). `--no-binary pyyaml` lifts `--only-binary :all:`
+  # for PyYAML alone; every other package must still be a wheel (checked with
+  # uv 0.13.7 on CPython 3.15.2 with CC=/bin/false, 2026-11-12: the previous
+  # lock still fails on httptools 0.8.0). Drop both PyYAML flags with T-726.
   lockfile:
     name: Python Lockfile Consistency
     runs-on: ubuntu-latest
@@ -393,14 +407,20 @@ jobs:
       - name: uv.lock matches pyproject.toml
         run: uv lock --check
       - name: Every image install set installs from the lock with verified hashes
+        env:
+          PYYAML_FORCE_LIBYAML: "0"  # the plain-Python PyYAML build, as in the Dockerfiles
         run: |
           set -euo pipefail
+          # The build group first, into the job's Python, as the Dockerfiles do: PyYAML is built with it below.
+          uv export --locked --only-group build -o "${RUNNER_TEMP}/build-backend.txt"
+          uv pip install --system --require-hashes --no-deps --only-binary :all: -r "${RUNNER_TEMP}/build-backend.txt"
           # (label, export flags) — one line per Python Dockerfile plus the build group.
           while IFS='|' read -r label flags; do
             echo "::group::${label}"
             # shellcheck disable=SC2086  # flags are a deliberate word list
             uv export --locked --no-emit-project ${flags} -o "${RUNNER_TEMP}/${label}.txt"
             uv pip install --system --require-hashes --no-deps --only-binary :all: \
+              --no-binary pyyaml --no-build-isolation-package pyyaml \
               --prefix "${RUNNER_TEMP}/prefix-${label}" -r "${RUNNER_TEMP}/${label}.txt"
             echo "::endgroup::"
           done <<'SETS'
@@ -421,7 +441,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:

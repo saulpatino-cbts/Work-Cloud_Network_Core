@@ -50,8 +50,11 @@ reviews:
     - path: "**/Dockerfile*"
       instructions: >
         Python deps are locked via uv.lock (uv export --locked --require-hashes).
-        No bare pip install, no apt-get/apk upgrade in a final stage. The uv
-        version is pinned in the FROM uv stage.
+        No bare pip install. Every shipped final stage keeps its distro security
+        upgrade (apt-get upgrade / apk upgrade) behind ARG PUBLISH_CACHE_BUST,
+        named in the upgrade RUN (TODO.md T-727, reversing T-702's old rule);
+        flag a final stage that drops it. The uv version is pinned in the FROM
+        uv stage.
   tools:
     ruff:
       enabled: true

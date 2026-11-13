@@ -34,10 +34,20 @@ RUN npm run build
 FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS migrator
 WORKDIR /app
 
-# No `apk upgrade`: the image is the pinned base digest plus libc6-compat,
-# nothing that depends on the day it was built. Dependabot's docker ecosystem
-# bumps the digest; a Scout finding on a base apk is fixed there (TODO.md T-702).
-RUN apk add --no-cache libc6-compat
+# Alpine's security updates first (`apk upgrade`, deliberate: TODO.md T-727, which reverses T-702's "no upgrade"
+# rule). The base is pinned by digest, but a fix reaches Alpine's main repository before the official node image
+# is rebuilt with it: on 2026-11-12 390-scan-images failed this image and the runner on CRITICAL CVE-2026-4738 in
+# zlib 1.3.2-r1, fixed in 1.4-r0 in Alpine v3.24/main, which no node:26-alpine digest carried. Dependabot's
+# digest bump still moves the base; the cost is that two builds of one commit on different days can differ in
+# their Alpine packages, and the controls are 390-scan-images and tests/unit/test_image_security_upgrade.py.
+# PUBLISH_CACHE_BUST is a per-run value 200-build-images.yml and the pull-request builds in 300-test-codebase.yml
+# pass (run id and attempt); naming it in the command changes this RUN's cache key on every run, so a rebuild of
+# the same commit cannot reuse an older upgrade result from the Actions build cache. BuildKit then also rebuilds
+# every later layer of the stage (build time and Actions cache churn, accepted). Unset on a local build (cached).
+ARG PUBLISH_CACHE_BUST=
+RUN printf 'upgrade run: %s\n' "${PUBLISH_CACHE_BUST}" \
+ && apk upgrade --no-cache \
+ && apk add --no-cache libc6-compat
 
 # The bundled npm CLI is unused here (prisma is invoked directly via
 # node_modules/.bin) and periodically carries fixable CVEs in its own
@@ -79,6 +89,12 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# Alpine's security updates (`apk upgrade`, TODO.md T-727): see the migrator stage above for why, and for the
+# per-run PUBLISH_CACHE_BUST, which makes this RUN and every later layer of the stage rebuild on each CI run.
+ARG PUBLISH_CACHE_BUST=
+RUN printf 'upgrade run: %s\n' "${PUBLISH_CACHE_BUST}" \
+ && apk upgrade --no-cache
 
 # Add a non-root user for Container Apps security best practices.
 RUN addgroup --system --gid 1001 nodejs

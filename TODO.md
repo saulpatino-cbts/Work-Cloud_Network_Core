@@ -7,7 +7,7 @@ can pick up work without rediscovering the findings.
 Items requiring external input — an approval, an account, a credential, an access grant — belong
 in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-**Last reviewed:** 2026-11-11
+**Last reviewed:** 2026-11-12
 
 | Phase | Theme | Items |
 |---|---|---|
@@ -17,7 +17,7 @@ in [`REVIEW.md`](REVIEW.md), not here. Completed work is recorded in [`CHANGELOG
 | [Phase 4](#phase-4--technical-debt) | Technical debt | T-401 – T-419 |
 | [Phase 5](#phase-5--feature-enhancements) | Feature enhancements + appliance migration | T-501 – T-509 |
 | [Phase 6](#phase-6--documentation-improvements) | Documentation improvements | T-601 – T-608 |
-| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-725 |
+| [Phase 7](#phase-7--version-10-follow-ups) | Version 1.0 follow-ups — open rows of the v1.0 findings register | T-701 – T-727 |
 
 ---
 
@@ -1981,6 +1981,9 @@ mutable tag and unconditionally uses `migrator-latest`. Add a `migrator_image` i
   and the base digests are current (`python:3.14-slim@sha256:51dafde8…`,
   `node:24-alpine@sha256:ebfe2f90…`); a Scout finding on a base package is now fixed by the
   Dependabot digest bump. The `>=` floors in `pyproject.toml` stay as floors — the lock is the pin.
+- **Superseded in part 2026-11-12 (T-727):** the "no `apt-get upgrade` / `apk upgrade` in a final stage" rule
+  is reversed. A digest bump could not clear fixes that no base digest carried, so every shipped final stage runs
+  the distro security upgrade again, behind a per-run cache-bust argument. The lockfile and hash rules above stand.
 - **Original description:** 0 of the package's dependency specifiers are pinned and there is no lockfile, so an immutable
 `sha-<7>` image is not reproducible (today's resolution accepts `openai 3.x` against a `>=2.45`
 floor). Generate a lock (`uv lock` / `pip-compile` with hashes) consumed by all three Python
@@ -2157,6 +2160,11 @@ api/migrator images in `200`'s smoke test, and run `TestRealDrawioExport` inside
   force minimatch 11 into consumers requiring 3 or 10. **Not implemented or claimed fixed:**
   no reachable Docker engine or local Postgres tooling is available for the required image
   and migration smoke tests; approval to install tooling or use a shared database is absent.
+- **Amended 2026-11-12 (T-727):** `apps/cna-web/package.json` now overrides `minimatch@^10` to 11.0.8
+  (Dependabot alert #74, GHSA-g3hv-75wg-m249 / `CVE-2026-118764`), which supersedes the "do not force
+  minimatch 11" guidance above for the `^10` consumers (`eslint` 10.14.0, `@eslint/config-array`,
+  `@typescript-eslint/typescript-estree`); `npm run lint`, `typecheck` and `test` pass on it. The 3.1.5 copy
+  (eslint plugins) is unchanged. The production dependency stage for the migrator is still open.
 
 ### T-717 — Bound request bodies in cna-api
 The adversarial pass (Phase 8 of the v1.0 review) posted a 5 MB authenticated JSON body to
@@ -2180,7 +2188,9 @@ uses), behind the same `dry_run` input.
 
 
 ### T-719 — CVE visibility after Docker Scout left `200`
-- **Current image evidence, 2026-11-04:** fresh run `41841234214` used Grype
+- **2026-11-12:** `390` failed `cli`, `api`, `web` and `migrator` on base-package CVEs no digest carried;
+  remediation and policy in T-727.
+- **Image evidence, 2026-11-04:** fresh run `41841234214` used Grype
   0.118.0, DB v6.1.10 built `2026-11-04T06:20:59Z`, against the unchanged catalog
   digests. CLI/API/worker still fail on fixable CRITICAL `CVE-2026-115557` in Python
   3.14.9; web/migrator pass fixable HIGH+ policy, not a zero-finding verdict.
@@ -2382,3 +2392,69 @@ running the script against a real digest published from this repository.
      then remove the `worker` pattern and `worker-latest` protection from `370-registry-cleanup.yml`.
 - **Status:** Open. Core change prepared 2026-11-11 on `work/retire-cna-worker`, not merged; appliance
   changes not started. Refresh this line before each merge.
+
+### T-726 — Drop the PyYAML source build when PyYAML ships cp315 wheels
+- **Priority:** Low
+- **Description:** The Python images moved to `python:3.15.2-slim-trixie` on 2026-11-12 (T-727 has the CVE
+  reason). PyYAML 6.0.3, the newest release and the locked one, has no wheel for CPython 3.15
+  ([yaml/pyyaml#951](https://github.com/yaml/pyyaml/issues/951), read 2026-11-12). Both Python Dockerfiles therefore
+  install the hash-checked `build` group first and build PyYAML from its hash-checked source archive with it
+  (`--no-build-isolation-package pyyaml`), as plain Python (`PYYAML_FORCE_LIBYAML=0`): the builder stages have no C
+  compiler, and no code here imports `yaml.CLoader`. The `Python Lockfile Consistency` job in
+  `300-test-codebase.yml` runs the same commands and keeps `--only-binary :all:` for every other package, with
+  `--no-binary pyyaml` as the single exception. The same move took three other locked packages to their first
+  releases with cp315 wheels: `httptools` 0.8.0 → 0.9.0, `markupsafe` 3.0.3 → 3.0.4, `uvloop` 0.22.1 → 0.23.0
+  (`uv lock --upgrade-package`, uv 0.13.7; nothing else moved).
+- **Dependencies:** A PyYAML release with cp315 manylinux wheels.
+- **Recommended action:** When it exists, move PyYAML with `uv lock --upgrade-package pyyaml` and remove, together:
+  `PYYAML_FORCE_LIBYAML=0` and `--no-build-isolation-package pyyaml` from the builder `RUN` of `Dockerfile` and
+  `apps/cna-api/Dockerfile` (the build group can then go back after the main install, as before), and
+  `PYYAML_FORCE_LIBYAML`, `--no-binary pyyaml` and `--no-build-isolation-package pyyaml` from the lockfile job.
+  Then confirm in the built images that `yaml.__with_libyaml__` is whatever the new wheel ships.
+- **Status:** Open (2026-11-12). Checked that day in local builds of both images: `import yaml` gives 6.0.3 with
+  `__with_libyaml__` False.
+
+### T-727 — Distro security upgrade in every shipped final stage (reverses T-702's rule)
+- **Priority:** High (it is expected to clear the 2026-11-12 `390-scan-images` failures)
+- **Description:** On 2026-11-12 `390 · Scan Published Images` failed on fixable HIGH and CRITICAL findings that
+  no digest bump could clear: in `cli` and `api`, CVE-2026-119170 in Python 3.14.10 (fixed in 3.14.11, for which
+  no image exists) and CVE-2026-76844 and CVE-2026-85091 in `zlib1g` 1:1.3.dfsg+really1.3.1-1+b1 (fixed in
+  1:1.3.dfsg+really1.3.1-1+deb13u1, in trixie-security only); in `web` and `migrator`, CRITICAL CVE-2026-4738 in
+  `zlib` 1.3.2-r1 (fixed in 1.4-r0, in Alpine v3.24/main, not in any `node:26-alpine` digest). T-702 had removed
+  `apt-get upgrade` / `apk upgrade` so that an image would be its pinned base digest plus named packages, and
+  left base-package fixes to Dependabot's digest bump; that only works once the official image has been rebuilt
+  with the fix, which can lag days or weeks.
+- **Dependencies:** None. Owner decision on the policy in the pull request (flagged [REVIEW REQUIRED]).
+- **Recommended action (implemented on `work/py315-security`):**
+  1. Move the Python images to `python:3.15.2-slim-trixie@sha256:65a65fc7…` (Python 3.15.2, Debian 13.7; all six
+     `FROM` lines share it, and `tests/unit/test_image_base_pins.py` requires the `-slim-trixie` tag and at least
+     3.15.2). PyYAML's source build is T-726.
+  2. Run the distro security upgrade first in every shipped final stage (`final` in `Dockerfile` and
+     `apps/cna-api/Dockerfile`, now named; `migrator` and `runner` in `apps/cna-web/Dockerfile`), as
+     saulpatinojr/HCW-NetworkEyes_App T-741 does: `apt-get -o Acquire::Retries=0 update --error-on=any` then
+     `apt-get -o Acquire::Retries=0 upgrade` in the Python images (the root image's draw.io install is folded into
+     the same `RUN`, so every apt-get in a shipped stage has retries off), `apk upgrade --no-cache` in the web
+     images, each in a `RUN` that names `ARG PUBLISH_CACHE_BUST`.
+  3. Pass `PUBLISH_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}` in all three `build-args` blocks of
+     `200-build-images.yml` and in every image build of `300-test-codebase.yml` (the CLI smoke build and the
+     pull-request image builds), so the Actions build cache never replays an older upgrade result and a pull request
+     proves the upgrade against that day's mirrors.
+  4. Guard it: `tests/unit/test_image_security_upgrade.py` fails if a shipped stage drops the upgrade, neutralises it
+     (`||`, `;`, a simulate or dry-run flag, or any apt option other than `Acquire::Retries=0`), drops the cache-bust
+     argument, `--error-on=any` or the retry setting on any `apt` or `apt-get`; if a stage is appended after `final`;
+     if `200` or `300` builds a stage the test does not check (or `200` stops building one it does); or if any image
+     build in `200` or `300`, including the shell `docker build` of the CLI smoke test, stops passing the value.
+  5. Group python base bumps: `.github/dependabot.yml` gains a `python-base` group (`group-by: dependency-name`) so
+     a bump lands in one pull request across `/` and `/apps/cna-api`.
+- **Cost and controls:** Two builds of one commit on different days can now differ in their distro packages, so an
+  image is no longer reproducible from the commit alone (its digest, signature and SBOM still identify exactly what
+  was shipped). The per-run cache-bust argument misses the cache for the upgrade `RUN` and for every later layer
+  of the same stage, so each CI run rebuilds those layers: longer builds and more churn in the Actions cache. The
+  controls: `390-scan-images` scans every published digest, and the guard test keeps the upgrade in place.
+- **Status:** Prepared 2026-11-12 on `work/py315-security`, not merged. Checked in local amd64 builds with
+  `PUBLISH_CACHE_BUST=local1` (Docker Engine 29.9.3): `cli` and `api` run Python 3.15.2 with `zlib1g`
+  1:1.3.dfsg+really1.3.1-1+deb13u1 and `apt` 3.0.4 as uid 1001; `migrator` and `runner` (Alpine 3.24.4) carry
+  `zlib` 1.4-r0 and run as uid 1001. No image was scanned or pushed: the next `200` run on `main` and the `390`
+  scan that follows it are the proof for the published images. Dependabot PRs #122 and #123 (the split python
+  digest bump) are superseded and are to be closed when this merges; #124 was already replaced by Dependabot
+  with #125.

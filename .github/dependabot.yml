@@ -87,19 +87,36 @@ updates:
       - dependencies
       - docker
     ignore:
-      # A Python minor (3.14 -> 3.15) is a new interpreter ABI, not a routine
-      # base-image refresh: uv.lock's compiled wheels (numpy, contourpy, uvloop,
-      # httptools, markupsafe, pyyaml) ship per-ABI, and the slim builder has no
-      # compiler, so 200-build-images fails on sdist builds. 300-test-codebase
-      # also tests on 3.14 and never builds the images, so such a PR merges
-      # green and breaks main. Bump the Python minor by hand, together with the
-      # CI python-version and a lock that has cp3XX wheels. Patch updates
-      # (3.14.x) still arrive through the group below.
+      # A Python minor is a new interpreter ABI, not a routine base-image
+      # refresh: uv.lock's compiled wheels ship per-ABI, and the slim builder
+      # has no compiler, so a minor with missing wheels fails 200-build-images
+      # on sdist builds (Dependabot PR #104 did, 2026-11-05). Python minors are
+      # therefore moved by hand. 3.15 was moved that way on 2026-11-12
+      # (TODO.md T-726, T-727). Move 3.16 the same way: switch every
+      # python-version in 300-test-codebase.yml (its lockfile job requires them
+      # to equal the Dockerfiles' minor) and run the tests on it; check that
+      # every locked package has a cp316 (or abi3/pure) wheel, moving the ones
+      # that do not with `uv lock --upgrade-package` (PyYAML had none for 3.15
+      # and is built as plain Python, T-726); then move all six FROM lines in
+      # one change. A major line (Python 4) is moved by hand too. Patch updates
+      # (3.15.x) and digest bumps still arrive, through `python-base` below.
       - dependency-name: "python"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
     groups:
+      # One pull request for a python base bump across "/" and "/apps/cna-api".
+      # Dependabot PRs #122 and #123 moved the python digest one directory at
+      # a time, and each failed tests/unit/test_image_base_pins.py, which
+      # requires every Python FROM line in both Dockerfiles to share one
+      # digest. `group-by: dependency-name` groups updates across the
+      # directories of a multi-directory entry (version updates only). It
+      # comes before `docker-minor-patch`, because an update joins the first
+      # group it matches.
+      python-base:
+        patterns:
+          - "python"
+        group-by: dependency-name
       docker-minor-patch:
         update-types:
           - minor

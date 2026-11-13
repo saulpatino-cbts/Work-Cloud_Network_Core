@@ -8,9 +8,9 @@ version = "0.8.0b0"
 description = "Cloud Network Assessment Platform CLI"
 requires-python = ">=3.11"
 dependencies = [
-    "click>=8.4.2",
+    "click>=8.5.1",
     "rich>=15.0.0",
-    "boto3>=1.43.125",
+    "boto3>=1.43.127",
     "azure-identity>=1.27.0",
     # Pinned to 1.x deliberately (TODO.md T-413). FoundryAgentClient drives
     # agents.threads / .messages / .runs, which is the 1.x surface; 2.x replaced
@@ -24,8 +24,8 @@ dependencies = [
     "azure-mgmt-resource>=26.0.0",
     "azure-mgmt-subscription>=3.1.1",
     "azure-storage-blob>=12.31.1",       # Phase F: Azure Blob Storage deployer
-    "openai>=3.42.1",
-    "anthropic>=2.3.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
+    "openai>=3.48.0",
+    "anthropic>=2.7.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
     # Reads the AES-256-GCM credential blobs the web tier writes (BYO AI keys).
     # Was only ever a transitive dependency of azure-identity; declared so a
     # future azure-identity bump cannot silently drop it.
@@ -37,12 +37,12 @@ dependencies = [
     "python-pptx>=1.0.2",
     "jinja2>=3.1.6",
     "weasyprint>=62.0",                # Phase E: PDF generation
-    "markdown>=3.11.2",
+    "markdown>=3.11.3",
     # merge_diagrams() parses diagram XML that arrives from the database
     # via the API; defusedxml is the hardened stdlib drop-in for that.
     "defusedxml>=0.7.1",
-    "pandas>=3.1.0",
-    "pydantic>=2.14.2",
+    "pandas>=3.1.1",
+    "pydantic>=2.14.3",
     "python-dotenv>=1.2.4",
     "pyyaml>=6.0.3",
     "tenacity>=9.2.1",
@@ -92,7 +92,7 @@ enrichment = [
 # exercises at discovery time and must be present in the image; the rest of the
 # enrichment extra remains optional.
 api = [
-    "fastapi>=0.162.0",
+    "fastapi>=0.162.2",
     "uvicorn[standard]>=0.54.0",
     "psycopg2-binary>=2.9",
     "azure-mgmt-monitor>=7.0.0,<8",
@@ -103,9 +103,9 @@ api = [
 dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
-    "hypothesis>=6.170.14",             # property-based tests (production-readiness review invariants)
+    "hypothesis>=6.170.15",             # property-based tests (production-readiness review invariants)
     "ruff>=0.17.4",
-    "ty>=0.0.95",                       # type checker (TODO.md T-402)
+    "ty>=0.0.100",                       # type checker (TODO.md T-402)
     "pre-commit>=4.7.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]

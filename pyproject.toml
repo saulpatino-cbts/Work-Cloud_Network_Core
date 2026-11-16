@@ -18,14 +18,14 @@ dependencies = [
     # In 1.x, AIProjectClient.agents returns an AgentsClient from the separate
     # azure-ai-agents package, so that must be declared too — it is what actually
     # provides the operations.
-    "azure-ai-projects>=2.10.0,<3",       # Foundry Agent Service: recommendation enrichment
+    "azure-ai-projects>=2.11.0,<3",       # Foundry Agent Service: recommendation enrichment
     "azure-ai-agents>=1.1.0,<2",         # provides AIProjectClient.agents in 1.x
     "azure-mgmt-network>=33.1.0",
     "azure-mgmt-resource>=26.0.0",
     "azure-mgmt-subscription>=3.1.1",
     "azure-storage-blob>=12.31.1",       # Phase F: Azure Blob Storage deployer
-    "openai>=3.48.0",
-    "anthropic>=2.7.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
+    "openai>=3.50.0",
+    "anthropic>=2.8.0",                  # bring-your-own Claude engine (CNA_AI_MODE=byo-api)
     # Reads the AES-256-GCM credential blobs the web tier writes (BYO AI keys).
     # Was only ever a transitive dependency of azure-identity; declared so a
     # future azure-identity bump cannot silently drop it.
@@ -92,7 +92,7 @@ enrichment = [
 # exercises at discovery time and must be present in the image; the rest of the
 # enrichment extra remains optional.
 api = [
-    "fastapi>=0.162.2",
+    "fastapi>=0.162.5",
     "uvicorn[standard]>=0.54.0",
     "psycopg2-binary>=2.9",
     "azure-mgmt-monitor>=7.0.0,<8",
@@ -105,7 +105,7 @@ dev = [
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
     "hypothesis>=6.170.15",             # property-based tests (production-readiness review invariants)
     "ruff>=0.17.4",
-    "ty>=0.0.100",                       # type checker (TODO.md T-402)
+    "ty>=0.0.103",                       # type checker (TODO.md T-402)
     "pre-commit>=4.7.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook
 ]

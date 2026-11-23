@@ -12,13 +12,14 @@ expressions (the workflow passes `github.event.*` values through `env:`):
     DOCKERHUB_NAMESPACE  Docker Hub organisation; every digest must be under it.
     EVENT_NAME           workflow_run | schedule | workflow_dispatch.
     RUN_HEAD_SHA         workflow_run only: commit the finished 200 run built.
+    RUN_CURRENT_SHA      workflow_run only: main's checked-out commit.
     GITHUB_OUTPUT        optional: receives `matrix`, `has_targets`, `commit`.
     GITHUB_STEP_SUMMARY  optional: receives a short note on what will be scanned.
 
 Until the first main publish the committed manifest is a placeholder (all-zero
 `commit`, no `digests{}`). That is "nothing published yet": a green skip with a
-warning on the weekly `schedule`, a failure for `workflow_run` and
-`workflow_dispatch`, where someone expects a scan to have happened.
+warning on the weekly `schedule` or for a superseded `workflow_run`, and a
+failure for a current `workflow_run` or `workflow_dispatch`.
 
 For `workflow_run` the manifest `commit` is compared with the run's head SHA. A
 mismatch means a newer publish superseded the run (or the manifest push lost a
@@ -208,6 +209,16 @@ def run(manifest_path: Path, env: Mapping[str, str]) -> int:
         manifest = load_manifest(manifest_path)
         reason = nothing_published_reason(manifest)
         if reason is not None:
+            current_sha = env.get("RUN_CURRENT_SHA", "")
+            if (
+                event == "workflow_run"
+                and manifest["commit"] == PLACEHOLDER_COMMIT
+                and COMMIT_PATTERN.fullmatch(current_sha)
+                and current_sha != head_sha
+            ):
+                annotate("warning", "The build was superseded and nothing has been published yet.")
+                write_outputs(env, [], manifest["commit"])
+                return 0
             if event == "schedule":
                 annotate("warning", f"Nothing to scan: {reason}. Skipping this scheduled scan.")
                 write_outputs(env, [], manifest["commit"])

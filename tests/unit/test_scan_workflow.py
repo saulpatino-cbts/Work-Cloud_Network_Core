@@ -8,7 +8,9 @@ silently green or put event data into a shell line. They read the workflow as
 data; they prove the file's shape, not how GitHub behaves when it runs.
 """
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -202,6 +204,63 @@ class TestBuildPublisherSafety:
         assert "git rev-parse HEAD" in guard["run"]
         assert "CURRENT_MAIN" in guard["run"]
         assert steps.index(checkout) < steps.index(guard) < steps.index(login)
+        assert guard["id"] == "freshness"
+        for step in steps[steps.index(guard) + 1 :]:
+            assert step["if"] == "steps.freshness.outputs.current == 'true'"
+        assert job["outputs"]["published"] == "${{ steps.tag.outcome == 'success' }}"
+        assert (
+            build["jobs"]["publish-build-manifest"]["if"]
+            == "needs.tag-images.outputs.published == 'true'"
+        )
+        assert build["jobs"]["notify-appliances"]["needs"] == "publish-build-manifest"
+
+    @pytest.mark.parametrize("current", [True, False])
+    def test_freshness_guard_executes(self, build: dict, tmp_path: Path, current: bool) -> None:
+        guard = next(
+            step for step in build["jobs"]["tag-images"]["steps"] if step.get("id") == "freshness"
+        )
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
+        ).strip()
+        output = tmp_path / "output"
+        env = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ}
+        env.update({"RUN_SHA": sha if current else "0" * 40, "GITHUB_OUTPUT": str(output)})
+        result = subprocess.run(
+            ["bash", "-e", "-c", guard["run"]],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert output.read_text().strip() == f"current={str(current).lower()}"
+        assert ("::warning::" in result.stdout) is not current
+
+    def test_freshness_guard_fails_closed_when_git_fails(self, build: dict, tmp_path: Path) -> None:
+        guard = next(
+            step for step in build["jobs"]["tag-images"]["steps"] if step.get("id") == "freshness"
+        )
+        output = tmp_path / "output"
+        env = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ}
+        env.update({"RUN_SHA": "0" * 40, "GITHUB_OUTPUT": str(output)})
+        result = subprocess.run(
+            ["bash", "-e", "-c", guard["run"]],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert not output.exists()
+
+    def test_every_main_push_queues_a_replacement_build(self, build: dict) -> None:
+        push = triggers(build)["push"]
+        assert push["branches"] == ["main"]
+        assert "paths" not in push and "paths-ignore" not in push
 
     def test_tags_are_split_into_immutable_then_floating_with_bounded_retries(
         self, build: dict
@@ -332,7 +391,9 @@ class TestNoEventDataInShell:
 
         assert resolve["env"]["RUN_HEAD_SHA"] == "${{ github.event.workflow_run.head_sha }}"
         assert resolve["env"]["EVENT_NAME"] == "${{ github.event_name }}"
-        assert resolve["run"].strip() == "python3 scripts/ci/resolve_scan_targets.py"
+        assert resolve["run"].strip() == (
+            'RUN_CURRENT_SHA="$(git rev-parse HEAD)" python3 scripts/ci/resolve_scan_targets.py'
+        )
 
     def test_every_script_the_workflow_runs_exists(self, scan: dict) -> None:
         for step in all_steps(scan):

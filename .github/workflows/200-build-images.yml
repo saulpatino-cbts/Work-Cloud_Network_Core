@@ -38,19 +38,10 @@ on:
   push:
     branches:
       - main
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - apps/cna-api/**
-      - apps/cna-web/**
-      - cna/**
-      - scripts/drawio-headless.sh
-      - scripts/ci/sign_image.sh
-      - pyproject.toml
-      - uv.lock  # every Python image installs from it (TODO.md T-702)
-      - .github/workflows/200-build-images.yml
   workflow_dispatch:
 
+# Every main push must queue a replacement build: even a documentation-only
+# commit can supersede an in-flight build before its publication guard.
 # Never cancel an in-flight build. The final `tag-images` job tags one component
 # at a time (it is not atomic), so a cancellation while it is mid-loop would leave
 # a partial tagged set on Docker Hub (e.g. `api-latest` moved, `web-latest` not)
@@ -481,6 +472,8 @@ jobs:
       id-token: write  # keyless Docker Hub OIDC login (re-tag pushes to the registry)
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+    outputs:
+      published: ${{ steps.tag.outcome == 'success' }}
     steps:
       # A re-run of an old successful main run can still be dispatched after
       # main has advanced. Refuse before obtaining a registry token or moving
@@ -493,20 +486,25 @@ jobs:
           persist-credentials: false
 
       - name: Refuse to publish a stale main build
+        id: freshness
         env:
           RUN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           CURRENT_MAIN=$(git rev-parse HEAD)
           if [ "$RUN_SHA" != "$CURRENT_MAIN" ]; then
-            echo "::error::This build is for ${RUN_SHA}, but main is now ${CURRENT_MAIN}; refusing to move image tags."
-            exit 1
+            echo "::warning::This build is for ${RUN_SHA}, but main is now ${CURRENT_MAIN}; skipping image publication."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up Docker Buildx
+        if: steps.freshness.outputs.current == 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: Validate Docker Hub namespace
+        if: steps.freshness.outputs.current == 'true'
         run: |
           if [ -z "$DOCKERHUB_NAMESPACE" ]; then
             echo "::error::DOCKERHUB_NAMESPACE variable is required."
@@ -515,6 +513,7 @@ jobs:
 
       # Keyless OIDC login (see build-images for the full explanation).
       - name: Log in to Docker Hub
+        if: steps.freshness.outputs.current == 'true'
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
         env:
           DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
@@ -529,6 +528,8 @@ jobs:
           # build, so there is no public helper-image pull to protect.
 
       - name: Tag immutable digests first and floating tags last
+        id: tag
+        if: steps.freshness.outputs.current == 'true'
         env:
           DIGEST_CLI: ${{ needs.build-images.outputs.digest_cli }}
           DIGEST_API: ${{ needs.build-images.outputs.digest_api }}
@@ -614,6 +615,7 @@ jobs:
     # tag-images gates this job; build-images / build-web are listed as direct
     # dependencies only so their digest outputs are reachable via `needs`.
     needs: [build-images, build-web, tag-images]
+    if: needs.tag-images.outputs.published == 'true'
     permissions:
       contents: write
     env:

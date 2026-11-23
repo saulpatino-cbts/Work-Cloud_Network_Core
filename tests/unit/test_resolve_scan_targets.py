@@ -2,7 +2,8 @@
 
 The script decides what workflow 390 scans, so its failure modes matter: it must
 never scan a reference that is not exactly `docker.io/<namespace>/cna@sha256:<64>`,
-must treat "nothing published yet" as a skip only on the weekly schedule, and must
+must treat "nothing published yet" as a skip only on the weekly schedule or for a
+superseded build before the first publication, and must
 surface a superseded `workflow_run`. Each case runs the real entry point as a
 subprocess from an unrelated working directory, with a minimal environment, the
 way the repository's other CI-script tests do.
@@ -150,6 +151,43 @@ class TestResolvesPublishedManifest:
 
 
 class TestNothingPublishedYet:
+    def test_superseded_workflow_run_skips_before_first_publish(self, tmp_path: Path) -> None:
+        result, outputs, _ = run_script(
+            tmp_path,
+            placeholder_manifest(),
+            "workflow_run",
+            head_sha=COMMIT,
+            extra_env={"RUN_CURRENT_SHA": OTHER_COMMIT},
+        )
+
+        assert result.returncode == 0
+        assert outputs["has_targets"] == "false"
+        assert "superseded" in result.stdout
+
+    def test_current_workflow_run_still_fails_without_a_manifest(self, tmp_path: Path) -> None:
+        result, outputs, _ = run_script(
+            tmp_path,
+            placeholder_manifest(),
+            "workflow_run",
+            head_sha=COMMIT,
+            extra_env={"RUN_CURRENT_SHA": COMMIT},
+        )
+
+        assert result.returncode == 1
+        assert "has_targets" not in outputs
+
+    def test_invalid_current_sha_does_not_hide_missing_manifest(self, tmp_path: Path) -> None:
+        result, outputs, _ = run_script(
+            tmp_path,
+            placeholder_manifest(),
+            "workflow_run",
+            head_sha=COMMIT,
+            extra_env={"RUN_CURRENT_SHA": "invalid"},
+        )
+
+        assert result.returncode == 1
+        assert "has_targets" not in outputs
+
     def test_schedule_skips_with_a_warning(self, tmp_path: Path) -> None:
         result, outputs, _ = run_script(tmp_path, placeholder_manifest(), "schedule")
 
@@ -180,6 +218,15 @@ class TestNothingPublishedYet:
         assert "records no digests" in skipped.stdout
 
         failed, _, _ = run_script(tmp_path, manifest, "workflow_dispatch")
+        assert failed.returncode == 1
+
+        failed, _, _ = run_script(
+            tmp_path,
+            manifest,
+            "workflow_run",
+            head_sha=COMMIT,
+            extra_env={"RUN_CURRENT_SHA": OTHER_COMMIT},
+        )
         assert failed.returncode == 1
 
     def test_an_empty_digests_object_counts_as_nothing_published(self, tmp_path: Path) -> None:

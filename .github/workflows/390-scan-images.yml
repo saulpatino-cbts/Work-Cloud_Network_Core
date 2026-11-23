@@ -140,7 +140,7 @@ jobs:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
           EVENT_NAME: ${{ github.event_name }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: python3 scripts/ci/resolve_scan_targets.py
+        run: RUN_CURRENT_SHA="$(git rev-parse HEAD)" python3 scripts/ci/resolve_scan_targets.py
 
   scan:
     name: Scan ${{ matrix.key }}

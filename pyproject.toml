@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "click>=8.5.1",
     "rich>=15.0.0",
-    "boto3>=1.43.127",
+    "boto3>=1.44.2",
     "azure-identity>=1.27.0",
     # Pinned to 1.x deliberately (TODO.md T-413). FoundryAgentClient drives
     # agents.threads / .messages / .runs, which is the 1.x surface; 2.x replaced
@@ -104,7 +104,7 @@ dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",               # coverage plugin (was missing from dev deps)
     "hypothesis>=6.170.15",             # property-based tests (production-readiness review invariants)
-    "ruff>=0.17.4",
+    "ruff>=0.17.5",
     "ty>=0.0.103",                       # type checker (TODO.md T-402)
     "pre-commit>=4.7.0",               # pre-commit itself as a dev dep
     "detect-secrets>=1.5",           # used by pre-commit hook

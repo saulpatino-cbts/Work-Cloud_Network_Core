@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FILE = ROOT / ".github" / "workflows" / "390-scout-review.yml"
-SCOUT_ACTION = "docker/scout-action@e7e2a72bf1485d10a58f30696b6c513b261ce4fa"
+SCOUT_ACTION = "docker/scout-action@b265cd48f8a1451d2680815b3e8dc4ed65ee16e7"
 
 
 @pytest.fixture(scope="module")

@@ -448,7 +448,7 @@ jobs:
           path: ~/.cache/pip
           key: pip-audit-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - name: Install pip-audit and uv
-        run: pip install pip-audit "uv==0.13.8"
+        run: pip install pip-audit "uv==0.13.9"
       - name: Audit the locked resolution
         # Audits exactly what the images ship (TODO.md T-702): the lock exported
         # with every extra, so the api/enrichment/dev sets are covered in one
